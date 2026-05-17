@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -e
+
+cd "$(dirname "$0")"
+
+CONFIG_DIR="${CONFIG_DIR:-../Qwen3-0.6B}"
+CKPT_FILE="${CKPT_FILE:-../checkpoints/inverse-kv-local-h128-l3-top1/10000.pth}"
+OUTPUT_PATH="${OUTPUT_PATH:-../experiments/inverse_kv_feature_attention_heads_step10000.json}"
+
+SEQ_LEN="${SEQ_LEN:-128}"
+NUM_SAMPLES="${NUM_SAMPLES:-256}"
+BATCH_SIZE="${BATCH_SIZE:-8}"
+
+SYNTHETIC_BLOCK_SIZE="${SYNTHETIC_BLOCK_SIZE:-4}"
+SYNTHETIC_NUM_HIERARCHY_LAYERS="${SYNTHETIC_NUM_HIERARCHY_LAYERS:-2}"
+SYNTHETIC_CONTENT_TOKEN_COUNT="${SYNTHETIC_CONTENT_TOKEN_COUNT:-256}"
+SYNTHETIC_NUM_UNITS_PER_LAYER="${SYNTHETIC_NUM_UNITS_PER_LAYER:-64}"
+SYNTHETIC_SEED="${SYNTHETIC_SEED:-0}"
+SYNTHETIC_MIN_TOKEN_ID="${SYNTHETIC_MIN_TOKEN_ID:-1}"
+
+DEBUG_VOCAB_SIZE="${DEBUG_VOCAB_SIZE:-257}"
+DEBUG_HIDDEN_SIZE="${DEBUG_HIDDEN_SIZE:-128}"
+DEBUG_INTERMEDIATE_SIZE="${DEBUG_INTERMEDIATE_SIZE:-256}"
+DEBUG_NUM_HIDDEN_LAYERS="${DEBUG_NUM_HIDDEN_LAYERS:-3}"
+DEBUG_NUM_ATTENTION_HEADS="${DEBUG_NUM_ATTENTION_HEADS:-4}"
+DEBUG_NUM_KEY_VALUE_HEADS="${DEBUG_NUM_KEY_VALUE_HEADS:-2}"
+DEBUG_HEAD_DIM="${DEBUG_HEAD_DIM:-32}"
+DEBUG_MAX_POSITION_EMBEDDINGS="${DEBUG_MAX_POSITION_EMBEDDINGS:-256}"
+
+USE_MOE="${USE_MOE:-true}"  # true/false
+MOE_NUM_UNIQUE_EXPERTS="${MOE_NUM_UNIQUE_EXPERTS:-4}"
+MOE_NUM_EXPERTS_PER_TOK="${MOE_NUM_EXPERTS_PER_TOK:-1}"
+MOE_INTERMEDIATE_SIZE="${MOE_INTERMEDIATE_SIZE:-128}"
+MOE_USE_COMMON_EXPERT="${MOE_USE_COMMON_EXPERT:-false}"  # true/false
+MOE_COMMON_INTERMEDIATE_SIZE="${MOE_COMMON_INTERMEDIATE_SIZE:-128}"
+
+ATTENTION_STRIDE_PATTERN="${ATTENTION_STRIDE_PATTERN-}"
+RESIDUAL_SOURCE_PATTERN="${RESIDUAL_SOURCE_PATTERN-}"
+
+ARGS=""
+ARGS+=" --config_dir $CONFIG_DIR"
+ARGS+=" --ckpt_file $CKPT_FILE"
+ARGS+=" --output_path $OUTPUT_PATH"
+ARGS+=" --seq_len $SEQ_LEN"
+ARGS+=" --num_samples $NUM_SAMPLES"
+ARGS+=" --batch_size $BATCH_SIZE"
+ARGS+=" --synthetic_block_size $SYNTHETIC_BLOCK_SIZE"
+ARGS+=" --synthetic_num_hierarchy_layers $SYNTHETIC_NUM_HIERARCHY_LAYERS"
+ARGS+=" --synthetic_content_token_count $SYNTHETIC_CONTENT_TOKEN_COUNT"
+ARGS+=" --synthetic_num_units_per_layer $SYNTHETIC_NUM_UNITS_PER_LAYER"
+ARGS+=" --synthetic_seed $SYNTHETIC_SEED"
+ARGS+=" --synthetic_min_token_id $SYNTHETIC_MIN_TOKEN_ID"
+ARGS+=" --debug_vocab_size $DEBUG_VOCAB_SIZE"
+ARGS+=" --debug_hidden_size $DEBUG_HIDDEN_SIZE"
+ARGS+=" --debug_intermediate_size $DEBUG_INTERMEDIATE_SIZE"
+ARGS+=" --debug_num_hidden_layers $DEBUG_NUM_HIDDEN_LAYERS"
+ARGS+=" --debug_num_attention_heads $DEBUG_NUM_ATTENTION_HEADS"
+ARGS+=" --debug_num_key_value_heads $DEBUG_NUM_KEY_VALUE_HEADS"
+ARGS+=" --debug_head_dim $DEBUG_HEAD_DIM"
+ARGS+=" --debug_max_position_embeddings $DEBUG_MAX_POSITION_EMBEDDINGS"
+if [ "$USE_MOE" = "true" ]; then
+  ARGS+=" --use_moe"
+fi
+ARGS+=" --moe_num_unique_experts $MOE_NUM_UNIQUE_EXPERTS"
+ARGS+=" --moe_num_experts_per_tok $MOE_NUM_EXPERTS_PER_TOK"
+ARGS+=" --moe_intermediate_size $MOE_INTERMEDIATE_SIZE"
+if [ "$MOE_USE_COMMON_EXPERT" = "true" ]; then
+  ARGS+=" --moe_use_common_expert"
+fi
+ARGS+=" --moe_common_intermediate_size $MOE_COMMON_INTERMEDIATE_SIZE"
+if [ -n "$ATTENTION_STRIDE_PATTERN" ]; then
+  ARGS+=" --attention_stride_pattern=$ATTENTION_STRIDE_PATTERN"
+fi
+if [ -n "$RESIDUAL_SOURCE_PATTERN" ]; then
+  ARGS+=" --residual_source_pattern=$RESIDUAL_SOURCE_PATTERN"
+fi
+
+python3 analyze_feature_attention_heads.py ${ARGS}

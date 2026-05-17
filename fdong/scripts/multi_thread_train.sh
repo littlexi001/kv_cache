@@ -9,16 +9,16 @@ LOCAL_BATCH_SIZE="${LOCAL_BATCH_SIZE:-16}"
 GLOBAL_BATCH_SIZE="${GLOBAL_BATCH_SIZE:-512}"
 SAVE_INTERVAL="${SAVE_INTERVAL:-1000}"
 SEQ_LEN="${SEQ_LEN:-1024}"
-DATA_SHUFFLE="${DATA_SHUFFLE:-true}"
-USE_BF16="${USE_BF16:-true}"
+DATA_SHUFFLE="${DATA_SHUFFLE:-true}"  # true/false
+USE_BF16="${USE_BF16:-true}"  # true/false
 
-OPTIMIZER="${OPTIMIZER:-AdamW}"
+OPTIMIZER="${OPTIMIZER:-AdamW}"  # AdamW/sgd
 LR="${LR:-1e-4}"
 
 NUM_WORKERS="${NUM_WORKERS:-4}"
 CONFIG_DIR="${CONFIG_DIR:-../Qwen3-0.6B}"
 DATA_DIR="${DATA_DIR:-.}"
-DATASET_TYPE="${DATASET_TYPE:-hierarchical_pattern}"
+DATASET_TYPE="${DATASET_TYPE:-hierarchical_pattern}"  # jsonl/pruned/synthetic_indexed/hierarchical_pattern
 
 SYNTHETIC_NUM_SAMPLES="${SYNTHETIC_NUM_SAMPLES:-100000}"
 SYNTHETIC_BLOCK_SIZE="${SYNTHETIC_BLOCK_SIZE:-4}"
@@ -28,6 +28,9 @@ SYNTHETIC_NUM_UNITS_PER_LAYER="${SYNTHETIC_NUM_UNITS_PER_LAYER:-256}"
 SYNTHETIC_SEED="${SYNTHETIC_SEED:-0}"
 SYNTHETIC_PAD_TOKEN_ID="${SYNTHETIC_PAD_TOKEN_ID:-0}"
 SYNTHETIC_MIN_TOKEN_ID="${SYNTHETIC_MIN_TOKEN_ID:-1}"
+SYNTHETIC_SAMPLING_DISTRIBUTION="${SYNTHETIC_SAMPLING_DISTRIBUTION:-uniform}"  # uniform/zipf
+SYNTHETIC_ZIPF_ALPHA="${SYNTHETIC_ZIPF_ALPHA:-1.0}"
+SYNTHETIC_ZIPF_SHUFFLE_RANKS="${SYNTHETIC_ZIPF_SHUFFLE_RANKS:-true}"  # true/false
 
 DEBUG_VOCAB_SIZE="${DEBUG_VOCAB_SIZE:--1}"
 DEBUG_HIDDEN_SIZE="${DEBUG_HIDDEN_SIZE:--1}"
@@ -38,12 +41,14 @@ DEBUG_NUM_KEY_VALUE_HEADS="${DEBUG_NUM_KEY_VALUE_HEADS:--1}"
 DEBUG_HEAD_DIM="${DEBUG_HEAD_DIM:--1}"
 DEBUG_MAX_POSITION_EMBEDDINGS="${DEBUG_MAX_POSITION_EMBEDDINGS:--1}"
 
-USE_MOE="${USE_MOE:-false}"
+USE_MOE="${USE_MOE:-false}"  # true/false
 MOE_NUM_UNIQUE_EXPERTS="${MOE_NUM_UNIQUE_EXPERTS:-4}"
 MOE_NUM_EXPERTS_PER_TOK="${MOE_NUM_EXPERTS_PER_TOK:-1}"
 MOE_INTERMEDIATE_SIZE="${MOE_INTERMEDIATE_SIZE:--1}"
-MOE_USE_COMMON_EXPERT="${MOE_USE_COMMON_EXPERT:-false}"
+MOE_USE_COMMON_EXPERT="${MOE_USE_COMMON_EXPERT:-false}"  # true/false
 MOE_COMMON_INTERMEDIATE_SIZE="${MOE_COMMON_INTERMEDIATE_SIZE:--1}"
+MOE_ROUTER_INPUT="${MOE_ROUTER_INPUT:-hidden}"  # hidden/attention_output
+MOE_HEAD_LEVEL="${MOE_HEAD_LEVEL:-false}"  # true/false
 
 RUN_NAME="${RUN_NAME:-hierarchical-pattern}"
 
@@ -73,6 +78,13 @@ ARGS+=" --synthetic_num_units_per_layer $SYNTHETIC_NUM_UNITS_PER_LAYER"
 ARGS+=" --synthetic_seed $SYNTHETIC_SEED"
 ARGS+=" --synthetic_pad_token_id $SYNTHETIC_PAD_TOKEN_ID"
 ARGS+=" --synthetic_min_token_id $SYNTHETIC_MIN_TOKEN_ID"
+ARGS+=" --synthetic_sampling_distribution $SYNTHETIC_SAMPLING_DISTRIBUTION"
+ARGS+=" --synthetic_zipf_alpha $SYNTHETIC_ZIPF_ALPHA"
+if [ "$SYNTHETIC_ZIPF_SHUFFLE_RANKS" = "true" ]; then
+  ARGS+=" --synthetic_zipf_shuffle_ranks"
+else
+  ARGS+=" --synthetic_no_zipf_shuffle_ranks"
+fi
 ARGS+=" --debug_vocab_size $DEBUG_VOCAB_SIZE"
 ARGS+=" --debug_hidden_size $DEBUG_HIDDEN_SIZE"
 ARGS+=" --debug_intermediate_size $DEBUG_INTERMEDIATE_SIZE"
@@ -91,6 +103,10 @@ if [ "$MOE_USE_COMMON_EXPERT" = "true" ]; then
   ARGS+=" --moe_use_common_expert"
 fi
 ARGS+=" --moe_common_intermediate_size $MOE_COMMON_INTERMEDIATE_SIZE"
+ARGS+=" --moe_router_input $MOE_ROUTER_INPUT"
+if [ "$MOE_HEAD_LEVEL" = "true" ]; then
+  ARGS+=" --moe_head_level"
+fi
 if [ -n "$ATTENTION_STRIDE_PATTERN" ]; then
   ARGS+=" --attention_stride_pattern=${ATTENTION_STRIDE_PATTERN}"
 fi

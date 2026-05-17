@@ -56,6 +56,15 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--synthetic_seed", type=int, default=0)
     parser.add_argument("--synthetic_pad_token_id", type=int, default=0)
     parser.add_argument("--synthetic_min_token_id", type=int, default=1)
+    parser.add_argument(
+        "--synthetic_sampling_distribution",
+        type=str,
+        choices=["uniform", "zipf"],
+        default="uniform",
+    )
+    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
+    parser.add_argument("--synthetic_zipf_shuffle_ranks", action="store_true", default=True)
+    parser.add_argument("--synthetic_no_zipf_shuffle_ranks", action="store_false", dest="synthetic_zipf_shuffle_ranks")
 
     parser.add_argument("--debug_vocab_size", type=int, default=-1)
     parser.add_argument("--debug_hidden_size", type=int, default=-1)
@@ -74,6 +83,13 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--moe_common_intermediate_size", type=int, default=-1)
     parser.add_argument("--moe_router_bias", action="store_true", default=False)
     parser.add_argument("--moe_no_normalize_topk_prob", action="store_true", default=False)
+    parser.add_argument(
+        "--moe_router_input",
+        type=str,
+        choices=["hidden", "attention_output"],
+        default="hidden",
+    )
+    parser.add_argument("--moe_head_level", action="store_true", default=False)
 
     parser.add_argument("--attention_stride_pattern", type=parse_int_list, default=None)
     parser.add_argument("--residual_source_pattern", type=parse_int_list, default=None)
@@ -132,6 +148,8 @@ def apply_moe_overrides(config, args):
     )
     config.moe_router_bias = bool(args.moe_router_bias)
     config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
+    config.moe_router_input = str(args.moe_router_input)
+    config.moe_head_level = bool(args.moe_head_level)
 
 
 def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pattern, config=None):
@@ -153,6 +171,8 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_common_intermediate_size": int(getattr(config, "moe_common_intermediate_size", 0)),
                 "moe_router_bias": bool(getattr(config, "moe_router_bias", False)),
                 "moe_normalize_topk_prob": bool(getattr(config, "moe_normalize_topk_prob", True)),
+                "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
+                "moe_head_level": bool(getattr(config, "moe_head_level", False)),
             }
         )
     with open(runtime_config_path, "w", encoding="utf-8") as f:
@@ -182,7 +202,8 @@ def prepare_model(local_rank, world_size, device, args):
             f"use_moe={config.use_moe}, unique_experts={config.moe_num_unique_experts}, "
             f"topk={config.moe_num_experts_per_tok}, moe_intermediate={config.moe_intermediate_size}, "
             f"use_common={config.moe_use_common_expert}, "
-            f"common_intermediate={config.moe_common_intermediate_size}",
+            f"common_intermediate={config.moe_common_intermediate_size}, "
+            f"router_input={config.moe_router_input}, head_level={config.moe_head_level}",
             flush=True,
         )
     model = MyQwen3ForCausalLM(config).to(device)
@@ -209,6 +230,9 @@ def prepare_data(local_rank, world_size, args):
             seed=args.synthetic_seed,
             pad_token_id=args.synthetic_pad_token_id,
             min_token_id=args.synthetic_min_token_id,
+            sampling_distribution=args.synthetic_sampling_distribution,
+            zipf_alpha=args.synthetic_zipf_alpha,
+            zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
         )
     else:
         dataset = TokenizedJSONLData(args.data_dir, args.seq_len, tokenizer)

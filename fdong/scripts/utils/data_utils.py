@@ -96,6 +96,9 @@ class HierarchicalPatternData(Dataset):
         seed=0,
         pad_token_id=0,
         min_token_id=1,
+        sampling_distribution="uniform",
+        zipf_alpha=1.0,
+        zipf_shuffle_ranks=True,
         padding=False,
         return_metadata=False,
     ) -> None:
@@ -110,6 +113,10 @@ class HierarchicalPatternData(Dataset):
             raise ValueError("content_token_count must be >= block_size")
         if num_units_per_layer < block_size:
             raise ValueError("num_units_per_layer must be >= block_size")
+        if sampling_distribution not in ("uniform", "zipf"):
+            raise ValueError("sampling_distribution must be 'uniform' or 'zipf'")
+        if zipf_alpha <= 0:
+            raise ValueError("zipf_alpha must be positive")
 
         self.max_seq_len = max_seq_len
         self.num_samples = num_samples
@@ -120,12 +127,16 @@ class HierarchicalPatternData(Dataset):
         self.seed = seed
         self.pad_token_id = pad_token_id
         self.min_token_id = min_token_id
+        self.sampling_distribution = sampling_distribution
+        self.zipf_alpha = zipf_alpha
+        self.zipf_shuffle_ranks = zipf_shuffle_ranks
         self.padding = padding
         self.return_metadata = return_metadata
 
         self.units_by_layer = self._build_units()
         self.top_layer = num_hierarchy_layers - 1
         self.top_units = self.units_by_layer[self.top_layer]
+        self.top_unit_sample_weights = self._build_top_unit_sample_weights()
 
     def __len__(self):
         return self.num_samples
@@ -160,6 +171,18 @@ class HierarchicalPatternData(Dataset):
 
         return units_by_layer
 
+    def _build_top_unit_sample_weights(self):
+        if self.sampling_distribution == "uniform":
+            return None
+
+        num_top_units = len(self.top_units)
+        ranks = list(range(1, num_top_units + 1))
+        weights = [1.0 / (rank ** self.zipf_alpha) for rank in ranks]
+        if self.zipf_shuffle_ranks:
+            rng = self._rng(7919)
+            rng.shuffle(weights)
+        return weights
+
     def _flatten_unit(self, layer_idx, unit_idx, output, metadata=None, ancestor_unit_ids=None):
         if ancestor_unit_ids is None:
             ancestor_unit_ids = [-1] * self.num_hierarchy_layers
@@ -183,7 +206,14 @@ class HierarchicalPatternData(Dataset):
         metadata = [] if with_metadata else None
 
         while len(tokens) < required_len:
-            unit_idx = rng.randrange(len(self.top_units))
+            if self.top_unit_sample_weights is None:
+                unit_idx = rng.randrange(len(self.top_units))
+            else:
+                unit_idx = rng.choices(
+                    range(len(self.top_units)),
+                    weights=self.top_unit_sample_weights,
+                    k=1,
+                )[0]
             self._flatten_unit(self.top_layer, unit_idx, tokens, metadata)
 
         tokens = tokens[:required_len]

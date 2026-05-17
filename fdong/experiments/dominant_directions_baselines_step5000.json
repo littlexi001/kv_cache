@@ -1,0 +1,5998 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "run_specs": "uniform_baseline:inverse-kv-local-h128-l3-top1:uniform,zipf_baseline:inverse-kv-zipf-baseline:zipf",
+    "checkpoint_step": 5000,
+    "output_path": "../experiments/dominant_directions_baselines_step5000.json",
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_zipf_alpha": 1.1,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "top_tokens": 8
+  },
+  "device": "cpu",
+  "runs": [
+    {
+      "alias": "uniform_baseline",
+      "run": "inverse-kv-local-h128-l3-top1",
+      "distribution": "uniform",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "../checkpoints/inverse-kv-local-h128-l3-top1/5000.pth",
+      "embedding": {
+        "content_mean_norm": 0.18499992787837982,
+        "content_embedding_norm_mean": 0.9371518492698669,
+        "raw_top1_energy": 0.11122179239586728,
+        "centered_top1_energy": 0.0820560078611007,
+        "abs_cos_raw_v1_embedding_mean": 0.9761526584625244,
+        "centered_v1_top_embedding_tokens": [
+          {
+            "token_id": 200,
+            "abs_cos": 0.9070720672607422,
+            "signed_cos": -0.9070720672607422
+          },
+          {
+            "token_id": 93,
+            "abs_cos": 0.9044610857963562,
+            "signed_cos": -0.9044610857963562
+          },
+          {
+            "token_id": 122,
+            "abs_cos": 0.9001002907752991,
+            "signed_cos": -0.9001002907752991
+          },
+          {
+            "token_id": 1,
+            "abs_cos": 0.8987722396850586,
+            "signed_cos": -0.8987722396850586
+          },
+          {
+            "token_id": 190,
+            "abs_cos": 0.8980704545974731,
+            "signed_cos": -0.8980704545974731
+          },
+          {
+            "token_id": 196,
+            "abs_cos": 0.8962582945823669,
+            "signed_cos": -0.8962582945823669
+          },
+          {
+            "token_id": 256,
+            "abs_cos": 0.8960575461387634,
+            "signed_cos": -0.8960575461387634
+          },
+          {
+            "token_id": 17,
+            "abs_cos": 0.8957388401031494,
+            "signed_cos": -0.8957388401031494
+          }
+        ]
+      },
+      "representations": [
+        {
+          "name": "embedding",
+          "raw_top1_energy": 0.05967573931518461,
+          "centered_top1_energy": 0.05966424138166544,
+          "abs_cos_raw_v1_rep_mean": 0.26430457830429077,
+          "abs_cos_raw_v1_embedding_mean": 0.7552288174629211,
+          "abs_cos_centered_v1_embedding_mean": 0.7475756406784058,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.8616174459457397,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.850691556930542,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 122,
+              "abs_cos": 0.6782147288322449,
+              "signed_cos": 0.6782147288322449
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.6739392280578613,
+              "signed_cos": 0.6739392280578613
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.6674399971961975,
+              "signed_cos": 0.6674399971961975
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.6662551164627075,
+              "signed_cos": 0.6662551164627075
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.6622577905654907,
+              "signed_cos": 0.6622577905654907
+            },
+            {
+              "token_id": 50,
+              "abs_cos": 0.6599593758583069,
+              "signed_cos": 0.6599593758583069
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.6596487760543823,
+              "signed_cos": 0.6596487760543823
+            },
+            {
+              "token_id": 186,
+              "abs_cos": 0.6590495109558105,
+              "signed_cos": 0.6590495109558105
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 122,
+              "abs_cos": 0.6664126515388489,
+              "signed_cos": 0.6664126515388489
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.6623611450195312,
+              "signed_cos": 0.6623611450195312
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.657628059387207,
+              "signed_cos": 0.657628059387207
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.6560112237930298,
+              "signed_cos": 0.6560112237930298
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.6519842743873596,
+              "signed_cos": 0.6519842743873596
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.6509473323822021,
+              "signed_cos": 0.6509473323822021
+            },
+            {
+              "token_id": 50,
+              "abs_cos": 0.648291826248169,
+              "signed_cos": 0.648291826248169
+            },
+            {
+              "token_id": 195,
+              "abs_cos": 0.647869348526001,
+              "signed_cos": 0.647869348526001
+            }
+          ]
+        },
+        {
+          "name": "after_layer_0",
+          "raw_top1_energy": 0.083267943978689,
+          "centered_top1_energy": 0.042770077660920516,
+          "abs_cos_raw_v1_rep_mean": 0.9764080047607422,
+          "abs_cos_raw_v1_embedding_mean": 0.22999846935272217,
+          "abs_cos_centered_v1_embedding_mean": 0.10452590882778168,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.2731872797012329,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.1264098733663559,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 226,
+              "abs_cos": 0.38551390171051025,
+              "signed_cos": 0.38551390171051025
+            },
+            {
+              "token_id": 235,
+              "abs_cos": 0.3791482448577881,
+              "signed_cos": 0.3791482448577881
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.37522757053375244,
+              "signed_cos": 0.37522757053375244
+            },
+            {
+              "token_id": 212,
+              "abs_cos": 0.37495824694633484,
+              "signed_cos": 0.37495824694633484
+            },
+            {
+              "token_id": 144,
+              "abs_cos": 0.37352585792541504,
+              "signed_cos": 0.37352585792541504
+            },
+            {
+              "token_id": 203,
+              "abs_cos": 0.37093937397003174,
+              "signed_cos": 0.37093937397003174
+            },
+            {
+              "token_id": 9,
+              "abs_cos": 0.3697868585586548,
+              "signed_cos": 0.3697868585586548
+            },
+            {
+              "token_id": 168,
+              "abs_cos": 0.36877405643463135,
+              "signed_cos": 0.36877405643463135
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 84,
+              "abs_cos": 0.6549134254455566,
+              "signed_cos": 0.6549134254455566
+            },
+            {
+              "token_id": 143,
+              "abs_cos": 0.3113000988960266,
+              "signed_cos": 0.3113000988960266
+            },
+            {
+              "token_id": 51,
+              "abs_cos": 0.24790021777153015,
+              "signed_cos": 0.24790021777153015
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.2417457401752472,
+              "signed_cos": 0.2417457401752472
+            },
+            {
+              "token_id": 228,
+              "abs_cos": 0.23825398087501526,
+              "signed_cos": 0.23825398087501526
+            },
+            {
+              "token_id": 26,
+              "abs_cos": 0.21178293228149414,
+              "signed_cos": -0.21178293228149414
+            },
+            {
+              "token_id": 92,
+              "abs_cos": 0.20715779066085815,
+              "signed_cos": -0.20715779066085815
+            },
+            {
+              "token_id": 38,
+              "abs_cos": 0.204012930393219,
+              "signed_cos": -0.204012930393219
+            }
+          ]
+        },
+        {
+          "name": "after_layer_1",
+          "raw_top1_energy": 0.0794208762485401,
+          "centered_top1_energy": 0.08247218436287936,
+          "abs_cos_raw_v1_rep_mean": 0.32703328132629395,
+          "abs_cos_raw_v1_embedding_mean": 0.6884369850158691,
+          "abs_cos_centered_v1_embedding_mean": 0.5894936919212341,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.7597087621688843,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.658078670501709,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 255,
+              "abs_cos": 0.6400569677352905,
+              "signed_cos": -0.6400569677352905
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.6396300792694092,
+              "signed_cos": -0.6396300792694092
+            },
+            {
+              "token_id": 122,
+              "abs_cos": 0.6381305456161499,
+              "signed_cos": -0.6381305456161499
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.6317809820175171,
+              "signed_cos": -0.6317809820175171
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.630836009979248,
+              "signed_cos": -0.630836009979248
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.6299903988838196,
+              "signed_cos": -0.6299903988838196
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.6286807060241699,
+              "signed_cos": -0.6286807060241699
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.6284677982330322,
+              "signed_cos": -0.6284677982330322
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 255,
+              "abs_cos": 0.5310976505279541,
+              "signed_cos": -0.5310976505279541
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.5267062187194824,
+              "signed_cos": -0.5267062187194824
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.5256602764129639,
+              "signed_cos": -0.5256602764129639
+            },
+            {
+              "token_id": 122,
+              "abs_cos": 0.5170021057128906,
+              "signed_cos": -0.5170021057128906
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.5150043964385986,
+              "signed_cos": -0.5150043964385986
+            },
+            {
+              "token_id": 17,
+              "abs_cos": 0.5145254731178284,
+              "signed_cos": -0.5145254731178284
+            },
+            {
+              "token_id": 68,
+              "abs_cos": 0.5105006098747253,
+              "signed_cos": -0.5105006098747253
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.5097132921218872,
+              "signed_cos": -0.5097132921218872
+            }
+          ]
+        },
+        {
+          "name": "final_norm",
+          "raw_top1_energy": 0.08270186444041096,
+          "centered_top1_energy": 0.07487320425543138,
+          "abs_cos_raw_v1_rep_mean": 0.739747941493988,
+          "abs_cos_raw_v1_embedding_mean": 0.7542877197265625,
+          "abs_cos_centered_v1_embedding_mean": 0.6665480136871338,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.8385025858879089,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.7635757923126221,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 122,
+              "abs_cos": 0.6756824254989624,
+              "signed_cos": -0.6756824254989624
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.6625334024429321,
+              "signed_cos": -0.6625334024429321
+            },
+            {
+              "token_id": 186,
+              "abs_cos": 0.6574450731277466,
+              "signed_cos": -0.6574450731277466
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.6566044092178345,
+              "signed_cos": -0.6566044092178345
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.6549936532974243,
+              "signed_cos": -0.6549936532974243
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.6536073088645935,
+              "signed_cos": -0.6536073088645935
+            },
+            {
+              "token_id": 17,
+              "abs_cos": 0.6531696915626526,
+              "signed_cos": -0.6531696915626526
+            },
+            {
+              "token_id": 68,
+              "abs_cos": 0.6523467898368835,
+              "signed_cos": -0.6523467898368835
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 122,
+              "abs_cos": 0.5859357714653015,
+              "signed_cos": -0.5859357714653015
+            },
+            {
+              "token_id": 186,
+              "abs_cos": 0.5737590789794922,
+              "signed_cos": -0.5737590789794922
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.5715883374214172,
+              "signed_cos": -0.5715883374214172
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.5709692239761353,
+              "signed_cos": -0.5709692239761353
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.5695451498031616,
+              "signed_cos": -0.5695451498031616
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.5678017139434814,
+              "signed_cos": -0.5678017139434814
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.5646826028823853,
+              "signed_cos": -0.5646826028823853
+            },
+            {
+              "token_id": 162,
+              "abs_cos": 0.5640240907669067,
+              "signed_cos": -0.5640240907669067
+            }
+          ]
+        }
+      ],
+      "matrix_summary": {
+        "attention.k_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.3677620242039363,
+          "mean_abs_cos_embedding_centered_v1": 0.4622769554456075,
+          "mean_top1_energy": 0.1478527976857081,
+          "max_abs_cos_embedding_mean": 0.5730186104774475
+        },
+        "attention.o_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.08285414179166158,
+          "mean_abs_cos_embedding_centered_v1": 0.0865453692773978,
+          "mean_top1_energy": 0.05585238867338485,
+          "max_abs_cos_embedding_mean": 0.1045147180557251
+        },
+        "attention.q_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.36419514069954556,
+          "mean_abs_cos_embedding_centered_v1": 0.4447836180528005,
+          "mean_top1_energy": 0.07254526379694315,
+          "max_abs_cos_embedding_mean": 0.5568791627883911
+        },
+        "attention.v_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.06133991417785486,
+          "mean_abs_cos_embedding_centered_v1": 0.06724859898289044,
+          "mean_top1_energy": 0.060270068267957035,
+          "max_abs_cos_embedding_mean": 0.15168026089668274
+        },
+        "moe_expert.down_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.042261121018479265,
+          "mean_abs_cos_embedding_centered_v1": 0.04025587936242422,
+          "mean_top1_energy": 0.0688262741547271,
+          "max_abs_cos_embedding_mean": 0.11658772826194763
+        },
+        "moe_expert.gate_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.2045751342860361,
+          "mean_abs_cos_embedding_centered_v1": 0.24216833850368857,
+          "mean_top1_energy": 0.04679950382121378,
+          "max_abs_cos_embedding_mean": 0.5165480375289917
+        },
+        "moe_expert.up_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.2066469956189394,
+          "mean_abs_cos_embedding_centered_v1": 0.21812946970264116,
+          "mean_top1_energy": 0.04564222962848822,
+          "max_abs_cos_embedding_mean": 0.6099122762680054
+        }
+      },
+      "matrices": [
+        {
+          "name": "model.layers.0.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.05654662030484553,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.10870785266160965,
+          "abs_cos_embedding_centered_v1": 0.16747722029685974,
+          "top_embedding_tokens": [
+            {
+              "token_id": 88,
+              "abs_cos": 0.4954138994216919,
+              "signed_cos": 0.4954138994216919
+            },
+            {
+              "token_id": 169,
+              "abs_cos": 0.3082960247993469,
+              "signed_cos": 0.3082960247993469
+            },
+            {
+              "token_id": 57,
+              "abs_cos": 0.28814610838890076,
+              "signed_cos": -0.28814610838890076
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.2874360978603363,
+              "signed_cos": 0.2874360978603363
+            },
+            {
+              "token_id": 16,
+              "abs_cos": 0.2729029655456543,
+              "signed_cos": -0.2729029655456543
+            },
+            {
+              "token_id": 119,
+              "abs_cos": 0.25872254371643066,
+              "signed_cos": -0.25872254371643066
+            },
+            {
+              "token_id": 230,
+              "abs_cos": 0.2564551532268524,
+              "signed_cos": -0.2564551532268524
+            },
+            {
+              "token_id": 10,
+              "abs_cos": 0.2547416687011719,
+              "signed_cos": 0.2547416687011719
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.09977795705434714,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.17205344140529633,
+          "abs_cos_embedding_centered_v1": 0.32150325179100037,
+          "top_embedding_tokens": [
+            {
+              "token_id": 136,
+              "abs_cos": 0.36316731572151184,
+              "signed_cos": 0.36316731572151184
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.34628111124038696,
+              "signed_cos": 0.34628111124038696
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.32113856077194214,
+              "signed_cos": 0.32113856077194214
+            },
+            {
+              "token_id": 131,
+              "abs_cos": 0.31763625144958496,
+              "signed_cos": 0.31763625144958496
+            },
+            {
+              "token_id": 148,
+              "abs_cos": 0.31226205825805664,
+              "signed_cos": 0.31226205825805664
+            },
+            {
+              "token_id": 27,
+              "abs_cos": 0.3109876811504364,
+              "signed_cos": -0.3109876811504364
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.30628347396850586,
+              "signed_cos": -0.30628347396850586
+            },
+            {
+              "token_id": 242,
+              "abs_cos": 0.2848188877105713,
+              "signed_cos": -0.2848188877105713
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.05246241679742038,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.024533012881875038,
+          "abs_cos_embedding_centered_v1": 0.03646504878997803,
+          "top_embedding_tokens": [
+            {
+              "token_id": 34,
+              "abs_cos": 0.4169100821018219,
+              "signed_cos": 0.4169100821018219
+            },
+            {
+              "token_id": 131,
+              "abs_cos": 0.30087995529174805,
+              "signed_cos": 0.30087995529174805
+            },
+            {
+              "token_id": 145,
+              "abs_cos": 0.30073124170303345,
+              "signed_cos": 0.30073124170303345
+            },
+            {
+              "token_id": 146,
+              "abs_cos": 0.23178838193416595,
+              "signed_cos": 0.23178838193416595
+            },
+            {
+              "token_id": 95,
+              "abs_cos": 0.20959283411502838,
+              "signed_cos": -0.20959283411502838
+            },
+            {
+              "token_id": 173,
+              "abs_cos": 0.20454677939414978,
+              "signed_cos": 0.20454677939414978
+            },
+            {
+              "token_id": 202,
+              "abs_cos": 0.19584143161773682,
+              "signed_cos": -0.19584143161773682
+            },
+            {
+              "token_id": 219,
+              "abs_cos": 0.1933842897415161,
+              "signed_cos": 0.1933842897415161
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.03558658318056588,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1045147180557251,
+          "abs_cos_embedding_centered_v1": 0.13169875741004944,
+          "top_embedding_tokens": [
+            {
+              "token_id": 34,
+              "abs_cos": 0.19065116345882416,
+              "signed_cos": -0.19065116345882416
+            },
+            {
+              "token_id": 116,
+              "abs_cos": 0.1836027055978775,
+              "signed_cos": -0.1836027055978775
+            },
+            {
+              "token_id": 167,
+              "abs_cos": 0.18325674533843994,
+              "signed_cos": -0.18325674533843994
+            },
+            {
+              "token_id": 154,
+              "abs_cos": 0.18128332495689392,
+              "signed_cos": 0.18128332495689392
+            },
+            {
+              "token_id": 117,
+              "abs_cos": 0.1801101118326187,
+              "signed_cos": 0.1801101118326187
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.17910484969615936,
+              "signed_cos": -0.17910484969615936
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.177744060754776,
+              "signed_cos": -0.177744060754776
+            },
+            {
+              "token_id": 1,
+              "abs_cos": 0.17310300469398499,
+              "signed_cos": 0.17310300469398499
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.044894973543949016,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1970382183790207,
+          "abs_cos_embedding_centered_v1": 0.29107555747032166,
+          "top_embedding_tokens": [
+            {
+              "token_id": 19,
+              "abs_cos": 0.2907431125640869,
+              "signed_cos": 0.2907431125640869
+            },
+            {
+              "token_id": 88,
+              "abs_cos": 0.28827154636383057,
+              "signed_cos": -0.28827154636383057
+            },
+            {
+              "token_id": 168,
+              "abs_cos": 0.281236469745636,
+              "signed_cos": 0.281236469745636
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.2728465497493744,
+              "signed_cos": 0.2728465497493744
+            },
+            {
+              "token_id": 122,
+              "abs_cos": 0.2724609375,
+              "signed_cos": 0.2724609375
+            },
+            {
+              "token_id": 235,
+              "abs_cos": 0.27205657958984375,
+              "signed_cos": 0.27205657958984375
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.27140504121780396,
+              "signed_cos": -0.27140504121780396
+            },
+            {
+              "token_id": 218,
+              "abs_cos": 0.271095871925354,
+              "signed_cos": 0.271095871925354
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04423823683147935,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.09888872504234314,
+          "abs_cos_embedding_centered_v1": 0.0841430276632309,
+          "top_embedding_tokens": [
+            {
+              "token_id": 101,
+              "abs_cos": 0.3079017102718353,
+              "signed_cos": 0.3079017102718353
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.30758193135261536,
+              "signed_cos": -0.30758193135261536
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.3072656989097595,
+              "signed_cos": 0.3072656989097595
+            },
+            {
+              "token_id": 34,
+              "abs_cos": 0.29645538330078125,
+              "signed_cos": -0.29645538330078125
+            },
+            {
+              "token_id": 58,
+              "abs_cos": 0.2647817134857178,
+              "signed_cos": -0.2647817134857178
+            },
+            {
+              "token_id": 172,
+              "abs_cos": 0.24891915917396545,
+              "signed_cos": -0.24891915917396545
+            },
+            {
+              "token_id": 87,
+              "abs_cos": 0.2367418110370636,
+              "signed_cos": 0.2367418110370636
+            },
+            {
+              "token_id": 219,
+              "abs_cos": 0.232507586479187,
+              "signed_cos": 0.232507586479187
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04740106215897775,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.11658772826194763,
+          "abs_cos_embedding_centered_v1": 0.10535308718681335,
+          "top_embedding_tokens": [
+            {
+              "token_id": 95,
+              "abs_cos": 0.2639446556568146,
+              "signed_cos": -0.2639446556568146
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.2621241807937622,
+              "signed_cos": 0.2621241807937622
+            },
+            {
+              "token_id": 7,
+              "abs_cos": 0.2527584433555603,
+              "signed_cos": -0.2527584433555603
+            },
+            {
+              "token_id": 49,
+              "abs_cos": 0.22771143913269043,
+              "signed_cos": -0.22771143913269043
+            },
+            {
+              "token_id": 173,
+              "abs_cos": 0.21256783604621887,
+              "signed_cos": 0.21256783604621887
+            },
+            {
+              "token_id": 248,
+              "abs_cos": 0.2089322954416275,
+              "signed_cos": -0.2089322954416275
+            },
+            {
+              "token_id": 33,
+              "abs_cos": 0.19698163866996765,
+              "signed_cos": -0.19698163866996765
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.18135282397270203,
+              "signed_cos": 0.18135282397270203
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.043290561330883846,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.202786386013031,
+          "abs_cos_embedding_centered_v1": 0.27375251054763794,
+          "top_embedding_tokens": [
+            {
+              "token_id": 221,
+              "abs_cos": 0.4221934676170349,
+              "signed_cos": -0.4221934676170349
+            },
+            {
+              "token_id": 114,
+              "abs_cos": 0.29905056953430176,
+              "signed_cos": 0.29905056953430176
+            },
+            {
+              "token_id": 244,
+              "abs_cos": 0.298315167427063,
+              "signed_cos": -0.298315167427063
+            },
+            {
+              "token_id": 24,
+              "abs_cos": 0.29533976316452026,
+              "signed_cos": -0.29533976316452026
+            },
+            {
+              "token_id": 18,
+              "abs_cos": 0.27982547879219055,
+              "signed_cos": -0.27982547879219055
+            },
+            {
+              "token_id": 4,
+              "abs_cos": 0.27905339002609253,
+              "signed_cos": 0.27905339002609253
+            },
+            {
+              "token_id": 103,
+              "abs_cos": 0.27595919370651245,
+              "signed_cos": -0.27595919370651245
+            },
+            {
+              "token_id": 125,
+              "abs_cos": 0.271395206451416,
+              "signed_cos": 0.271395206451416
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.041657876967887045,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.36002105474472046,
+          "abs_cos_embedding_centered_v1": 0.3993144631385803,
+          "top_embedding_tokens": [
+            {
+              "token_id": 25,
+              "abs_cos": 0.3520083427429199,
+              "signed_cos": -0.3520083427429199
+            },
+            {
+              "token_id": 197,
+              "abs_cos": 0.3499212861061096,
+              "signed_cos": 0.3499212861061096
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.3476669490337372,
+              "signed_cos": -0.3476669490337372
+            },
+            {
+              "token_id": 20,
+              "abs_cos": 0.3467805087566376,
+              "signed_cos": -0.3467805087566376
+            },
+            {
+              "token_id": 81,
+              "abs_cos": 0.3446904420852661,
+              "signed_cos": -0.3446904420852661
+            },
+            {
+              "token_id": 59,
+              "abs_cos": 0.3422126770019531,
+              "signed_cos": -0.3422126770019531
+            },
+            {
+              "token_id": 65,
+              "abs_cos": 0.3395301401615143,
+              "signed_cos": -0.3395301401615143
+            },
+            {
+              "token_id": 47,
+              "abs_cos": 0.33873966336250305,
+              "signed_cos": -0.33873966336250305
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04977297585244124,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.004509583115577698,
+          "abs_cos_embedding_centered_v1": 0.00861968845129013,
+          "top_embedding_tokens": [
+            {
+              "token_id": 145,
+              "abs_cos": 0.25540170073509216,
+              "signed_cos": 0.25540170073509216
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.20783604681491852,
+              "signed_cos": 0.20783604681491852
+            },
+            {
+              "token_id": 40,
+              "abs_cos": 0.20060811936855316,
+              "signed_cos": 0.20060811936855316
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.199147030711174,
+              "signed_cos": -0.199147030711174
+            },
+            {
+              "token_id": 130,
+              "abs_cos": 0.17966410517692566,
+              "signed_cos": 0.17966410517692566
+            },
+            {
+              "token_id": 187,
+              "abs_cos": 0.16983819007873535,
+              "signed_cos": 0.16983819007873535
+            },
+            {
+              "token_id": 11,
+              "abs_cos": 0.16383078694343567,
+              "signed_cos": -0.16383078694343567
+            },
+            {
+              "token_id": 146,
+              "abs_cos": 0.15884436666965485,
+              "signed_cos": -0.15884436666965485
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04934281279555786,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.20153716206550598,
+          "abs_cos_embedding_centered_v1": 0.18986180424690247,
+          "top_embedding_tokens": [
+            {
+              "token_id": 26,
+              "abs_cos": 0.3925186097621918,
+              "signed_cos": 0.3925186097621918
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.3051615059375763,
+              "signed_cos": 0.3051615059375763
+            },
+            {
+              "token_id": 30,
+              "abs_cos": 0.27039697766304016,
+              "signed_cos": -0.27039697766304016
+            },
+            {
+              "token_id": 207,
+              "abs_cos": 0.2585633099079132,
+              "signed_cos": -0.2585633099079132
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.23636634647846222,
+              "signed_cos": 0.23636634647846222
+            },
+            {
+              "token_id": 246,
+              "abs_cos": 0.23604384064674377,
+              "signed_cos": -0.23604384064674377
+            },
+            {
+              "token_id": 177,
+              "abs_cos": 0.23456235229969025,
+              "signed_cos": -0.23456235229969025
+            },
+            {
+              "token_id": 107,
+              "abs_cos": 0.22143231332302094,
+              "signed_cos": -0.22143231332302094
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04529330427464237,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.025449249893426895,
+          "abs_cos_embedding_centered_v1": 0.01840619370341301,
+          "top_embedding_tokens": [
+            {
+              "token_id": 165,
+              "abs_cos": 0.4491216242313385,
+              "signed_cos": 0.4491216242313385
+            },
+            {
+              "token_id": 105,
+              "abs_cos": 0.36739209294319153,
+              "signed_cos": 0.36739209294319153
+            },
+            {
+              "token_id": 26,
+              "abs_cos": 0.3594832122325897,
+              "signed_cos": -0.3594832122325897
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.28106003999710083,
+              "signed_cos": -0.28106003999710083
+            },
+            {
+              "token_id": 221,
+              "abs_cos": 0.27135851979255676,
+              "signed_cos": 0.27135851979255676
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.26315832138061523,
+              "signed_cos": -0.26315832138061523
+            },
+            {
+              "token_id": 45,
+              "abs_cos": 0.24788697063922882,
+              "signed_cos": 0.24788697063922882
+            },
+            {
+              "token_id": 207,
+              "abs_cos": 0.2213955819606781,
+              "signed_cos": 0.2213955819606781
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.056005293446694825,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.011228226125240326,
+          "abs_cos_embedding_centered_v1": 0.0050798505544662476,
+          "top_embedding_tokens": [
+            {
+              "token_id": 187,
+              "abs_cos": 0.2742912769317627,
+              "signed_cos": 0.2742912769317627
+            },
+            {
+              "token_id": 160,
+              "abs_cos": 0.24787530303001404,
+              "signed_cos": 0.24787530303001404
+            },
+            {
+              "token_id": 71,
+              "abs_cos": 0.24505935609340668,
+              "signed_cos": -0.24505935609340668
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.20948687195777893,
+              "signed_cos": 0.20948687195777893
+            },
+            {
+              "token_id": 234,
+              "abs_cos": 0.19446182250976562,
+              "signed_cos": 0.19446182250976562
+            },
+            {
+              "token_id": 6,
+              "abs_cos": 0.1799694448709488,
+              "signed_cos": 0.1799694448709488
+            },
+            {
+              "token_id": 140,
+              "abs_cos": 0.1792546808719635,
+              "signed_cos": -0.1792546808719635
+            },
+            {
+              "token_id": 191,
+              "abs_cos": 0.17469573020935059,
+              "signed_cos": 0.17469573020935059
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.043345366426343346,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.041272856295108795,
+          "abs_cos_embedding_centered_v1": 0.033230505883693695,
+          "top_embedding_tokens": [
+            {
+              "token_id": 114,
+              "abs_cos": 0.4892255365848541,
+              "signed_cos": -0.4892255365848541
+            },
+            {
+              "token_id": 102,
+              "abs_cos": 0.32315593957901,
+              "signed_cos": -0.32315593957901
+            },
+            {
+              "token_id": 98,
+              "abs_cos": 0.28396350145339966,
+              "signed_cos": -0.28396350145339966
+            },
+            {
+              "token_id": 208,
+              "abs_cos": 0.2839590013027191,
+              "signed_cos": 0.2839590013027191
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.27688664197921753,
+              "signed_cos": -0.27688664197921753
+            },
+            {
+              "token_id": 231,
+              "abs_cos": 0.2734500765800476,
+              "signed_cos": -0.2734500765800476
+            },
+            {
+              "token_id": 16,
+              "abs_cos": 0.257642924785614,
+              "signed_cos": -0.257642924785614
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.23554030060768127,
+              "signed_cos": -0.23554030060768127
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.0423223174802625,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.013024765998125076,
+          "abs_cos_embedding_centered_v1": 0.01570366695523262,
+          "top_embedding_tokens": [
+            {
+              "token_id": 173,
+              "abs_cos": 0.3240903913974762,
+              "signed_cos": 0.3240903913974762
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.31049081683158875,
+              "signed_cos": 0.31049081683158875
+            },
+            {
+              "token_id": 169,
+              "abs_cos": 0.2969338297843933,
+              "signed_cos": 0.2969338297843933
+            },
+            {
+              "token_id": 167,
+              "abs_cos": 0.2778055667877197,
+              "signed_cos": 0.2778055667877197
+            },
+            {
+              "token_id": 161,
+              "abs_cos": 0.2761942744255066,
+              "signed_cos": -0.2761942744255066
+            },
+            {
+              "token_id": 213,
+              "abs_cos": 0.2713126242160797,
+              "signed_cos": -0.2713126242160797
+            },
+            {
+              "token_id": 114,
+              "abs_cos": 0.24686306715011597,
+              "signed_cos": -0.24686306715011597
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.23822331428527832,
+              "signed_cos": 0.23822331428527832
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.045103483673593375,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.01606198586523533,
+          "abs_cos_embedding_centered_v1": 0.007524639368057251,
+          "top_embedding_tokens": [
+            {
+              "token_id": 164,
+              "abs_cos": 0.2419942021369934,
+              "signed_cos": 0.2419942021369934
+            },
+            {
+              "token_id": 89,
+              "abs_cos": 0.2102125883102417,
+              "signed_cos": -0.2102125883102417
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.20581889152526855,
+              "signed_cos": 0.20581889152526855
+            },
+            {
+              "token_id": 10,
+              "abs_cos": 0.19815245270729065,
+              "signed_cos": 0.19815245270729065
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.18656867742538452,
+              "signed_cos": -0.18656867742538452
+            },
+            {
+              "token_id": 95,
+              "abs_cos": 0.18576404452323914,
+              "signed_cos": 0.18576404452323914
+            },
+            {
+              "token_id": 32,
+              "abs_cos": 0.18396052718162537,
+              "signed_cos": 0.18396052718162537
+            },
+            {
+              "token_id": 55,
+              "abs_cos": 0.17861786484718323,
+              "signed_cos": 0.17861786484718323
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.07439262128270012,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.42699840664863586,
+          "abs_cos_embedding_centered_v1": 0.5396222472190857,
+          "top_embedding_tokens": [
+            {
+              "token_id": 239,
+              "abs_cos": 0.5423910617828369,
+              "signed_cos": 0.5423910617828369
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.5114997029304504,
+              "signed_cos": 0.5114997029304504
+            },
+            {
+              "token_id": 82,
+              "abs_cos": 0.5041666626930237,
+              "signed_cos": 0.5041666626930237
+            },
+            {
+              "token_id": 241,
+              "abs_cos": 0.4983074963092804,
+              "signed_cos": 0.4983074963092804
+            },
+            {
+              "token_id": 204,
+              "abs_cos": 0.49751561880111694,
+              "signed_cos": 0.49751561880111694
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.4954182505607605,
+              "signed_cos": 0.4954182505607605
+            },
+            {
+              "token_id": 196,
+              "abs_cos": 0.4950883388519287,
+              "signed_cos": 0.4950883388519287
+            },
+            {
+              "token_id": 176,
+              "abs_cos": 0.49325406551361084,
+              "signed_cos": 0.49325406551361084
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.1489874006669525,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.35821402072906494,
+          "abs_cos_embedding_centered_v1": 0.44339820742607117,
+          "top_embedding_tokens": [
+            {
+              "token_id": 235,
+              "abs_cos": 0.4871533215045929,
+              "signed_cos": 0.4871533215045929
+            },
+            {
+              "token_id": 176,
+              "abs_cos": 0.48073065280914307,
+              "signed_cos": 0.48073065280914307
+            },
+            {
+              "token_id": 241,
+              "abs_cos": 0.47962987422943115,
+              "signed_cos": 0.47962987422943115
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.4786398410797119,
+              "signed_cos": 0.4786398410797119
+            },
+            {
+              "token_id": 70,
+              "abs_cos": 0.4785821735858917,
+              "signed_cos": 0.4785821735858917
+            },
+            {
+              "token_id": 168,
+              "abs_cos": 0.47636255621910095,
+              "signed_cos": 0.47636255621910095
+            },
+            {
+              "token_id": 29,
+              "abs_cos": 0.4743361473083496,
+              "signed_cos": 0.4743361473083496
+            },
+            {
+              "token_id": 203,
+              "abs_cos": 0.47291815280914307,
+              "signed_cos": 0.47291815280914307
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.06296579368443275,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.00780646875500679,
+          "abs_cos_embedding_centered_v1": 0.011557895690202713,
+          "top_embedding_tokens": [
+            {
+              "token_id": 148,
+              "abs_cos": 0.3351707458496094,
+              "signed_cos": 0.3351707458496094
+            },
+            {
+              "token_id": 240,
+              "abs_cos": 0.29212629795074463,
+              "signed_cos": -0.29212629795074463
+            },
+            {
+              "token_id": 39,
+              "abs_cos": 0.27387887239456177,
+              "signed_cos": -0.27387887239456177
+            },
+            {
+              "token_id": 89,
+              "abs_cos": 0.26107853651046753,
+              "signed_cos": 0.26107853651046753
+            },
+            {
+              "token_id": 167,
+              "abs_cos": 0.2579353451728821,
+              "signed_cos": -0.2579353451728821
+            },
+            {
+              "token_id": 118,
+              "abs_cos": 0.2575535476207733,
+              "signed_cos": 0.2575535476207733
+            },
+            {
+              "token_id": 26,
+              "abs_cos": 0.2558315694332123,
+              "signed_cos": -0.2558315694332123
+            },
+            {
+              "token_id": 170,
+              "abs_cos": 0.21627037227153778,
+              "signed_cos": -0.21627037227153778
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.06832080167171849,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.059931881725788116,
+          "abs_cos_embedding_centered_v1": 0.021927151829004288,
+          "top_embedding_tokens": [
+            {
+              "token_id": 219,
+              "abs_cos": 0.26758328080177307,
+              "signed_cos": -0.26758328080177307
+            },
+            {
+              "token_id": 135,
+              "abs_cos": 0.24726444482803345,
+              "signed_cos": 0.24726444482803345
+            },
+            {
+              "token_id": 213,
+              "abs_cos": 0.24153661727905273,
+              "signed_cos": 0.24153661727905273
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.2102014124393463,
+              "signed_cos": 0.2102014124393463
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.19685424864292145,
+              "signed_cos": 0.19685424864292145
+            },
+            {
+              "token_id": 130,
+              "abs_cos": 0.19030983746051788,
+              "signed_cos": 0.19030983746051788
+            },
+            {
+              "token_id": 155,
+              "abs_cos": 0.18992184102535248,
+              "signed_cos": 0.18992184102535248
+            },
+            {
+              "token_id": 28,
+              "abs_cos": 0.18981020152568817,
+              "signed_cos": -0.18981020152568817
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04519432936930163,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.2757914662361145,
+          "abs_cos_embedding_centered_v1": 0.33660832047462463,
+          "top_embedding_tokens": [
+            {
+              "token_id": 171,
+              "abs_cos": 0.3476695418357849,
+              "signed_cos": -0.3476695418357849
+            },
+            {
+              "token_id": 191,
+              "abs_cos": 0.34227097034454346,
+              "signed_cos": 0.34227097034454346
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.3389349579811096,
+              "signed_cos": 0.3389349579811096
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.32601362466812134,
+              "signed_cos": 0.32601362466812134
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.3211427927017212,
+              "signed_cos": -0.3211427927017212
+            },
+            {
+              "token_id": 100,
+              "abs_cos": 0.31429335474967957,
+              "signed_cos": 0.31429335474967957
+            },
+            {
+              "token_id": 2,
+              "abs_cos": 0.3060323894023895,
+              "signed_cos": 0.3060323894023895
+            },
+            {
+              "token_id": 193,
+              "abs_cos": 0.3031631410121918,
+              "signed_cos": 0.3031631410121918
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.0414393649636417,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1105407327413559,
+          "abs_cos_embedding_centered_v1": 0.08010316640138626,
+          "top_embedding_tokens": [
+            {
+              "token_id": 191,
+              "abs_cos": 0.3836710751056671,
+              "signed_cos": -0.3836710751056671
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.34307533502578735,
+              "signed_cos": -0.34307533502578735
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.29341238737106323,
+              "signed_cos": -0.29341238737106323
+            },
+            {
+              "token_id": 60,
+              "abs_cos": 0.29006558656692505,
+              "signed_cos": -0.29006558656692505
+            },
+            {
+              "token_id": 45,
+              "abs_cos": 0.27996987104415894,
+              "signed_cos": -0.27996987104415894
+            },
+            {
+              "token_id": 143,
+              "abs_cos": 0.25566238164901733,
+              "signed_cos": 0.25566238164901733
+            },
+            {
+              "token_id": 208,
+              "abs_cos": 0.2508455216884613,
+              "signed_cos": -0.2508455216884613
+            },
+            {
+              "token_id": 74,
+              "abs_cos": 0.21905459463596344,
+              "signed_cos": -0.21905459463596344
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05992007473777917,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.02474803663790226,
+          "abs_cos_embedding_centered_v1": 0.004964159801602364,
+          "top_embedding_tokens": [
+            {
+              "token_id": 6,
+              "abs_cos": 0.21020105481147766,
+              "signed_cos": -0.21020105481147766
+            },
+            {
+              "token_id": 249,
+              "abs_cos": 0.20488481223583221,
+              "signed_cos": 0.20488481223583221
+            },
+            {
+              "token_id": 37,
+              "abs_cos": 0.19912779331207275,
+              "signed_cos": -0.19912779331207275
+            },
+            {
+              "token_id": 169,
+              "abs_cos": 0.1888038069009781,
+              "signed_cos": -0.1888038069009781
+            },
+            {
+              "token_id": 188,
+              "abs_cos": 0.18268881738185883,
+              "signed_cos": -0.18268881738185883
+            },
+            {
+              "token_id": 236,
+              "abs_cos": 0.18182790279388428,
+              "signed_cos": -0.18182790279388428
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.16924908757209778,
+              "signed_cos": 0.16924908757209778
+            },
+            {
+              "token_id": 179,
+              "abs_cos": 0.16737601161003113,
+              "signed_cos": -0.16737601161003113
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04209904735067119,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.006762875244021416,
+          "abs_cos_embedding_centered_v1": 0.028019363060593605,
+          "top_embedding_tokens": [
+            {
+              "token_id": 40,
+              "abs_cos": 0.31512874364852905,
+              "signed_cos": -0.31512874364852905
+            },
+            {
+              "token_id": 220,
+              "abs_cos": 0.29564619064331055,
+              "signed_cos": 0.29564619064331055
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.26642459630966187,
+              "signed_cos": 0.26642459630966187
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.26518815755844116,
+              "signed_cos": 0.26518815755844116
+            },
+            {
+              "token_id": 74,
+              "abs_cos": 0.2613399624824524,
+              "signed_cos": -0.2613399624824524
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.23583322763442993,
+              "signed_cos": -0.23583322763442993
+            },
+            {
+              "token_id": 97,
+              "abs_cos": 0.2269001305103302,
+              "signed_cos": -0.2269001305103302
+            },
+            {
+              "token_id": 33,
+              "abs_cos": 0.2213800847530365,
+              "signed_cos": -0.2213800847530365
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.047576053948718666,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1943155825138092,
+          "abs_cos_embedding_centered_v1": 0.2220122516155243,
+          "top_embedding_tokens": [
+            {
+              "token_id": 151,
+              "abs_cos": 0.3266354203224182,
+              "signed_cos": -0.3266354203224182
+            },
+            {
+              "token_id": 31,
+              "abs_cos": 0.3082680106163025,
+              "signed_cos": 0.3082680106163025
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.30406373739242554,
+              "signed_cos": -0.30406373739242554
+            },
+            {
+              "token_id": 243,
+              "abs_cos": 0.2920847237110138,
+              "signed_cos": 0.2920847237110138
+            },
+            {
+              "token_id": 78,
+              "abs_cos": 0.2909869849681854,
+              "signed_cos": 0.2909869849681854
+            },
+            {
+              "token_id": 205,
+              "abs_cos": 0.28920698165893555,
+              "signed_cos": 0.28920698165893555
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.2843904197216034,
+              "signed_cos": -0.2843904197216034
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.2600782811641693,
+              "signed_cos": -0.2600782811641693
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.059476445764208706,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.01645621657371521,
+          "abs_cos_embedding_centered_v1": 0.03222309798002243,
+          "top_embedding_tokens": [
+            {
+              "token_id": 188,
+              "abs_cos": 0.2788892984390259,
+              "signed_cos": 0.2788892984390259
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.27327054738998413,
+              "signed_cos": 0.27327054738998413
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.238235741853714,
+              "signed_cos": -0.238235741853714
+            },
+            {
+              "token_id": 234,
+              "abs_cos": 0.21756792068481445,
+              "signed_cos": 0.21756792068481445
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.20594622194766998,
+              "signed_cos": -0.20594622194766998
+            },
+            {
+              "token_id": 92,
+              "abs_cos": 0.19996239244937897,
+              "signed_cos": -0.19996239244937897
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.19480323791503906,
+              "signed_cos": -0.19480323791503906
+            },
+            {
+              "token_id": 253,
+              "abs_cos": 0.18922141194343567,
+              "signed_cos": -0.18922141194343567
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04400436513031198,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.2383721023797989,
+          "abs_cos_embedding_centered_v1": 0.2429223209619522,
+          "top_embedding_tokens": [
+            {
+              "token_id": 151,
+              "abs_cos": 0.43103915452957153,
+              "signed_cos": -0.43103915452957153
+            },
+            {
+              "token_id": 135,
+              "abs_cos": 0.33548808097839355,
+              "signed_cos": -0.33548808097839355
+            },
+            {
+              "token_id": 212,
+              "abs_cos": 0.28714656829833984,
+              "signed_cos": -0.28714656829833984
+            },
+            {
+              "token_id": 12,
+              "abs_cos": 0.28346025943756104,
+              "signed_cos": -0.28346025943756104
+            },
+            {
+              "token_id": 182,
+              "abs_cos": 0.28268247842788696,
+              "signed_cos": -0.28268247842788696
+            },
+            {
+              "token_id": 204,
+              "abs_cos": 0.28004926443099976,
+              "signed_cos": -0.28004926443099976
+            },
+            {
+              "token_id": 113,
+              "abs_cos": 0.2768670916557312,
+              "signed_cos": -0.2768670916557312
+            },
+            {
+              "token_id": 235,
+              "abs_cos": 0.2767292559146881,
+              "signed_cos": -0.2767292559146881
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04345986937081145,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.0870773047208786,
+          "abs_cos_embedding_centered_v1": 0.07418585568666458,
+          "top_embedding_tokens": [
+            {
+              "token_id": 36,
+              "abs_cos": 0.3427121341228485,
+              "signed_cos": 0.3427121341228485
+            },
+            {
+              "token_id": 140,
+              "abs_cos": 0.32881730794906616,
+              "signed_cos": -0.32881730794906616
+            },
+            {
+              "token_id": 7,
+              "abs_cos": 0.3287658095359802,
+              "signed_cos": -0.3287658095359802
+            },
+            {
+              "token_id": 135,
+              "abs_cos": 0.30140191316604614,
+              "signed_cos": -0.30140191316604614
+            },
+            {
+              "token_id": 49,
+              "abs_cos": 0.29571887850761414,
+              "signed_cos": -0.29571887850761414
+            },
+            {
+              "token_id": 131,
+              "abs_cos": 0.26387491822242737,
+              "signed_cos": 0.26387491822242737
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.2245166301727295,
+              "signed_cos": -0.2245166301727295
+            },
+            {
+              "token_id": 130,
+              "abs_cos": 0.2204580307006836,
+              "signed_cos": -0.2204580307006836
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05456481315357535,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.07384331524372101,
+          "abs_cos_embedding_centered_v1": 0.054929476231336594,
+          "top_embedding_tokens": [
+            {
+              "token_id": 245,
+              "abs_cos": 0.28388673067092896,
+              "signed_cos": 0.28388673067092896
+            },
+            {
+              "token_id": 130,
+              "abs_cos": 0.2460007220506668,
+              "signed_cos": -0.2460007220506668
+            },
+            {
+              "token_id": 31,
+              "abs_cos": 0.23787683248519897,
+              "signed_cos": 0.23787683248519897
+            },
+            {
+              "token_id": 7,
+              "abs_cos": 0.21400770545005798,
+              "signed_cos": 0.21400770545005798
+            },
+            {
+              "token_id": 51,
+              "abs_cos": 0.20220805704593658,
+              "signed_cos": 0.20220805704593658
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.19706153869628906,
+              "signed_cos": -0.19706153869628906
+            },
+            {
+              "token_id": 167,
+              "abs_cos": 0.19690123200416565,
+              "signed_cos": 0.19690123200416565
+            },
+            {
+              "token_id": 64,
+              "abs_cos": 0.1867923140525818,
+              "signed_cos": 0.1867923140525818
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04463323478972342,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.13600066304206848,
+          "abs_cos_embedding_centered_v1": 0.10592545568943024,
+          "top_embedding_tokens": [
+            {
+              "token_id": 164,
+              "abs_cos": 0.46206384897232056,
+              "signed_cos": 0.46206384897232056
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.25900745391845703,
+              "signed_cos": -0.25900745391845703
+            },
+            {
+              "token_id": 118,
+              "abs_cos": 0.2487831860780716,
+              "signed_cos": 0.2487831860780716
+            },
+            {
+              "token_id": 83,
+              "abs_cos": 0.24875429272651672,
+              "signed_cos": 0.24875429272651672
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.23934730887413025,
+              "signed_cos": 0.23934730887413025
+            },
+            {
+              "token_id": 167,
+              "abs_cos": 0.2196134477853775,
+              "signed_cos": -0.2196134477853775
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.21927925944328308,
+              "signed_cos": -0.21927925944328308
+            },
+            {
+              "token_id": 179,
+              "abs_cos": 0.21312028169631958,
+              "signed_cos": 0.21312028169631958
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05045175521120654,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.058669328689575195,
+          "abs_cos_embedding_centered_v1": 0.039454713463783264,
+          "top_embedding_tokens": [
+            {
+              "token_id": 179,
+              "abs_cos": 0.4121549725532532,
+              "signed_cos": -0.4121549725532532
+            },
+            {
+              "token_id": 164,
+              "abs_cos": 0.37821364402770996,
+              "signed_cos": -0.37821364402770996
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.2636604309082031,
+              "signed_cos": 0.2636604309082031
+            },
+            {
+              "token_id": 227,
+              "abs_cos": 0.2573109269142151,
+              "signed_cos": 0.2573109269142151
+            },
+            {
+              "token_id": 215,
+              "abs_cos": 0.2565385401248932,
+              "signed_cos": -0.2565385401248932
+            },
+            {
+              "token_id": 201,
+              "abs_cos": 0.24971802532672882,
+              "signed_cos": -0.24971802532672882
+            },
+            {
+              "token_id": 206,
+              "abs_cos": 0.24962204694747925,
+              "signed_cos": 0.24962204694747925
+            },
+            {
+              "token_id": 118,
+              "abs_cos": 0.24529531598091125,
+              "signed_cos": -0.24529531598091125
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.047895119792491045,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.08304443210363388,
+          "abs_cos_embedding_centered_v1": 0.0339171327650547,
+          "top_embedding_tokens": [
+            {
+              "token_id": 164,
+              "abs_cos": 0.2622467875480652,
+              "signed_cos": -0.2622467875480652
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.2560099959373474,
+              "signed_cos": -0.2560099959373474
+            },
+            {
+              "token_id": 61,
+              "abs_cos": 0.23994342982769012,
+              "signed_cos": 0.23994342982769012
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.1928734928369522,
+              "signed_cos": -0.1928734928369522
+            },
+            {
+              "token_id": 95,
+              "abs_cos": 0.1922684609889984,
+              "signed_cos": 0.1922684609889984
+            },
+            {
+              "token_id": 228,
+              "abs_cos": 0.17927950620651245,
+              "signed_cos": -0.17927950620651245
+            },
+            {
+              "token_id": 31,
+              "abs_cos": 0.17707981169223785,
+              "signed_cos": -0.17707981169223785
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.16908350586891174,
+              "signed_cos": 0.16908350586891174
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.0866965498032838,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.5568791627883911,
+          "abs_cos_embedding_centered_v1": 0.627251386642456,
+          "top_embedding_tokens": [
+            {
+              "token_id": 200,
+              "abs_cos": 0.6335463523864746,
+              "signed_cos": -0.6335463523864746
+            },
+            {
+              "token_id": 168,
+              "abs_cos": 0.6326127052307129,
+              "signed_cos": -0.6326127052307129
+            },
+            {
+              "token_id": 75,
+              "abs_cos": 0.630943238735199,
+              "signed_cos": -0.630943238735199
+            },
+            {
+              "token_id": 157,
+              "abs_cos": 0.6187759637832642,
+              "signed_cos": -0.6187759637832642
+            },
+            {
+              "token_id": 21,
+              "abs_cos": 0.6147396564483643,
+              "signed_cos": -0.6147396564483643
+            },
+            {
+              "token_id": 12,
+              "abs_cos": 0.6142817139625549,
+              "signed_cos": -0.6142817139625549
+            },
+            {
+              "token_id": 182,
+              "abs_cos": 0.6141417026519775,
+              "signed_cos": -0.6141417026519775
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.6119310855865479,
+              "signed_cos": -0.6119310855865479
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.19479303533582468,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.5730186104774475,
+          "abs_cos_embedding_centered_v1": 0.621929407119751,
+          "top_embedding_tokens": [
+            {
+              "token_id": 19,
+              "abs_cos": 0.6587229371070862,
+              "signed_cos": 0.6587229371070862
+            },
+            {
+              "token_id": 168,
+              "abs_cos": 0.6559087634086609,
+              "signed_cos": 0.6559087634086609
+            },
+            {
+              "token_id": 212,
+              "abs_cos": 0.6545969247817993,
+              "signed_cos": 0.6545969247817993
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.6533464193344116,
+              "signed_cos": 0.6533464193344116
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.6512595415115356,
+              "signed_cos": 0.6512595415115356
+            },
+            {
+              "token_id": 113,
+              "abs_cos": 0.6512052416801453,
+              "signed_cos": 0.6512052416801453
+            },
+            {
+              "token_id": 182,
+              "abs_cos": 0.6493304967880249,
+              "signed_cos": 0.6493304967880249
+            },
+            {
+              "token_id": 226,
+              "abs_cos": 0.6480032801628113,
+              "signed_cos": 0.6480032801628113
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.06538199432201797,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.15168026089668274,
+          "abs_cos_embedding_centered_v1": 0.1537228524684906,
+          "top_embedding_tokens": [
+            {
+              "token_id": 210,
+              "abs_cos": 0.35333049297332764,
+              "signed_cos": -0.35333049297332764
+            },
+            {
+              "token_id": 129,
+              "abs_cos": 0.3467830419540405,
+              "signed_cos": -0.3467830419540405
+            },
+            {
+              "token_id": 152,
+              "abs_cos": 0.28329068422317505,
+              "signed_cos": 0.28329068422317505
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.26883745193481445,
+              "signed_cos": -0.26883745193481445
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.2585146427154541,
+              "signed_cos": 0.2585146427154541
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.2549300789833069,
+              "signed_cos": -0.2549300789833069
+            },
+            {
+              "token_id": 61,
+              "abs_cos": 0.23778411746025085,
+              "signed_cos": 0.23778411746025085
+            },
+            {
+              "token_id": 88,
+              "abs_cos": 0.2324763685464859,
+              "signed_cos": -0.2324763685464859
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.06364978116787018,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.08411582559347153,
+          "abs_cos_embedding_centered_v1": 0.10601019859313965,
+          "top_embedding_tokens": [
+            {
+              "token_id": 85,
+              "abs_cos": 0.3301524221897125,
+              "signed_cos": 0.3301524221897125
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.218502476811409,
+              "signed_cos": 0.218502476811409
+            },
+            {
+              "token_id": 159,
+              "abs_cos": 0.2097489833831787,
+              "signed_cos": -0.2097489833831787
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.20274902880191803,
+              "signed_cos": -0.20274902880191803
+            },
+            {
+              "token_id": 155,
+              "abs_cos": 0.18364766240119934,
+              "signed_cos": -0.18364766240119934
+            },
+            {
+              "token_id": 249,
+              "abs_cos": 0.1763986349105835,
+              "signed_cos": 0.1763986349105835
+            },
+            {
+              "token_id": 8,
+              "abs_cos": 0.173994243144989,
+              "signed_cos": -0.173994243144989
+            },
+            {
+              "token_id": 215,
+              "abs_cos": 0.17355866730213165,
+              "signed_cos": 0.17355866730213165
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.040536735450802934,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1537795513868332,
+          "abs_cos_embedding_centered_v1": 0.23877325654029846,
+          "top_embedding_tokens": [
+            {
+              "token_id": 27,
+              "abs_cos": 0.35200265049934387,
+              "signed_cos": 0.35200265049934387
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.3138365149497986,
+              "signed_cos": -0.3138365149497986
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.3135858178138733,
+              "signed_cos": -0.3135858178138733
+            },
+            {
+              "token_id": 15,
+              "abs_cos": 0.2740650773048401,
+              "signed_cos": -0.2740650773048401
+            },
+            {
+              "token_id": 8,
+              "abs_cos": 0.2701689302921295,
+              "signed_cos": 0.2701689302921295
+            },
+            {
+              "token_id": 99,
+              "abs_cos": 0.2676529884338379,
+              "signed_cos": 0.2676529884338379
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.2627872824668884,
+              "signed_cos": 0.2627872824668884
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.261739045381546,
+              "signed_cos": -0.261739045381546
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.04594296412086563,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.15529689192771912,
+          "abs_cos_embedding_centered_v1": 0.10386362671852112,
+          "top_embedding_tokens": [
+            {
+              "token_id": 232,
+              "abs_cos": 0.3457971513271332,
+              "signed_cos": -0.3457971513271332
+            },
+            {
+              "token_id": 149,
+              "abs_cos": 0.3169729709625244,
+              "signed_cos": -0.3169729709625244
+            },
+            {
+              "token_id": 57,
+              "abs_cos": 0.29436570405960083,
+              "signed_cos": 0.29436570405960083
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.28968435525894165,
+              "signed_cos": -0.28968435525894165
+            },
+            {
+              "token_id": 78,
+              "abs_cos": 0.2879641652107239,
+              "signed_cos": 0.2879641652107239
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.28176769614219666,
+              "signed_cos": -0.28176769614219666
+            },
+            {
+              "token_id": 71,
+              "abs_cos": 0.26354095339775085,
+              "signed_cos": 0.26354095339775085
+            },
+            {
+              "token_id": 135,
+              "abs_cos": 0.2522616386413574,
+              "signed_cos": -0.2522616386413574
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.08111648850636133,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.01601412333548069,
+          "abs_cos_embedding_centered_v1": 0.004274120554327965,
+          "top_embedding_tokens": [
+            {
+              "token_id": 101,
+              "abs_cos": 0.23400342464447021,
+              "signed_cos": 0.23400342464447021
+            },
+            {
+              "token_id": 230,
+              "abs_cos": 0.2162909060716629,
+              "signed_cos": -0.2162909060716629
+            },
+            {
+              "token_id": 219,
+              "abs_cos": 0.19370867311954498,
+              "signed_cos": 0.19370867311954498
+            },
+            {
+              "token_id": 92,
+              "abs_cos": 0.1935516893863678,
+              "signed_cos": -0.1935516893863678
+            },
+            {
+              "token_id": 87,
+              "abs_cos": 0.18262390792369843,
+              "signed_cos": 0.18262390792369843
+            },
+            {
+              "token_id": 16,
+              "abs_cos": 0.17731595039367676,
+              "signed_cos": 0.17731595039367676
+            },
+            {
+              "token_id": 215,
+              "abs_cos": 0.17349395155906677,
+              "signed_cos": -0.17349395155906677
+            },
+            {
+              "token_id": 83,
+              "abs_cos": 0.17184492945671082,
+              "signed_cos": -0.17184492945671082
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.06957313046918177,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.5165480375289917,
+          "abs_cos_embedding_centered_v1": 0.5680832862854004,
+          "top_embedding_tokens": [
+            {
+              "token_id": 53,
+              "abs_cos": 0.46626216173171997,
+              "signed_cos": -0.46626216173171997
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.46012285351753235,
+              "signed_cos": -0.46012285351753235
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.4546751081943512,
+              "signed_cos": -0.4546751081943512
+            },
+            {
+              "token_id": 186,
+              "abs_cos": 0.4525027871131897,
+              "signed_cos": -0.4525027871131897
+            },
+            {
+              "token_id": 150,
+              "abs_cos": 0.45167261362075806,
+              "signed_cos": -0.45167261362075806
+            },
+            {
+              "token_id": 20,
+              "abs_cos": 0.44813525676727295,
+              "signed_cos": -0.44813525676727295
+            },
+            {
+              "token_id": 68,
+              "abs_cos": 0.4473212659358978,
+              "signed_cos": -0.4473212659358978
+            },
+            {
+              "token_id": 166,
+              "abs_cos": 0.4468710720539093,
+              "signed_cos": -0.4468710720539093
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.05638758199188452,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.6099122762680054,
+          "abs_cos_embedding_centered_v1": 0.6682788133621216,
+          "top_embedding_tokens": [
+            {
+              "token_id": 62,
+              "abs_cos": 0.5821424722671509,
+              "signed_cos": 0.5821424722671509
+            },
+            {
+              "token_id": 68,
+              "abs_cos": 0.5818712711334229,
+              "signed_cos": 0.5818712711334229
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.5791665315628052,
+              "signed_cos": 0.5791665315628052
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.5709934830665588,
+              "signed_cos": 0.5709934830665588
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.5644177198410034,
+              "signed_cos": 0.5644177198410034
+            },
+            {
+              "token_id": 132,
+              "abs_cos": 0.5604243278503418,
+              "signed_cos": 0.5604243278503418
+            },
+            {
+              "token_id": 113,
+              "abs_cos": 0.5602521896362305,
+              "signed_cos": 0.5602521896362305
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.5587069392204285,
+              "signed_cos": 0.5587069392204285
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.13389925664383692,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.05187380313873291,
+          "abs_cos_embedding_centered_v1": 0.0626995712518692,
+          "top_embedding_tokens": [
+            {
+              "token_id": 83,
+              "abs_cos": 0.2586822807788849,
+              "signed_cos": 0.2586822807788849
+            },
+            {
+              "token_id": 174,
+              "abs_cos": 0.2303217351436615,
+              "signed_cos": -0.2303217351436615
+            },
+            {
+              "token_id": 64,
+              "abs_cos": 0.20645320415496826,
+              "signed_cos": 0.20645320415496826
+            },
+            {
+              "token_id": 119,
+              "abs_cos": 0.20300069451332092,
+              "signed_cos": 0.20300069451332092
+            },
+            {
+              "token_id": 98,
+              "abs_cos": 0.20187337696552277,
+              "signed_cos": -0.20187337696552277
+            },
+            {
+              "token_id": 172,
+              "abs_cos": 0.19551680982112885,
+              "signed_cos": -0.19551680982112885
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.19219180941581726,
+              "signed_cos": -0.19219180941581726
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.18263494968414307,
+              "signed_cos": -0.18263494968414307
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.050998112881496936,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.3214161992073059,
+          "abs_cos_embedding_centered_v1": 0.3713723421096802,
+          "top_embedding_tokens": [
+            {
+              "token_id": 66,
+              "abs_cos": 0.4330710172653198,
+              "signed_cos": 0.4330710172653198
+            },
+            {
+              "token_id": 34,
+              "abs_cos": 0.38784146308898926,
+              "signed_cos": 0.38784146308898926
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.37442508339881897,
+              "signed_cos": 0.37442508339881897
+            },
+            {
+              "token_id": 171,
+              "abs_cos": 0.36764490604400635,
+              "signed_cos": 0.36764490604400635
+            },
+            {
+              "token_id": 188,
+              "abs_cos": 0.3668973445892334,
+              "signed_cos": 0.3668973445892334
+            },
+            {
+              "token_id": 136,
+              "abs_cos": 0.35727447271347046,
+              "signed_cos": 0.35727447271347046
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.33195599913597107,
+              "signed_cos": 0.33195599913597107
+            },
+            {
+              "token_id": 68,
+              "abs_cos": 0.3150908350944519,
+              "signed_cos": -0.3150908350944519
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.046689987527022865,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.49676942825317383,
+          "abs_cos_embedding_centered_v1": 0.5353286862373352,
+          "top_embedding_tokens": [
+            {
+              "token_id": 68,
+              "abs_cos": 0.5238288640975952,
+              "signed_cos": -0.5238288640975952
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.5174857378005981,
+              "signed_cos": -0.5174857378005981
+            },
+            {
+              "token_id": 141,
+              "abs_cos": 0.5135219693183899,
+              "signed_cos": -0.5135219693183899
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.5059239864349365,
+              "signed_cos": -0.5059239864349365
+            },
+            {
+              "token_id": 25,
+              "abs_cos": 0.5036603212356567,
+              "signed_cos": -0.5036603212356567
+            },
+            {
+              "token_id": 200,
+              "abs_cos": 0.5026021599769592,
+              "signed_cos": -0.5026021599769592
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.5017173290252686,
+              "signed_cos": -0.5017173290252686
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.5008624792098999,
+              "signed_cos": -0.5008624792098999
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.10035637084353359,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.05263862758874893,
+          "abs_cos_embedding_centered_v1": 0.09735271334648132,
+          "top_embedding_tokens": [
+            {
+              "token_id": 148,
+              "abs_cos": 0.22773131728172302,
+              "signed_cos": -0.22773131728172302
+            },
+            {
+              "token_id": 213,
+              "abs_cos": 0.2206379920244217,
+              "signed_cos": -0.2206379920244217
+            },
+            {
+              "token_id": 14,
+              "abs_cos": 0.20476964116096497,
+              "signed_cos": 0.20476964116096497
+            },
+            {
+              "token_id": 197,
+              "abs_cos": 0.19645920395851135,
+              "signed_cos": -0.19645920395851135
+            },
+            {
+              "token_id": 160,
+              "abs_cos": 0.19125032424926758,
+              "signed_cos": -0.19125032424926758
+            },
+            {
+              "token_id": 66,
+              "abs_cos": 0.18773534893989563,
+              "signed_cos": -0.18773534893989563
+            },
+            {
+              "token_id": 156,
+              "abs_cos": 0.17046193778514862,
+              "signed_cos": 0.17046193778514862
+            },
+            {
+              "token_id": 50,
+              "abs_cos": 0.16697365045547485,
+              "signed_cos": 0.16697365045547485
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.04368137631634138,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.16359609365463257,
+          "abs_cos_embedding_centered_v1": 0.22639533877372742,
+          "top_embedding_tokens": [
+            {
+              "token_id": 243,
+              "abs_cos": 0.3878587484359741,
+              "signed_cos": -0.3878587484359741
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.30731743574142456,
+              "signed_cos": 0.30731743574142456
+            },
+            {
+              "token_id": 18,
+              "abs_cos": 0.30432426929473877,
+              "signed_cos": -0.30432426929473877
+            },
+            {
+              "token_id": 137,
+              "abs_cos": 0.29779648780822754,
+              "signed_cos": -0.29779648780822754
+            },
+            {
+              "token_id": 27,
+              "abs_cos": 0.28470921516418457,
+              "signed_cos": -0.28470921516418457
+            },
+            {
+              "token_id": 199,
+              "abs_cos": 0.26784542202949524,
+              "signed_cos": -0.26784542202949524
+            },
+            {
+              "token_id": 11,
+              "abs_cos": 0.25484514236450195,
+              "signed_cos": -0.25484514236450195
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.2525768280029297,
+              "signed_cos": 0.2525768280029297
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.04224744285343598,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.26979860663414,
+          "abs_cos_embedding_centered_v1": 0.3767591714859009,
+          "top_embedding_tokens": [
+            {
+              "token_id": 136,
+              "abs_cos": 0.47800955176353455,
+              "signed_cos": -0.47800955176353455
+            },
+            {
+              "token_id": 66,
+              "abs_cos": 0.40152305364608765,
+              "signed_cos": -0.40152305364608765
+            },
+            {
+              "token_id": 188,
+              "abs_cos": 0.3612029552459717,
+              "signed_cos": -0.3612029552459717
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.35124439001083374,
+              "signed_cos": -0.35124439001083374
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.3240389823913574,
+              "signed_cos": -0.3240389823913574
+            },
+            {
+              "token_id": 93,
+              "abs_cos": 0.3189692497253418,
+              "signed_cos": 0.3189692497253418
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.3139185309410095,
+              "signed_cos": 0.3139185309410095
+            },
+            {
+              "token_id": 62,
+              "abs_cos": 0.3128845691680908,
+              "signed_cos": 0.3128845691680908
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.09040390528323183,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.04012737423181534,
+          "abs_cos_embedding_centered_v1": 0.06613301485776901,
+          "top_embedding_tokens": [
+            {
+              "token_id": 243,
+              "abs_cos": 0.2527269721031189,
+              "signed_cos": -0.2527269721031189
+            },
+            {
+              "token_id": 103,
+              "abs_cos": 0.22576755285263062,
+              "signed_cos": -0.22576755285263062
+            },
+            {
+              "token_id": 206,
+              "abs_cos": 0.19992253184318542,
+              "signed_cos": 0.19992253184318542
+            },
+            {
+              "token_id": 219,
+              "abs_cos": 0.19391728937625885,
+              "signed_cos": 0.19391728937625885
+            },
+            {
+              "token_id": 108,
+              "abs_cos": 0.19250977039337158,
+              "signed_cos": -0.19250977039337158
+            },
+            {
+              "token_id": 161,
+              "abs_cos": 0.18279752135276794,
+              "signed_cos": 0.18279752135276794
+            },
+            {
+              "token_id": 72,
+              "abs_cos": 0.17414472997188568,
+              "signed_cos": 0.17414472997188568
+            },
+            {
+              "token_id": 121,
+              "abs_cos": 0.1658063530921936,
+              "signed_cos": 0.1658063530921936
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "alias": "zipf_baseline",
+      "run": "inverse-kv-zipf-baseline",
+      "distribution": "zipf",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "../checkpoints/inverse-kv-zipf-baseline/5000.pth",
+      "embedding": {
+        "content_mean_norm": 0.2123265117406845,
+        "content_embedding_norm_mean": 0.8575079441070557,
+        "raw_top1_energy": 0.13606708271384166,
+        "centered_top1_energy": 0.08913344089613127,
+        "abs_cos_raw_v1_embedding_mean": 0.982833981513977,
+        "centered_v1_top_embedding_tokens": [
+          {
+            "token_id": 50,
+            "abs_cos": 0.9068673253059387,
+            "signed_cos": 0.9068673253059387
+          },
+          {
+            "token_id": 56,
+            "abs_cos": 0.9032259583473206,
+            "signed_cos": 0.9032259583473206
+          },
+          {
+            "token_id": 144,
+            "abs_cos": 0.8992976546287537,
+            "signed_cos": 0.8992976546287537
+          },
+          {
+            "token_id": 190,
+            "abs_cos": 0.8975951075553894,
+            "signed_cos": 0.8975951075553894
+          },
+          {
+            "token_id": 35,
+            "abs_cos": 0.8972204327583313,
+            "signed_cos": 0.8972204327583313
+          },
+          {
+            "token_id": 168,
+            "abs_cos": 0.8948309421539307,
+            "signed_cos": 0.8948309421539307
+          },
+          {
+            "token_id": 126,
+            "abs_cos": 0.8942086696624756,
+            "signed_cos": 0.8942086696624756
+          },
+          {
+            "token_id": 247,
+            "abs_cos": 0.8933638334274292,
+            "signed_cos": 0.8933638334274292
+          }
+        ]
+      },
+      "representations": [
+        {
+          "name": "embedding",
+          "raw_top1_energy": 0.0629749395611399,
+          "centered_top1_energy": 0.06251389773419196,
+          "abs_cos_raw_v1_rep_mean": 0.37456727027893066,
+          "abs_cos_raw_v1_embedding_mean": 0.6379256844520569,
+          "abs_cos_centered_v1_embedding_mean": 0.5893522500991821,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.7628551721572876,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.7270478010177612,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 128,
+              "abs_cos": 0.6834903955459595,
+              "signed_cos": -0.6834903955459595
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.6546645164489746,
+              "signed_cos": -0.6546645164489746
+            },
+            {
+              "token_id": 9,
+              "abs_cos": 0.6018111705780029,
+              "signed_cos": 0.6018111705780029
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.59707111120224,
+              "signed_cos": 0.59707111120224
+            },
+            {
+              "token_id": 47,
+              "abs_cos": 0.5957959890365601,
+              "signed_cos": 0.5957959890365601
+            },
+            {
+              "token_id": 166,
+              "abs_cos": 0.5940961837768555,
+              "signed_cos": 0.5940961837768555
+            },
+            {
+              "token_id": 193,
+              "abs_cos": 0.5940149426460266,
+              "signed_cos": 0.5940149426460266
+            },
+            {
+              "token_id": 144,
+              "abs_cos": 0.5861880779266357,
+              "signed_cos": 0.5861880779266357
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 128,
+              "abs_cos": 0.681304931640625,
+              "signed_cos": -0.681304931640625
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.6595874428749084,
+              "signed_cos": -0.6595874428749084
+            },
+            {
+              "token_id": 9,
+              "abs_cos": 0.5602657794952393,
+              "signed_cos": 0.5602657794952393
+            },
+            {
+              "token_id": 166,
+              "abs_cos": 0.5593770742416382,
+              "signed_cos": 0.5593770742416382
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.5561184287071228,
+              "signed_cos": 0.5561184287071228
+            },
+            {
+              "token_id": 193,
+              "abs_cos": 0.555254340171814,
+              "signed_cos": 0.555254340171814
+            },
+            {
+              "token_id": 47,
+              "abs_cos": 0.554043710231781,
+              "signed_cos": 0.554043710231781
+            },
+            {
+              "token_id": 22,
+              "abs_cos": 0.5452476739883423,
+              "signed_cos": 0.5452476739883423
+            }
+          ]
+        },
+        {
+          "name": "after_layer_0",
+          "raw_top1_energy": 0.14148394424968838,
+          "centered_top1_energy": 0.13532877857999032,
+          "abs_cos_raw_v1_rep_mean": 0.6248547434806824,
+          "abs_cos_raw_v1_embedding_mean": 0.17760775983333588,
+          "abs_cos_centered_v1_embedding_mean": 0.0658087432384491,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.12590178847312927,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.012702111154794693,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 45,
+              "abs_cos": 0.8929375410079956,
+              "signed_cos": 0.8929375410079956
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.2512812614440918,
+              "signed_cos": -0.2512812614440918
+            },
+            {
+              "token_id": 235,
+              "abs_cos": 0.24289387464523315,
+              "signed_cos": -0.24289387464523315
+            },
+            {
+              "token_id": 247,
+              "abs_cos": 0.23768289387226105,
+              "signed_cos": -0.23768289387226105
+            },
+            {
+              "token_id": 153,
+              "abs_cos": 0.22620099782943726,
+              "signed_cos": -0.22620099782943726
+            },
+            {
+              "token_id": 162,
+              "abs_cos": 0.22111520171165466,
+              "signed_cos": -0.22111520171165466
+            },
+            {
+              "token_id": 35,
+              "abs_cos": 0.21703273057937622,
+              "signed_cos": -0.21703273057937622
+            },
+            {
+              "token_id": 19,
+              "abs_cos": 0.2152380645275116,
+              "signed_cos": -0.2152380645275116
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 45,
+              "abs_cos": 0.9146776795387268,
+              "signed_cos": 0.9146776795387268
+            },
+            {
+              "token_id": 221,
+              "abs_cos": 0.1932414472103119,
+              "signed_cos": 0.1932414472103119
+            },
+            {
+              "token_id": 123,
+              "abs_cos": 0.17160078883171082,
+              "signed_cos": 0.17160078883171082
+            },
+            {
+              "token_id": 83,
+              "abs_cos": 0.1669403463602066,
+              "signed_cos": -0.1669403463602066
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.16067756712436676,
+              "signed_cos": 0.16067756712436676
+            },
+            {
+              "token_id": 84,
+              "abs_cos": 0.15992170572280884,
+              "signed_cos": 0.15992170572280884
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.15607093274593353,
+              "signed_cos": -0.15607093274593353
+            },
+            {
+              "token_id": 171,
+              "abs_cos": 0.1521134078502655,
+              "signed_cos": -0.1521134078502655
+            }
+          ]
+        },
+        {
+          "name": "after_layer_1",
+          "raw_top1_energy": 0.15314522451835597,
+          "centered_top1_energy": 0.1534848008919669,
+          "abs_cos_raw_v1_rep_mean": 0.4773915410041809,
+          "abs_cos_raw_v1_embedding_mean": 0.2719261646270752,
+          "abs_cos_centered_v1_embedding_mean": 0.1682552993297577,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.2829662263393402,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.1949600875377655,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 213,
+              "abs_cos": 0.8634675741195679,
+              "signed_cos": 0.8634675741195679
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.6748077869415283,
+              "signed_cos": 0.6748077869415283
+            },
+            {
+              "token_id": 153,
+              "abs_cos": 0.3183942437171936,
+              "signed_cos": -0.3183942437171936
+            },
+            {
+              "token_id": 218,
+              "abs_cos": 0.30928733944892883,
+              "signed_cos": -0.30928733944892883
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.3048273026943207,
+              "signed_cos": -0.3048273026943207
+            },
+            {
+              "token_id": 127,
+              "abs_cos": 0.30303719639778137,
+              "signed_cos": -0.30303719639778137
+            },
+            {
+              "token_id": 75,
+              "abs_cos": 0.29980555176734924,
+              "signed_cos": -0.29980555176734924
+            },
+            {
+              "token_id": 107,
+              "abs_cos": 0.2966478168964386,
+              "signed_cos": -0.2966478168964386
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 213,
+              "abs_cos": 0.8965806365013123,
+              "signed_cos": 0.8965806365013123
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.6858734488487244,
+              "signed_cos": 0.6858734488487244
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.23439496755599976,
+              "signed_cos": -0.23439496755599976
+            },
+            {
+              "token_id": 218,
+              "abs_cos": 0.2216866910457611,
+              "signed_cos": -0.2216866910457611
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.22084681689739227,
+              "signed_cos": -0.22084681689739227
+            },
+            {
+              "token_id": 153,
+              "abs_cos": 0.21632269024848938,
+              "signed_cos": -0.21632269024848938
+            },
+            {
+              "token_id": 255,
+              "abs_cos": 0.215981125831604,
+              "signed_cos": -0.215981125831604
+            },
+            {
+              "token_id": 38,
+              "abs_cos": 0.21512380242347717,
+              "signed_cos": -0.21512380242347717
+            }
+          ]
+        },
+        {
+          "name": "final_norm",
+          "raw_top1_energy": 0.0855442770638436,
+          "centered_top1_energy": 0.07833446713905629,
+          "abs_cos_raw_v1_rep_mean": 0.6634577512741089,
+          "abs_cos_raw_v1_embedding_mean": 0.6993815898895264,
+          "abs_cos_centered_v1_embedding_mean": 0.4921104609966278,
+          "abs_cos_raw_v1_embedding_centered_v1": 0.8076130151748657,
+          "abs_cos_centered_v1_embedding_centered_v1": 0.6577282547950745,
+          "raw_v1_top_embedding_tokens": [
+            {
+              "token_id": 216,
+              "abs_cos": 0.6667687892913818,
+              "signed_cos": 0.6667687892913818
+            },
+            {
+              "token_id": 9,
+              "abs_cos": 0.654242753982544,
+              "signed_cos": -0.654242753982544
+            },
+            {
+              "token_id": 166,
+              "abs_cos": 0.6472718715667725,
+              "signed_cos": -0.6472718715667725
+            },
+            {
+              "token_id": 24,
+              "abs_cos": 0.6471042633056641,
+              "signed_cos": -0.6471042633056641
+            },
+            {
+              "token_id": 47,
+              "abs_cos": 0.6465571522712708,
+              "signed_cos": -0.6465571522712708
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.6463952660560608,
+              "signed_cos": -0.6463952660560608
+            },
+            {
+              "token_id": 190,
+              "abs_cos": 0.6406216621398926,
+              "signed_cos": -0.6406216621398926
+            },
+            {
+              "token_id": 22,
+              "abs_cos": 0.6378846168518066,
+              "signed_cos": -0.6378846168518066
+            }
+          ],
+          "centered_v1_top_embedding_tokens": [
+            {
+              "token_id": 216,
+              "abs_cos": 0.6772861480712891,
+              "signed_cos": 0.6772861480712891
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.5898087024688721,
+              "signed_cos": 0.5898087024688721
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.5073392987251282,
+              "signed_cos": 0.5073392987251282
+            },
+            {
+              "token_id": 166,
+              "abs_cos": 0.49508827924728394,
+              "signed_cos": -0.49508827924728394
+            },
+            {
+              "token_id": 90,
+              "abs_cos": 0.4802122712135315,
+              "signed_cos": 0.4802122712135315
+            },
+            {
+              "token_id": 9,
+              "abs_cos": 0.4794389605522156,
+              "signed_cos": -0.4794389605522156
+            },
+            {
+              "token_id": 24,
+              "abs_cos": 0.47674208879470825,
+              "signed_cos": -0.47674208879470825
+            },
+            {
+              "token_id": 120,
+              "abs_cos": 0.47574111819267273,
+              "signed_cos": -0.47574111819267273
+            }
+          ]
+        }
+      ],
+      "matrix_summary": {
+        "attention.k_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.4065536856651306,
+          "mean_abs_cos_embedding_centered_v1": 0.4267210861047109,
+          "mean_top1_energy": 0.12269547212222703,
+          "max_abs_cos_embedding_mean": 0.5726810693740845
+        },
+        "attention.o_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.04273596281806628,
+          "mean_abs_cos_embedding_centered_v1": 0.03949792279551426,
+          "mean_top1_energy": 0.05665262634715381,
+          "max_abs_cos_embedding_mean": 0.10102012753486633
+        },
+        "attention.q_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.42333537340164185,
+          "mean_abs_cos_embedding_centered_v1": 0.4789692461490631,
+          "mean_top1_energy": 0.0762686084055078,
+          "max_abs_cos_embedding_mean": 0.5198342800140381
+        },
+        "attention.v_proj": {
+          "num_matrices": 3,
+          "mean_abs_cos_embedding_mean": 0.12494872758785884,
+          "mean_abs_cos_embedding_centered_v1": 0.1642686960597833,
+          "mean_top1_energy": 0.06126734448655243,
+          "max_abs_cos_embedding_mean": 0.2926595211029053
+        },
+        "moe_expert.down_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.0731985098682344,
+          "mean_abs_cos_embedding_centered_v1": 0.06585458611759047,
+          "mean_top1_energy": 0.06767847854947474,
+          "max_abs_cos_embedding_mean": 0.20426881313323975
+        },
+        "moe_expert.gate_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.17935111497839293,
+          "mean_abs_cos_embedding_centered_v1": 0.1978406018267075,
+          "mean_top1_energy": 0.04896540733223134,
+          "max_abs_cos_embedding_mean": 0.3963993489742279
+        },
+        "moe_expert.up_proj": {
+          "num_matrices": 12,
+          "mean_abs_cos_embedding_mean": 0.15210692832867304,
+          "mean_abs_cos_embedding_centered_v1": 0.16886509054650864,
+          "mean_top1_energy": 0.04664221196080857,
+          "max_abs_cos_embedding_mean": 0.6340258717536926
+        }
+      },
+      "matrices": [
+        {
+          "name": "model.layers.0.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.06045022120483456,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.37585344910621643,
+          "abs_cos_embedding_centered_v1": 0.3312469720840454,
+          "top_embedding_tokens": [
+            {
+              "token_id": 204,
+              "abs_cos": 0.3943922519683838,
+              "signed_cos": -0.3943922519683838
+            },
+            {
+              "token_id": 19,
+              "abs_cos": 0.36884236335754395,
+              "signed_cos": -0.36884236335754395
+            },
+            {
+              "token_id": 138,
+              "abs_cos": 0.3675549030303955,
+              "signed_cos": -0.3675549030303955
+            },
+            {
+              "token_id": 12,
+              "abs_cos": 0.3659874200820923,
+              "signed_cos": -0.3659874200820923
+            },
+            {
+              "token_id": 165,
+              "abs_cos": 0.3654472827911377,
+              "signed_cos": 0.3654472827911377
+            },
+            {
+              "token_id": 190,
+              "abs_cos": 0.36144304275512695,
+              "signed_cos": -0.36144304275512695
+            },
+            {
+              "token_id": 195,
+              "abs_cos": 0.35734209418296814,
+              "signed_cos": -0.35734209418296814
+            },
+            {
+              "token_id": 144,
+              "abs_cos": 0.3559853136539459,
+              "signed_cos": -0.3559853136539459
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.0925967267589036,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.2677723169326782,
+          "abs_cos_embedding_centered_v1": 0.19684717059135437,
+          "top_embedding_tokens": [
+            {
+              "token_id": 83,
+              "abs_cos": 0.3722156286239624,
+              "signed_cos": 0.3722156286239624
+            },
+            {
+              "token_id": 202,
+              "abs_cos": 0.33477550745010376,
+              "signed_cos": -0.33477550745010376
+            },
+            {
+              "token_id": 78,
+              "abs_cos": 0.332366943359375,
+              "signed_cos": -0.332366943359375
+            },
+            {
+              "token_id": 146,
+              "abs_cos": 0.32198619842529297,
+              "signed_cos": 0.32198619842529297
+            },
+            {
+              "token_id": 20,
+              "abs_cos": 0.30958402156829834,
+              "signed_cos": 0.30958402156829834
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.30137479305267334,
+              "signed_cos": 0.30137479305267334
+            },
+            {
+              "token_id": 148,
+              "abs_cos": 0.29593411087989807,
+              "signed_cos": -0.29593411087989807
+            },
+            {
+              "token_id": 106,
+              "abs_cos": 0.2953345775604248,
+              "signed_cos": 0.2953345775604248
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.05108818786793138,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.03841070830821991,
+          "abs_cos_embedding_centered_v1": 0.0943152904510498,
+          "top_embedding_tokens": [
+            {
+              "token_id": 131,
+              "abs_cos": 0.3095068335533142,
+              "signed_cos": -0.3095068335533142
+            },
+            {
+              "token_id": 60,
+              "abs_cos": 0.30430465936660767,
+              "signed_cos": 0.30430465936660767
+            },
+            {
+              "token_id": 27,
+              "abs_cos": 0.2717248499393463,
+              "signed_cos": 0.2717248499393463
+            },
+            {
+              "token_id": 246,
+              "abs_cos": 0.2701560854911804,
+              "signed_cos": 0.2701560854911804
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.2637115716934204,
+              "signed_cos": 0.2637115716934204
+            },
+            {
+              "token_id": 89,
+              "abs_cos": 0.26282212138175964,
+              "signed_cos": 0.26282212138175964
+            },
+            {
+              "token_id": 137,
+              "abs_cos": 0.252705454826355,
+              "signed_cos": -0.252705454826355
+            },
+            {
+              "token_id": 85,
+              "abs_cos": 0.23448462784290314,
+              "signed_cos": 0.23448462784290314
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.047925285995096024,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.020056642591953278,
+          "abs_cos_embedding_centered_v1": 0.010784118436276913,
+          "top_embedding_tokens": [
+            {
+              "token_id": 163,
+              "abs_cos": 0.25429677963256836,
+              "signed_cos": 0.25429677963256836
+            },
+            {
+              "token_id": 60,
+              "abs_cos": 0.22660043835639954,
+              "signed_cos": 0.22660043835639954
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.21719923615455627,
+              "signed_cos": 0.21719923615455627
+            },
+            {
+              "token_id": 74,
+              "abs_cos": 0.2119264155626297,
+              "signed_cos": -0.2119264155626297
+            },
+            {
+              "token_id": 242,
+              "abs_cos": 0.20131780207157135,
+              "signed_cos": -0.20131780207157135
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.2008102983236313,
+              "signed_cos": 0.2008102983236313
+            },
+            {
+              "token_id": 123,
+              "abs_cos": 0.1900617778301239,
+              "signed_cos": 0.1900617778301239
+            },
+            {
+              "token_id": 140,
+              "abs_cos": 0.18921098113059998,
+              "signed_cos": -0.18921098113059998
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04119660699915308,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.07772146910429001,
+          "abs_cos_embedding_centered_v1": 0.09304405003786087,
+          "top_embedding_tokens": [
+            {
+              "token_id": 74,
+              "abs_cos": 0.5801330804824829,
+              "signed_cos": 0.5801330804824829
+            },
+            {
+              "token_id": 112,
+              "abs_cos": 0.3629417419433594,
+              "signed_cos": 0.3629417419433594
+            },
+            {
+              "token_id": 103,
+              "abs_cos": 0.3399629592895508,
+              "signed_cos": 0.3399629592895508
+            },
+            {
+              "token_id": 215,
+              "abs_cos": 0.24324418604373932,
+              "signed_cos": -0.24324418604373932
+            },
+            {
+              "token_id": 179,
+              "abs_cos": 0.2413521111011505,
+              "signed_cos": -0.2413521111011505
+            },
+            {
+              "token_id": 105,
+              "abs_cos": 0.2269067019224167,
+              "signed_cos": 0.2269067019224167
+            },
+            {
+              "token_id": 84,
+              "abs_cos": 0.2254936695098877,
+              "signed_cos": 0.2254936695098877
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.22115680575370789,
+              "signed_cos": 0.22115680575370789
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.0457345172759662,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.011136192828416824,
+          "abs_cos_embedding_centered_v1": 0.06273743510246277,
+          "top_embedding_tokens": [
+            {
+              "token_id": 112,
+              "abs_cos": 0.35777297616004944,
+              "signed_cos": -0.35777297616004944
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.3434865474700928,
+              "signed_cos": 0.3434865474700928
+            },
+            {
+              "token_id": 74,
+              "abs_cos": 0.3376162648200989,
+              "signed_cos": -0.3376162648200989
+            },
+            {
+              "token_id": 118,
+              "abs_cos": 0.26602134108543396,
+              "signed_cos": -0.26602134108543396
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.26118203997612,
+              "signed_cos": 0.26118203997612
+            },
+            {
+              "token_id": 228,
+              "abs_cos": 0.22769129276275635,
+              "signed_cos": -0.22769129276275635
+            },
+            {
+              "token_id": 87,
+              "abs_cos": 0.2197384387254715,
+              "signed_cos": -0.2197384387254715
+            },
+            {
+              "token_id": 199,
+              "abs_cos": 0.21755918860435486,
+              "signed_cos": 0.21755918860435486
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.046124713519106235,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.19408217072486877,
+          "abs_cos_embedding_centered_v1": 0.1746882200241089,
+          "top_embedding_tokens": [
+            {
+              "token_id": 137,
+              "abs_cos": 0.27862539887428284,
+              "signed_cos": -0.27862539887428284
+            },
+            {
+              "token_id": 31,
+              "abs_cos": 0.2510591149330139,
+              "signed_cos": -0.2510591149330139
+            },
+            {
+              "token_id": 249,
+              "abs_cos": 0.24517381191253662,
+              "signed_cos": 0.24517381191253662
+            },
+            {
+              "token_id": 76,
+              "abs_cos": 0.23865485191345215,
+              "signed_cos": -0.23865485191345215
+            },
+            {
+              "token_id": 198,
+              "abs_cos": 0.2204521745443344,
+              "signed_cos": -0.2204521745443344
+            },
+            {
+              "token_id": 132,
+              "abs_cos": 0.21556653082370758,
+              "signed_cos": -0.21556653082370758
+            },
+            {
+              "token_id": 193,
+              "abs_cos": 0.2134428769350052,
+              "signed_cos": -0.2134428769350052
+            },
+            {
+              "token_id": 56,
+              "abs_cos": 0.2103385031223297,
+              "signed_cos": -0.2103385031223297
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04502452574078167,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1002877876162529,
+          "abs_cos_embedding_centered_v1": 0.12147501856088638,
+          "top_embedding_tokens": [
+            {
+              "token_id": 57,
+              "abs_cos": 0.3588665723800659,
+              "signed_cos": -0.3588665723800659
+            },
+            {
+              "token_id": 72,
+              "abs_cos": 0.3393494188785553,
+              "signed_cos": -0.3393494188785553
+            },
+            {
+              "token_id": 210,
+              "abs_cos": 0.28690066933631897,
+              "signed_cos": -0.28690066933631897
+            },
+            {
+              "token_id": 237,
+              "abs_cos": 0.2717919945716858,
+              "signed_cos": 0.2717919945716858
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.24946357309818268,
+              "signed_cos": -0.24946357309818268
+            },
+            {
+              "token_id": 39,
+              "abs_cos": 0.2403782606124878,
+              "signed_cos": 0.2403782606124878
+            },
+            {
+              "token_id": 60,
+              "abs_cos": 0.2387489378452301,
+              "signed_cos": 0.2387489378452301
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.2382906824350357,
+              "signed_cos": 0.2382906824350357
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04690110491566178,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.03470052406191826,
+          "abs_cos_embedding_centered_v1": 0.07457403093576431,
+          "top_embedding_tokens": [
+            {
+              "token_id": 214,
+              "abs_cos": 0.3846205472946167,
+              "signed_cos": 0.3846205472946167
+            },
+            {
+              "token_id": 148,
+              "abs_cos": 0.31161439418792725,
+              "signed_cos": 0.31161439418792725
+            },
+            {
+              "token_id": 165,
+              "abs_cos": 0.29311680793762207,
+              "signed_cos": -0.29311680793762207
+            },
+            {
+              "token_id": 28,
+              "abs_cos": 0.2818228602409363,
+              "signed_cos": 0.2818228602409363
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.27941423654556274,
+              "signed_cos": 0.27941423654556274
+            },
+            {
+              "token_id": 199,
+              "abs_cos": 0.2582775950431824,
+              "signed_cos": 0.2582775950431824
+            },
+            {
+              "token_id": 237,
+              "abs_cos": 0.2536908984184265,
+              "signed_cos": -0.2536908984184265
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.24672119319438934,
+              "signed_cos": -0.24672119319438934
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.05114161424274181,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.015696018934249878,
+          "abs_cos_embedding_centered_v1": 0.056629929691553116,
+          "top_embedding_tokens": [
+            {
+              "token_id": 118,
+              "abs_cos": 0.21507659554481506,
+              "signed_cos": 0.21507659554481506
+            },
+            {
+              "token_id": 6,
+              "abs_cos": 0.2047983855009079,
+              "signed_cos": -0.2047983855009079
+            },
+            {
+              "token_id": 249,
+              "abs_cos": 0.1901366412639618,
+              "signed_cos": -0.1901366412639618
+            },
+            {
+              "token_id": 119,
+              "abs_cos": 0.1894654631614685,
+              "signed_cos": -0.1894654631614685
+            },
+            {
+              "token_id": 164,
+              "abs_cos": 0.18710964918136597,
+              "signed_cos": -0.18710964918136597
+            },
+            {
+              "token_id": 16,
+              "abs_cos": 0.1859365999698639,
+              "signed_cos": -0.1859365999698639
+            },
+            {
+              "token_id": 60,
+              "abs_cos": 0.18499168753623962,
+              "signed_cos": -0.18499168753623962
+            },
+            {
+              "token_id": 136,
+              "abs_cos": 0.18113118410110474,
+              "signed_cos": 0.18113118410110474
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04742108932255089,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.35137656331062317,
+          "abs_cos_embedding_centered_v1": 0.26931920647621155,
+          "top_embedding_tokens": [
+            {
+              "token_id": 178,
+              "abs_cos": 0.398954838514328,
+              "signed_cos": 0.398954838514328
+            },
+            {
+              "token_id": 232,
+              "abs_cos": 0.3973989486694336,
+              "signed_cos": 0.3973989486694336
+            },
+            {
+              "token_id": 138,
+              "abs_cos": 0.38649556040763855,
+              "signed_cos": 0.38649556040763855
+            },
+            {
+              "token_id": 96,
+              "abs_cos": 0.3766198456287384,
+              "signed_cos": 0.3766198456287384
+            },
+            {
+              "token_id": 150,
+              "abs_cos": 0.3725053668022156,
+              "signed_cos": 0.3725053668022156
+            },
+            {
+              "token_id": 226,
+              "abs_cos": 0.3692401647567749,
+              "signed_cos": 0.3692401647567749
+            },
+            {
+              "token_id": 196,
+              "abs_cos": 0.3686237335205078,
+              "signed_cos": 0.3686237335205078
+            },
+            {
+              "token_id": 80,
+              "abs_cos": 0.36623865365982056,
+              "signed_cos": 0.36623865365982056
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.050191354708887616,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.22511647641658783,
+          "abs_cos_embedding_centered_v1": 0.24547125399112701,
+          "top_embedding_tokens": [
+            {
+              "token_id": 133,
+              "abs_cos": 0.368324875831604,
+              "signed_cos": 0.368324875831604
+            },
+            {
+              "token_id": 213,
+              "abs_cos": 0.34263959527015686,
+              "signed_cos": -0.34263959527015686
+            },
+            {
+              "token_id": 51,
+              "abs_cos": 0.3420587182044983,
+              "signed_cos": 0.3420587182044983
+            },
+            {
+              "token_id": 103,
+              "abs_cos": 0.3147965669631958,
+              "signed_cos": 0.3147965669631958
+            },
+            {
+              "token_id": 205,
+              "abs_cos": 0.28625571727752686,
+              "signed_cos": -0.28625571727752686
+            },
+            {
+              "token_id": 116,
+              "abs_cos": 0.2814171314239502,
+              "signed_cos": 0.2814171314239502
+            },
+            {
+              "token_id": 46,
+              "abs_cos": 0.2812069058418274,
+              "signed_cos": 0.2812069058418274
+            },
+            {
+              "token_id": 13,
+              "abs_cos": 0.28001588582992554,
+              "signed_cos": 0.28001588582992554
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04692421911364855,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.044803254306316376,
+          "abs_cos_embedding_centered_v1": 0.04074622690677643,
+          "top_embedding_tokens": [
+            {
+              "token_id": 16,
+              "abs_cos": 0.19778534770011902,
+              "signed_cos": 0.19778534770011902
+            },
+            {
+              "token_id": 169,
+              "abs_cos": 0.18471315503120422,
+              "signed_cos": -0.18471315503120422
+            },
+            {
+              "token_id": 199,
+              "abs_cos": 0.1815391182899475,
+              "signed_cos": -0.1815391182899475
+            },
+            {
+              "token_id": 116,
+              "abs_cos": 0.16882312297821045,
+              "signed_cos": -0.16882312297821045
+            },
+            {
+              "token_id": 160,
+              "abs_cos": 0.15757398307323456,
+              "signed_cos": -0.15757398307323456
+            },
+            {
+              "token_id": 14,
+              "abs_cos": 0.15552453696727753,
+              "signed_cos": 0.15552453696727753
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.15236708521842957,
+              "signed_cos": 0.15236708521842957
+            },
+            {
+              "token_id": 71,
+              "abs_cos": 0.14765547215938568,
+              "signed_cos": -0.14765547215938568
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04853109408043566,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.05985788628458977,
+          "abs_cos_embedding_centered_v1": 0.04800030216574669,
+          "top_embedding_tokens": [
+            {
+              "token_id": 90,
+              "abs_cos": 0.3508259356021881,
+              "signed_cos": 0.3508259356021881
+            },
+            {
+              "token_id": 114,
+              "abs_cos": 0.29787003993988037,
+              "signed_cos": 0.29787003993988037
+            },
+            {
+              "token_id": 45,
+              "abs_cos": 0.28778383135795593,
+              "signed_cos": 0.28778383135795593
+            },
+            {
+              "token_id": 71,
+              "abs_cos": 0.2748910188674927,
+              "signed_cos": 0.2748910188674927
+            },
+            {
+              "token_id": 170,
+              "abs_cos": 0.2702319622039795,
+              "signed_cos": -0.2702319622039795
+            },
+            {
+              "token_id": 55,
+              "abs_cos": 0.24002227187156677,
+              "signed_cos": 0.24002227187156677
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.21082642674446106,
+              "signed_cos": 0.21082642674446106
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.20462480187416077,
+              "signed_cos": -0.20462480187416077
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04481312395118696,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.0692082941532135,
+          "abs_cos_embedding_centered_v1": 0.13208885490894318,
+          "top_embedding_tokens": [
+            {
+              "token_id": 90,
+              "abs_cos": 0.40739351511001587,
+              "signed_cos": -0.40739351511001587
+            },
+            {
+              "token_id": 201,
+              "abs_cos": 0.32914209365844727,
+              "signed_cos": 0.32914209365844727
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.32465609908103943,
+              "signed_cos": -0.32465609908103943
+            },
+            {
+              "token_id": 45,
+              "abs_cos": 0.29883044958114624,
+              "signed_cos": -0.29883044958114624
+            },
+            {
+              "token_id": 173,
+              "abs_cos": 0.29628822207450867,
+              "signed_cos": -0.29628822207450867
+            },
+            {
+              "token_id": 15,
+              "abs_cos": 0.2530260682106018,
+              "signed_cos": -0.2530260682106018
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.24120758473873138,
+              "signed_cos": 0.24120758473873138
+            },
+            {
+              "token_id": 71,
+              "abs_cos": 0.24006496369838715,
+              "signed_cos": -0.24006496369838715
+            }
+          ]
+        },
+        {
+          "name": "model.layers.0.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 0,
+          "input_dim": 128,
+          "top1_energy": 0.04355558835768801,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.01105189323425293,
+          "abs_cos_embedding_centered_v1": 0.01468164473772049,
+          "top_embedding_tokens": [
+            {
+              "token_id": 131,
+              "abs_cos": 0.21317344903945923,
+              "signed_cos": 0.21317344903945923
+            },
+            {
+              "token_id": 67,
+              "abs_cos": 0.20092222094535828,
+              "signed_cos": 0.20092222094535828
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.19078652560710907,
+              "signed_cos": -0.19078652560710907
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.17713209986686707,
+              "signed_cos": -0.17713209986686707
+            },
+            {
+              "token_id": 102,
+              "abs_cos": 0.16306079924106598,
+              "signed_cos": -0.16306079924106598
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.15647894144058228,
+              "signed_cos": -0.15647894144058228
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.15491655468940735,
+              "signed_cos": -0.15491655468940735
+            },
+            {
+              "token_id": 201,
+              "abs_cos": 0.1546211540699005,
+              "signed_cos": 0.1546211540699005
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.06915273164164339,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.374318391084671,
+          "abs_cos_embedding_centered_v1": 0.4637540280818939,
+          "top_embedding_tokens": [
+            {
+              "token_id": 212,
+              "abs_cos": 0.4938206374645233,
+              "signed_cos": -0.4938206374645233
+            },
+            {
+              "token_id": 80,
+              "abs_cos": 0.4896165430545807,
+              "signed_cos": -0.4896165430545807
+            },
+            {
+              "token_id": 12,
+              "abs_cos": 0.4757845401763916,
+              "signed_cos": -0.4757845401763916
+            },
+            {
+              "token_id": 200,
+              "abs_cos": 0.46859264373779297,
+              "signed_cos": -0.46859264373779297
+            },
+            {
+              "token_id": 204,
+              "abs_cos": 0.46688708662986755,
+              "signed_cos": -0.46688708662986755
+            },
+            {
+              "token_id": 86,
+              "abs_cos": 0.4640669822692871,
+              "signed_cos": -0.4640669822692871
+            },
+            {
+              "token_id": 21,
+              "abs_cos": 0.46264201402664185,
+              "signed_cos": -0.46264201402664185
+            },
+            {
+              "token_id": 81,
+              "abs_cos": 0.46113547682762146,
+              "signed_cos": -0.46113547682762146
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.11944616048390246,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.37920767068862915,
+          "abs_cos_embedding_centered_v1": 0.44236838817596436,
+          "top_embedding_tokens": [
+            {
+              "token_id": 75,
+              "abs_cos": 0.47737592458724976,
+              "signed_cos": 0.47737592458724976
+            },
+            {
+              "token_id": 80,
+              "abs_cos": 0.4593926668167114,
+              "signed_cos": 0.4593926668167114
+            },
+            {
+              "token_id": 53,
+              "abs_cos": 0.45862531661987305,
+              "signed_cos": 0.45862531661987305
+            },
+            {
+              "token_id": 212,
+              "abs_cos": 0.4514477849006653,
+              "signed_cos": 0.4514477849006653
+            },
+            {
+              "token_id": 247,
+              "abs_cos": 0.44867420196533203,
+              "signed_cos": 0.44867420196533203
+            },
+            {
+              "token_id": 21,
+              "abs_cos": 0.44351091980934143,
+              "signed_cos": 0.44351091980934143
+            },
+            {
+              "token_id": 19,
+              "abs_cos": 0.4432300925254822,
+              "signed_cos": 0.4432300925254822
+            },
+            {
+              "token_id": 52,
+              "abs_cos": 0.4414612948894501,
+              "signed_cos": 0.4414612948894501
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.06002597812789325,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.043775953352451324,
+          "abs_cos_embedding_centered_v1": 0.026112150400877,
+          "top_embedding_tokens": [
+            {
+              "token_id": 49,
+              "abs_cos": 0.3904363214969635,
+              "signed_cos": 0.3904363214969635
+            },
+            {
+              "token_id": 253,
+              "abs_cos": 0.3522849678993225,
+              "signed_cos": -0.3522849678993225
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.31296080350875854,
+              "signed_cos": -0.31296080350875854
+            },
+            {
+              "token_id": 26,
+              "abs_cos": 0.2904583811759949,
+              "signed_cos": -0.2904583811759949
+            },
+            {
+              "token_id": 119,
+              "abs_cos": 0.26647210121154785,
+              "signed_cos": 0.26647210121154785
+            },
+            {
+              "token_id": 206,
+              "abs_cos": 0.2650780975818634,
+              "signed_cos": -0.2650780975818634
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.24800236523151398,
+              "signed_cos": 0.24800236523151398
+            },
+            {
+              "token_id": 171,
+              "abs_cos": 0.22990605235099792,
+              "signed_cos": 0.22990605235099792
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.058668865177812876,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.007131118327379227,
+          "abs_cos_embedding_centered_v1": 0.026000041514635086,
+          "top_embedding_tokens": [
+            {
+              "token_id": 64,
+              "abs_cos": 0.2662816047668457,
+              "signed_cos": 0.2662816047668457
+            },
+            {
+              "token_id": 234,
+              "abs_cos": 0.2393670529127121,
+              "signed_cos": -0.2393670529127121
+            },
+            {
+              "token_id": 172,
+              "abs_cos": 0.23274080455303192,
+              "signed_cos": -0.23274080455303192
+            },
+            {
+              "token_id": 213,
+              "abs_cos": 0.22208043932914734,
+              "signed_cos": 0.22208043932914734
+            },
+            {
+              "token_id": 135,
+              "abs_cos": 0.21409407258033752,
+              "signed_cos": -0.21409407258033752
+            },
+            {
+              "token_id": 192,
+              "abs_cos": 0.20992471277713776,
+              "signed_cos": 0.20992471277713776
+            },
+            {
+              "token_id": 210,
+              "abs_cos": 0.19843484461307526,
+              "signed_cos": 0.19843484461307526
+            },
+            {
+              "token_id": 38,
+              "abs_cos": 0.18438398838043213,
+              "signed_cos": -0.18438398838043213
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.048010624605795985,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.04608934745192528,
+          "abs_cos_embedding_centered_v1": 0.05218898132443428,
+          "top_embedding_tokens": [
+            {
+              "token_id": 213,
+              "abs_cos": 0.6055929064750671,
+              "signed_cos": -0.6055929064750671
+            },
+            {
+              "token_id": 248,
+              "abs_cos": 0.28502029180526733,
+              "signed_cos": -0.28502029180526733
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.27313753962516785,
+              "signed_cos": -0.27313753962516785
+            },
+            {
+              "token_id": 159,
+              "abs_cos": 0.27282387018203735,
+              "signed_cos": -0.27282387018203735
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.26390063762664795,
+              "signed_cos": 0.26390063762664795
+            },
+            {
+              "token_id": 57,
+              "abs_cos": 0.2550370991230011,
+              "signed_cos": -0.2550370991230011
+            },
+            {
+              "token_id": 37,
+              "abs_cos": 0.20718097686767578,
+              "signed_cos": -0.20718097686767578
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.20522338151931763,
+              "signed_cos": 0.20522338151931763
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04556335293951016,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.0722355842590332,
+          "abs_cos_embedding_centered_v1": 0.033511411398649216,
+          "top_embedding_tokens": [
+            {
+              "token_id": 61,
+              "abs_cos": 0.2619338035583496,
+              "signed_cos": 0.2619338035583496
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.2576279044151306,
+              "signed_cos": 0.2576279044151306
+            },
+            {
+              "token_id": 49,
+              "abs_cos": 0.2420021891593933,
+              "signed_cos": 0.2420021891593933
+            },
+            {
+              "token_id": 109,
+              "abs_cos": 0.22446364164352417,
+              "signed_cos": -0.22446364164352417
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.20916134119033813,
+              "signed_cos": 0.20916134119033813
+            },
+            {
+              "token_id": 116,
+              "abs_cos": 0.20188486576080322,
+              "signed_cos": -0.20188486576080322
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.20065873861312866,
+              "signed_cos": -0.20065873861312866
+            },
+            {
+              "token_id": 40,
+              "abs_cos": 0.19958683848381042,
+              "signed_cos": -0.19958683848381042
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.06491406395890928,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.06460513174533844,
+          "abs_cos_embedding_centered_v1": 0.06720079481601715,
+          "top_embedding_tokens": [
+            {
+              "token_id": 229,
+              "abs_cos": 0.2683344781398773,
+              "signed_cos": 0.2683344781398773
+            },
+            {
+              "token_id": 85,
+              "abs_cos": 0.23213717341423035,
+              "signed_cos": -0.23213717341423035
+            },
+            {
+              "token_id": 223,
+              "abs_cos": 0.20457836985588074,
+              "signed_cos": 0.20457836985588074
+            },
+            {
+              "token_id": 221,
+              "abs_cos": 0.1967708170413971,
+              "signed_cos": -0.1967708170413971
+            },
+            {
+              "token_id": 243,
+              "abs_cos": 0.19405719637870789,
+              "signed_cos": 0.19405719637870789
+            },
+            {
+              "token_id": 51,
+              "abs_cos": 0.19035516679286957,
+              "signed_cos": 0.19035516679286957
+            },
+            {
+              "token_id": 152,
+              "abs_cos": 0.18102239072322845,
+              "signed_cos": 0.18102239072322845
+            },
+            {
+              "token_id": 109,
+              "abs_cos": 0.18076163530349731,
+              "signed_cos": -0.18076163530349731
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04922111162595706,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.06879807263612747,
+          "abs_cos_embedding_centered_v1": 0.0354122519493103,
+          "top_embedding_tokens": [
+            {
+              "token_id": 152,
+              "abs_cos": 0.42360803484916687,
+              "signed_cos": 0.42360803484916687
+            },
+            {
+              "token_id": 228,
+              "abs_cos": 0.2796252965927124,
+              "signed_cos": 0.2796252965927124
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.26382601261138916,
+              "signed_cos": -0.26382601261138916
+            },
+            {
+              "token_id": 230,
+              "abs_cos": 0.2450036108493805,
+              "signed_cos": -0.2450036108493805
+            },
+            {
+              "token_id": 189,
+              "abs_cos": 0.23843926191329956,
+              "signed_cos": -0.23843926191329956
+            },
+            {
+              "token_id": 221,
+              "abs_cos": 0.2206825315952301,
+              "signed_cos": 0.2206825315952301
+            },
+            {
+              "token_id": 149,
+              "abs_cos": 0.21660691499710083,
+              "signed_cos": 0.21660691499710083
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.20971018075942993,
+              "signed_cos": -0.20971018075942993
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04576471815769132,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.07877402752637863,
+          "abs_cos_embedding_centered_v1": 0.08241209387779236,
+          "top_embedding_tokens": [
+            {
+              "token_id": 165,
+              "abs_cos": 0.36835289001464844,
+              "signed_cos": 0.36835289001464844
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.2883242964744568,
+              "signed_cos": 0.2883242964744568
+            },
+            {
+              "token_id": 158,
+              "abs_cos": 0.28006091713905334,
+              "signed_cos": 0.28006091713905334
+            },
+            {
+              "token_id": 18,
+              "abs_cos": 0.2637556195259094,
+              "signed_cos": -0.2637556195259094
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.26212096214294434,
+              "signed_cos": 0.26212096214294434
+            },
+            {
+              "token_id": 225,
+              "abs_cos": 0.24806295335292816,
+              "signed_cos": 0.24806295335292816
+            },
+            {
+              "token_id": 214,
+              "abs_cos": 0.24731793999671936,
+              "signed_cos": -0.24731793999671936
+            },
+            {
+              "token_id": 137,
+              "abs_cos": 0.23352357745170593,
+              "signed_cos": 0.23352357745170593
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05073135473122279,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.05367022752761841,
+          "abs_cos_embedding_centered_v1": 0.0515391007065773,
+          "top_embedding_tokens": [
+            {
+              "token_id": 60,
+              "abs_cos": 0.23325827717781067,
+              "signed_cos": 0.23325827717781067
+            },
+            {
+              "token_id": 146,
+              "abs_cos": 0.21514840424060822,
+              "signed_cos": -0.21514840424060822
+            },
+            {
+              "token_id": 159,
+              "abs_cos": 0.2056368887424469,
+              "signed_cos": -0.2056368887424469
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.1897956132888794,
+              "signed_cos": 0.1897956132888794
+            },
+            {
+              "token_id": 228,
+              "abs_cos": 0.1861036866903305,
+              "signed_cos": -0.1861036866903305
+            },
+            {
+              "token_id": 199,
+              "abs_cos": 0.17746105790138245,
+              "signed_cos": 0.17746105790138245
+            },
+            {
+              "token_id": 39,
+              "abs_cos": 0.1751367151737213,
+              "signed_cos": 0.1751367151737213
+            },
+            {
+              "token_id": 201,
+              "abs_cos": 0.1693791151046753,
+              "signed_cos": -0.1693791151046753
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04190136741900268,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.2323605716228485,
+          "abs_cos_embedding_centered_v1": 0.26966649293899536,
+          "top_embedding_tokens": [
+            {
+              "token_id": 135,
+              "abs_cos": 0.3220919370651245,
+              "signed_cos": -0.3220919370651245
+            },
+            {
+              "token_id": 95,
+              "abs_cos": 0.3143143951892853,
+              "signed_cos": -0.3143143951892853
+            },
+            {
+              "token_id": 124,
+              "abs_cos": 0.30457717180252075,
+              "signed_cos": -0.30457717180252075
+            },
+            {
+              "token_id": 114,
+              "abs_cos": 0.3032072186470032,
+              "signed_cos": 0.3032072186470032
+            },
+            {
+              "token_id": 183,
+              "abs_cos": 0.3016464114189148,
+              "signed_cos": -0.3016464114189148
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.2859230637550354,
+              "signed_cos": -0.2859230637550354
+            },
+            {
+              "token_id": 46,
+              "abs_cos": 0.2846408188343048,
+              "signed_cos": -0.2846408188343048
+            },
+            {
+              "token_id": 239,
+              "abs_cos": 0.27790042757987976,
+              "signed_cos": -0.27790042757987976
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.042304077062546554,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.10637485980987549,
+          "abs_cos_embedding_centered_v1": 0.10039719939231873,
+          "top_embedding_tokens": [
+            {
+              "token_id": 192,
+              "abs_cos": 0.368308424949646,
+              "signed_cos": 0.368308424949646
+            },
+            {
+              "token_id": 224,
+              "abs_cos": 0.3593539893627167,
+              "signed_cos": 0.3593539893627167
+            },
+            {
+              "token_id": 43,
+              "abs_cos": 0.33562564849853516,
+              "signed_cos": 0.33562564849853516
+            },
+            {
+              "token_id": 236,
+              "abs_cos": 0.32563838362693787,
+              "signed_cos": 0.32563838362693787
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.300217866897583,
+              "signed_cos": -0.300217866897583
+            },
+            {
+              "token_id": 121,
+              "abs_cos": 0.2838696241378784,
+              "signed_cos": -0.2838696241378784
+            },
+            {
+              "token_id": 14,
+              "abs_cos": 0.26713672280311584,
+              "signed_cos": -0.26713672280311584
+            },
+            {
+              "token_id": 231,
+              "abs_cos": 0.2402481734752655,
+              "signed_cos": 0.2402481734752655
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.053109636660955396,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.028956834226846695,
+          "abs_cos_embedding_centered_v1": 0.007481317967176437,
+          "top_embedding_tokens": [
+            {
+              "token_id": 167,
+              "abs_cos": 0.22446438670158386,
+              "signed_cos": 0.22446438670158386
+            },
+            {
+              "token_id": 26,
+              "abs_cos": 0.22205471992492676,
+              "signed_cos": 0.22205471992492676
+            },
+            {
+              "token_id": 253,
+              "abs_cos": 0.2193554788827896,
+              "signed_cos": 0.2193554788827896
+            },
+            {
+              "token_id": 142,
+              "abs_cos": 0.1960795521736145,
+              "signed_cos": -0.1960795521736145
+            },
+            {
+              "token_id": 161,
+              "abs_cos": 0.19600674510002136,
+              "signed_cos": -0.19600674510002136
+            },
+            {
+              "token_id": 109,
+              "abs_cos": 0.17925751209259033,
+              "signed_cos": 0.17925751209259033
+            },
+            {
+              "token_id": 99,
+              "abs_cos": 0.1763215959072113,
+              "signed_cos": -0.1763215959072113
+            },
+            {
+              "token_id": 188,
+              "abs_cos": 0.17385730147361755,
+              "signed_cos": -0.17385730147361755
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05015594935174681,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.23730973899364471,
+          "abs_cos_embedding_centered_v1": 0.2955220937728882,
+          "top_embedding_tokens": [
+            {
+              "token_id": 194,
+              "abs_cos": 0.3342887759208679,
+              "signed_cos": -0.3342887759208679
+            },
+            {
+              "token_id": 156,
+              "abs_cos": 0.324907511472702,
+              "signed_cos": 0.324907511472702
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.29325953125953674,
+              "signed_cos": 0.29325953125953674
+            },
+            {
+              "token_id": 101,
+              "abs_cos": 0.28943583369255066,
+              "signed_cos": -0.28943583369255066
+            },
+            {
+              "token_id": 107,
+              "abs_cos": 0.28630465269088745,
+              "signed_cos": -0.28630465269088745
+            },
+            {
+              "token_id": 252,
+              "abs_cos": 0.27675434947013855,
+              "signed_cos": -0.27675434947013855
+            },
+            {
+              "token_id": 231,
+              "abs_cos": 0.2761353552341461,
+              "signed_cos": -0.2761353552341461
+            },
+            {
+              "token_id": 124,
+              "abs_cos": 0.27571243047714233,
+              "signed_cos": -0.27571243047714233
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.04745271631381591,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.009884469211101532,
+          "abs_cos_embedding_centered_v1": 0.07755833119153976,
+          "top_embedding_tokens": [
+            {
+              "token_id": 194,
+              "abs_cos": 0.3417007327079773,
+              "signed_cos": 0.3417007327079773
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.29048094153404236,
+              "signed_cos": -0.29048094153404236
+            },
+            {
+              "token_id": 123,
+              "abs_cos": 0.23592513799667358,
+              "signed_cos": -0.23592513799667358
+            },
+            {
+              "token_id": 209,
+              "abs_cos": 0.22531941533088684,
+              "signed_cos": -0.22531941533088684
+            },
+            {
+              "token_id": 140,
+              "abs_cos": 0.22328384220600128,
+              "signed_cos": 0.22328384220600128
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.22313039004802704,
+              "signed_cos": -0.22313039004802704
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.21633467078208923,
+              "signed_cos": 0.21633467078208923
+            },
+            {
+              "token_id": 48,
+              "abs_cos": 0.2059224247932434,
+              "signed_cos": -0.2059224247932434
+            }
+          ]
+        },
+        {
+          "name": "model.layers.1.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 1,
+          "input_dim": 128,
+          "top1_energy": 0.05344354217447478,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.03650160878896713,
+          "abs_cos_embedding_centered_v1": 0.010995126329362392,
+          "top_embedding_tokens": [
+            {
+              "token_id": 170,
+              "abs_cos": 0.22482813894748688,
+              "signed_cos": 0.22482813894748688
+            },
+            {
+              "token_id": 238,
+              "abs_cos": 0.18807432055473328,
+              "signed_cos": -0.18807432055473328
+            },
+            {
+              "token_id": 242,
+              "abs_cos": 0.18199396133422852,
+              "signed_cos": 0.18199396133422852
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.1795789897441864,
+              "signed_cos": -0.1795789897441864
+            },
+            {
+              "token_id": 173,
+              "abs_cos": 0.17872834205627441,
+              "signed_cos": 0.17872834205627441
+            },
+            {
+              "token_id": 165,
+              "abs_cos": 0.17763739824295044,
+              "signed_cos": 0.17763739824295044
+            },
+            {
+              "token_id": 57,
+              "abs_cos": 0.165452241897583,
+              "signed_cos": 0.165452241897583
+            },
+            {
+              "token_id": 174,
+              "abs_cos": 0.16488376259803772,
+              "signed_cos": 0.16488376259803772
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.q_proj.weight",
+          "group": "attention.q_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.09920287237004542,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.5198342800140381,
+          "abs_cos_embedding_centered_v1": 0.64190673828125,
+          "top_embedding_tokens": [
+            {
+              "token_id": 200,
+              "abs_cos": 0.5758160352706909,
+              "signed_cos": -0.5758160352706909
+            },
+            {
+              "token_id": 107,
+              "abs_cos": 0.5740970373153687,
+              "signed_cos": -0.5740970373153687
+            },
+            {
+              "token_id": 52,
+              "abs_cos": 0.5738231539726257,
+              "signed_cos": -0.5738231539726257
+            },
+            {
+              "token_id": 212,
+              "abs_cos": 0.573558509349823,
+              "signed_cos": -0.573558509349823
+            },
+            {
+              "token_id": 157,
+              "abs_cos": 0.5717794299125671,
+              "signed_cos": -0.5717794299125671
+            },
+            {
+              "token_id": 80,
+              "abs_cos": 0.5712809562683105,
+              "signed_cos": -0.5712809562683105
+            },
+            {
+              "token_id": 204,
+              "abs_cos": 0.571086049079895,
+              "signed_cos": -0.571086049079895
+            },
+            {
+              "token_id": 12,
+              "abs_cos": 0.5701831579208374,
+              "signed_cos": -0.5701831579208374
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.k_proj.weight",
+          "group": "attention.k_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.15604352912387504,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.5726810693740845,
+          "abs_cos_embedding_centered_v1": 0.640947699546814,
+          "top_embedding_tokens": [
+            {
+              "token_id": 204,
+              "abs_cos": 0.6180834174156189,
+              "signed_cos": 0.6180834174156189
+            },
+            {
+              "token_id": 52,
+              "abs_cos": 0.6176481246948242,
+              "signed_cos": 0.6176481246948242
+            },
+            {
+              "token_id": 65,
+              "abs_cos": 0.616061806678772,
+              "signed_cos": 0.616061806678772
+            },
+            {
+              "token_id": 21,
+              "abs_cos": 0.61431884765625,
+              "signed_cos": 0.61431884765625
+            },
+            {
+              "token_id": 80,
+              "abs_cos": 0.611193835735321,
+              "signed_cos": 0.611193835735321
+            },
+            {
+              "token_id": 50,
+              "abs_cos": 0.6096458435058594,
+              "signed_cos": 0.6096458435058594
+            },
+            {
+              "token_id": 20,
+              "abs_cos": 0.6028788089752197,
+              "signed_cos": 0.6028788089752197
+            },
+            {
+              "token_id": 176,
+              "abs_cos": 0.6012964248657227,
+              "signed_cos": 0.6012964248657227
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.v_proj.weight",
+          "group": "attention.v_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.07268786746383264,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.2926595211029053,
+          "abs_cos_embedding_centered_v1": 0.3723786473274231,
+          "top_embedding_tokens": [
+            {
+              "token_id": 128,
+              "abs_cos": 0.48448798060417175,
+              "signed_cos": 0.48448798060417175
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.425497829914093,
+              "signed_cos": 0.425497829914093
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.39264142513275146,
+              "signed_cos": 0.39264142513275146
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.3866563141345978,
+              "signed_cos": 0.3866563141345978
+            },
+            {
+              "token_id": 197,
+              "abs_cos": 0.3604832589626312,
+              "signed_cos": 0.3604832589626312
+            },
+            {
+              "token_id": 90,
+              "abs_cos": 0.31847187876701355,
+              "signed_cos": 0.31847187876701355
+            },
+            {
+              "token_id": 82,
+              "abs_cos": 0.31136274337768555,
+              "signed_cos": -0.31136274337768555
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.3067070543766022,
+              "signed_cos": 0.3067070543766022
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.self_attn.o_proj.weight",
+          "group": "attention.o_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.06336372786855253,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.10102012753486633,
+          "abs_cos_embedding_centered_v1": 0.0817096084356308,
+          "top_embedding_tokens": [
+            {
+              "token_id": 234,
+              "abs_cos": 0.2584768533706665,
+              "signed_cos": -0.2584768533706665
+            },
+            {
+              "token_id": 72,
+              "abs_cos": 0.22105742990970612,
+              "signed_cos": -0.22105742990970612
+            },
+            {
+              "token_id": 94,
+              "abs_cos": 0.21881361305713654,
+              "signed_cos": 0.21881361305713654
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.21451684832572937,
+              "signed_cos": -0.21451684832572937
+            },
+            {
+              "token_id": 67,
+              "abs_cos": 0.2087189108133316,
+              "signed_cos": 0.2087189108133316
+            },
+            {
+              "token_id": 7,
+              "abs_cos": 0.2042565494775772,
+              "signed_cos": -0.2042565494775772
+            },
+            {
+              "token_id": 154,
+              "abs_cos": 0.19480904936790466,
+              "signed_cos": -0.19480904936790466
+            },
+            {
+              "token_id": 25,
+              "abs_cos": 0.18689145147800446,
+              "signed_cos": -0.18689145147800446
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.06709332937178117,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.3963993489742279,
+          "abs_cos_embedding_centered_v1": 0.4723329246044159,
+          "top_embedding_tokens": [
+            {
+              "token_id": 128,
+              "abs_cos": 0.5555057525634766,
+              "signed_cos": -0.5555057525634766
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.5171034336090088,
+              "signed_cos": -0.5171034336090088
+            },
+            {
+              "token_id": 90,
+              "abs_cos": 0.46684402227401733,
+              "signed_cos": -0.46684402227401733
+            },
+            {
+              "token_id": 250,
+              "abs_cos": 0.46219003200531006,
+              "signed_cos": -0.46219003200531006
+            },
+            {
+              "token_id": 197,
+              "abs_cos": 0.44216567277908325,
+              "signed_cos": -0.44216567277908325
+            },
+            {
+              "token_id": 17,
+              "abs_cos": 0.37257277965545654,
+              "signed_cos": 0.37257277965545654
+            },
+            {
+              "token_id": 247,
+              "abs_cos": 0.361350953578949,
+              "signed_cos": 0.361350953578949
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.3610523045063019,
+              "signed_cos": -0.3610523045063019
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.050719645515970364,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1639799177646637,
+          "abs_cos_embedding_centered_v1": 0.28245609998703003,
+          "top_embedding_tokens": [
+            {
+              "token_id": 26,
+              "abs_cos": 0.4991331696510315,
+              "signed_cos": -0.4991331696510315
+            },
+            {
+              "token_id": 5,
+              "abs_cos": 0.3776540756225586,
+              "signed_cos": -0.3776540756225586
+            },
+            {
+              "token_id": 42,
+              "abs_cos": 0.30621737241744995,
+              "signed_cos": -0.30621737241744995
+            },
+            {
+              "token_id": 161,
+              "abs_cos": 0.27883443236351013,
+              "signed_cos": -0.27883443236351013
+            },
+            {
+              "token_id": 77,
+              "abs_cos": 0.2700883150100708,
+              "signed_cos": -0.2700883150100708
+            },
+            {
+              "token_id": 111,
+              "abs_cos": 0.25441333651542664,
+              "signed_cos": 0.25441333651542664
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.2447046935558319,
+              "signed_cos": -0.2447046935558319
+            },
+            {
+              "token_id": 226,
+              "abs_cos": 0.2442466914653778,
+              "signed_cos": 0.2442466914653778
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.0.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.12245948511022983,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.08595156669616699,
+          "abs_cos_embedding_centered_v1": 0.09625370800495148,
+          "top_embedding_tokens": [
+            {
+              "token_id": 84,
+              "abs_cos": 0.22754618525505066,
+              "signed_cos": 0.22754618525505066
+            },
+            {
+              "token_id": 191,
+              "abs_cos": 0.22526761889457703,
+              "signed_cos": 0.22526761889457703
+            },
+            {
+              "token_id": 45,
+              "abs_cos": 0.20153851807117462,
+              "signed_cos": 0.20153851807117462
+            },
+            {
+              "token_id": 220,
+              "abs_cos": 0.18878941237926483,
+              "signed_cos": -0.18878941237926483
+            },
+            {
+              "token_id": 129,
+              "abs_cos": 0.1783103048801422,
+              "signed_cos": 0.1783103048801422
+            },
+            {
+              "token_id": 194,
+              "abs_cos": 0.17180338501930237,
+              "signed_cos": -0.17180338501930237
+            },
+            {
+              "token_id": 249,
+              "abs_cos": 0.1700211763381958,
+              "signed_cos": 0.1700211763381958
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.16431806981563568,
+              "signed_cos": -0.16431806981563568
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.047244094066967134,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.09589317440986633,
+          "abs_cos_embedding_centered_v1": 0.179153710603714,
+          "top_embedding_tokens": [
+            {
+              "token_id": 179,
+              "abs_cos": 0.4078989326953888,
+              "signed_cos": 0.4078989326953888
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.3758450150489807,
+              "signed_cos": -0.3758450150489807
+            },
+            {
+              "token_id": 99,
+              "abs_cos": 0.34282398223876953,
+              "signed_cos": 0.34282398223876953
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.34185150265693665,
+              "signed_cos": -0.34185150265693665
+            },
+            {
+              "token_id": 58,
+              "abs_cos": 0.32368701696395874,
+              "signed_cos": 0.32368701696395874
+            },
+            {
+              "token_id": 163,
+              "abs_cos": 0.30577683448791504,
+              "signed_cos": -0.30577683448791504
+            },
+            {
+              "token_id": 242,
+              "abs_cos": 0.29161977767944336,
+              "signed_cos": 0.29161977767944336
+            },
+            {
+              "token_id": 169,
+              "abs_cos": 0.2864142060279846,
+              "signed_cos": 0.2864142060279846
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.04283276535089353,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.06548008322715759,
+          "abs_cos_embedding_centered_v1": 0.0680088996887207,
+          "top_embedding_tokens": [
+            {
+              "token_id": 158,
+              "abs_cos": 0.4742956757545471,
+              "signed_cos": 0.4742956757545471
+            },
+            {
+              "token_id": 37,
+              "abs_cos": 0.29555758833885193,
+              "signed_cos": -0.29555758833885193
+            },
+            {
+              "token_id": 152,
+              "abs_cos": 0.2586140036582947,
+              "signed_cos": -0.2586140036582947
+            },
+            {
+              "token_id": 145,
+              "abs_cos": 0.24334383010864258,
+              "signed_cos": -0.24334383010864258
+            },
+            {
+              "token_id": 18,
+              "abs_cos": 0.24180316925048828,
+              "signed_cos": -0.24180316925048828
+            },
+            {
+              "token_id": 125,
+              "abs_cos": 0.2383376508951187,
+              "signed_cos": 0.2383376508951187
+            },
+            {
+              "token_id": 92,
+              "abs_cos": 0.2371423989534378,
+              "signed_cos": 0.2371423989534378
+            },
+            {
+              "token_id": 151,
+              "abs_cos": 0.21778282523155212,
+              "signed_cos": 0.21778282523155212
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.1.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.07903224378687927,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 3.5939738154411316e-05,
+          "abs_cos_embedding_centered_v1": 0.015324832871556282,
+          "top_embedding_tokens": [
+            {
+              "token_id": 26,
+              "abs_cos": 0.2288513481616974,
+              "signed_cos": -0.2288513481616974
+            },
+            {
+              "token_id": 67,
+              "abs_cos": 0.21202658116817474,
+              "signed_cos": -0.21202658116817474
+            },
+            {
+              "token_id": 185,
+              "abs_cos": 0.21073880791664124,
+              "signed_cos": 0.21073880791664124
+            },
+            {
+              "token_id": 155,
+              "abs_cos": 0.20176087319850922,
+              "signed_cos": -0.20176087319850922
+            },
+            {
+              "token_id": 230,
+              "abs_cos": 0.1989276111125946,
+              "signed_cos": 0.1989276111125946
+            },
+            {
+              "token_id": 208,
+              "abs_cos": 0.19325678050518036,
+              "signed_cos": -0.19325678050518036
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.18266913294792175,
+              "signed_cos": 0.18266913294792175
+            },
+            {
+              "token_id": 173,
+              "abs_cos": 0.18207061290740967,
+              "signed_cos": -0.18207061290740967
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.05148483248276261,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.3003809452056885,
+          "abs_cos_embedding_centered_v1": 0.42497679591178894,
+          "top_embedding_tokens": [
+            {
+              "token_id": 42,
+              "abs_cos": 0.43001610040664673,
+              "signed_cos": 0.43001610040664673
+            },
+            {
+              "token_id": 216,
+              "abs_cos": 0.41568484902381897,
+              "signed_cos": 0.41568484902381897
+            },
+            {
+              "token_id": 88,
+              "abs_cos": 0.4106054902076721,
+              "signed_cos": 0.4106054902076721
+            },
+            {
+              "token_id": 210,
+              "abs_cos": 0.3804935812950134,
+              "signed_cos": 0.3804935812950134
+            },
+            {
+              "token_id": 128,
+              "abs_cos": 0.3735913634300232,
+              "signed_cos": 0.3735913634300232
+            },
+            {
+              "token_id": 171,
+              "abs_cos": 0.3686124384403229,
+              "signed_cos": 0.3686124384403229
+            },
+            {
+              "token_id": 64,
+              "abs_cos": 0.35993480682373047,
+              "signed_cos": 0.35993480682373047
+            },
+            {
+              "token_id": 100,
+              "abs_cos": 0.33998769521713257,
+              "signed_cos": -0.33998769521713257
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.048146472310771286,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.35436683893203735,
+          "abs_cos_embedding_centered_v1": 0.25571325421333313,
+          "top_embedding_tokens": [
+            {
+              "token_id": 80,
+              "abs_cos": 0.3640151023864746,
+              "signed_cos": -0.3640151023864746
+            },
+            {
+              "token_id": 200,
+              "abs_cos": 0.35074639320373535,
+              "signed_cos": -0.35074639320373535
+            },
+            {
+              "token_id": 153,
+              "abs_cos": 0.3489363193511963,
+              "signed_cos": -0.3489363193511963
+            },
+            {
+              "token_id": 143,
+              "abs_cos": 0.3474534749984741,
+              "signed_cos": 0.3474534749984741
+            },
+            {
+              "token_id": 19,
+              "abs_cos": 0.3455985188484192,
+              "signed_cos": -0.3455985188484192
+            },
+            {
+              "token_id": 59,
+              "abs_cos": 0.3439353108406067,
+              "signed_cos": -0.3439353108406067
+            },
+            {
+              "token_id": 117,
+              "abs_cos": 0.34306252002716064,
+              "signed_cos": -0.34306252002716064
+            },
+            {
+              "token_id": 25,
+              "abs_cos": 0.34298354387283325,
+              "signed_cos": -0.34298354387283325
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.2.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.10731866651226364,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.13875865936279297,
+          "abs_cos_embedding_centered_v1": 0.08330263197422028,
+          "top_embedding_tokens": [
+            {
+              "token_id": 145,
+              "abs_cos": 0.2276523858308792,
+              "signed_cos": 0.2276523858308792
+            },
+            {
+              "token_id": 39,
+              "abs_cos": 0.20775505900382996,
+              "signed_cos": 0.20775505900382996
+            },
+            {
+              "token_id": 205,
+              "abs_cos": 0.20486602187156677,
+              "signed_cos": 0.20486602187156677
+            },
+            {
+              "token_id": 73,
+              "abs_cos": 0.20321615040302277,
+              "signed_cos": 0.20321615040302277
+            },
+            {
+              "token_id": 92,
+              "abs_cos": 0.1920340359210968,
+              "signed_cos": 0.1920340359210968
+            },
+            {
+              "token_id": 244,
+              "abs_cos": 0.19193203747272491,
+              "signed_cos": 0.19193203747272491
+            },
+            {
+              "token_id": 31,
+              "abs_cos": 0.18977946043014526,
+              "signed_cos": 0.18977946043014526
+            },
+            {
+              "token_id": 123,
+              "abs_cos": 0.1812411993741989,
+              "signed_cos": 0.1812411993741989
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.gate_proj.weight",
+          "group": "moe_expert.gate_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.05030026291984139,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.1857384741306305,
+          "abs_cos_embedding_centered_v1": 0.11299539357423782,
+          "top_embedding_tokens": [
+            {
+              "token_id": 74,
+              "abs_cos": 0.4161311388015747,
+              "signed_cos": 0.4161311388015747
+            },
+            {
+              "token_id": 78,
+              "abs_cos": 0.3968886733055115,
+              "signed_cos": 0.3968886733055115
+            },
+            {
+              "token_id": 79,
+              "abs_cos": 0.36563825607299805,
+              "signed_cos": 0.36563825607299805
+            },
+            {
+              "token_id": 246,
+              "abs_cos": 0.2907254993915558,
+              "signed_cos": -0.2907254993915558
+            },
+            {
+              "token_id": 67,
+              "abs_cos": 0.28731006383895874,
+              "signed_cos": -0.28731006383895874
+            },
+            {
+              "token_id": 83,
+              "abs_cos": 0.2754952013492584,
+              "signed_cos": -0.2754952013492584
+            },
+            {
+              "token_id": 84,
+              "abs_cos": 0.25313836336135864,
+              "signed_cos": 0.25313836336135864
+            },
+            {
+              "token_id": 170,
+              "abs_cos": 0.25089231133461,
+              "signed_cos": -0.25089231133461
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.up_proj.weight",
+          "group": "moe_expert.up_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.04928269502680113,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.6340258717536926,
+          "abs_cos_embedding_centered_v1": 0.6114522218704224,
+          "top_embedding_tokens": [
+            {
+              "token_id": 195,
+              "abs_cos": 0.5789307355880737,
+              "signed_cos": -0.5789307355880737
+            },
+            {
+              "token_id": 47,
+              "abs_cos": 0.574203610420227,
+              "signed_cos": -0.574203610420227
+            },
+            {
+              "token_id": 127,
+              "abs_cos": 0.5657678246498108,
+              "signed_cos": -0.5657678246498108
+            },
+            {
+              "token_id": 247,
+              "abs_cos": 0.5629891157150269,
+              "signed_cos": -0.5629891157150269
+            },
+            {
+              "token_id": 17,
+              "abs_cos": 0.5611439943313599,
+              "signed_cos": -0.5611439943313599
+            },
+            {
+              "token_id": 22,
+              "abs_cos": 0.5604041814804077,
+              "signed_cos": -0.5604041814804077
+            },
+            {
+              "token_id": 147,
+              "abs_cos": 0.5599846243858337,
+              "signed_cos": -0.5599846243858337
+            },
+            {
+              "token_id": 113,
+              "abs_cos": 0.5583922863006592,
+              "signed_cos": -0.5583922863006592
+            }
+          ]
+        },
+        {
+          "name": "model.layers.2.mlp.experts.3.down_proj.weight",
+          "group": "moe_expert.down_proj",
+          "layer": 2,
+          "input_dim": 128,
+          "top1_energy": 0.09338661442557729,
+          "comparable_to_embedding": true,
+          "abs_cos_embedding_mean": 0.20426881313323975,
+          "abs_cos_embedding_centered_v1": 0.17141149938106537,
+          "top_embedding_tokens": [
+            {
+              "token_id": 178,
+              "abs_cos": 0.24678990244865417,
+              "signed_cos": -0.24678990244865417
+            },
+            {
+              "token_id": 56,
+              "abs_cos": 0.24554668366909027,
+              "signed_cos": -0.24554668366909027
+            },
+            {
+              "token_id": 22,
+              "abs_cos": 0.24478064477443695,
+              "signed_cos": -0.24478064477443695
+            },
+            {
+              "token_id": 115,
+              "abs_cos": 0.23768523335456848,
+              "signed_cos": -0.23768523335456848
+            },
+            {
+              "token_id": 187,
+              "abs_cos": 0.23740924894809723,
+              "signed_cos": -0.23740924894809723
+            },
+            {
+              "token_id": 256,
+              "abs_cos": 0.2352655678987503,
+              "signed_cos": -0.2352655678987503
+            },
+            {
+              "token_id": 153,
+              "abs_cos": 0.23070421814918518,
+              "signed_cos": -0.23070421814918518
+            },
+            {
+              "token_id": 59,
+              "abs_cos": 0.22295530140399933,
+              "signed_cos": -0.22295530140399933
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
