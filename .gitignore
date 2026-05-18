@@ -20,6 +20,7 @@ env/
 *.temp
 .DS_Store
 logs/
+*.html
 
 # Analysis outputs
 ymluo/projects/*/outputs/
