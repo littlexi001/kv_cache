@@ -90,6 +90,7 @@ def add_common_training_args(parser: argparse.ArgumentParser):
         default="hidden",
     )
     parser.add_argument("--moe_head_level", action="store_true", default=False)
+    parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
 
     parser.add_argument("--attention_stride_pattern", type=parse_int_list, default=None)
     parser.add_argument("--residual_source_pattern", type=parse_int_list, default=None)
@@ -150,6 +151,7 @@ def apply_moe_overrides(config, args):
     config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
     config.moe_router_input = str(args.moe_router_input)
     config.moe_head_level = bool(args.moe_head_level)
+    config.moe_load_balance_loss_weight = float(args.moe_load_balance_loss_weight)
 
 
 def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pattern, config=None):
@@ -173,6 +175,7 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_normalize_topk_prob": bool(getattr(config, "moe_normalize_topk_prob", True)),
                 "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
                 "moe_head_level": bool(getattr(config, "moe_head_level", False)),
+                "moe_load_balance_loss_weight": float(getattr(config, "moe_load_balance_loss_weight", 0.0)),
             }
         )
     with open(runtime_config_path, "w", encoding="utf-8") as f:
@@ -203,7 +206,8 @@ def prepare_model(local_rank, world_size, device, args):
             f"topk={config.moe_num_experts_per_tok}, moe_intermediate={config.moe_intermediate_size}, "
             f"use_common={config.moe_use_common_expert}, "
             f"common_intermediate={config.moe_common_intermediate_size}, "
-            f"router_input={config.moe_router_input}, head_level={config.moe_head_level}",
+            f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
+            f"load_balance_weight={config.moe_load_balance_loss_weight}",
             flush=True,
         )
     model = MyQwen3ForCausalLM(config).to(device)
@@ -260,9 +264,18 @@ def prepare_loss_optimizer(model, args):
 
 def forward_step(local_rank, device, source, target, model, token_loss_fn, args):
     source, target = source.to(device), target.to(device)
-    output = model(source, output_hidden_states=False)
+    use_load_balance = args.moe_load_balance_loss_weight > 0
+    output = model(
+        source,
+        output_hidden_states=False,
+        output_router_aux_loss=use_load_balance,
+    )
     target = target.reshape(-1)
-    loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
+    token_loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
+    if use_load_balance:
+        loss = token_loss + args.moe_load_balance_loss_weight * output.moe_load_balance_loss
+    else:
+        loss = token_loss
     return loss
 
 

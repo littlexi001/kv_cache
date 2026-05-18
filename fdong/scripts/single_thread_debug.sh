@@ -49,6 +49,7 @@ MOE_USE_COMMON_EXPERT="${MOE_USE_COMMON_EXPERT:-true}"  # true/false
 MOE_COMMON_INTERMEDIATE_SIZE="${MOE_COMMON_INTERMEDIATE_SIZE:-64}"
 MOE_ROUTER_INPUT="${MOE_ROUTER_INPUT:-hidden}"  # hidden/attention_output
 MOE_HEAD_LEVEL="${MOE_HEAD_LEVEL:-false}"  # true/false
+MOE_LOAD_BALANCE_LOSS_WEIGHT="${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}"
 
 ATTENTION_STRIDE_PATTERN="${ATTENTION_STRIDE_PATTERN-1,4}"
 RESIDUAL_SOURCE_PATTERN="${RESIDUAL_SOURCE_PATTERN--1,-1}"
@@ -105,6 +106,7 @@ ARGS+=" --moe_router_input $MOE_ROUTER_INPUT"
 if [ "$MOE_HEAD_LEVEL" = "true" ]; then
   ARGS+=" --moe_head_level"
 fi
+ARGS+=" --moe_load_balance_loss_weight $MOE_LOAD_BALANCE_LOSS_WEIGHT"
 ARGS+=" --attention_stride_pattern=${ATTENTION_STRIDE_PATTERN}"
 ARGS+=" --residual_source_pattern=${RESIDUAL_SOURCE_PATTERN}"
 

@@ -226,10 +226,18 @@ class MyQwen3MoE(nn.Module):
             else None
         )
 
+    def load_balance_loss(self, router_logits, topk_indices):
+        routing_probs = F.softmax(router_logits, dim=-1, dtype=torch.float32)
+        tokens_per_expert = F.one_hot(topk_indices, num_classes=self.num_unique_experts).float()
+        tokens_per_expert = tokens_per_expert.mean(dim=0).sum(dim=0) / self.num_experts_per_tok
+        router_prob_per_expert = routing_probs.mean(dim=0)
+        return self.num_unique_experts * torch.sum(tokens_per_expert * router_prob_per_expert)
+
     def forward(
         self,
         hidden_states,
         output_expert_labels: bool = False,
+        output_router_aux_loss: bool = False,
         router_hidden_states: Optional[torch.Tensor] = None,
     ):
         original_shape = hidden_states.shape
@@ -261,10 +269,16 @@ class MyQwen3MoE(nn.Module):
             final_states = final_states + self.common_expert(flat_states)
 
         final_states = final_states.reshape(original_shape)
+        if not output_expert_labels and not output_router_aux_loss:
+            return final_states
+
+        outputs = (final_states,)
         if output_expert_labels:
             expert_labels = topk_indices.reshape(*original_shape[:-1], self.num_experts_per_tok)
-            return final_states, expert_labels
-        return final_states
+            outputs += (expert_labels,)
+        if output_router_aux_loss:
+            outputs += (self.load_balance_loss(router_logits, topk_indices),)
+        return outputs
 
 
 class MyQwen3HeadMoE(nn.Module):
@@ -316,10 +330,18 @@ class MyQwen3HeadMoE(nn.Module):
             else None
         )
 
+    def load_balance_loss(self, router_logits, topk_indices):
+        routing_probs = F.softmax(router_logits, dim=-1, dtype=torch.float32)
+        tokens_per_expert = F.one_hot(topk_indices, num_classes=self.num_unique_experts).float()
+        tokens_per_expert = tokens_per_expert.mean(dim=0).sum(dim=0) / self.num_experts_per_tok
+        router_prob_per_expert = routing_probs.mean(dim=0)
+        return self.num_unique_experts * torch.sum(tokens_per_expert * router_prob_per_expert)
+
     def forward(
         self,
         hidden_states,
         output_expert_labels: bool = False,
+        output_router_aux_loss: bool = False,
         router_hidden_states: Optional[torch.Tensor] = None,
     ):
         # hidden_states/router_hidden_states: [batch, seq, heads, head_dim]
@@ -341,6 +363,7 @@ class MyQwen3HeadMoE(nn.Module):
 
         head_outputs = []
         head_labels = []
+        head_aux_losses = []
         for head_idx in range(self.num_heads):
             head_states = hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
             head_router_states = router_hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
@@ -369,12 +392,20 @@ class MyQwen3HeadMoE(nn.Module):
             head_outputs.append(final_states.reshape(batch, seq_len, self.head_dim))
             if output_expert_labels:
                 head_labels.append(topk_indices.reshape(batch, seq_len, self.num_experts_per_tok))
+            if output_router_aux_loss:
+                head_aux_losses.append(self.load_balance_loss(router_logits, topk_indices))
 
         output = torch.stack(head_outputs, dim=2)
+        if not output_expert_labels and not output_router_aux_loss:
+            return output
+
+        outputs = (output,)
         if output_expert_labels:
             expert_labels = torch.stack(head_labels, dim=2)
-            return output, expert_labels
-        return output
+            outputs += (expert_labels,)
+        if output_router_aux_loss:
+            outputs += (torch.stack(head_aux_losses).mean(),)
+        return outputs
 
 
 def rotate_half(x):
@@ -538,6 +569,7 @@ class MyQwen3DecoderLayer(nn.Module):
         past_key_value: Optional[Cache] = None,
         output_attentions: Optional[bool] = False,
         output_expert_labels: Optional[bool] = False,
+        output_router_aux_loss: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
         position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
@@ -566,6 +598,7 @@ class MyQwen3DecoderLayer(nn.Module):
         residual = hidden_states
         mlp_input = self.post_attention_layernorm(hidden_states)
         expert_labels = None
+        router_aux_loss = None
         if isinstance(self.mlp, MyQwen3HeadMoE):
             residual_heads = residual_source.reshape(
                 residual_source.shape[0], residual_source.shape[1], self.num_attention_heads, self.head_dim
@@ -578,10 +611,17 @@ class MyQwen3DecoderLayer(nn.Module):
             head_output = self.mlp(
                 head_expert_input,
                 output_expert_labels=output_expert_labels,
+                output_router_aux_loss=output_router_aux_loss,
                 router_hidden_states=head_router_input,
             )
             if isinstance(head_output, tuple):
-                head_output, expert_labels = head_output
+                tuple_idx = 1
+                if output_expert_labels:
+                    expert_labels = head_output[tuple_idx]
+                    tuple_idx += 1
+                if output_router_aux_loss:
+                    router_aux_loss = head_output[tuple_idx]
+                head_output = head_output[0]
             hidden_states = head_output.reshape(head_output.shape[0], head_output.shape[1], -1)
         elif isinstance(self.mlp, MyQwen3MoE):
             router_input = None
@@ -590,13 +630,20 @@ class MyQwen3DecoderLayer(nn.Module):
             hidden_states = self.mlp(
                 mlp_input,
                 output_expert_labels=output_expert_labels,
+                output_router_aux_loss=output_router_aux_loss,
                 router_hidden_states=router_input,
             )
         else:
             hidden_states = self.mlp(mlp_input)
 
         if isinstance(hidden_states, tuple):
-            hidden_states, expert_labels = hidden_states
+            tuple_idx = 1
+            if output_expert_labels:
+                expert_labels = hidden_states[tuple_idx]
+                tuple_idx += 1
+            if output_router_aux_loss:
+                router_aux_loss = hidden_states[tuple_idx]
+            hidden_states = hidden_states[0]
         hidden_states = residual + hidden_states
 
         outputs = (hidden_states,)
@@ -605,6 +652,11 @@ class MyQwen3DecoderLayer(nn.Module):
 
         if output_expert_labels:
             outputs += (expert_labels, )
+
+        if output_router_aux_loss:
+            if router_aux_loss is None:
+                router_aux_loss = hidden_states.new_zeros(())
+            outputs += (router_aux_loss, )
 
         return outputs
 
@@ -749,6 +801,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
         anchor_only_kv_cache: bool = False,
         output_attentions: Optional[bool] = None,
         output_expert_labels:Optional[bool] = None,
+        output_router_aux_loss: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
@@ -803,6 +856,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
         all_expert_labels = () if output_expert_labels else None
+        all_router_aux_losses = () if output_router_aux_loss else None
         layer_hidden_states = []
 
         for layer_idx, decoder_layer in enumerate(self.layers):
@@ -835,6 +889,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     past_key_values,
                     output_attentions,
                     output_expert_labels,
+                    output_router_aux_loss,
                     use_cache,
                     cache_position,
                     position_embeddings,
@@ -848,6 +903,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     past_key_value=past_key_values,
                     output_attentions=output_attentions,
                     output_expert_labels = output_expert_labels,
+                    output_router_aux_loss=output_router_aux_loss,
                     use_cache=use_cache,
                     cache_position=cache_position,
                     position_embeddings=position_embeddings,
@@ -864,7 +920,16 @@ class Qwen3Model(Qwen3PreTrainedModel):
                 all_self_attns += (layer_outputs[1],)
             
             if output_expert_labels:
-                all_expert_labels += (layer_outputs[-1],)
+                label_idx = 2 if output_attentions else 1
+                all_expert_labels += (layer_outputs[label_idx],)
+
+            if output_router_aux_loss:
+                aux_idx = 1
+                if output_attentions:
+                    aux_idx += 1
+                if output_expert_labels:
+                    aux_idx += 1
+                all_router_aux_losses += (layer_outputs[aux_idx],)
                 
 
         hidden_states = self.norm(hidden_states)
@@ -882,6 +947,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
         
         if output_expert_labels:
             output.expert_labels = all_expert_labels
+
+        if output_router_aux_loss:
+            output.moe_load_balance_loss = torch.stack(all_router_aux_losses).mean()
 
         return output
 
@@ -1143,6 +1211,7 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
         anchor_only_kv_cache: bool = False,
         output_attentions: Optional[bool] = None,
         output_expert_labels:Optional[bool] = None,
+        output_router_aux_loss: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
@@ -1195,6 +1264,7 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
             anchor_only_kv_cache=anchor_only_kv_cache,
             output_attentions=output_attentions,
             output_expert_labels = output_expert_labels,
+            output_router_aux_loss=output_router_aux_loss,
             output_hidden_states=output_hidden_states,
             cache_position=cache_position,
             **kwargs,
@@ -1219,5 +1289,8 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
         
         if output_expert_labels:
             output.expert_labels = outputs.expert_labels
-        
+
+        if output_router_aux_loss:
+            output.moe_load_balance_loss = outputs.moe_load_balance_loss
+
         return output
