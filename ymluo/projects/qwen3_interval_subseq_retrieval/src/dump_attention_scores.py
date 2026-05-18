@@ -67,6 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attention_stride_pattern", type=parse_int_list, default=None)
     parser.add_argument("--residual_source_pattern", type=parse_int_list, default=None)
     parser.add_argument("--auto_resize_vocab", type=str2bool, default=None)
+    parser.add_argument("--disable_sliding_window", type=str2bool, default=None)
 
     parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--seed", type=int, default=2026)
@@ -135,6 +136,7 @@ def build_model_args(args: argparse.Namespace) -> argparse.Namespace:
         init_checkpoint=str(ckpt_file),
         auto_resize_vocab=pick("auto_resize_vocab", True),
         force_vocab_size=ckpt_vocab_size,
+        disable_sliding_window=pick("disable_sliding_window", True),
         attn_implementation="eager",
     )
     return model_args
@@ -241,6 +243,7 @@ def write_outputs(
         "query_positions": args.query_positions,
         "attention_stride_pattern": model_args.attention_stride_pattern,
         "num_hidden_layers": model_args.num_hidden_layers,
+        "disable_sliding_window": model_args.disable_sliding_window,
         "save_raw_scores": args.save_raw_scores,
         "save_probabilities": args.save_probabilities,
         "save_format": args.save_format,

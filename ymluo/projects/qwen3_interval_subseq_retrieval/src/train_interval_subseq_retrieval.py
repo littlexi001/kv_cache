@@ -98,6 +98,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--use_bf16", type=str2bool, default=True)
+    parser.add_argument(
+        "--disable_sliding_window",
+        type=str2bool,
+        default=True,
+        help="Force config.use_sliding_window=False and config.sliding_window=None.",
+    )
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
     args = parser.parse_args()
 
@@ -247,6 +253,9 @@ def prepare_model(args: argparse.Namespace, device: torch.device):
 
     config = AutoConfig.from_pretrained(args.config_dir, trust_remote_code=True)
     config._attn_implementation = args.attn_implementation
+    if getattr(args, "disable_sliding_window", True):
+        config.use_sliding_window = False
+        config.sliding_window = None
     config.num_hidden_layers = args.num_hidden_layers
     config.attention_stride_pattern = args.attention_stride_pattern or [1] * args.num_hidden_layers
     config.residual_source_pattern = args.residual_source_pattern or [-1] * args.num_hidden_layers
@@ -401,6 +410,7 @@ def write_runtime_config(ckpt_dir: Path, model, args: argparse.Namespace) -> Non
         "residual_source_pattern": list(real_model.model.residual_source_pattern),
         "training_objective": "full_sequence_next_token_cross_entropy",
         "train_mode": args.train_mode,
+        "disable_sliding_window": getattr(args, "disable_sliding_window", True),
         "data": {
             "total_token": args.total_token,
             "subseq_len": args.subseq_len,

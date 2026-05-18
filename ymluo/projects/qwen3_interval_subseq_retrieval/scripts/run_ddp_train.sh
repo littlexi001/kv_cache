@@ -44,5 +44,6 @@ torchrun \
   --seed "${SEED:-1234}" \
   --device "${DEVICE:-cuda}" \
   --use_bf16 "${USE_BF16:-true}" \
+  --disable_sliding_window "${DISABLE_SLIDING_WINDOW:-true}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   "$@"

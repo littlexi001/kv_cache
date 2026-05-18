@@ -19,6 +19,7 @@ ARGS=(
   --seed "${SEED:-2026}"
   --device "${DEVICE:-cuda}"
   --use_bf16 "${USE_BF16:-true}"
+  --disable_sliding_window "${DISABLE_SLIDING_WINDOW:-true}"
 )
 
 [[ -n "${TOTAL_TOKEN:-}" ]] && ARGS+=(--total_token "${TOTAL_TOKEN}")
