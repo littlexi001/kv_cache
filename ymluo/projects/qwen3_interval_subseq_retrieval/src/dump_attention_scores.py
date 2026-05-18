@@ -101,6 +101,15 @@ def resolve_checkpoint(args: argparse.Namespace) -> Path:
     return Path(args.run_dir) / "checkpoints" / f"{args.ckpt_step}.pth"
 
 
+def checkpoint_vocab_size(ckpt_file: Path) -> int | None:
+    state_dict = torch.load(ckpt_file, map_location="cpu", weights_only=True)
+    for key in ("model.embed_tokens.weight", "lm_head.weight"):
+        tensor = state_dict.get(key)
+        if tensor is not None and tensor.ndim == 2:
+            return int(tensor.shape[0])
+    return None
+
+
 def build_model_args(args: argparse.Namespace) -> argparse.Namespace:
     train_config = load_train_config(Path(args.run_dir)) if args.run_dir else {}
 
@@ -110,6 +119,8 @@ def build_model_args(args: argparse.Namespace) -> argparse.Namespace:
             return cli_value
         return train_config.get(name, default)
 
+    ckpt_file = resolve_checkpoint(args)
+    ckpt_vocab_size = checkpoint_vocab_size(ckpt_file)
     model_args = argparse.Namespace(
         config_dir=args.config_dir or train_config.get("config_dir", "/mnt/workspace/Qwen3-0.6B"),
         total_token=pick("total_token", 10_000),
@@ -121,8 +132,9 @@ def build_model_args(args: argparse.Namespace) -> argparse.Namespace:
         num_hidden_layers=pick("num_hidden_layers", 8),
         attention_stride_pattern=pick("attention_stride_pattern", [1, 1, 4, 4, 4, 4, 1, 1]),
         residual_source_pattern=pick("residual_source_pattern", None),
-        init_checkpoint=str(resolve_checkpoint(args)),
+        init_checkpoint=str(ckpt_file),
         auto_resize_vocab=pick("auto_resize_vocab", True),
+        force_vocab_size=ckpt_vocab_size,
         attn_implementation="eager",
     )
     return model_args
@@ -296,7 +308,19 @@ def main() -> None:
     print(f"loading checkpoint: {ckpt_file}", flush=True)
     print(f"writing attention scores to: {output_dir}", flush=True)
 
-    model = prepare_model(model_args, device)
+    try:
+        model = prepare_model(model_args, device)
+    except ValueError as exc:
+        if "Generated token ids must fit vocab size" in str(exc):
+            raise ValueError(
+                f"{exc}\n\n"
+                "The checkpoint vocab size does not cover the diagnostic data distribution. "
+                "This usually means the run_dir train_config.json no longer matches the checkpoint, "
+                "or you are dumping a checkpoint trained with smaller TOTAL_TOKEN/INTERVALS.\n"
+                "Use the matching RUN_NAME/RUN_DIR, or pass the original data args, for example:\n"
+                "  bash .../dump_attention_scores.sh --total_token 10000 --intervals 1\n"
+            ) from exc
+        raise
     model.eval()
 
     generator = torch.Generator(device="cpu").manual_seed(args.seed)

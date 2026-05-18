@@ -1,6 +1,6 @@
 # Qwen3 KV Cache 研究工作区
 
-> 文档中文化与最近同步日期：2026-05-15
+> 文档中文化与最近同步日期：2026-05-18
 
 ## 研究主题
 
@@ -15,6 +15,7 @@
 - 用 attention energy 估计在有限 loss 影响下可以丢弃多少上下文。
 - profile K-cache 的数值、相邻 token delta、范数、pairwise cosine，理解不同 layer/head 到底存了什么。
 - 用可控 synthetic retrieval 任务验证 anchor-only KV、U-Net mask schedule 与 answer-only training 是否能学到可检索记忆。
+- 用 interval subsequence next-token 任务检查 U-Net stride schedule 对局部/跨步序列规律的建模能力，并导出 attention scores 做层/head 诊断。
 
 更完整的搜索系统类比和动机见：
 
@@ -33,6 +34,7 @@ KVCache_Indexing_Knowledge_Retrieval_2026-05-09.md
 | `KVCache_Indexing_Knowledge_Retrieval_2026-05-09.md` | 把搜索、向量索引、层级结构、知识图谱等思想映射到 KV-cache lookup 的研究笔记。 |
 | `projects/qwen3_chunk_routing` | Qwen3-0.6B chunk attention 训练框架，包含 `baseline`、`oracle`、`router` 模式。 |
 | `projects/qwen3_unet_synthetic_retrieval` | 基于 `fdong` mask-based U-Net Transformer 的可控 synthetic retrieval 评估与 answer-only 训练。 |
+| `projects/qwen3_interval_subseq_retrieval` | 基于 fdong-style 8-layer U-Net Qwen3 的 arithmetic subsequence next-token 训练和 attention score dump。 |
 | `projects/pyramid_kv_compression` | 继续预训练实验：用学习到的 summary 替换旧的中间层 KV blocks。 |
 | `projects/qwen3_kcache_avg_topk` | 推理期 sparse decode 实验：用 K-cache block 平均向量做 top-k block 选择。 |
 | `projects/qwen3_kcache_norm_analysis` | Qwen3-0.6B 的 K-cache norm、attention energy、pruning loss/PPL 分析。 |
@@ -131,6 +133,73 @@ ymluo/projects/qwen3_unet_synthetic_retrieval/outputs/synthetic_eval/metrics.csv
 ymluo/projects/qwen3_unet_synthetic_retrieval/outputs/train/<run_name>/metrics.jsonl
 ymluo/projects/qwen3_unet_synthetic_retrieval/outputs/train/<run_name>/checkpoints/<step>.pth
 ymluo/projects/qwen3_unet_synthetic_retrieval/outputs/train/<run_name>/checkpoints/runtime_config.json
+```
+
+### `qwen3_interval_subseq_retrieval`
+
+新增日期：2026-05-18
+
+这个项目训练一个小型 fdong-style `MyQwen3ForCausalLM`，用直接生成的 token-id arithmetic subsequences 做标准 causal next-token prediction。它和上面的 answer-only synthetic retrieval 不同：没有 query token、placeholder 或最终答案位置，所有 1023 个有效 next-token 位置都会贡献 loss。
+
+默认数据配置：
+
+```text
+total_token = 10000
+subseq_len = 4
+seq_len = 1024
+intervals = 1
+```
+
+`interval=1` 时样本来自 `[1,2,3,4]`、`[5,6,7,8]` 这类连续 4-token subsequences；`interval=2` 等更大 interval 会生成 `[2,4,6,8]`、`[10,12,14,16]` 这类跨步 pattern。每条训练样本随机抽取 256 个 subsequences 并拼成 1024-token 序列。
+
+模型默认把 Qwen config 覆盖为 8 层，并使用 U-Net 风格 stride schedule：
+
+```text
+num_hidden_layers = 8
+attention_stride_pattern = 1,1,4,4,4,4,1,1
+```
+
+单卡训练：
+
+```bash
+bash ymluo/projects/qwen3_interval_subseq_retrieval/scripts/run_train.sh
+```
+
+多卡 DDP 训练：
+
+```bash
+CUDA_DEVICES=0,1,2,3 \
+bash ymluo/projects/qwen3_interval_subseq_retrieval/scripts/run_ddp_train.sh
+```
+
+常用覆盖参数：
+
+```bash
+INTERVALS=1,2,4 \
+RUN_NAME=unet8-intervals-1-2-4 \
+TOTAL_STEPS=20000 \
+BATCH_SIZE=4 \
+TRAIN_MODE=full_sequence_lm \
+bash ymluo/projects/qwen3_interval_subseq_retrieval/scripts/nohup_train.sh
+```
+
+如果 `INTERVAL_GROUP_MODE=scaled`，最大 token id 是 `TOTAL_TOKEN * max(INTERVALS)`；超过基础 Qwen vocab 时，训练脚本默认会自动扩大 `config.vocab_size`，除非显式设置 `AUTO_RESIZE_VOCAB=false`。
+
+保存 checkpoint 后可以导出每层/head 的 masked raw attention scores 和 softmax probabilities：
+
+```bash
+RUN_NAME=unet8-interval1-lm-ddp \
+CKPT_STEP=2000 \
+bash ymluo/projects/qwen3_interval_subseq_retrieval/scripts/dump_attention_scores.sh
+```
+
+主要输出：
+
+```text
+ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/metrics.jsonl
+ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/checkpoints/<step>.pth
+ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/checkpoints/runtime_config.json
+ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/attention_scores/step_<ckpt_step>/
 ```
 
 ### `pyramid_kv_compression`
@@ -557,9 +626,22 @@ TRAIN_MODE=anchor_kv_decode
 TOTAL_STEPS=20000
 ```
 
+interval subsequence 项目的训练和 attention dump 常用：
+
+```bash
+CONFIG_DIR=/mnt/workspace/Qwen3-0.6B
+TOTAL_TOKEN=10000
+SUBSEQ_LEN=4
+SEQ_LEN=1024
+INTERVALS=1,2,4
+ATTENTION_STRIDE_PATTERN=1,1,4,4,4,4,1,1
+CKPT_STEP=2000
+QUERY_POSITIONS=last
+```
+
 ## 推荐阅读顺序
 
-新增日期：2026-05-14；最近同步日期：2026-05-15
+新增日期：2026-05-14；最近同步日期：2026-05-18
 
 1. `KVCache_Indexing_Knowledge_Retrieval_2026-05-09.md`：理解 retrieval-system framing。
 2. `projects/qwen3_kcache_cosine_heatmap/README.md`：理解 K-cache pairwise cosine 热力图生成方法。
@@ -567,8 +649,9 @@ TOTAL_STEPS=20000
 4. `projects/qwen3_kcache_avg_topk/README.md`：查看可运行的 block-selection sparse decode baseline。
 5. `projects/qwen3_chunk_routing/README.md`：查看 oracle/router sparse chunk training。
 6. `projects/qwen3_unet_synthetic_retrieval/README.md`：查看可控 synthetic retrieval 评估和 answer-only 训练入口。
-7. `projects/pyramid_kv_compression/METHOD_NOTES.md`：在跑 compressed KV 继续预训练前先看风险记录。
-8. `projects/qwen3_kcache_value_delta_analysis/README.md`：查看 K-cache 数值和 delta 分布 profiling。
+7. `projects/qwen3_interval_subseq_retrieval/README.md`：查看 arithmetic subsequence next-token 训练和 attention score dump。
+8. `projects/pyramid_kv_compression/METHOD_NOTES.md`：在跑 compressed KV 继续预训练前先看风险记录。
+9. `projects/qwen3_kcache_value_delta_analysis/README.md`：查看 K-cache 数值和 delta 分布 profiling。
 
 ## 实践注意事项
 
@@ -577,6 +660,7 @@ TOTAL_STEPS=20000
 - 精确命令参数和输出路径以每个项目自己的 README 为准。
 - 分析脚本默认把输出写到各项目的 `outputs/` 目录下。
 - synthetic retrieval 项目默认直接生成 token-id 序列，避免 tokenizer segmentation 对可控任务的干扰；训练默认只对最终 answer 位置施加 loss。
+- interval subsequence 项目同样直接生成 token-id 序列，但目标是标准 causal LM，所有 next-token 位置都会参与 loss；不要把它和 answer-only retrieval 的指标直接混读。
 - 长上下文分析会占较多显存和内存；smoke test 时先减小 `MAX_TOKENS` 和 `CHUNK_SIZE`。
 - sparse decode 和 routing 实验还需要 kernel-aware 实现，理论 KV-read reduction 才能转化为真实 serving 加速。
 - 对 KV cache 压缩来说，raw cosine 是很好的诊断信号，但最终判断必须回到 attention logits、attention output、loss/PPL。
