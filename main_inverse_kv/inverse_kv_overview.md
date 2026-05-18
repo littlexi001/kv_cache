@@ -19,7 +19,7 @@
 
 当前结论是：
 
-1. **MoE Selectivity**: Attention output routing + head-level MoE 显著提高了 MoE 分发与 Attention score 的一致性（约 60%），但 MoE bucket 仍不够干净，无法直接作为可靠的 KV cache reverse index。
+1. **MoE Selectivity**: Attention output routing + head-level MoE 显著提高了 MoE 分发与 Attention score 的一致性（约 60%），但不足以直接作为可靠的 KV cache reverse index。
 2. **MoE Selectivity 不高的原因**：Attention 捕捉的 feature hierarchy 不干净。Attention score 有 75% 的注意力捕捉到 ground truth feature hierarchy，但各 hierarchy 混在所有 layer / head 中；同时，仍有约 25% 的注意力分配到无关的 token。
 3. **数据分布的影响**：无论数据分布是否有 Zipf，参数矩阵和表征矩阵都是奇异的，且最大奇异方向与 Embedding 矩阵的 mean direction 高度相似。
 4. **TODO**：应当设计更干净的 Attention，然后让 MoE gating 直接按 Attention score 分发。
