@@ -123,3 +123,29 @@ ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/metrics.
 ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/checkpoints/<step>.pth
 ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train/<run_name>/checkpoints/runtime_config.json
 ```
+
+## Dump Attention Scores
+
+After a checkpoint is saved, dump each layer/head attention values:
+
+```bash
+RUN_NAME=unet8-interval1-lm-ddp \
+CKPT_STEP=2000 \
+bash ymluo/projects/qwen3_interval_subseq_retrieval/scripts/dump_attention_scores.sh
+```
+
+By default this saves both raw masked attention scores and softmax
+probabilities. Files are written under:
+
+```text
+outputs/train/<run_name>/attention_scores/step_<ckpt_step>/
+```
+
+The per-head tensor files have shape:
+
+```text
+[batch, selected_query_positions, key_positions]
+```
+
+Use `QUERY_POSITIONS=last` or `QUERY_POSITIONS=0,255,511,767,1023` if saving the
+full `[1024,1024]` matrix for every layer/head is too large.

@@ -258,13 +258,6 @@ def prepare_model(args: argparse.Namespace, device: torch.device):
                 f"but config.vocab_size={config.vocab_size}. "
                 "Set --auto_resize_vocab true or reduce total_token/intervals."
             )
-        if args.init_checkpoint:
-            raise ValueError(
-                "Synthetic token ids exceed the base vocab and --init_checkpoint is set. "
-                "Automatic vocab resizing changes embedding/lm_head shapes, so it cannot "
-                "load that checkpoint strictly. Use a checkpoint trained with the resized "
-                "vocab, reduce total_token/intervals, or run without --init_checkpoint."
-            )
         print(
             f"Resizing config.vocab_size from {config.vocab_size} to {needed_vocab_size} "
             "for synthetic token ids.",
