@@ -1,3 +1,7 @@
+[toc]
+
+
+
 # Inverse KV Indexing: Feature-Based Memory Layout
 
 ## 1. 核心问题
