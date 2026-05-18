@@ -8,7 +8,7 @@ LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs}"
 mkdir -p "${LOG_DIR}"
 
 TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-RUN_NAME_VALUE="${RUN_NAME:-unet8-interval1-lm-ddp}"
+RUN_NAME_VALUE="${RUN_NAME:-unet8-small-intervals123-lm-ddp}"
 CUDA_DEVICES_VALUE="${CUDA_DEVICES:-${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}}"
 SAFE_CUDA_DEVICES="${CUDA_DEVICES_VALUE//,/}"
 LOG_PATH="${LOG_PATH:-${LOG_DIR}/ddp_${RUN_NAME_VALUE}_cuda${SAFE_CUDA_DEVICES}_${TIMESTAMP}.log}"

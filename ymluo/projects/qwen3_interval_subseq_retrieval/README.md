@@ -14,7 +14,7 @@ Default settings:
 total_token = 10000
 subseq_len = 4
 seq_len = 1024
-intervals = 1
+intervals = 1,2,3
 ```
 
 For `interval=1`, the subsequence table is:
@@ -35,6 +35,9 @@ the token ids:
 [10, 12, 14, 16]
 ...
 ```
+
+With the default small setting, the maximum token id is `10000 * 3 = 30000`,
+which fits the base Qwen vocab size `151936`.
 
 Each training sample randomly samples 256 candidate groups and concatenates
 them into a 1024-token sequence:
@@ -107,7 +110,8 @@ When `INTERVAL_GROUP_MODE=scaled`, the largest generated token id is
 `TOTAL_TOKEN * max(INTERVALS)`. If that exceeds the base Qwen vocab, the trainer
 automatically increases `config.vocab_size` unless `AUTO_RESIZE_VOCAB=false`.
 For example, `TOTAL_TOKEN=100000` and `INTERVALS=1,2,3` needs vocab size
-`300001`.
+  `300001`. To keep using checkpoints with the base vocab, use the default
+  small setting: `TOTAL_TOKEN=10000 INTERVALS=1,2,3`.
 
 Use a different 8-layer U-Net schedule:
 

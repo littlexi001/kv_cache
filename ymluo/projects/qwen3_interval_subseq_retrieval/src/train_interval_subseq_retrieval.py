@@ -47,12 +47,12 @@ def parse_args() -> argparse.Namespace:
         "--output_dir",
         default=str(REPO_ROOT / "ymluo/projects/qwen3_interval_subseq_retrieval/outputs/train"),
     )
-    parser.add_argument("--run_name", default="unet8-interval1-lm")
+    parser.add_argument("--run_name", default="unet8-small-intervals123-lm")
 
     parser.add_argument("--total_token", type=int, default=10_000)
     parser.add_argument("--subseq_len", type=int, default=4)
     parser.add_argument("--seq_len", type=int, default=1024)
-    parser.add_argument("--intervals", type=parse_int_list, default=[1])
+    parser.add_argument("--intervals", type=parse_int_list, default=[1, 2, 3])
     parser.add_argument(
         "--interval_group_mode",
         choices=["scaled", "bounded"],

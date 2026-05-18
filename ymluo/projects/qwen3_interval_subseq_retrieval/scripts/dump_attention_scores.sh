@@ -7,7 +7,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export TOKENIZERS_PARALLELISM=false
 
 ARGS=(
-  --run_dir "${RUN_DIR:-${PROJECT_DIR}/outputs/train/${RUN_NAME:-unet8-interval1-lm-ddp}}"
+  --run_dir "${RUN_DIR:-${PROJECT_DIR}/outputs/train/${RUN_NAME:-unet8-small-intervals123-lm-ddp}}"
   --ckpt_step "${CKPT_STEP:-2000}"
   --config_dir "${CONFIG_DIR:-/mnt/workspace/Qwen3-0.6B}"
   --batch_size "${BATCH_SIZE:-1}"

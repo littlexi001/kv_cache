@@ -23,11 +23,11 @@ torchrun \
   "${PROJECT_DIR}/src/train_interval_subseq_retrieval.py" \
   --config_dir "${CONFIG_DIR:-/mnt/workspace/Qwen3-0.6B}" \
   --output_dir "${OUT_DIR:-${PROJECT_DIR}/outputs/train}" \
-  --run_name "${RUN_NAME:-unet8-interval1-lm-ddp}" \
+  --run_name "${RUN_NAME:-unet8-small-intervals123-lm-ddp}" \
   --total_token "${TOTAL_TOKEN:-10000}" \
   --subseq_len "${SUBSEQ_LEN:-4}" \
   --seq_len "${SEQ_LEN:-1024}" \
-  --intervals "${INTERVALS:-1}" \
+  --intervals "${INTERVALS:-1,2,3}" \
   --interval_group_mode "${INTERVAL_GROUP_MODE:-scaled}" \
   --num_hidden_layers "${NUM_HIDDEN_LAYERS:-8}" \
   --attention_stride_pattern "${ATTENTION_STRIDE_PATTERN:-1,1,4,4,4,4,1,1}" \
