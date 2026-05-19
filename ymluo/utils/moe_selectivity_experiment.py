@@ -35,6 +35,7 @@ EXPERIMENT_DEFAULTS = {
         "orthogonalize_experts": False,
         "forced_warmup_steps": 0,
         "forced_warmup_router_loss_weight": 0.0,
+        "eval_forced_warmup_routing": False,
     },
     "single_token_update": {
         "run_name": "moe-single-token-update",
@@ -45,6 +46,7 @@ EXPERIMENT_DEFAULTS = {
         "orthogonalize_experts": False,
         "forced_warmup_steps": 0,
         "forced_warmup_router_loss_weight": 0.0,
+        "eval_forced_warmup_routing": False,
     },
     "orthogonal_init": {
         "run_name": "moe-orthogonal-init",
@@ -55,6 +57,7 @@ EXPERIMENT_DEFAULTS = {
         "orthogonalize_experts": True,
         "forced_warmup_steps": 0,
         "forced_warmup_router_loss_weight": 0.0,
+        "eval_forced_warmup_routing": False,
     },
     "forced_warmup": {
         "run_name": "moe-forced-warmup",
@@ -65,6 +68,7 @@ EXPERIMENT_DEFAULTS = {
         "orthogonalize_experts": False,
         "forced_warmup_steps": 100,
         "forced_warmup_router_loss_weight": 1.0,
+        "eval_forced_warmup_routing": True,
     },
 }
 
@@ -174,6 +178,7 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
         default=defaults["forced_warmup_router_loss_weight"],
         help="CE loss weight used to train the router toward the forced warmup assignment.",
     )
+    parser.add_argument("--eval_forced_warmup_routing", type=str2bool, default=defaults["eval_forced_warmup_routing"])
     return parser
 
 
@@ -626,6 +631,13 @@ def build_forced_warmup_expert_ids(batch: Batch, args: argparse.Namespace, model
     return per_position.unsqueeze(0).expand(batch.source.shape[0], -1).contiguous()
 
 
+def higher_occurrence_ids(batch: Batch, args: argparse.Namespace) -> torch.Tensor:
+    higher_unit_len = max(forced_higher_unit_len(args), 1)
+    positions = torch.arange(batch.source.shape[1], device=batch.source.device)
+    occurrence_ids = torch.div(positions, higher_unit_len, rounding_mode="floor")
+    return occurrence_ids.unsqueeze(0).expand(batch.source.shape[0], -1).contiguous()
+
+
 def compute_prediction_loss(
     logits: torch.Tensor,
     target: torch.Tensor,
@@ -785,12 +797,17 @@ def evaluate(
     args: argparse.Namespace,
     device: torch.device,
     generator: torch.Generator,
+    force_warmup_routing: bool = False,
 ) -> dict[str, Any]:
     was_training = model.training
     model.eval()
     rows = []
     for batch_idx in range(args.eval_batches):
         batch = sample_batch(dataset, args, generator, device)
+        if force_warmup_routing:
+            set_forced_expert_ids(model, build_forced_warmup_expert_ids(batch, args, model))
+        else:
+            clear_forced_expert_ids(model)
         with autocast_context(args, device):
             output = model(
                 batch.source,
@@ -814,6 +831,7 @@ def evaluate(
         }
         attentions = output.attentions or ()
         expert_labels = getattr(output, "expert_labels", None) or ()
+        occurrence_ids = higher_occurrence_ids(batch, args)
         for layer_idx in range(len(attentions)):
             layer_labels = expert_labels[layer_idx] if layer_idx < len(expert_labels) else None
             layer_row = {
@@ -821,6 +839,7 @@ def evaluate(
                     layer_labels,
                     batch.metadata[:, :, 1] if batch.metadata.shape[-1] > 1 else batch.metadata[:, :, 0],
                 ),
+                "same_higher_occurrence_same_expert": same_feature_same_expert_rate(layer_labels, occurrence_ids),
                 "same_local_same_expert": same_feature_same_expert_rate(layer_labels, batch.metadata[:, :, 0]),
                 "local_slot_history_mass": attention_history_mass(attentions[layer_idx], batch.metadata[:, :, 0]),
                 "higher_level_history_mass": attention_history_mass(
@@ -831,6 +850,7 @@ def evaluate(
             layer_row.update(expert_load_metrics(layer_labels, int(model.config.moe_num_unique_experts)))
             row["layers"][str(layer_idx)] = layer_row
         rows.append(row)
+    clear_forced_expert_ids(model)
     if was_training:
         model.train()
     return aggregate_eval_metrics(rows)
@@ -1057,7 +1077,19 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
 
         if args.eval_interval > 0 and step % args.eval_interval == 0:
             eval_metrics = evaluate(model, dataset, args, device, eval_generator)
+            forced_eval_metrics = None
+            if args.eval_forced_warmup_routing:
+                forced_eval_metrics = evaluate(
+                    model,
+                    dataset,
+                    args,
+                    device,
+                    eval_generator,
+                    force_warmup_routing=True,
+                )
             row = {"type": "eval", "step": step, **eval_metrics}
+            if forced_eval_metrics is not None:
+                row["forced_oracle"] = forced_eval_metrics
             append_jsonl(metrics_path, row)
             mean_layers = eval_metrics.get("mean_layers", {})
             layers = eval_metrics.get("layers", {})
@@ -1072,9 +1104,27 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
             print(
                 f"step {step}: "
                 f"same_higher_by_layer={format_layer_metric(layers, 'same_higher_same_expert')} "
+                f"same_higher_occurrence_by_layer={format_layer_metric(layers, 'same_higher_occurrence_same_expert')} "
                 f"higher_mass_by_layer={format_layer_metric(layers, 'higher_level_history_mass')}",
                 flush=True,
             )
+            if forced_eval_metrics is not None:
+                forced_layers = forced_eval_metrics.get("layers", {})
+                forced_mean_layers = forced_eval_metrics.get("mean_layers", {})
+                print(
+                    f"step {step}: forced_oracle_eval_loss={forced_eval_metrics['loss']:.4f} "
+                    f"forced_oracle_eval_acc={forced_eval_metrics['accuracy']:.4f} "
+                    f"forced_same_higher={forced_mean_layers.get('same_higher_same_expert')} "
+                    f"forced_same_higher_occurrence={forced_mean_layers.get('same_higher_occurrence_same_expert')}",
+                    flush=True,
+                )
+                print(
+                    f"step {step}: "
+                    f"forced_same_higher_by_layer={format_layer_metric(forced_layers, 'same_higher_same_expert')} "
+                    f"forced_same_higher_occurrence_by_layer="
+                    f"{format_layer_metric(forced_layers, 'same_higher_occurrence_same_expert')}",
+                    flush=True,
+                )
 
         if args.save_interval > 0 and step % args.save_interval == 0:
             save_checkpoint(ckpt_dir, step, model, optimizer, scheduler, args)

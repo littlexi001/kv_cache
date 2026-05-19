@@ -62,4 +62,5 @@ python "${PROJECT_DIR}/src/train_forced_warmup.py" \
   --forced_warmup_steps "${FORCED_WARMUP_STEPS:-100}" \
   --forced_warmup_higher_unit_len "${FORCED_WARMUP_HIGHER_UNIT_LEN:--1}" \
   --forced_warmup_router_loss_weight "${FORCED_WARMUP_ROUTER_LOSS_WEIGHT:-1.0}" \
+  --eval_forced_warmup_routing "${EVAL_FORCED_WARMUP_ROUTING:-true}" \
   "$@"

@@ -18,6 +18,10 @@ The implementation also adds a router cross-entropy loss during warmup so the
 gate learns the forced assignment. After warmup, routing returns to normal MoE
 top-k routing.
 
+Eval reports both normal learned-gate routing and, by default, a
+`forced_oracle` sanity check that re-applies the forced routing rule during eval.
+Use `EVAL_FORCED_WARMUP_ROUTING=false` to disable the extra eval.
+
 Run:
 
 ```bash
@@ -36,6 +40,7 @@ Useful overrides:
 FORCED_WARMUP_STEPS=200 \
 FORCED_WARMUP_ROUTER_LOSS_WEIGHT=1.0 \
 FORCED_WARMUP_HIGHER_UNIT_LEN=16 \
+EVAL_FORCED_WARMUP_ROUTING=true \
 MOE_NUM_UNIQUE_EXPERTS=4 \
 bash ymluo/projects/qwen3_moe_forced_warmup/scripts/run_train.sh
 ```
