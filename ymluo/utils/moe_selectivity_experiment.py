@@ -33,6 +33,8 @@ EXPERIMENT_DEFAULTS = {
         "expert_repulsion_weight": 0.001,
         "orthogonalize_gate": False,
         "orthogonalize_experts": False,
+        "forced_warmup_steps": 0,
+        "forced_warmup_router_loss_weight": 0.0,
     },
     "single_token_update": {
         "run_name": "moe-single-token-update",
@@ -41,6 +43,8 @@ EXPERIMENT_DEFAULTS = {
         "expert_repulsion_weight": 0.0,
         "orthogonalize_gate": False,
         "orthogonalize_experts": False,
+        "forced_warmup_steps": 0,
+        "forced_warmup_router_loss_weight": 0.0,
     },
     "orthogonal_init": {
         "run_name": "moe-orthogonal-init",
@@ -49,6 +53,18 @@ EXPERIMENT_DEFAULTS = {
         "expert_repulsion_weight": 0.0,
         "orthogonalize_gate": True,
         "orthogonalize_experts": True,
+        "forced_warmup_steps": 0,
+        "forced_warmup_router_loss_weight": 0.0,
+    },
+    "forced_warmup": {
+        "run_name": "moe-forced-warmup",
+        "single_token_update": False,
+        "gate_inhibition_weight": 0.0,
+        "expert_repulsion_weight": 0.0,
+        "orthogonalize_gate": False,
+        "orthogonalize_experts": False,
+        "forced_warmup_steps": 100,
+        "forced_warmup_router_loss_weight": 1.0,
     },
 }
 
@@ -139,6 +155,25 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--orthogonalize_gate", type=str2bool, default=defaults["orthogonalize_gate"])
     parser.add_argument("--orthogonalize_experts", type=str2bool, default=defaults["orthogonalize_experts"])
     parser.add_argument("--orthogonal_init_mode", choices=["preserve_norm", "unit"], default="preserve_norm")
+    parser.add_argument(
+        "--orthogonalize_after_checkpoint",
+        type=str2bool,
+        default=False,
+        help="If false, loading --init_checkpoint preserves checkpoint weights without re-orthogonalizing them.",
+    )
+    parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
+    parser.add_argument(
+        "--forced_warmup_higher_unit_len",
+        type=int,
+        default=-1,
+        help="If -1, use synthetic_block_size ** synthetic_num_hierarchy_layers.",
+    )
+    parser.add_argument(
+        "--forced_warmup_router_loss_weight",
+        type=float,
+        default=defaults["forced_warmup_router_loss_weight"],
+        help="CE loss weight used to train the router toward the forced warmup assignment.",
+    )
     return parser
 
 
@@ -185,6 +220,185 @@ class RouterLogitTracker:
         if not losses:
             return None
         return torch.stack(losses).mean()
+
+    def target_ce_loss(self, expert_ids: torch.Tensor) -> torch.Tensor | None:
+        losses = []
+        flat_targets = expert_ids.reshape(-1).long()
+        for logits in self.logits:
+            flat_logits = logits.reshape(-1, logits.shape[-1])
+            if flat_logits.shape[0] != flat_targets.numel():
+                continue
+            targets = flat_targets.to(flat_logits.device)
+            losses.append(F.cross_entropy(flat_logits.float(), targets))
+        if not losses:
+            return None
+        return torch.stack(losses).mean()
+
+
+def _forced_topk_from_targets(
+    routing_weights: torch.Tensor,
+    forced_ids: torch.Tensor,
+    num_experts_per_tok: int,
+    normalize_topk_prob: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    forced_ids = forced_ids.to(routing_weights.device, dtype=torch.long).reshape(-1)
+    if num_experts_per_tok == 1:
+        topk_indices = forced_ids[:, None]
+        topk_weights = torch.ones_like(topk_indices, dtype=routing_weights.dtype)
+        return topk_weights, topk_indices
+
+    masked_weights = routing_weights.clone()
+    masked_weights.scatter_(1, forced_ids[:, None], -1.0)
+    other_weights, other_indices = torch.topk(
+        masked_weights,
+        k=num_experts_per_tok - 1,
+        dim=-1,
+    )
+    topk_indices = torch.cat([forced_ids[:, None], other_indices], dim=-1)
+    forced_weights = routing_weights.gather(1, forced_ids[:, None])
+    topk_weights = torch.cat([forced_weights, other_weights.clamp_min(0.0)], dim=-1)
+    if normalize_topk_prob:
+        topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+    return topk_weights, topk_indices
+
+
+def _patched_moe_forward(
+    self,
+    hidden_states,
+    output_expert_labels: bool = False,
+    router_hidden_states: torch.Tensor | None = None,
+):
+    original_shape = hidden_states.shape
+    flat_states = hidden_states.reshape(-1, self.hidden_size)
+    if router_hidden_states is None:
+        router_hidden_states = hidden_states
+    flat_router_states = router_hidden_states.reshape(-1, self.hidden_size)
+
+    router_logits = self.router(flat_router_states)
+    routing_weights = F.softmax(router_logits, dim=-1, dtype=torch.float32)
+    forced_ids = getattr(self, "_forced_expert_ids", None)
+    if forced_ids is None:
+        topk_weights, topk_indices = torch.topk(
+            routing_weights,
+            k=self.num_experts_per_tok,
+            dim=-1,
+        )
+        if self.normalize_topk_prob:
+            topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+    else:
+        topk_weights, topk_indices = _forced_topk_from_targets(
+            routing_weights,
+            forced_ids,
+            self.num_experts_per_tok,
+            self.normalize_topk_prob,
+        )
+    topk_weights = topk_weights.to(flat_states.dtype)
+
+    final_states = torch.zeros_like(flat_states)
+    for expert_idx, expert in enumerate(self.experts):
+        token_idx, slot_idx = torch.where(topk_indices == expert_idx)
+        if token_idx.numel() == 0:
+            continue
+        expert_output = expert(flat_states[token_idx])
+        final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
+
+    if self.common_expert is not None:
+        final_states = final_states + self.common_expert(flat_states)
+
+    final_states = final_states.reshape(original_shape)
+    if output_expert_labels:
+        expert_labels = topk_indices.reshape(*original_shape[:-1], self.num_experts_per_tok)
+        return final_states, expert_labels
+    return final_states
+
+
+def _patched_head_moe_forward(
+    self,
+    hidden_states,
+    output_expert_labels: bool = False,
+    router_hidden_states: torch.Tensor | None = None,
+):
+    if hidden_states.dim() != 4:
+        raise ValueError(f"Head-level MoE expects [batch, seq, heads, head_dim], got {tuple(hidden_states.shape)}.")
+    if router_hidden_states is None:
+        router_hidden_states = hidden_states
+    if router_hidden_states.shape != hidden_states.shape:
+        raise ValueError(
+            "`router_hidden_states` must match head-level expert input shape, "
+            f"got {tuple(router_hidden_states.shape)} vs {tuple(hidden_states.shape)}."
+        )
+
+    batch, seq_len, num_heads, head_dim = hidden_states.shape
+    if num_heads != self.num_heads or head_dim != self.head_dim:
+        raise ValueError(
+            f"Expected {self.num_heads} heads with dim {self.head_dim}, got {num_heads} heads with dim {head_dim}."
+        )
+
+    forced_ids = getattr(self, "_forced_expert_ids", None)
+    head_outputs = []
+    head_labels = []
+    for head_idx in range(self.num_heads):
+        head_states = hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
+        head_router_states = router_hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
+        router_logits = self.routers[head_idx](head_router_states)
+        routing_weights = F.softmax(router_logits, dim=-1, dtype=torch.float32)
+        if forced_ids is None:
+            topk_weights, topk_indices = torch.topk(
+                routing_weights,
+                k=self.num_experts_per_tok,
+                dim=-1,
+            )
+            if self.normalize_topk_prob:
+                topk_weights = topk_weights / topk_weights.sum(dim=-1, keepdim=True).clamp_min(1e-9)
+        else:
+            topk_weights, topk_indices = _forced_topk_from_targets(
+                routing_weights,
+                forced_ids,
+                self.num_experts_per_tok,
+                self.normalize_topk_prob,
+            )
+        topk_weights = topk_weights.to(head_states.dtype)
+
+        final_states = torch.zeros_like(head_states)
+        for expert_idx, expert in enumerate(self.experts[head_idx]):
+            token_idx, slot_idx = torch.where(topk_indices == expert_idx)
+            if token_idx.numel() == 0:
+                continue
+            expert_output = expert(head_states[token_idx])
+            final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
+
+        if self.common_experts is not None:
+            final_states = final_states + self.common_experts[head_idx](head_states)
+
+        head_outputs.append(final_states.reshape(batch, seq_len, self.head_dim))
+        if output_expert_labels:
+            head_labels.append(topk_indices.reshape(batch, seq_len, self.num_experts_per_tok))
+
+    output = torch.stack(head_outputs, dim=2)
+    if output_expert_labels:
+        expert_labels = torch.stack(head_labels, dim=2)
+        return output, expert_labels
+    return output
+
+
+def install_forced_routing_patch() -> None:
+    if getattr(MyQwen3MoE, "_ymluo_forced_routing_patch", False):
+        return
+    MyQwen3MoE.forward = _patched_moe_forward
+    MyQwen3HeadMoE.forward = _patched_head_moe_forward
+    MyQwen3MoE._ymluo_forced_routing_patch = True
+    MyQwen3HeadMoE._ymluo_forced_routing_patch = True
+
+
+def clear_forced_expert_ids(model: torch.nn.Module) -> None:
+    for module in iter_moe_modules(model):
+        if hasattr(module, "_forced_expert_ids"):
+            delattr(module, "_forced_expert_ids")
+
+
+def set_forced_expert_ids(model: torch.nn.Module, expert_ids: torch.Tensor) -> None:
+    for module in iter_moe_modules(model):
+        module._forced_expert_ids = expert_ids
 
 
 def apply_debug_model_overrides(config: Any, args: argparse.Namespace) -> None:
@@ -364,7 +578,10 @@ def prepare_model(args: argparse.Namespace, device: torch.device) -> MyQwen3ForC
     if args.init_checkpoint:
         state_dict = torch.load(args.init_checkpoint, map_location=device, weights_only=True)
         model.load_state_dict(state_dict)
-    init_counts = apply_orthogonal_initialization(model, args)
+    if args.init_checkpoint and not args.orthogonalize_after_checkpoint:
+        init_counts = {"gate_groups": 0, "expert_groups": 0}
+    else:
+        init_counts = apply_orthogonal_initialization(model, args)
     print(
         "model: "
         f"layers={config.num_hidden_layers} hidden={config.hidden_size} "
@@ -391,6 +608,20 @@ def choose_single_token_position(args: argparse.Namespace, step: int, seq_len: i
     if args.single_token_position == "cycle":
         return (step - 1) % seq_len
     return int(torch.randint(0, seq_len, (1,), generator=generator).item())
+
+
+def forced_higher_unit_len(args: argparse.Namespace) -> int:
+    if args.forced_warmup_higher_unit_len > 0:
+        return int(args.forced_warmup_higher_unit_len)
+    return int(args.synthetic_block_size ** args.synthetic_num_hierarchy_layers)
+
+
+def build_forced_warmup_expert_ids(batch: Batch, args: argparse.Namespace, model: MyQwen3ForCausalLM) -> torch.Tensor:
+    higher_unit_len = max(forced_higher_unit_len(args), 1)
+    num_experts = int(model.config.moe_num_unique_experts)
+    positions = torch.arange(batch.source.shape[1], device=batch.source.device)
+    per_position = torch.div(positions, higher_unit_len, rounding_mode="floor").remainder(num_experts)
+    return per_position.unsqueeze(0).expand(batch.source.shape[0], -1).contiguous()
 
 
 def compute_prediction_loss(
@@ -473,6 +704,24 @@ def same_feature_same_expert_rate(labels: torch.Tensor, feature_ids: torch.Tenso
     return float((same_expert & valid).float().sum().detach().cpu() / valid.float().sum().detach().cpu().clamp_min(1.0))
 
 
+def expert_load_metrics(labels: torch.Tensor, num_experts: int) -> dict[str, Any]:
+    if labels is None:
+        return {}
+    primary = labels[..., 0]
+    counts = torch.bincount(primary.reshape(-1).long().cpu(), minlength=num_experts).float()
+    total = counts.sum().clamp_min(1.0)
+    load = counts / total
+    entropy = -(load[load > 0] * load[load > 0].log()).sum()
+    normalized_entropy = entropy / math.log(max(num_experts, 2))
+    return {
+        "expert_load": [float(value) for value in load.tolist()],
+        "expert_load_max": float(load.max().item()),
+        "expert_load_min": float(load.min().item()),
+        "expert_load_entropy": float(normalized_entropy.item()),
+        "expert_load_nonzero_fraction": float((counts > 0).float().mean().item()),
+    }
+
+
 def aggregate_eval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
     total_loss_sum = sum(row["loss_sum"] for row in rows)
     total_count = sum(row["count"] for row in rows)
@@ -483,19 +732,39 @@ def aggregate_eval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
             bucket = layers.setdefault(layer_idx, {})
             for key, value in layer_metrics.items():
                 if value is not None:
-                    bucket.setdefault(key, []).append(float(value))
+                    bucket.setdefault(key, []).append(value)
     layer_summary = {}
     for layer_idx, layer_values in layers.items():
-        layer_summary[layer_idx] = {
-            key: sum(values) / len(values)
-            for key, values in layer_values.items()
-            if values
-        }
+        layer_summary[layer_idx] = {}
+        for key, values in layer_values.items():
+            if not values:
+                continue
+            first = values[0]
+            if isinstance(first, list):
+                width = len(first)
+                layer_summary[layer_idx][key] = [
+                    sum(float(value[idx]) for value in values) / len(values)
+                    for idx in range(width)
+                ]
+            else:
+                layer_summary[layer_idx][key] = sum(float(value) for value in values) / len(values)
     mean_summary = {}
     for layer_values in layer_summary.values():
         for key, value in layer_values.items():
-            mean_summary.setdefault(key, []).append(float(value))
-    mean_summary = {key: sum(values) / len(values) for key, values in mean_summary.items() if values}
+            mean_summary.setdefault(key, []).append(value)
+    averaged_mean_summary = {}
+    for key, values in mean_summary.items():
+        if not values:
+            continue
+        first = values[0]
+        if isinstance(first, list):
+            width = len(first)
+            averaged_mean_summary[key] = [
+                sum(float(value[idx]) for value in values) / len(values)
+                for idx in range(width)
+            ]
+        else:
+            averaged_mean_summary[key] = sum(float(value) for value in values) / len(values)
     loss = total_loss_sum / max(total_count, 1)
     return {
         "loss": loss,
@@ -503,7 +772,7 @@ def aggregate_eval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "ppl": math.exp(min(loss, 80.0)),
         "count": total_count,
         "layers": layer_summary,
-        "mean_layers": mean_summary,
+        "mean_layers": averaged_mean_summary,
     }
 
 
@@ -545,7 +814,7 @@ def evaluate(
         expert_labels = getattr(output, "expert_labels", None) or ()
         for layer_idx in range(len(attentions)):
             layer_labels = expert_labels[layer_idx] if layer_idx < len(expert_labels) else None
-            row["layers"][str(layer_idx)] = {
+            layer_row = {
                 "same_higher_same_expert": same_feature_same_expert_rate(
                     layer_labels,
                     batch.metadata[:, :, 1] if batch.metadata.shape[-1] > 1 else batch.metadata[:, :, 0],
@@ -557,6 +826,8 @@ def evaluate(
                     batch.metadata[:, :, 1] if batch.metadata.shape[-1] > 1 else batch.metadata[:, :, 0],
                 ),
             }
+            layer_row.update(expert_load_metrics(layer_labels, int(model.config.moe_num_unique_experts)))
+            row["layers"][str(layer_idx)] = layer_row
         rows.append(row)
     if was_training:
         model.train()
@@ -567,6 +838,20 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def format_layer_metric(layers: dict[str, dict[str, Any]], key: str) -> str:
+    parts = []
+    for layer_idx in sorted(layers, key=lambda value: int(value)):
+        value = layers[layer_idx].get(key)
+        if value is None:
+            continue
+        if isinstance(value, list):
+            formatted = "[" + ",".join(f"{item:.3f}" for item in value) + "]"
+        else:
+            formatted = f"{float(value):.4f}"
+        parts.append(f"L{layer_idx}:{formatted}")
+    return " ".join(parts)
 
 
 def save_checkpoint(
@@ -639,6 +924,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
     )
 
     dataset = prepare_dataset(args)
+    if args.forced_warmup_steps > 0:
+        install_forced_routing_patch()
     model = prepare_model(args, device)
     tracker = RouterLogitTracker(model)
     optimizer = torch.optim.AdamW(
@@ -656,6 +943,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
         "prediction_loss_sum": 0.0,
         "gate_inhibition_loss_sum": 0.0,
         "expert_repulsion_loss_sum": 0.0,
+        "forced_router_loss_sum": 0.0,
         "correct": 0,
         "count": 0,
         "selected_position_sum": 0,
@@ -666,8 +954,17 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
     for step in range(1, args.total_steps + 1):
         for _ in range(args.gradient_accumulation_steps):
             batch = sample_batch(dataset, args, train_generator, device)
+            forced_ids = None
+            if args.forced_warmup_steps > 0 and step <= args.forced_warmup_steps:
+                forced_ids = build_forced_warmup_expert_ids(batch, args, model)
+                set_forced_expert_ids(model, forced_ids)
+            else:
+                clear_forced_expert_ids(model)
             tracker.clear()
-            tracker.enabled = args.gate_inhibition_weight > 0.0
+            tracker.enabled = (
+                args.gate_inhibition_weight > 0.0
+                or (forced_ids is not None and args.forced_warmup_router_loss_weight > 0.0)
+            )
             with autocast_context(args, device):
                 output = model(
                     batch.source,
@@ -689,6 +986,11 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                     gate_loss_value = tracker.gate_inhibition_loss(args.gate_inhibition_temperature)
                     if gate_loss_value is not None:
                         total_loss = total_loss + args.gate_inhibition_weight * gate_loss_value
+                forced_router_loss_value = None
+                if forced_ids is not None and args.forced_warmup_router_loss_weight > 0.0:
+                    forced_router_loss_value = tracker.target_ce_loss(forced_ids)
+                    if forced_router_loss_value is not None:
+                        total_loss = total_loss + args.forced_warmup_router_loss_weight * forced_router_loss_value
                 expert_loss_value = None
                 if args.expert_repulsion_weight > 0.0:
                     expert_loss_value = expert_repulsion_loss(model, args.expert_repulsion_margin)
@@ -701,6 +1003,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
             rolling["prediction_loss_sum"] += float(prediction_loss.detach().cpu()) * count
             if gate_loss_value is not None:
                 rolling["gate_inhibition_loss_sum"] += float(gate_loss_value.detach().cpu()) * count
+            if forced_router_loss_value is not None:
+                rolling["forced_router_loss_sum"] += float(forced_router_loss_value.detach().cpu()) * count
             if expert_loss_value is not None:
                 rolling["expert_repulsion_loss_sum"] += float(expert_loss_value.detach().cpu()) * count
             rolling["correct"] += correct
@@ -714,6 +1018,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
         optimizer.step()
         scheduler.step()
         optimizer.zero_grad(set_to_none=True)
+        clear_forced_expert_ids(model)
 
         if step % args.log_interval == 0 or step == 1:
             elapsed = max(time.monotonic() - started_at, 1e-6)
@@ -725,6 +1030,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 "prediction_loss": rolling["prediction_loss_sum"] / count,
                 "accuracy": rolling["correct"] / count,
                 "gate_inhibition_loss": rolling["gate_inhibition_loss_sum"] / count,
+                "forced_router_loss": rolling["forced_router_loss_sum"] / count,
                 "expert_repulsion_loss": rolling["expert_repulsion_loss_sum"] / count,
                 "count": rolling["count"],
                 "lr": scheduler.get_last_lr()[0],
@@ -739,6 +1045,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
             print(
                 f"step {step}: loss={row['prediction_loss']:.4f} "
                 f"acc={row['accuracy']:.4f} gate_inhib={row['gate_inhibition_loss']:.4f} "
+                f"forced_router={row['forced_router_loss']:.4f} "
                 f"expert_repulse={row['expert_repulsion_loss']:.4f}",
                 flush=True,
             )
@@ -751,11 +1058,19 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
             row = {"type": "eval", "step": step, **eval_metrics}
             append_jsonl(metrics_path, row)
             mean_layers = eval_metrics.get("mean_layers", {})
+            layers = eval_metrics.get("layers", {})
             print(
                 f"step {step}: eval_loss={eval_metrics['loss']:.4f} "
                 f"eval_acc={eval_metrics['accuracy']:.4f} "
                 f"same_higher_same_expert={mean_layers.get('same_higher_same_expert')} "
-                f"higher_mass={mean_layers.get('higher_level_history_mass')}",
+                f"higher_mass={mean_layers.get('higher_level_history_mass')} "
+                f"expert_load={mean_layers.get('expert_load')}",
+                flush=True,
+            )
+            print(
+                f"step {step}: "
+                f"same_higher_by_layer={format_layer_metric(layers, 'same_higher_same_expert')} "
+                f"higher_mass_by_layer={format_layer_metric(layers, 'higher_level_history_mass')}",
                 flush=True,
             )
 

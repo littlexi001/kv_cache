@@ -7,10 +7,10 @@ REPO_ROOT="$(cd "${PROJECT_DIR}/../../.." && pwd)"
 
 export TOKENIZERS_PARALLELISM=false
 
-python "${PROJECT_DIR}/src/train_orthogonal_init.py" \
+python "${PROJECT_DIR}/src/train_forced_warmup.py" \
   --config_dir "${CONFIG_DIR:-${REPO_ROOT}/fdong/Qwen3-0.6B}" \
   --output_dir "${OUT_DIR:-${PROJECT_DIR}/outputs/train}" \
-  --run_name "${RUN_NAME:-moe-orthogonal-init}" \
+  --run_name "${RUN_NAME:-moe-forced-warmup}" \
   --init_checkpoint "${INIT_CHECKPOINT:-}" \
   --total_steps "${TOTAL_STEPS:-10000}" \
   --batch_size "${BATCH_SIZE:-16}" \
@@ -24,7 +24,7 @@ python "${PROJECT_DIR}/src/train_orthogonal_init.py" \
   --eval_batches "${EVAL_BATCHES:-8}" \
   --log_interval "${LOG_INTERVAL:-10}" \
   --seed "${SEED:-1234}" \
-  --device "${DEVICE:-cuda:2}" \
+  --device "${DEVICE:-cuda}" \
   --use_bf16 "${USE_BF16:-false}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --seq_len "${SEQ_LEN:-128}" \
@@ -59,8 +59,7 @@ python "${PROJECT_DIR}/src/train_orthogonal_init.py" \
   --moe_normalize_topk_prob "${MOE_NORMALIZE_TOPK_PROB:-true}" \
   --moe_router_input "${MOE_ROUTER_INPUT:-attention_output}" \
   --moe_head_level "${MOE_HEAD_LEVEL:-true}" \
-  --orthogonalize_gate "${ORTHOGONALIZE_GATE:-true}" \
-  --orthogonalize_experts "${ORTHOGONALIZE_EXPERTS:-true}" \
-  --orthogonal_init_mode "${ORTHOGONAL_INIT_MODE:-preserve_norm}" \
-  --orthogonalize_after_checkpoint "${ORTHOGONALIZE_AFTER_CHECKPOINT:-false}" \
+  --forced_warmup_steps "${FORCED_WARMUP_STEPS:-100}" \
+  --forced_warmup_higher_unit_len "${FORCED_WARMUP_HIGHER_UNIT_LEN:--1}" \
+  --forced_warmup_router_loss_weight "${FORCED_WARMUP_ROUTER_LOSS_WEIGHT:-1.0}" \
   "$@"

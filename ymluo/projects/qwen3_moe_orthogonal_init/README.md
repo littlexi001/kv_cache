@@ -26,6 +26,7 @@ bash ymluo/projects/qwen3_moe_orthogonal_init/scripts/nohup_train.sh
 Useful overrides:
 
 ```bash
+INIT_CHECKPOINT=ymluo/projects/qwen3_moe_orthogonal_init/outputs/train/moe-orthogonal-init/checkpoints/1000.pth \
 ORTHOGONALIZE_GATE=true \
 ORTHOGONALIZE_EXPERTS=true \
 ORTHOGONAL_INIT_MODE=preserve_norm \

@@ -25,6 +25,7 @@ bash ymluo/projects/qwen3_moe_negative_gradient/scripts/nohup_train.sh
 Useful overrides:
 
 ```bash
+INIT_CHECKPOINT=ymluo/projects/qwen3_moe_negative_gradient/outputs/train/moe-negative-gradient/checkpoints/1000.pth \
 GATE_INHIBITION_WEIGHT=0.1 \
 EXPERT_REPULSION_WEIGHT=0.002 \
 SYNTHETIC_SAMPLING_DISTRIBUTION=zipf \

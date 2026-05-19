@@ -11,6 +11,7 @@ python "${PROJECT_DIR}/src/train_negative_gradient.py" \
   --config_dir "${CONFIG_DIR:-${REPO_ROOT}/fdong/Qwen3-0.6B}" \
   --output_dir "${OUT_DIR:-${PROJECT_DIR}/outputs/train}" \
   --run_name "${RUN_NAME:-moe-negative-gradient}" \
+  --init_checkpoint "${INIT_CHECKPOINT:-}" \
   --total_steps "${TOTAL_STEPS:-10000}" \
   --batch_size "${BATCH_SIZE:-16}" \
   --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-1}" \
@@ -23,7 +24,7 @@ python "${PROJECT_DIR}/src/train_negative_gradient.py" \
   --eval_batches "${EVAL_BATCHES:-8}" \
   --log_interval "${LOG_INTERVAL:-10}" \
   --seed "${SEED:-1234}" \
-  --device "${DEVICE:-cuda}" \
+  --device "${DEVICE:-cuda:0}" \
   --use_bf16 "${USE_BF16:-false}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --seq_len "${SEQ_LEN:-128}" \

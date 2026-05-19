@@ -11,22 +11,23 @@ python "${PROJECT_DIR}/src/train_single_token_update.py" \
   --config_dir "${CONFIG_DIR:-${REPO_ROOT}/fdong/Qwen3-0.6B}" \
   --output_dir "${OUT_DIR:-${PROJECT_DIR}/outputs/train}" \
   --run_name "${RUN_NAME:-moe-single-token-update}" \
-  --total_steps "${TOTAL_STEPS:-10000}" \
+  --init_checkpoint "${INIT_CHECKPOINT:-}" \
+  --total_steps "${TOTAL_STEPS:-10000000}" \
   --batch_size "${BATCH_SIZE:-1}" \
   --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-1}" \
   --lr "${LR:-1e-3}" \
   --weight_decay "${WEIGHT_DECAY:-0.01}" \
-  --warmup_steps "${WARMUP_STEPS:-100}" \
+  --warmup_steps "${WARMUP_STEPS:-100000}" \
   --max_grad_norm "${MAX_GRAD_NORM:-1.0}" \
-  --save_interval "${SAVE_INTERVAL:-1000}" \
-  --eval_interval "${EVAL_INTERVAL:-100}" \
+  --save_interval "${SAVE_INTERVAL:-100000}" \
+  --eval_interval "${EVAL_INTERVAL:-1000}" \
   --eval_batches "${EVAL_BATCHES:-8}" \
   --log_interval "${LOG_INTERVAL:-10}" \
   --seed "${SEED:-1234}" \
-  --device "${DEVICE:-cuda}" \
+  --device "${DEVICE:-cuda:1}" \
   --use_bf16 "${USE_BF16:-false}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
-  --seq_len "${SEQ_LEN:-128}" \
+  --seq_len "${SEQ_LEN:-32}" \
   --synthetic_num_samples "${SYNTHETIC_NUM_SAMPLES:-200000}" \
   --synthetic_block_size "${SYNTHETIC_BLOCK_SIZE:-4}" \
   --synthetic_num_hierarchy_layers "${SYNTHETIC_NUM_HIERARCHY_LAYERS:-2}" \

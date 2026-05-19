@@ -19,6 +19,7 @@ bash ymluo/projects/qwen3_moe_single_token_update/scripts/nohup_train.sh
 Useful overrides:
 
 ```bash
+INIT_CHECKPOINT=ymluo/projects/qwen3_moe_single_token_update/outputs/train/moe-single-token-update/checkpoints/1000.pth \
 BATCH_SIZE=1 \
 SINGLE_TOKEN_POSITION=random \
 TOTAL_STEPS=20000 \
