@@ -14,6 +14,7 @@ OPTIMIZER="${OPTIMIZER:-AdamW}"  # AdamW/sgd
 LR="${LR:-1e-4}"
 WARMUP_STEPS="${WARMUP_STEPS:-200}"
 TOTAL_TRAINING_STEPS="${TOTAL_TRAINING_STEPS:-1000}"
+TRAINING_SEED="${TRAINING_SEED:--1}"
 
 NUM_WORKERS="${NUM_WORKERS:-0}"
 CONFIG_DIR="${CONFIG_DIR:-../Qwen3-0.6B}"
@@ -47,9 +48,18 @@ MOE_NUM_EXPERTS_PER_TOK="${MOE_NUM_EXPERTS_PER_TOK:-2}"
 MOE_INTERMEDIATE_SIZE="${MOE_INTERMEDIATE_SIZE:-64}"
 MOE_USE_COMMON_EXPERT="${MOE_USE_COMMON_EXPERT:-true}"  # true/false
 MOE_COMMON_INTERMEDIATE_SIZE="${MOE_COMMON_INTERMEDIATE_SIZE:-64}"
+MOE_ROUTER_TYPE="${MOE_ROUTER_TYPE:-linear}"  # linear/mlp
+MOE_ROUTER_HIDDEN_SIZE="${MOE_ROUTER_HIDDEN_SIZE:--1}"
+MOE_ROUTER_ACT="${MOE_ROUTER_ACT:-silu}"
 MOE_ROUTER_INPUT="${MOE_ROUTER_INPUT:-hidden}"  # hidden/attention_output
 MOE_HEAD_LEVEL="${MOE_HEAD_LEVEL:-false}"  # true/false
 MOE_LOAD_BALANCE_LOSS_WEIGHT="${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}"
+GROUND_TRUTH_ROUTING_MODE="${GROUND_TRUTH_ROUTING_MODE:-dispatch}"  # dispatch/supervise
+MOE_ROUTER_SUPERVISION_LOSS_WEIGHT="${MOE_ROUTER_SUPERVISION_LOSS_WEIGHT:-0.0}"
+MOE_ROUTER_SUPERVISION_DETACH_INPUT="${MOE_ROUTER_SUPERVISION_DETACH_INPUT:-false}"  # true/false
+GROUND_TRUTH_ROUTING_STRATEGY="${GROUND_TRUTH_ROUTING_STRATEGY:-none}"  # none/hash/frequency_balanced
+GROUND_TRUTH_ROUTING_FEATURE_LAYER="${GROUND_TRUTH_ROUTING_FEATURE_LAYER:-0}"  # 0=local slot, 1=higher-level unit
+GROUND_TRUTH_FREQUENCY_ESTIMATE_SAMPLES="${GROUND_TRUTH_FREQUENCY_ESTIMATE_SAMPLES:-4096}"
 
 ATTENTION_STRIDE_PATTERN="${ATTENTION_STRIDE_PATTERN-1,4}"
 RESIDUAL_SOURCE_PATTERN="${RESIDUAL_SOURCE_PATTERN--1,-1}"
@@ -102,11 +112,22 @@ if [ "$MOE_USE_COMMON_EXPERT" = "true" ]; then
   ARGS+=" --moe_use_common_expert"
 fi
 ARGS+=" --moe_common_intermediate_size $MOE_COMMON_INTERMEDIATE_SIZE"
+ARGS+=" --moe_router_type $MOE_ROUTER_TYPE"
+ARGS+=" --moe_router_hidden_size $MOE_ROUTER_HIDDEN_SIZE"
+ARGS+=" --moe_router_act $MOE_ROUTER_ACT"
 ARGS+=" --moe_router_input $MOE_ROUTER_INPUT"
 if [ "$MOE_HEAD_LEVEL" = "true" ]; then
   ARGS+=" --moe_head_level"
 fi
 ARGS+=" --moe_load_balance_loss_weight $MOE_LOAD_BALANCE_LOSS_WEIGHT"
+ARGS+=" --ground_truth_routing_mode $GROUND_TRUTH_ROUTING_MODE"
+ARGS+=" --moe_router_supervision_loss_weight $MOE_ROUTER_SUPERVISION_LOSS_WEIGHT"
+if [ "$MOE_ROUTER_SUPERVISION_DETACH_INPUT" = "true" ]; then
+  ARGS+=" --moe_router_supervision_detach_input"
+fi
+ARGS+=" --ground_truth_routing_strategy $GROUND_TRUTH_ROUTING_STRATEGY"
+ARGS+=" --ground_truth_routing_feature_layer $GROUND_TRUTH_ROUTING_FEATURE_LAYER"
+ARGS+=" --ground_truth_frequency_estimate_samples $GROUND_TRUTH_FREQUENCY_ESTIMATE_SAMPLES"
 ARGS+=" --attention_stride_pattern=${ATTENTION_STRIDE_PATTERN}"
 ARGS+=" --residual_source_pattern=${RESIDUAL_SOURCE_PATTERN}"
 
@@ -128,5 +149,6 @@ ARGS+=" --optimizer $OPTIMIZER"
 ARGS+=" --lr $LR"
 ARGS+=" --warmup_steps $WARMUP_STEPS"
 ARGS+=" --total_training_steps $TOTAL_TRAINING_STEPS"
+ARGS+=" --training_seed $TRAINING_SEED"
 
 python3 single_thread_debug.py ${ARGS}

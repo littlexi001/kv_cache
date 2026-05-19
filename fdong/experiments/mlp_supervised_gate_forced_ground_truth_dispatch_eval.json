@@ -1,0 +1,22 @@
+{
+  "inverse-kv-mlp-gate-hidden-supervised-zipf-high-hash": {
+    "learned_dispatch": {
+      "loss": 0.2090428238734603,
+      "accuracy": 0.939605712890625
+    },
+    "forced_ground_truth_dispatch": {
+      "loss": 0.22933789202943444,
+      "accuracy": 0.936431884765625
+    }
+  },
+  "inverse-kv-mlp-gate-attention_output-supervised-zipf-high-hash": {
+    "learned_dispatch": {
+      "loss": 0.2090347814373672,
+      "accuracy": 0.939544677734375
+    },
+    "forced_ground_truth_dispatch": {
+      "loss": 0.23759041773155332,
+      "accuracy": 0.9356689453125
+    }
+  }
+}

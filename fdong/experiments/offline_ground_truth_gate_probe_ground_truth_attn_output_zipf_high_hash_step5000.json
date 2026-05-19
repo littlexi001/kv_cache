@@ -1,0 +1,136 @@
+{
+  "config": {
+    "config_dir": "fdong/Qwen3-0.6B",
+    "checkpoint_root": "fdong/checkpoints",
+    "runs": "ground_truth-zipf-higher-hash",
+    "checkpoint_step": 5000,
+    "output_path": "fdong/experiments/offline_ground_truth_gate_probe_ground_truth_attn_output_zipf_high_hash_step5000.json",
+    "seq_len": 128,
+    "num_train_samples": 512,
+    "num_test_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null,
+    "ground_truth_routing_strategy": "hash",
+    "ground_truth_routing_feature_layer": 1,
+    "ground_truth_frequency_estimate_samples": 4096,
+    "probe_input_source": "attention_output",
+    "probe_epochs": 120,
+    "probe_lr": 0.05,
+    "probe_batch_size": 4096,
+    "probe_weight_decay": 0.0,
+    "max_probe_tokens": 65536,
+    "probe_seed": 123
+  },
+  "device": "cpu",
+  "runs": [
+    {
+      "run": "ground_truth-zipf-higher-hash",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "fdong/checkpoints/ground_truth-zipf-higher-hash/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "hidden",
+        "moe_head_level": false,
+        "moe_load_balance_loss_weight": 0.0,
+        "ground_truth_routing_strategy": "hash",
+        "ground_truth_routing_feature_layer": 1,
+        "ground_truth_frequency_estimate_samples": 4096
+      },
+      "ground_truth_probe_target": {
+        "ground_truth_routing_strategy": "hash",
+        "ground_truth_routing_feature_layer": 1,
+        "ground_truth_frequency_estimate_samples": 4096
+      },
+      "model_forward_uses_ground_truth_dispatch": true,
+      "majority_baseline": {
+        "train": 0.38134765625,
+        "test": 0.3896484375
+      },
+      "layers": [
+        {
+          "layer": 0,
+          "router_input_shape": [
+            512,
+            128,
+            128
+          ],
+          "probe": {
+            "train_accuracy": 0.6512603759765625,
+            "test_accuracy": 0.649139404296875,
+            "train_loss": 0.8879194259643555,
+            "test_loss": 0.8959290981292725,
+            "train_count": 65536,
+            "test_count": 32768
+          }
+        },
+        {
+          "layer": 1,
+          "router_input_shape": [
+            512,
+            128,
+            128
+          ],
+          "probe": {
+            "train_accuracy": 0.852081298828125,
+            "test_accuracy": 0.851409912109375,
+            "train_loss": 0.4472721219062805,
+            "test_loss": 0.45410236716270447,
+            "train_count": 65536,
+            "test_count": 32768
+          }
+        },
+        {
+          "layer": 2,
+          "router_input_shape": [
+            512,
+            128,
+            128
+          ],
+          "probe": {
+            "train_accuracy": 0.8748931884765625,
+            "test_accuracy": 0.8720703125,
+            "train_loss": 0.36316391825675964,
+            "test_loss": 0.3705764710903168,
+            "train_count": 65536,
+            "test_count": 32768
+          }
+        }
+      ]
+    }
+  ]
+}

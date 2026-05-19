@@ -1,0 +1,393 @@
+{
+  "config": {
+    "config_dir": "fdong/Qwen3-0.6B",
+    "checkpoint_root": "fdong/checkpoints",
+    "runs": "inverse-kv-supervised-gate-zipf-high-hash",
+    "checkpoint_step": 5000,
+    "output_path": "fdong/experiments/supervised_gate_zipf_high_hash_step5000.json",
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null,
+    "modes": "full,same_slot_occurrence,same_slot,same_higher,random_same_size",
+    "random_seed": 123
+  },
+  "device": "cpu",
+  "runs": [
+    {
+      "run": "inverse-kv-supervised-gate-zipf-high-hash",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "fdong/checkpoints/inverse-kv-supervised-gate-zipf-high-hash/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "hidden",
+        "moe_head_level": false,
+        "moe_load_balance_loss_weight": 0.0,
+        "ground_truth_routing_mode": "supervise",
+        "moe_router_supervision_loss_weight": 1.0,
+        "ground_truth_routing_strategy": "hash",
+        "ground_truth_routing_feature_layer": 1,
+        "ground_truth_frequency_estimate_samples": 4096
+      },
+      "loss": 0.20901388674974442,
+      "accuracy": 0.939544677734375,
+      "sparse_attention_inference": {
+        "full": {
+          "loss": 0.20901388674974442,
+          "accuracy": 0.939544677734375,
+          "visible_fraction": 1.0,
+          "count": 32768
+        },
+        "same_slot_occurrence": {
+          "loss": 2.3146578818559647,
+          "accuracy": 0.689239501953125,
+          "visible_fraction": 0.09464101493358612,
+          "count": 32768
+        },
+        "same_slot": {
+          "loss": 2.2008571922779083,
+          "accuracy": 0.711151123046875,
+          "visible_fraction": 0.12320500239729881,
+          "count": 32768
+        },
+        "same_higher": {
+          "loss": 0.21000989666208625,
+          "accuracy": 0.938812255859375,
+          "visible_fraction": 0.3094536317512393,
+          "count": 32768
+        },
+        "random_same_size": {
+          "loss": 3.450072944164276,
+          "accuracy": 0.547393798828125,
+          "visible_fraction": 0.12320500239729881,
+          "count": 32768
+        }
+      },
+      "layers": [
+        {
+          "layer": 0,
+          "expert_shape": [
+            256,
+            128
+          ],
+          "feature_selectivity": {
+            "local_slot": {
+              "feature_expert_mi": 0.6404505941201877,
+              "feature_to_expert_purity": 0.701202392578125,
+              "expert_to_feature_purity": 0.13287353515625,
+              "same_feature_same_expert_rate": 0.8067678027154337
+            },
+            "higher_unit": {
+              "feature_expert_mi": 1.232643181566059,
+              "feature_to_expert_purity": 0.97021484375,
+              "expert_to_feature_purity": 0.43890380859375,
+              "same_feature_same_expert_rate": 0.9667994653514589
+            }
+          },
+          "attention_feature_metrics": {
+            "local_slot": {
+              "include_self_mass_by_head": [
+                0.358202395029366,
+                0.41998961474746466,
+                0.3983394065871835,
+                0.4282691618427634
+              ],
+              "include_self_mass_mean": 0.4012001473456621,
+              "include_self_pair_score_same": 0.08925644331611693,
+              "include_self_pair_score_diff": 0.00998401883407496,
+              "include_self_pair_score_lift": 8.94154224086201,
+              "history_mass_by_head": [
+                0.22925264248624444,
+                0.27525144163519144,
+                0.28471673373132944,
+                0.2790661845356226
+              ],
+              "history_mass_mean": 0.2670717528089881,
+              "history_pair_score_same": 0.0652604071656242,
+              "history_pair_score_diff": 0.00998401883407496,
+              "history_pair_score_lift": 6.537568750635839
+            },
+            "higher_unit": {
+              "include_self_mass_by_head": [
+                0.8241273481398821,
+                0.7725984062999487,
+                0.8051583878695965,
+                0.7489686254411936
+              ],
+              "include_self_mass_mean": 0.7877131998538971,
+              "include_self_pair_score_same": 0.06236380257178098,
+              "include_self_pair_score_diff": 0.004103490529814735,
+              "include_self_pair_score_lift": 15.19438623486688,
+              "history_mass_by_head": [
+                0.7541821096092463,
+                0.6921096686273813,
+                0.7414860595017672,
+                0.6649538986384869
+              ],
+              "history_mass_mean": 0.7131829205900431,
+              "history_pair_score_same": 0.0528503906680271,
+              "history_pair_score_diff": 0.004103490529814735,
+              "history_pair_score_lift": 12.87530142134552
+            }
+          },
+          "attention_expert_alignment": {
+            "same_expert_include_self_mass_by_head": [
+              0.8403302803635597,
+              0.8004479203373194,
+              0.8307396061718464,
+              0.7871885243803263
+            ],
+            "same_expert_include_self_mass_mean": 0.8146765735000372,
+            "same_expert_include_self_pair_score": 0.03383661713451147,
+            "diff_expert_include_self_pair_score": 0.004595221864292398,
+            "same_expert_include_self_pair_score_lift": 7.3799865411488135,
+            "same_expert_history_mass_by_head": [
+              0.7809230852872133,
+              0.7311002071946859,
+              0.7760771196335554,
+              0.7156096920371056
+            ],
+            "same_expert_history_mass_mean": 0.7509275302290916,
+            "same_expert_history_pair_score": 0.027784437756054103,
+            "diff_expert_history_pair_score": 0.004595221864292398,
+            "same_expert_history_pair_score_lift": 6.060867060964004
+          },
+          "expert_load": {
+            "1": 9921,
+            "2": 5236,
+            "3": 12460,
+            "0": 5151
+          },
+          "expert_entropy": 1.3133087640750079
+        },
+        {
+          "layer": 1,
+          "expert_shape": [
+            256,
+            128
+          ],
+          "feature_selectivity": {
+            "local_slot": {
+              "feature_expert_mi": 0.6475640600438232,
+              "feature_to_expert_purity": 0.703216552734375,
+              "expert_to_feature_purity": 0.1329345703125,
+              "same_feature_same_expert_rate": 0.8085601967303963
+            },
+            "higher_unit": {
+              "feature_expert_mi": 1.2407279841519347,
+              "feature_to_expert_purity": 0.970367431640625,
+              "expert_to_feature_purity": 0.43896484375,
+              "same_feature_same_expert_rate": 0.9674056075928382
+            }
+          },
+          "attention_feature_metrics": {
+            "local_slot": {
+              "include_self_mass_by_head": [
+                0.3911490412428975,
+                0.3693539397791028,
+                0.29775839298963547,
+                0.34626804292201996
+              ],
+              "include_self_mass_mean": 0.3511323519051075,
+              "include_self_pair_score_same": 0.07816945388913155,
+              "include_self_pair_score_diff": 0.010819204471772537,
+              "include_self_pair_score_lift": 7.230823161488629,
+              "history_mass_by_head": [
+                0.2690498949959874,
+                0.25744473887607455,
+                0.2014383259229362,
+                0.24543841741979122
+              ],
+              "history_mass_mean": 0.2433428419753909,
+              "history_pair_score_same": 0.05619119422044605,
+              "history_pair_score_diff": 0.010819204471772537,
+              "history_pair_score_lift": 5.198526876066983
+            },
+            "higher_unit": {
+              "include_self_mass_by_head": [
+                0.8297199513763189,
+                0.8946857582777739,
+                0.7813848648220301,
+                0.880532743409276
+              ],
+              "include_self_mass_mean": 0.8465808294713497,
+              "include_self_pair_score_same": 0.0670584790641442,
+              "include_self_pair_score_diff": 0.0029660331856575795,
+              "include_self_pair_score_lift": 22.652151546554677,
+              "history_mass_by_head": [
+                0.766578171402216,
+                0.8335836119949818,
+                0.7196541950106621,
+                0.8175780232995749
+              ],
+              "history_mass_mean": 0.7843485064804554,
+              "history_pair_score_same": 0.05952122376766056,
+              "history_pair_score_diff": 0.0029660331856575795,
+              "history_pair_score_lift": 20.105482267643332
+            }
+          },
+          "attention_expert_alignment": {
+            "same_expert_include_self_mass_by_head": [
+              0.8857864085584879,
+              0.9089519176632166,
+              0.8367801271378994,
+              0.8995851501822472
+            ],
+            "same_expert_include_self_mass_mean": 0.8827759008854628,
+            "same_expert_include_self_pair_score": 0.03678408730775118,
+            "diff_expert_include_self_pair_score": 0.0029018869463470764,
+            "same_expert_include_self_pair_score_lift": 12.77179653459156,
+            "same_expert_history_mass_by_head": [
+              0.8370434269309044,
+              0.8574471604079008,
+              0.7865617237985134,
+              0.8466446064412594
+            ],
+            "same_expert_history_mass_mean": 0.8319242298603058,
+            "same_expert_history_pair_score": 0.03163037070771679,
+            "diff_expert_history_pair_score": 0.0029018869463470764,
+            "same_expert_history_pair_score_lift": 10.984981122371819
+          },
+          "expert_load": {
+            "1": 9870,
+            "2": 5213,
+            "3": 12441,
+            "0": 5244
+          },
+          "expert_entropy": 1.3148211369269618
+        },
+        {
+          "layer": 2,
+          "expert_shape": [
+            256,
+            128
+          ],
+          "feature_selectivity": {
+            "local_slot": {
+              "feature_expert_mi": 0.6505104461438045,
+              "feature_to_expert_purity": 0.70355224609375,
+              "expert_to_feature_purity": 0.1329345703125,
+              "same_feature_same_expert_rate": 0.8092182737600443
+            },
+            "higher_unit": {
+              "feature_expert_mi": 1.2450567138107713,
+              "feature_to_expert_purity": 0.970550537109375,
+              "expert_to_feature_purity": 0.43896484375,
+              "same_feature_same_expert_rate": 0.9679236778846154
+            }
+          },
+          "attention_feature_metrics": {
+            "local_slot": {
+              "include_self_mass_by_head": [
+                0.5272112805396318,
+                0.5049324939027429,
+                0.5559860225766897,
+                0.5591383576393127
+              ],
+              "include_self_mass_mean": 0.5368170384317636,
+              "include_self_pair_score_same": 0.11951392772607505,
+              "include_self_pair_score_diff": 0.007723083370365202,
+              "include_self_pair_score_lift": 15.486240728117213,
+              "history_mass_by_head": [
+                0.38770461827516556,
+                0.3828721959143877,
+                0.39850619342178106,
+                0.42227449733763933
+              ],
+              "history_mass_mean": 0.39783937484025955,
+              "history_pair_score_same": 0.09091541962698102,
+              "history_pair_score_diff": 0.007723083370365202,
+              "history_pair_score_lift": 11.781337792722805
+            },
+            "higher_unit": {
+              "include_self_mass_by_head": [
+                0.8774428181350231,
+                0.847473781555891,
+                0.8422802444547415,
+                0.8444711193442345
+              ],
+              "include_self_mass_mean": 0.8529169969260693,
+              "include_self_pair_score_same": 0.06755974353291094,
+              "include_self_pair_score_diff": 0.0028433785773813725,
+              "include_self_pair_score_lift": 23.82965958463605,
+              "history_mass_by_head": [
+                0.8116911556571722,
+                0.7892777696251869,
+                0.7678468804806471,
+                0.7786534354090691
+              ],
+              "history_mass_mean": 0.7868673093616962,
+              "history_pair_score_same": 0.054478161968290806,
+              "history_pair_score_diff": 0.0028433785773813725,
+              "history_pair_score_lift": 19.214926734091517
+            }
+          },
+          "attention_expert_alignment": {
+            "same_expert_include_self_mass_by_head": [
+              0.9341769609600306,
+              0.9057658668607473,
+              0.8960118610411882,
+              0.8934433795511723
+            ],
+            "same_expert_include_self_mass_mean": 0.9073495101183653,
+            "same_expert_include_self_pair_score": 0.03776484599802643,
+            "diff_expert_include_self_pair_score": 0.0022950316670176107,
+            "same_expert_include_self_pair_score_lift": 16.566985989991576,
+            "same_expert_history_mass_by_head": [
+              0.8876835852861404,
+              0.8619939554482698,
+              0.8427590485662222,
+              0.8441419005393982
+            ],
+            "same_expert_history_mass_mean": 0.8591446243226528,
+            "same_expert_history_pair_score": 0.029844571836292744,
+            "diff_expert_history_pair_score": 0.0022950316670176107,
+            "same_expert_history_pair_score_lift": 13.093585041057446
+          },
+          "expert_load": {
+            "1": 9850,
+            "2": 5207,
+            "3": 12444,
+            "0": 5267
+          },
+          "expert_entropy": 1.3151246810744777
+        }
+      ]
+    }
+  ]
+}
