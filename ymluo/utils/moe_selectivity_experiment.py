@@ -267,6 +267,7 @@ def _patched_moe_forward(
     hidden_states,
     output_expert_labels: bool = False,
     router_hidden_states: torch.Tensor | None = None,
+    **kwargs,
 ):
     original_shape = hidden_states.shape
     flat_states = hidden_states.reshape(-1, self.hidden_size)
@@ -317,6 +318,7 @@ def _patched_head_moe_forward(
     hidden_states,
     output_expert_labels: bool = False,
     router_hidden_states: torch.Tensor | None = None,
+    **kwargs,
 ):
     if hidden_states.dim() != 4:
         raise ValueError(f"Head-level MoE expects [batch, seq, heads, head_dim], got {tuple(hidden_states.shape)}.")
