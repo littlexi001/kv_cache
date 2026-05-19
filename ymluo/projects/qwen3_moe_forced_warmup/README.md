@@ -56,3 +56,10 @@ bash ymluo/projects/qwen3_moe_forced_warmup/scripts/run_train.sh
 Eval rows in `metrics.jsonl` report loss, accuracy,
 `same_higher_same_expert`, `local_slot_history_mass`,
 `higher_level_history_mass`, and expert load metrics.
+
+Eval a saved checkpoint without training:
+
+```bash
+CKPT_FILE=ymluo/projects/qwen3_moe_forced_warmup/outputs/train/moe-forced-warmup/checkpoints/10000.pth \
+bash ymluo/projects/qwen3_moe_forced_warmup/scripts/run_eval.sh
+```

@@ -33,3 +33,10 @@ prediction, or `cycle` to sweep positions deterministically.
 Eval rows in `metrics.jsonl` report loss, accuracy,
 `same_higher_same_expert`, `local_slot_history_mass`, and
 `higher_level_history_mass`.
+
+Eval a saved checkpoint without training:
+
+```bash
+CKPT_FILE=ymluo/projects/qwen3_moe_single_token_update/outputs/train/moe-single-token-update/checkpoints/10000.pth \
+bash ymluo/projects/qwen3_moe_single_token_update/scripts/run_eval.sh
+```

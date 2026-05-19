@@ -43,3 +43,10 @@ ymluo/projects/qwen3_moe_negative_gradient/outputs/train/<run_name>/metrics.json
 Each eval row reports loss, accuracy, per-layer
 `same_higher_same_expert`, `local_slot_history_mass`, and
 `higher_level_history_mass`.
+
+Eval a saved checkpoint without training:
+
+```bash
+CKPT_FILE=ymluo/projects/qwen3_moe_negative_gradient/outputs/train/moe-negative-gradient/checkpoints/10000.pth \
+bash ymluo/projects/qwen3_moe_negative_gradient/scripts/run_eval.sh
+```

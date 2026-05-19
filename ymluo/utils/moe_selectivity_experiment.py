@@ -182,6 +182,61 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     return parser
 
 
+def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
+    defaults = EXPERIMENT_DEFAULTS[experiment_type]
+    parser = argparse.ArgumentParser(description=f"Eval fdong-style MoE selectivity checkpoint: {experiment_type}")
+    parser.add_argument("--experiment_type", default=experiment_type, choices=sorted(EXPERIMENT_DEFAULTS))
+    parser.add_argument("--config_dir", default=str(REPO_ROOT / "fdong" / "Qwen3-0.6B"))
+    parser.add_argument("--ckpt_file", required=True)
+    parser.add_argument("--output_path", default="")
+    parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--device", default="cuda")
+    parser.add_argument("--use_bf16", type=str2bool, default=False)
+    parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
+
+    parser.add_argument("--seq_len", type=int, default=128)
+    parser.add_argument("--eval_batch_size", type=int, default=16)
+    parser.add_argument("--eval_batches", type=int, default=32)
+    parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
+    parser.add_argument("--synthetic_block_size", type=int, default=4)
+    parser.add_argument("--synthetic_num_hierarchy_layers", type=int, default=2)
+    parser.add_argument("--synthetic_content_token_count", type=int, default=256)
+    parser.add_argument("--synthetic_num_units_per_layer", type=int, default=64)
+    parser.add_argument("--synthetic_seed", type=int, default=0)
+    parser.add_argument("--synthetic_pad_token_id", type=int, default=0)
+    parser.add_argument("--synthetic_min_token_id", type=int, default=1)
+    parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
+    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
+    parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
+
+    parser.add_argument("--debug_vocab_size", type=int, default=257)
+    parser.add_argument("--debug_hidden_size", type=int, default=128)
+    parser.add_argument("--debug_intermediate_size", type=int, default=256)
+    parser.add_argument("--debug_num_hidden_layers", type=int, default=3)
+    parser.add_argument("--debug_num_attention_heads", type=int, default=4)
+    parser.add_argument("--debug_num_key_value_heads", type=int, default=2)
+    parser.add_argument("--debug_head_dim", type=int, default=32)
+    parser.add_argument("--debug_max_position_embeddings", type=int, default=256)
+    parser.add_argument("--attention_stride_pattern", type=parse_int_list, default=None)
+    parser.add_argument("--residual_source_pattern", type=parse_int_list, default=None)
+
+    parser.add_argument("--use_moe", type=str2bool, default=True)
+    parser.add_argument("--moe_num_unique_experts", type=int, default=4)
+    parser.add_argument("--moe_num_experts_per_tok", type=int, default=1)
+    parser.add_argument("--moe_intermediate_size", type=int, default=128)
+    parser.add_argument("--moe_use_common_expert", type=str2bool, default=False)
+    parser.add_argument("--moe_common_intermediate_size", type=int, default=-1)
+    parser.add_argument("--moe_router_bias", type=str2bool, default=False)
+    parser.add_argument("--moe_normalize_topk_prob", type=str2bool, default=True)
+    parser.add_argument("--moe_router_input", choices=["hidden", "attention_output"], default="attention_output")
+    parser.add_argument("--moe_head_level", type=str2bool, default=True)
+
+    parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
+    parser.add_argument("--forced_warmup_higher_unit_len", type=int, default=-1)
+    parser.add_argument("--eval_forced_warmup_routing", type=str2bool, default=defaults["eval_forced_warmup_routing"])
+    return parser
+
+
 @dataclass
 class Batch:
     source: torch.Tensor
@@ -1076,9 +1131,11 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 rolling[key] = 0.0 if key.endswith("_sum") else 0
 
         if args.eval_interval > 0 and step % args.eval_interval == 0:
+            eval_generator_state = eval_generator.get_state()
             eval_metrics = evaluate(model, dataset, args, device, eval_generator)
             forced_eval_metrics = None
             if args.eval_forced_warmup_routing:
+                eval_generator.set_state(eval_generator_state)
                 forced_eval_metrics = evaluate(
                     model,
                     dataset,
@@ -1132,3 +1189,88 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
     save_checkpoint(ckpt_dir, args.total_steps, model, optimizer, scheduler, args)
     tracker.close()
     print(f"finished. metrics={metrics_path}", flush=True)
+
+
+def run_eval_only(experiment_type: str, argv: list[str] | None = None) -> None:
+    parser = build_eval_parser(experiment_type)
+    args = parser.parse_args(argv)
+    args.batch_size = args.eval_batch_size
+    args.init_checkpoint = args.ckpt_file
+    args.orthogonalize_gate = False
+    args.orthogonalize_experts = False
+    args.orthogonalize_after_checkpoint = False
+    args.single_token_update = False
+    args.single_token_position = "random"
+    args.gate_inhibition_weight = 0.0
+    args.gate_inhibition_temperature = 1.0
+    args.expert_repulsion_weight = 0.0
+    args.expert_repulsion_margin = 0.0
+    args.forced_warmup_router_loss_weight = 0.0
+    args.orthogonal_init_mode = "preserve_norm"
+
+    if args.synthetic_num_hierarchy_layers < 2:
+        raise ValueError("These metrics expect at least 2 synthetic hierarchy layers.")
+
+    torch.manual_seed(args.seed)
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    if device.type == "cuda":
+        torch.cuda.set_device(0 if device.index is None else device.index)
+
+    if args.eval_forced_warmup_routing:
+        install_forced_routing_patch()
+    dataset = prepare_dataset(args)
+    model = prepare_model(args, device)
+    model.eval()
+    eval_generator = torch.Generator(device="cpu").manual_seed(args.seed + 101)
+
+    eval_generator_state = eval_generator.get_state()
+    metrics = evaluate(model, dataset, args, device, eval_generator)
+    payload: dict[str, Any] = {
+        "type": "eval_only",
+        "experiment_type": experiment_type,
+        "ckpt_file": args.ckpt_file,
+        "config": vars(args),
+        "metrics": metrics,
+    }
+    if args.eval_forced_warmup_routing:
+        eval_generator.set_state(eval_generator_state)
+        payload["forced_oracle"] = evaluate(
+            model,
+            dataset,
+            args,
+            device,
+            eval_generator,
+            force_warmup_routing=True,
+        )
+
+    output_path = Path(args.output_path) if args.output_path else Path(args.ckpt_file).with_suffix(".selectivity_eval.json")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    mean_layers = metrics.get("mean_layers", {})
+    print(
+        f"eval_only: loss={metrics['loss']:.4f} acc={metrics['accuracy']:.4f} "
+        f"same_higher={mean_layers.get('same_higher_same_expert')} "
+        f"same_higher_occurrence={mean_layers.get('same_higher_occurrence_same_expert')} "
+        f"higher_mass={mean_layers.get('higher_level_history_mass')} "
+        f"expert_load={mean_layers.get('expert_load')}",
+        flush=True,
+    )
+    print(
+        f"eval_only: "
+        f"same_higher_by_layer={format_layer_metric(metrics.get('layers', {}), 'same_higher_same_expert')} "
+        f"same_higher_occurrence_by_layer="
+        f"{format_layer_metric(metrics.get('layers', {}), 'same_higher_occurrence_same_expert')} "
+        f"higher_mass_by_layer={format_layer_metric(metrics.get('layers', {}), 'higher_level_history_mass')}",
+        flush=True,
+    )
+    if "forced_oracle" in payload:
+        forced = payload["forced_oracle"]
+        forced_mean = forced.get("mean_layers", {})
+        print(
+            f"forced_oracle: loss={forced['loss']:.4f} acc={forced['accuracy']:.4f} "
+            f"same_higher={forced_mean.get('same_higher_same_expert')} "
+            f"same_higher_occurrence={forced_mean.get('same_higher_occurrence_same_expert')}",
+            flush=True,
+        )
+    print(f"wrote eval: {output_path}", flush=True)
