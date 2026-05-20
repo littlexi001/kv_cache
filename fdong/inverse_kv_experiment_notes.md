@@ -29,6 +29,10 @@ hierarchical / compositional data
 
    当前 TODO。验证 MoE selectivity 不足是否来自 gate / expert 训练动力学，而不是 attention feature 缺失。
 
+4. [第四轮：为什么 Inhibition 能形成 Ground-truth Slot Routing](./inverse_kv_round4_plan.md)
+
+   基于第三轮结论，解释 baseline MoE 为什么无法形成 ground-truth slot 分发，以及 inhibition / winner-take-all loss 为什么可能改变 gate 和 expert 的训练动力学。
+
 ## 当前简短结论
 
 Attention output 中已经存在很强的 ground-truth feature signal。local slot 几乎线性可读，higher-level unit 也显著线性可读。标准 MoE routing 仍然无法形成干净 expert bucket，因此下一步问题不是简单地让 attention 更集中，而是解释为什么 gate / expert 训练没有把可读 feature 转化成 selective routing。

@@ -97,6 +97,18 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--moe_head_level", action="store_true", default=False)
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
     parser.add_argument(
+        "--moe_router_inhibition_loss_weight",
+        type=float,
+        default=0.0,
+        help="Weight for winner-take-all router self-inhibition loss.",
+    )
+    parser.add_argument(
+        "--moe_router_inhibition_temperature",
+        type=float,
+        default=1.0,
+        help="Temperature used when computing router inhibition cross-entropy.",
+    )
+    parser.add_argument(
         "--ground_truth_routing_mode",
         type=str,
         choices=["dispatch", "supervise"],
@@ -213,6 +225,8 @@ def apply_moe_overrides(config, args):
     config.moe_router_input = str(args.moe_router_input)
     config.moe_head_level = bool(args.moe_head_level)
     config.moe_load_balance_loss_weight = float(args.moe_load_balance_loss_weight)
+    config.moe_router_inhibition_loss_weight = float(args.moe_router_inhibition_loss_weight)
+    config.moe_router_inhibition_temperature = float(args.moe_router_inhibition_temperature)
     config.ground_truth_routing_mode = str(args.ground_truth_routing_mode)
     config.moe_router_supervision_loss_weight = float(args.moe_router_supervision_loss_weight)
     config.moe_router_supervision_detach_input = bool(args.moe_router_supervision_detach_input)
@@ -246,6 +260,12 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
                 "moe_head_level": bool(getattr(config, "moe_head_level", False)),
                 "moe_load_balance_loss_weight": float(getattr(config, "moe_load_balance_loss_weight", 0.0)),
+                "moe_router_inhibition_loss_weight": float(
+                    getattr(config, "moe_router_inhibition_loss_weight", 0.0)
+                ),
+                "moe_router_inhibition_temperature": float(
+                    getattr(config, "moe_router_inhibition_temperature", 1.0)
+                ),
                 "ground_truth_routing_mode": str(getattr(config, "ground_truth_routing_mode", "dispatch")),
                 "moe_router_supervision_loss_weight": float(
                     getattr(config, "moe_router_supervision_loss_weight", 0.0)
@@ -291,6 +311,8 @@ def prepare_model(local_rank, world_size, device, args):
             f"router_act={config.moe_router_act}, "
             f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
             f"load_balance_weight={config.moe_load_balance_loss_weight}, "
+            f"router_inhibition_weight={config.moe_router_inhibition_loss_weight}, "
+            f"router_inhibition_temperature={config.moe_router_inhibition_temperature}, "
             f"ground_truth_mode={config.ground_truth_routing_mode}, "
             f"router_supervision_weight={config.moe_router_supervision_loss_weight}, "
             f"router_supervision_detach_input={config.moe_router_supervision_detach_input}, "
@@ -409,6 +431,7 @@ def make_ground_truth_expert_ids(metadata, ground_truth_expert_mapping, args, de
 def forward_step(local_rank, device, source, target, model, token_loss_fn, args, metadata=None, ground_truth_expert_mapping=None):
     source, target = source.to(device), target.to(device)
     use_load_balance = args.moe_load_balance_loss_weight > 0
+    use_router_inhibition = args.moe_router_inhibition_loss_weight > 0
     use_router_supervision = args.ground_truth_routing_mode == "supervise"
     ground_truth_expert_ids = None
     router_supervision_expert_ids = None
@@ -422,6 +445,7 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
         source,
         output_hidden_states=False,
         output_router_aux_loss=use_load_balance,
+        output_router_inhibition_loss=use_router_inhibition,
         output_router_supervision_loss=use_router_supervision,
         router_supervision_detach_input=args.moe_router_supervision_detach_input,
         ground_truth_expert_ids=ground_truth_expert_ids,
@@ -431,14 +455,18 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
     token_loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
     loss = token_loss
     load_balance_loss = None
+    router_inhibition_loss = None
     router_supervision_loss = None
     if use_load_balance:
         load_balance_loss = output.moe_load_balance_loss
         loss = loss + args.moe_load_balance_loss_weight * load_balance_loss
+    if use_router_inhibition:
+        router_inhibition_loss = output.moe_router_inhibition_loss
+        loss = loss + args.moe_router_inhibition_loss_weight * router_inhibition_loss
     if use_router_supervision:
         router_supervision_loss = output.moe_router_supervision_loss
         loss = loss + args.moe_router_supervision_loss_weight * router_supervision_loss
-    return loss, token_loss.detach(), load_balance_loss, router_supervision_loss
+    return loss, token_loss.detach(), load_balance_loss, router_inhibition_loss, router_supervision_loss
 
 
 def update_step(optimizer, scheduler):
@@ -480,7 +508,7 @@ def thread_main(local_rank, world_size, device, args):
         start_time = time.time()
 
         with torch.amp.autocast(dtype=torch.bfloat16, device_type=device.type, enabled=autocast_enabled):
-            loss, token_loss, load_balance_loss, router_supervision_loss = forward_step(
+            loss, token_loss, load_balance_loss, router_inhibition_loss, router_supervision_loss = forward_step(
                 local_rank,
                 device,
                 source,
@@ -518,6 +546,8 @@ def thread_main(local_rank, world_size, device, args):
             ]
             if load_balance_loss is not None:
                 metrics.append(f"load_balance_loss: {load_balance_loss.detach():.3f}")
+            if router_inhibition_loss is not None:
+                metrics.append(f"router_inhib_loss: {router_inhibition_loss.detach():.3f}")
             if router_supervision_loss is not None:
                 metrics.append(f"router_sup_loss: {router_supervision_loss.detach():.3f}")
             metrics.append(f"batch_time: {batch_time:.3f}")

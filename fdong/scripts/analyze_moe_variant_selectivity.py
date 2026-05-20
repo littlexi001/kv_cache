@@ -183,6 +183,15 @@ def build_config(args, runtime_config):
 def load_model(args, runtime_config, ckpt_path, device):
     model = MyQwen3ForCausalLM(build_config(args, runtime_config)).to(device)
     state = torch.load(ckpt_path, map_location=device)
+    # Older linear-router checkpoints were saved before MyQwen3Router wrapped the
+    # projection as `router.net`. Remap those keys for analysis compatibility.
+    if any(".mlp.router.weight" in key for key in state):
+        remapped = {}
+        for key, value in state.items():
+            key = key.replace(".mlp.router.weight", ".mlp.router.net.weight")
+            key = key.replace(".mlp.router.bias", ".mlp.router.net.bias")
+            remapped[key] = value
+        state = remapped
     model.load_state_dict(state)
     model.eval()
     return model

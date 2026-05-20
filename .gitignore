@@ -8,6 +8,7 @@ __pycache__/
 venv/
 env/
 .venv-transformers451/
+.side/
 
 # Test / tooling caches
 .pytest_cache/

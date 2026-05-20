@@ -257,11 +257,17 @@ class MyQwen3MoE(nn.Module):
         router_prob_per_expert = routing_probs.mean(dim=0)
         return self.num_unique_experts * torch.sum(tokens_per_expert * router_prob_per_expert)
 
+    def router_inhibition_loss(self, router_logits):
+        temperature = max(float(getattr(self.config, "moe_router_inhibition_temperature", 1.0)), 1e-6)
+        winners = router_logits.detach().argmax(dim=-1)
+        return F.cross_entropy(router_logits.float() / temperature, winners)
+
     def forward(
         self,
         hidden_states,
         output_expert_labels: bool = False,
         output_router_aux_loss: bool = False,
+        output_router_inhibition_loss: bool = False,
         output_router_supervision_loss: bool = False,
         router_supervision_detach_input: bool = False,
         router_hidden_states: Optional[torch.Tensor] = None,
@@ -311,7 +317,12 @@ class MyQwen3MoE(nn.Module):
             final_states = final_states + self.common_expert(flat_states)
 
         final_states = final_states.reshape(original_shape)
-        if not output_expert_labels and not output_router_aux_loss and not output_router_supervision_loss:
+        if (
+            not output_expert_labels
+            and not output_router_aux_loss
+            and not output_router_inhibition_loss
+            and not output_router_supervision_loss
+        ):
             return final_states
 
         outputs = (final_states,)
@@ -323,6 +334,11 @@ class MyQwen3MoE(nn.Module):
                 outputs += (hidden_states.new_zeros(()),)
             else:
                 outputs += (self.load_balance_loss(router_logits, topk_indices),)
+        if output_router_inhibition_loss:
+            if router_logits is None:
+                outputs += (hidden_states.new_zeros(()),)
+            else:
+                outputs += (self.router_inhibition_loss(router_logits),)
         if output_router_supervision_loss:
             if router_logits is None:
                 raise ValueError("Router supervision requires learned gate routing, not ground-truth dispatch.")
@@ -398,11 +414,17 @@ class MyQwen3HeadMoE(nn.Module):
         router_prob_per_expert = routing_probs.mean(dim=0)
         return self.num_unique_experts * torch.sum(tokens_per_expert * router_prob_per_expert)
 
+    def router_inhibition_loss(self, router_logits):
+        temperature = max(float(getattr(self.config, "moe_router_inhibition_temperature", 1.0)), 1e-6)
+        winners = router_logits.detach().argmax(dim=-1)
+        return F.cross_entropy(router_logits.float() / temperature, winners)
+
     def forward(
         self,
         hidden_states,
         output_expert_labels: bool = False,
         output_router_aux_loss: bool = False,
+        output_router_inhibition_loss: bool = False,
         output_router_supervision_loss: bool = False,
         router_supervision_detach_input: bool = False,
         router_hidden_states: Optional[torch.Tensor] = None,
@@ -429,6 +451,7 @@ class MyQwen3HeadMoE(nn.Module):
         head_outputs = []
         head_labels = []
         head_aux_losses = []
+        head_inhibition_losses = []
         for head_idx in range(self.num_heads):
             head_states = hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
             head_router_states = router_hidden_states[:, :, head_idx, :].reshape(-1, self.head_dim)
@@ -459,9 +482,11 @@ class MyQwen3HeadMoE(nn.Module):
                 head_labels.append(topk_indices.reshape(batch, seq_len, self.num_experts_per_tok))
             if output_router_aux_loss:
                 head_aux_losses.append(self.load_balance_loss(router_logits, topk_indices))
+            if output_router_inhibition_loss:
+                head_inhibition_losses.append(self.router_inhibition_loss(router_logits))
 
         output = torch.stack(head_outputs, dim=2)
-        if not output_expert_labels and not output_router_aux_loss:
+        if not output_expert_labels and not output_router_aux_loss and not output_router_inhibition_loss:
             return output
 
         outputs = (output,)
@@ -470,6 +495,8 @@ class MyQwen3HeadMoE(nn.Module):
             outputs += (expert_labels,)
         if output_router_aux_loss:
             outputs += (torch.stack(head_aux_losses).mean(),)
+        if output_router_inhibition_loss:
+            outputs += (torch.stack(head_inhibition_losses).mean(),)
         return outputs
 
 
@@ -635,6 +662,7 @@ class MyQwen3DecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         output_expert_labels: Optional[bool] = False,
         output_router_aux_loss: Optional[bool] = False,
+        output_router_inhibition_loss: Optional[bool] = False,
         output_router_supervision_loss: Optional[bool] = False,
         router_supervision_detach_input: Optional[bool] = False,
         use_cache: Optional[bool] = False,
@@ -668,6 +696,7 @@ class MyQwen3DecoderLayer(nn.Module):
         mlp_input = self.post_attention_layernorm(hidden_states)
         expert_labels = None
         router_aux_loss = None
+        router_inhibition_loss = None
         router_supervision_loss = None
         if isinstance(self.mlp, MyQwen3HeadMoE):
             if ground_truth_expert_ids is not None:
@@ -686,6 +715,7 @@ class MyQwen3DecoderLayer(nn.Module):
                 head_expert_input,
                 output_expert_labels=output_expert_labels,
                 output_router_aux_loss=output_router_aux_loss,
+                output_router_inhibition_loss=output_router_inhibition_loss,
                 output_router_supervision_loss=output_router_supervision_loss,
                 router_supervision_detach_input=router_supervision_detach_input,
                 router_hidden_states=head_router_input,
@@ -697,6 +727,9 @@ class MyQwen3DecoderLayer(nn.Module):
                     tuple_idx += 1
                 if output_router_aux_loss:
                     router_aux_loss = head_output[tuple_idx]
+                    tuple_idx += 1
+                if output_router_inhibition_loss:
+                    router_inhibition_loss = head_output[tuple_idx]
                     tuple_idx += 1
                 if output_router_supervision_loss:
                     router_supervision_loss = head_output[tuple_idx]
@@ -710,6 +743,7 @@ class MyQwen3DecoderLayer(nn.Module):
                 mlp_input,
                 output_expert_labels=output_expert_labels,
                 output_router_aux_loss=output_router_aux_loss,
+                output_router_inhibition_loss=output_router_inhibition_loss,
                 output_router_supervision_loss=output_router_supervision_loss,
                 router_supervision_detach_input=router_supervision_detach_input,
                 router_hidden_states=router_input,
@@ -727,6 +761,9 @@ class MyQwen3DecoderLayer(nn.Module):
             if output_router_aux_loss:
                 router_aux_loss = hidden_states[tuple_idx]
                 tuple_idx += 1
+            if output_router_inhibition_loss:
+                router_inhibition_loss = hidden_states[tuple_idx]
+                tuple_idx += 1
             if output_router_supervision_loss:
                 router_supervision_loss = hidden_states[tuple_idx]
             hidden_states = hidden_states[0]
@@ -743,6 +780,11 @@ class MyQwen3DecoderLayer(nn.Module):
             if router_aux_loss is None:
                 router_aux_loss = hidden_states.new_zeros(())
             outputs += (router_aux_loss, )
+
+        if output_router_inhibition_loss:
+            if router_inhibition_loss is None:
+                router_inhibition_loss = hidden_states.new_zeros(())
+            outputs += (router_inhibition_loss, )
 
         if output_router_supervision_loss:
             if router_supervision_loss is None:
@@ -893,6 +935,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
         output_attentions: Optional[bool] = None,
         output_expert_labels:Optional[bool] = None,
         output_router_aux_loss: Optional[bool] = None,
+        output_router_inhibition_loss: Optional[bool] = None,
         output_router_supervision_loss: Optional[bool] = None,
         router_supervision_detach_input: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -952,6 +995,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
         all_self_attns = () if output_attentions else None
         all_expert_labels = () if output_expert_labels else None
         all_router_aux_losses = () if output_router_aux_loss else None
+        all_router_inhibition_losses = () if output_router_inhibition_loss else None
         all_router_supervision_losses = () if output_router_supervision_loss else None
         layer_hidden_states = []
 
@@ -986,6 +1030,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     output_attentions,
                     output_expert_labels,
                     output_router_aux_loss,
+                    output_router_inhibition_loss,
                     output_router_supervision_loss,
                     router_supervision_detach_input,
                     use_cache,
@@ -1004,6 +1049,7 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     output_attentions=output_attentions,
                     output_expert_labels = output_expert_labels,
                     output_router_aux_loss=output_router_aux_loss,
+                    output_router_inhibition_loss=output_router_inhibition_loss,
                     output_router_supervision_loss=output_router_supervision_loss,
                     router_supervision_detach_input=router_supervision_detach_input,
                     use_cache=use_cache,
@@ -1035,6 +1081,16 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     aux_idx += 1
                 all_router_aux_losses += (layer_outputs[aux_idx],)
 
+            if output_router_inhibition_loss:
+                inhibition_idx = 1
+                if output_attentions:
+                    inhibition_idx += 1
+                if output_expert_labels:
+                    inhibition_idx += 1
+                if output_router_aux_loss:
+                    inhibition_idx += 1
+                all_router_inhibition_losses += (layer_outputs[inhibition_idx],)
+
             if output_router_supervision_loss:
                 supervision_idx = 1
                 if output_attentions:
@@ -1042,6 +1098,8 @@ class Qwen3Model(Qwen3PreTrainedModel):
                 if output_expert_labels:
                     supervision_idx += 1
                 if output_router_aux_loss:
+                    supervision_idx += 1
+                if output_router_inhibition_loss:
                     supervision_idx += 1
                 all_router_supervision_losses += (layer_outputs[supervision_idx],)
                 
@@ -1064,6 +1122,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
 
         if output_router_aux_loss:
             output.moe_load_balance_loss = torch.stack(all_router_aux_losses).mean()
+
+        if output_router_inhibition_loss:
+            output.moe_router_inhibition_loss = torch.stack(all_router_inhibition_losses).mean()
 
         if output_router_supervision_loss:
             output.moe_router_supervision_loss = torch.stack(all_router_supervision_losses).mean()
@@ -1329,6 +1390,7 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
         output_attentions: Optional[bool] = None,
         output_expert_labels:Optional[bool] = None,
         output_router_aux_loss: Optional[bool] = None,
+        output_router_inhibition_loss: Optional[bool] = None,
         output_router_supervision_loss: Optional[bool] = None,
         router_supervision_detach_input: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
@@ -1386,6 +1448,7 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
             output_attentions=output_attentions,
             output_expert_labels = output_expert_labels,
             output_router_aux_loss=output_router_aux_loss,
+            output_router_inhibition_loss=output_router_inhibition_loss,
             output_router_supervision_loss=output_router_supervision_loss,
             router_supervision_detach_input=router_supervision_detach_input,
             output_hidden_states=output_hidden_states,
@@ -1417,6 +1480,9 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
 
         if output_router_aux_loss:
             output.moe_load_balance_loss = outputs.moe_load_balance_loss
+
+        if output_router_inhibition_loss:
+            output.moe_router_inhibition_loss = outputs.moe_router_inhibition_loss
 
         if output_router_supervision_loss:
             output.moe_router_supervision_loss = outputs.moe_router_supervision_loss

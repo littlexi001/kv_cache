@@ -108,6 +108,50 @@ frequency_balanced:
 
 因此，最终 gate 分类准确不等价于 expert 已经学成 ground-truth expert。ground-truth dispatch 的收益来自训练全程稳定的 feature-to-expert ownership，而不是训练结束时临时把 token 分到某个看起来正确的 expert。
 
+## 问题 4：Expert Routing 能否作为 KV Cache 的 Reverse Index
+
+**结论 1：early_proxy 结果说明，用 `v` 近似 gate input 做 reverse index 是失败的。**
+失败原因是 `v` 无法正确预测 expert：`v` 与推理时真正输入 gate 的表征 cosine 约为 0.5，预测 expert 准确率约为 45%。
+
+**结论 2：true_router 结果说明，expert reverse indexing 这个 idea 是有潜力的。**
+如果使用真正的 gate routing 结果去压缩 KV，可以在压缩约 65% KV 后，让 next-token accuracy 从约 94% 降到约 93%。
+
+需要注意，第二句话是面向汇报的直观概括；精确实验数字是：true-router top1 保留约 36% KV，accuracy 约 92.4%~92.7%；true-router top2 保留约 58%~60% KV，accuracy 约 93.3%~93.5%。因此更严格地说，当前结果证明 expert reverse indexing 有上界潜力，但压缩率和精度之间仍有明显 tradeoff。
+
+在已经有 supervised selective MoE 的前提下，进一步测试最终系统目标：
+
+```text
+prefill 阶段记录每个历史 token 激活的 expert；
+decode 当前 token 时，根据当前 token 的 expert set 反向索引历史 KV；
+attention 只看 expert set 匹配的历史 token。
+```
+
+测试了两种 routing source：
+
+1. **true-router indexing**：先用模型真实 gate input 算当前 token 的 top-m expert，再用这个 expert set 过滤历史 KV。这个设置不能真实加速，因为它已经依赖 attention 后的表征，但可以验证 expert reverse indexing 这个想法本身是否有上界潜力。
+2. **early-proxy indexing**：在 attention 前，用当前 token 的 `v` 构造 proxy 表征。如果原 router input 是 hidden，则使用 `residual + O(v)`；如果原 router input 是 attention_output，则使用 `O(v)`。这个设置对应真正可部署的同层 reverse indexing 路径。
+
+true-router indexing 的结果说明，如果能拿到真实 gate routing，expert index 和 attention KV 之间确实有相关性：
+
+| indexing source | top-m | KV 保留比例 | loss | accuracy |
+|---|---:|---:|---:|---:|
+| full attention | - | 100% | 0.209 | 94.0% |
+| true-router | top1 | 36% | 0.316~0.333 | 92.4%~92.7% |
+| true-router | top2 | 58%~60% | 0.250~0.258 | 93.3%~93.5% |
+| true-router | top3 | 80% | 0.221~0.225 | 93.7%~93.8% |
+
+因此，更严谨的说法是：使用真实 gate routing 时，保留约 36% KV 可以把 accuracy 从约 94% 降到约 92.5%；保留约 60% KV 时 accuracy 约 93.4%。这说明 expert reverse indexing 不是完全无效，但当前模型里还没有达到“压缩 65% KV 只掉 1% accuracy”的稳定效果。
+
+early-proxy indexing 的结果明显失败：
+
+| router input | early-proxy top1 accuracy | proxy/true router input cosine | top1 expert overlap |
+|---|---:|---:|---:|
+| hidden, linear gate | 61.3% | 0.42 | 0.39 |
+| hidden, MLP gate | 70.3% | 0.58 | 0.44 |
+| attention_output, MLP gate | 66.1% | 0.26 | 0.34 |
+
+这说明 `v -> O(v)` 或 `residual + O(v)` 与真正输入 gate 的 attention 后表征差距较大，无法可靠预测当前 token 的 expert set。失败原因不是单纯 expert index 完全没用，而是当前架构下同层 attention 前的 `v` 不能近似 attention 后的 gate input。
+
 ## 当前结论
 
 **结论 1：feature-based expert bucket 是合理目标。**
@@ -122,8 +166,12 @@ supervised gate 能接近 ground-truth label，但性能仍接近 baseline；强
 **结论 4：导师关于 inhibition / winner-take-all 的方向仍然成立，但问题应表述得更精确。**
 当前需要的不是简单“让 gate 更强”，而是让 expert 在训练早期就形成稳定、互斥的 feature ownership。否则 gate 即使后来接近 ground-truth routing，也不能把已经学偏的 expert 变成 ground-truth expert。
 
+**结论 5：同层 MoE gate 暂时不能直接作为 attention KV 的可部署 reverse index。**
+真实 gate routing 能提供弱可用的 KV 子集，说明 inverse KV 方向有上界潜力；但 attention 前的 early proxy 无法可靠预测真实 gate routing，因此当前结构不能直接实现同层 KV reverse indexing。若要继续推进，需要让 routing signal 在 attention 前可靠地产生，或者把 reverse indexing 放到跨层/下一层使用。
+
 ## 下一步
 
 1. 设计一种训练机制，让 feature-to-expert ownership 在训练早期就固定或逐渐稳定下来，而不是训练结束后再监督 gate。
 2. 比较两类方法：显式 ground-truth warmup / curriculum，以及无监督 inhibition / winner-take-all loss。
 3. 继续观察 expert 内部参数和表征是否随着稳定 ownership 出现更清晰的 feature specialization。
+4. 重新设计可部署 inverse KV 路径：让 attention 前就能得到可靠 routing signal，或者使用前一层/上一 token 已知 routing 结果作为下一层 KV index。
