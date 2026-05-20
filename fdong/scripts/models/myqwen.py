@@ -1,4 +1,5 @@
 from functools import partial
+import math
 from typing import Callable, Dict, List, Optional, Tuple, Union
 
 import torch
@@ -271,6 +272,7 @@ class MyQwen3MoE(nn.Module):
         output_router_supervision_loss: bool = False,
         router_supervision_detach_input: bool = False,
         router_hidden_states: Optional[torch.Tensor] = None,
+        router_logits_override: Optional[torch.Tensor] = None,
         ground_truth_expert_ids: Optional[torch.Tensor] = None,
         router_supervision_expert_ids: Optional[torch.Tensor] = None,
     ):
@@ -294,7 +296,15 @@ class MyQwen3MoE(nn.Module):
                 raise ValueError("Ground-truth expert ids must be in [0, moe_num_unique_experts).")
             topk_weights = torch.ones((flat_states.shape[0], 1), dtype=flat_states.dtype, device=flat_states.device)
         else:
-            router_logits = self.router(flat_router_states)
+            if router_logits_override is None:
+                router_logits = self.router(flat_router_states)
+            else:
+                router_logits = router_logits_override.reshape(-1, self.num_unique_experts).to(flat_states.device)
+                if router_logits.shape[0] != flat_states.shape[0]:
+                    raise ValueError(
+                        "`router_logits_override` must align with hidden states, "
+                        f"got {tuple(router_logits_override.shape)} for hidden shape {tuple(original_shape)}."
+                    )
             routing_weights = F.softmax(router_logits, dim=-1, dtype=torch.float32)
             topk_weights, topk_indices = torch.topk(
                 routing_weights,
@@ -500,6 +510,111 @@ class MyQwen3HeadMoE(nn.Module):
         return outputs
 
 
+def _remove_self_and_renormalize_attention(attn: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    seq_len = attn.shape[-1]
+    eye = torch.eye(seq_len, device=attn.device, dtype=torch.bool)
+    attn = attn.masked_fill(eye.unsqueeze(0), 0.0)
+    row_sum = attn.sum(dim=-1, keepdim=True)
+    valid_rows = row_sum.squeeze(-1) > 0
+    attn = attn / row_sum.clamp_min(1e-8)
+    return attn, valid_rows
+
+
+def _top_mass_attention(attn: torch.Tensor, rho: float) -> torch.Tensor:
+    rho = float(rho)
+    sorted_vals, sorted_idx = torch.sort(attn, dim=-1, descending=True)
+    cumsum = sorted_vals.cumsum(dim=-1)
+    keep_sorted = cumsum <= rho
+    first_over = (cumsum > rho).to(torch.int64).argmax(dim=-1, keepdim=True)
+    keep_sorted.scatter_(-1, first_over, True)
+    keep_sorted = keep_sorted & (sorted_vals > 0)
+    keep = torch.zeros_like(keep_sorted)
+    keep.scatter_(-1, sorted_idx, keep_sorted)
+    selected = attn * keep.to(attn.dtype)
+    return selected / selected.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+
+
+def attention_derived_router_loss(
+    router_logits: torch.Tensor,
+    attn_weights: torch.Tensor,
+    loss_type: str,
+    rho: float,
+    topk: int,
+) -> torch.Tensor:
+    if attn_weights is None:
+        return router_logits.new_zeros(())
+    if router_logits.dim() != 3:
+        raise ValueError(f"`router_logits` must be [batch, seq, experts], got {tuple(router_logits.shape)}.")
+
+    router_probs = F.softmax(router_logits.float(), dim=-1)
+    attn = attn_weights.float().mean(dim=1)
+    attn, valid_rows = _remove_self_and_renormalize_attention(attn)
+    selected = _top_mass_attention(attn, rho=rho)
+    valid = valid_rows.to(router_probs.dtype)
+    valid_count = valid.sum().clamp_min(1.0)
+
+    loss_type = str(loss_type)
+    if loss_type == "kl":
+        teacher = selected @ router_probs.detach()
+        token_loss = F.kl_div(
+            router_probs.clamp_min(1e-8).log(),
+            teacher.clamp_min(1e-8),
+            reduction="none",
+        ).sum(dim=-1)
+    elif loss_type == "pairwise":
+        same_prob = torch.einsum("bqe,bke->bqk", router_probs, router_probs.detach())
+        token_loss = -(selected * same_prob.clamp_min(1e-8).log()).sum(dim=-1)
+    elif loss_type == "topk_logits":
+        k = max(1, min(int(topk), router_logits.shape[-1]))
+        logits = router_logits.float()
+        topk_vals, topk_idx = torch.topk(logits, k=k, dim=-1)
+        topk_logits = torch.zeros_like(logits)
+        topk_logits.scatter_(-1, topk_idx, topk_vals)
+        teacher_logits = selected @ topk_logits.detach()
+        teacher_vals, teacher_idx = torch.topk(teacher_logits, k=k, dim=-1)
+        masked_teacher = torch.full_like(teacher_logits, torch.finfo(teacher_logits.dtype).min)
+        masked_teacher.scatter_(-1, teacher_idx, teacher_vals)
+        teacher = F.softmax(masked_teacher, dim=-1)
+        token_loss = F.kl_div(
+            router_probs.clamp_min(1e-8).log(),
+            teacher.clamp_min(1e-8),
+            reduction="none",
+        ).sum(dim=-1)
+    else:
+        raise ValueError(f"Unsupported attention-derived router loss type: {loss_type}.")
+
+    return (token_loss * valid).sum() / valid_count
+
+
+def router_entropy_floor_loss(router_logits: torch.Tensor, alpha: float) -> torch.Tensor:
+    if router_logits.dim() != 3:
+        raise ValueError(f"`router_logits` must be [batch, seq, experts], got {tuple(router_logits.shape)}.")
+    num_experts = router_logits.shape[-1]
+    if num_experts <= 1:
+        return router_logits.new_zeros(())
+
+    router_probs = F.softmax(router_logits.float(), dim=-1)
+    usage = router_probs.mean(dim=(0, 1))
+    entropy = -(usage * usage.clamp_min(1e-8).log()).sum()
+    target_entropy = float(alpha) * math.log(float(num_experts))
+    return F.relu(router_logits.new_tensor(target_entropy) - entropy).to(router_logits.dtype)
+
+
+def pre_router_kv_additive_mask(router_logits: torch.Tensor, topk: int, dtype: torch.dtype) -> torch.Tensor:
+    if router_logits.dim() != 3:
+        raise ValueError(f"`router_logits` must be [batch, seq, experts], got {tuple(router_logits.shape)}.")
+    batch, seq_len, num_experts = router_logits.shape
+    k = max(1, min(int(topk), num_experts))
+    topk_idx = torch.topk(router_logits.float(), k=k, dim=-1).indices
+    overlap = topk_idx[:, :, None, :, None] == topk_idx[:, None, :, None, :]
+    same_bucket = overlap.any(dim=(-1, -2))
+    causal = torch.tril(torch.ones(seq_len, seq_len, dtype=torch.bool, device=router_logits.device))
+    allowed = same_bucket & causal.unsqueeze(0)
+    min_dtype = torch.finfo(dtype).min
+    mask = torch.zeros((batch, 1, seq_len, seq_len), dtype=dtype, device=router_logits.device)
+    return mask.masked_fill(~allowed[:, None, :, :], min_dtype)
+
+
 def rotate_half(x):
     """Rotates half the hidden dims of the input."""
     x1 = x[..., : x.shape[-1] // 2]
@@ -641,8 +756,16 @@ class MyQwen3DecoderLayer(nn.Module):
         self.head_dim = int(getattr(config, "head_dim", config.hidden_size // config.num_attention_heads))
         self.moe_router_input = str(getattr(config, "moe_router_input", "hidden"))
         self.moe_head_level = bool(getattr(config, "moe_head_level", False))
+        self.use_pre_router = bool(getattr(config, "use_pre_router", False))
+        self.pre_router_input = str(getattr(config, "pre_router_input", "layer_input"))
+        self.pre_router_controls_attention = bool(getattr(config, "pre_router_controls_attention", False))
+        self.attention_router_loss_type = str(getattr(config, "attention_router_loss_type", "kl"))
+        self.attention_router_rho = float(getattr(config, "attention_router_rho", 0.75))
+        self.router_entropy_floor_alpha = float(getattr(config, "router_entropy_floor_alpha", 0.5))
         if self.moe_router_input not in {"hidden", "attention_output"}:
             raise ValueError("`moe_router_input` must be either 'hidden' or 'attention_output'.")
+        if self.pre_router_input not in {"layer_input", "q"}:
+            raise ValueError("`pre_router_input` must be either 'layer_input' or 'q'.")
         self.self_attn = MyQwen3Attention(config=config, layer_idx=layer_idx)
         if bool(getattr(config, "use_moe", False)):
             self.mlp = MyQwen3HeadMoE(config) if self.moe_head_level else MyQwen3MoE(config)
@@ -664,6 +787,9 @@ class MyQwen3DecoderLayer(nn.Module):
         output_router_aux_loss: Optional[bool] = False,
         output_router_inhibition_loss: Optional[bool] = False,
         output_router_supervision_loss: Optional[bool] = False,
+        output_attention_router_loss: Optional[bool] = False,
+        output_router_entropy_floor_loss: Optional[bool] = False,
+        use_pre_router_kv_mask: Optional[bool] = False,
         router_supervision_detach_input: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
@@ -676,6 +802,34 @@ class MyQwen3DecoderLayer(nn.Module):
             residual_source = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
+        pre_router_logits = None
+        if self.use_pre_router:
+            if not isinstance(self.mlp, MyQwen3MoE) or self.moe_head_level:
+                raise ValueError("Pre-router routing is currently implemented for token-level MoE only.")
+            if ground_truth_expert_ids is not None or router_supervision_expert_ids is not None:
+                raise ValueError("Pre-router routing should not be combined with ground-truth router supervision.")
+            if self.pre_router_input == "q":
+                pre_router_states = self.self_attn.q_norm(
+                    self.self_attn.q_proj(hidden_states).view(
+                        *hidden_states.shape[:-1], self.num_attention_heads, self.head_dim
+                    )
+                ).reshape(*hidden_states.shape[:-1], -1)
+            else:
+                pre_router_states = hidden_states
+            pre_router_logits = self.mlp.router(pre_router_states)
+            if self.pre_router_controls_attention or use_pre_router_kv_mask:
+                kv_mask = pre_router_kv_additive_mask(
+                    pre_router_logits,
+                    topk=self.mlp.num_experts_per_tok,
+                    dtype=hidden_states.dtype,
+                )
+                if attention_mask is not None and kv_mask.shape[-1] != attention_mask.shape[-1]:
+                    pad = attention_mask.shape[-1] - kv_mask.shape[-1]
+                    if pad < 0:
+                        kv_mask = kv_mask[:, :, :, : attention_mask.shape[-1]]
+                    else:
+                        kv_mask = F.pad(kv_mask, (0, pad), value=0.0)
+                attention_mask = kv_mask if attention_mask is None else attention_mask + kv_mask
 
         # Self Attention
         attn_output_wo_res, self_attn_weights, head_attn_output = self.self_attn(
@@ -698,6 +852,8 @@ class MyQwen3DecoderLayer(nn.Module):
         router_aux_loss = None
         router_inhibition_loss = None
         router_supervision_loss = None
+        attention_router_loss = None
+        router_entropy_loss = None
         if isinstance(self.mlp, MyQwen3HeadMoE):
             if ground_truth_expert_ids is not None:
                 raise ValueError("Ground-truth expert routing is not implemented for head-level MoE.")
@@ -747,9 +903,29 @@ class MyQwen3DecoderLayer(nn.Module):
                 output_router_supervision_loss=output_router_supervision_loss,
                 router_supervision_detach_input=router_supervision_detach_input,
                 router_hidden_states=router_input,
+                router_logits_override=pre_router_logits,
                 ground_truth_expert_ids=ground_truth_expert_ids,
                 router_supervision_expert_ids=router_supervision_expert_ids,
             )
+            if output_attention_router_loss:
+                if pre_router_logits is None:
+                    attention_router_loss = hidden_states.new_zeros(())
+                else:
+                    attention_router_loss = attention_derived_router_loss(
+                        router_logits=pre_router_logits,
+                        attn_weights=self_attn_weights,
+                        loss_type=self.attention_router_loss_type,
+                        rho=self.attention_router_rho,
+                        topk=self.mlp.num_experts_per_tok,
+                    )
+            if output_router_entropy_floor_loss:
+                if pre_router_logits is None:
+                    router_entropy_loss = hidden_states.new_zeros(())
+                else:
+                    router_entropy_loss = router_entropy_floor_loss(
+                        router_logits=pre_router_logits,
+                        alpha=self.router_entropy_floor_alpha,
+                    )
         else:
             hidden_states = self.mlp(mlp_input)
 
@@ -766,6 +942,7 @@ class MyQwen3DecoderLayer(nn.Module):
                 tuple_idx += 1
             if output_router_supervision_loss:
                 router_supervision_loss = hidden_states[tuple_idx]
+                tuple_idx += 1
             hidden_states = hidden_states[0]
         hidden_states = residual + hidden_states
 
@@ -790,6 +967,16 @@ class MyQwen3DecoderLayer(nn.Module):
             if router_supervision_loss is None:
                 router_supervision_loss = hidden_states.new_zeros(())
             outputs += (router_supervision_loss, )
+
+        if output_attention_router_loss:
+            if attention_router_loss is None:
+                attention_router_loss = hidden_states.new_zeros(())
+            outputs += (attention_router_loss, )
+
+        if output_router_entropy_floor_loss:
+            if router_entropy_loss is None:
+                router_entropy_loss = hidden_states.new_zeros(())
+            outputs += (router_entropy_loss, )
 
         return outputs
 
@@ -937,6 +1124,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
         output_router_aux_loss: Optional[bool] = None,
         output_router_inhibition_loss: Optional[bool] = None,
         output_router_supervision_loss: Optional[bool] = None,
+        output_attention_router_loss: Optional[bool] = None,
+        output_router_entropy_floor_loss: Optional[bool] = None,
+        use_pre_router_kv_mask: Optional[bool] = False,
         router_supervision_detach_input: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
@@ -997,6 +1187,8 @@ class Qwen3Model(Qwen3PreTrainedModel):
         all_router_aux_losses = () if output_router_aux_loss else None
         all_router_inhibition_losses = () if output_router_inhibition_loss else None
         all_router_supervision_losses = () if output_router_supervision_loss else None
+        all_attention_router_losses = () if output_attention_router_loss else None
+        all_router_entropy_floor_losses = () if output_router_entropy_floor_loss else None
         layer_hidden_states = []
 
         for layer_idx, decoder_layer in enumerate(self.layers):
@@ -1032,6 +1224,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     output_router_aux_loss,
                     output_router_inhibition_loss,
                     output_router_supervision_loss,
+                    output_attention_router_loss,
+                    output_router_entropy_floor_loss,
+                    use_pre_router_kv_mask,
                     router_supervision_detach_input,
                     use_cache,
                     cache_position,
@@ -1051,6 +1246,9 @@ class Qwen3Model(Qwen3PreTrainedModel):
                     output_router_aux_loss=output_router_aux_loss,
                     output_router_inhibition_loss=output_router_inhibition_loss,
                     output_router_supervision_loss=output_router_supervision_loss,
+                    output_attention_router_loss=output_attention_router_loss,
+                    output_router_entropy_floor_loss=output_router_entropy_floor_loss,
+                    use_pre_router_kv_mask=use_pre_router_kv_mask,
                     router_supervision_detach_input=router_supervision_detach_input,
                     use_cache=use_cache,
                     cache_position=cache_position,
@@ -1102,6 +1300,36 @@ class Qwen3Model(Qwen3PreTrainedModel):
                 if output_router_inhibition_loss:
                     supervision_idx += 1
                 all_router_supervision_losses += (layer_outputs[supervision_idx],)
+
+            if output_attention_router_loss:
+                attention_router_idx = 1
+                if output_attentions:
+                    attention_router_idx += 1
+                if output_expert_labels:
+                    attention_router_idx += 1
+                if output_router_aux_loss:
+                    attention_router_idx += 1
+                if output_router_inhibition_loss:
+                    attention_router_idx += 1
+                if output_router_supervision_loss:
+                    attention_router_idx += 1
+                all_attention_router_losses += (layer_outputs[attention_router_idx],)
+
+            if output_router_entropy_floor_loss:
+                entropy_idx = 1
+                if output_attentions:
+                    entropy_idx += 1
+                if output_expert_labels:
+                    entropy_idx += 1
+                if output_router_aux_loss:
+                    entropy_idx += 1
+                if output_router_inhibition_loss:
+                    entropy_idx += 1
+                if output_router_supervision_loss:
+                    entropy_idx += 1
+                if output_attention_router_loss:
+                    entropy_idx += 1
+                all_router_entropy_floor_losses += (layer_outputs[entropy_idx],)
                 
 
         hidden_states = self.norm(hidden_states)
@@ -1128,6 +1356,12 @@ class Qwen3Model(Qwen3PreTrainedModel):
 
         if output_router_supervision_loss:
             output.moe_router_supervision_loss = torch.stack(all_router_supervision_losses).mean()
+
+        if output_attention_router_loss:
+            output.attention_router_loss = torch.stack(all_attention_router_losses).mean()
+
+        if output_router_entropy_floor_loss:
+            output.router_entropy_floor_loss = torch.stack(all_router_entropy_floor_losses).mean()
 
         return output
 
@@ -1392,6 +1626,9 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
         output_router_aux_loss: Optional[bool] = None,
         output_router_inhibition_loss: Optional[bool] = None,
         output_router_supervision_loss: Optional[bool] = None,
+        output_attention_router_loss: Optional[bool] = None,
+        output_router_entropy_floor_loss: Optional[bool] = None,
+        use_pre_router_kv_mask: Optional[bool] = False,
         router_supervision_detach_input: Optional[bool] = None,
         output_hidden_states: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
@@ -1450,6 +1687,9 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
             output_router_aux_loss=output_router_aux_loss,
             output_router_inhibition_loss=output_router_inhibition_loss,
             output_router_supervision_loss=output_router_supervision_loss,
+            output_attention_router_loss=output_attention_router_loss,
+            output_router_entropy_floor_loss=output_router_entropy_floor_loss,
+            use_pre_router_kv_mask=use_pre_router_kv_mask,
             router_supervision_detach_input=router_supervision_detach_input,
             output_hidden_states=output_hidden_states,
             cache_position=cache_position,
@@ -1486,5 +1726,11 @@ class MyQwen3ForCausalLM(Qwen3PreTrainedModel, GenerationMixin):
 
         if output_router_supervision_loss:
             output.moe_router_supervision_loss = outputs.moe_router_supervision_loss
+
+        if output_attention_router_loss:
+            output.attention_router_loss = outputs.attention_router_loss
+
+        if output_router_entropy_floor_loss:
+            output.router_entropy_floor_loss = outputs.router_entropy_floor_loss
 
         return output

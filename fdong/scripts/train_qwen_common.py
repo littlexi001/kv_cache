@@ -95,6 +95,34 @@ def add_common_training_args(parser: argparse.ArgumentParser):
         default="hidden",
     )
     parser.add_argument("--moe_head_level", action="store_true", default=False)
+    parser.add_argument("--use_pre_router", action="store_true", default=False)
+    parser.add_argument("--pre_router_input", type=str, choices=["layer_input", "q"], default="layer_input")
+    parser.add_argument(
+        "--pre_router_controls_attention",
+        action="store_true",
+        default=False,
+        help="Use pre-router top-k clusters to mask attention during normal forward.",
+    )
+    parser.add_argument(
+        "--attention_router_loss_type",
+        type=str,
+        choices=["kl", "pairwise", "topk_logits"],
+        default="kl",
+    )
+    parser.add_argument("--attention_router_loss_weight", type=float, default=0.0)
+    parser.add_argument("--attention_router_rho", type=float, default=0.75)
+    parser.add_argument(
+        "--router_entropy_floor_loss_weight",
+        type=float,
+        default=0.0,
+        help="Weight for soft expert-usage entropy floor loss on pre-router logits.",
+    )
+    parser.add_argument(
+        "--router_entropy_floor_alpha",
+        type=float,
+        default=0.5,
+        help="Target entropy fraction: target = alpha * log(num_experts).",
+    )
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
     parser.add_argument(
         "--moe_router_inhibition_loss_weight",
@@ -187,6 +215,13 @@ def apply_debug_model_overrides(config, args):
 
 
 def apply_moe_overrides(config, args):
+    if args.use_pre_router:
+        if not args.use_moe:
+            raise ValueError("Pre-router requires `--use_moe`.")
+        if args.moe_head_level:
+            raise ValueError("Pre-router is currently implemented for token-level MoE, not head-level MoE.")
+    if args.router_entropy_floor_loss_weight > 0 and not args.use_pre_router:
+        raise ValueError("Router entropy floor loss currently requires `--use_pre_router`.")
     if args.ground_truth_routing_strategy != "none":
         if not args.use_moe:
             raise ValueError("Ground-truth routing requires `--use_moe`.")
@@ -224,6 +259,14 @@ def apply_moe_overrides(config, args):
     config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
     config.moe_router_input = str(args.moe_router_input)
     config.moe_head_level = bool(args.moe_head_level)
+    config.use_pre_router = bool(args.use_pre_router)
+    config.pre_router_input = str(args.pre_router_input)
+    config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
+    config.attention_router_loss_type = str(args.attention_router_loss_type)
+    config.attention_router_loss_weight = float(args.attention_router_loss_weight)
+    config.attention_router_rho = float(args.attention_router_rho)
+    config.router_entropy_floor_loss_weight = float(args.router_entropy_floor_loss_weight)
+    config.router_entropy_floor_alpha = float(args.router_entropy_floor_alpha)
     config.moe_load_balance_loss_weight = float(args.moe_load_balance_loss_weight)
     config.moe_router_inhibition_loss_weight = float(args.moe_router_inhibition_loss_weight)
     config.moe_router_inhibition_temperature = float(args.moe_router_inhibition_temperature)
@@ -259,6 +302,18 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_normalize_topk_prob": bool(getattr(config, "moe_normalize_topk_prob", True)),
                 "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
                 "moe_head_level": bool(getattr(config, "moe_head_level", False)),
+                "use_pre_router": bool(getattr(config, "use_pre_router", False)),
+                "pre_router_input": str(getattr(config, "pre_router_input", "layer_input")),
+                "pre_router_controls_attention": bool(
+                    getattr(config, "pre_router_controls_attention", False)
+                ),
+                "attention_router_loss_type": str(getattr(config, "attention_router_loss_type", "kl")),
+                "attention_router_loss_weight": float(getattr(config, "attention_router_loss_weight", 0.0)),
+                "attention_router_rho": float(getattr(config, "attention_router_rho", 0.75)),
+                "router_entropy_floor_loss_weight": float(
+                    getattr(config, "router_entropy_floor_loss_weight", 0.0)
+                ),
+                "router_entropy_floor_alpha": float(getattr(config, "router_entropy_floor_alpha", 0.5)),
                 "moe_load_balance_loss_weight": float(getattr(config, "moe_load_balance_loss_weight", 0.0)),
                 "moe_router_inhibition_loss_weight": float(
                     getattr(config, "moe_router_inhibition_loss_weight", 0.0)
@@ -310,6 +365,13 @@ def prepare_model(local_rank, world_size, device, args):
             f"router_hidden={config.moe_router_hidden_size}, "
             f"router_act={config.moe_router_act}, "
             f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
+            f"use_pre_router={config.use_pre_router}, pre_router_input={config.pre_router_input}, "
+            f"pre_router_controls_attention={config.pre_router_controls_attention}, "
+            f"attention_router_loss_type={config.attention_router_loss_type}, "
+            f"attention_router_loss_weight={config.attention_router_loss_weight}, "
+            f"attention_router_rho={config.attention_router_rho}, "
+            f"router_entropy_floor_weight={config.router_entropy_floor_loss_weight}, "
+            f"router_entropy_floor_alpha={config.router_entropy_floor_alpha}, "
             f"load_balance_weight={config.moe_load_balance_loss_weight}, "
             f"router_inhibition_weight={config.moe_router_inhibition_loss_weight}, "
             f"router_inhibition_temperature={config.moe_router_inhibition_temperature}, "
@@ -432,6 +494,8 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
     source, target = source.to(device), target.to(device)
     use_load_balance = args.moe_load_balance_loss_weight > 0
     use_router_inhibition = args.moe_router_inhibition_loss_weight > 0
+    use_attention_router_loss = args.attention_router_loss_weight > 0
+    use_router_entropy_floor = args.router_entropy_floor_loss_weight > 0
     use_router_supervision = args.ground_truth_routing_mode == "supervise"
     ground_truth_expert_ids = None
     router_supervision_expert_ids = None
@@ -447,6 +511,8 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
         output_router_aux_loss=use_load_balance,
         output_router_inhibition_loss=use_router_inhibition,
         output_router_supervision_loss=use_router_supervision,
+        output_attention_router_loss=use_attention_router_loss,
+        output_router_entropy_floor_loss=use_router_entropy_floor,
         router_supervision_detach_input=args.moe_router_supervision_detach_input,
         ground_truth_expert_ids=ground_truth_expert_ids,
         router_supervision_expert_ids=router_supervision_expert_ids,
@@ -457,6 +523,8 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
     load_balance_loss = None
     router_inhibition_loss = None
     router_supervision_loss = None
+    attention_router_loss = None
+    router_entropy_floor_loss = None
     if use_load_balance:
         load_balance_loss = output.moe_load_balance_loss
         loss = loss + args.moe_load_balance_loss_weight * load_balance_loss
@@ -466,7 +534,21 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
     if use_router_supervision:
         router_supervision_loss = output.moe_router_supervision_loss
         loss = loss + args.moe_router_supervision_loss_weight * router_supervision_loss
-    return loss, token_loss.detach(), load_balance_loss, router_inhibition_loss, router_supervision_loss
+    if use_attention_router_loss:
+        attention_router_loss = output.attention_router_loss
+        loss = loss + args.attention_router_loss_weight * attention_router_loss
+    if use_router_entropy_floor:
+        router_entropy_floor_loss = output.router_entropy_floor_loss
+        loss = loss + args.router_entropy_floor_loss_weight * router_entropy_floor_loss
+    return (
+        loss,
+        token_loss.detach(),
+        load_balance_loss,
+        router_inhibition_loss,
+        router_supervision_loss,
+        attention_router_loss,
+        router_entropy_floor_loss,
+    )
 
 
 def update_step(optimizer, scheduler):
@@ -508,7 +590,7 @@ def thread_main(local_rank, world_size, device, args):
         start_time = time.time()
 
         with torch.amp.autocast(dtype=torch.bfloat16, device_type=device.type, enabled=autocast_enabled):
-            loss, token_loss, load_balance_loss, router_inhibition_loss, router_supervision_loss = forward_step(
+            loss, token_loss, load_balance_loss, router_inhibition_loss, router_supervision_loss, attention_router_loss, router_entropy_floor_loss = forward_step(
                 local_rank,
                 device,
                 source,
@@ -550,6 +632,10 @@ def thread_main(local_rank, world_size, device, args):
                 metrics.append(f"router_inhib_loss: {router_inhibition_loss.detach():.3f}")
             if router_supervision_loss is not None:
                 metrics.append(f"router_sup_loss: {router_supervision_loss.detach():.3f}")
+            if attention_router_loss is not None:
+                metrics.append(f"attn_router_loss: {attention_router_loss.detach():.3f}")
+            if router_entropy_floor_loss is not None:
+                metrics.append(f"router_entropy_floor_loss: {router_entropy_floor_loss.detach():.3f}")
             metrics.append(f"batch_time: {batch_time:.3f}")
             print(", ".join(metrics), flush=True)
 

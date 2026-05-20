@@ -52,6 +52,14 @@ MOE_ROUTER_HIDDEN_SIZE="${MOE_ROUTER_HIDDEN_SIZE:--1}"
 MOE_ROUTER_ACT="${MOE_ROUTER_ACT:-silu}"
 MOE_ROUTER_INPUT="${MOE_ROUTER_INPUT:-hidden}"  # hidden/attention_output
 MOE_HEAD_LEVEL="${MOE_HEAD_LEVEL:-false}"  # true/false
+USE_PRE_ROUTER="${USE_PRE_ROUTER:-false}"  # true/false
+PRE_ROUTER_INPUT="${PRE_ROUTER_INPUT:-layer_input}"  # layer_input/q
+PRE_ROUTER_CONTROLS_ATTENTION="${PRE_ROUTER_CONTROLS_ATTENTION:-false}"  # true/false
+ATTENTION_ROUTER_LOSS_TYPE="${ATTENTION_ROUTER_LOSS_TYPE:-kl}"  # kl/pairwise/topk_logits
+ATTENTION_ROUTER_LOSS_WEIGHT="${ATTENTION_ROUTER_LOSS_WEIGHT:-0.0}"
+ATTENTION_ROUTER_RHO="${ATTENTION_ROUTER_RHO:-0.75}"
+ROUTER_ENTROPY_FLOOR_LOSS_WEIGHT="${ROUTER_ENTROPY_FLOOR_LOSS_WEIGHT:-0.0}"
+ROUTER_ENTROPY_FLOOR_ALPHA="${ROUTER_ENTROPY_FLOOR_ALPHA:-0.5}"
 MOE_LOAD_BALANCE_LOSS_WEIGHT="${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}"
 MOE_ROUTER_INHIBITION_LOSS_WEIGHT="${MOE_ROUTER_INHIBITION_LOSS_WEIGHT:-0.0}"
 MOE_ROUTER_INHIBITION_TEMPERATURE="${MOE_ROUTER_INHIBITION_TEMPERATURE:-1.0}"
@@ -122,6 +130,18 @@ ARGS+=" --moe_router_input $MOE_ROUTER_INPUT"
 if [ "$MOE_HEAD_LEVEL" = "true" ]; then
   ARGS+=" --moe_head_level"
 fi
+if [ "$USE_PRE_ROUTER" = "true" ]; then
+  ARGS+=" --use_pre_router"
+fi
+ARGS+=" --pre_router_input $PRE_ROUTER_INPUT"
+if [ "$PRE_ROUTER_CONTROLS_ATTENTION" = "true" ]; then
+  ARGS+=" --pre_router_controls_attention"
+fi
+ARGS+=" --attention_router_loss_type $ATTENTION_ROUTER_LOSS_TYPE"
+ARGS+=" --attention_router_loss_weight $ATTENTION_ROUTER_LOSS_WEIGHT"
+ARGS+=" --attention_router_rho $ATTENTION_ROUTER_RHO"
+ARGS+=" --router_entropy_floor_loss_weight $ROUTER_ENTROPY_FLOOR_LOSS_WEIGHT"
+ARGS+=" --router_entropy_floor_alpha $ROUTER_ENTROPY_FLOOR_ALPHA"
 ARGS+=" --moe_load_balance_loss_weight $MOE_LOAD_BALANCE_LOSS_WEIGHT"
 ARGS+=" --moe_router_inhibition_loss_weight $MOE_ROUTER_INHIBITION_LOSS_WEIGHT"
 ARGS+=" --moe_router_inhibition_temperature $MOE_ROUTER_INHIBITION_TEMPERATURE"

@@ -1,0 +1,235 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "ckpt_file": "../checkpoints/pre-router-cluster-attn-zipf-layer_input-lb0.01/5000.pth",
+    "output_path": "../experiments/feature_attention_heads_pre_router_cluster_lb0.01_step5000.json",
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null,
+    "use_moe": true,
+    "moe_num_unique_experts": 4,
+    "moe_num_experts_per_tok": 1,
+    "moe_intermediate_size": 128,
+    "moe_use_common_expert": false,
+    "moe_common_intermediate_size": 128,
+    "moe_router_bias": false,
+    "moe_no_normalize_topk_prob": false
+  },
+  "device": "cpu",
+  "layers": [
+    {
+      "layer": 0,
+      "features": {
+        "local_slot": {
+          "include_self_mass_by_head": [
+            0.7220679633319378,
+            0.7664124388247728,
+            0.7751549519598484,
+            0.7084606662392616
+          ],
+          "history_mass_by_head": [
+            0.06919726072333929,
+            0.05624959224791039,
+            0.06715736109910049,
+            0.07326574846515506
+          ],
+          "include_self_baseline_by_head": [
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045
+          ],
+          "history_baseline_by_head": [
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557
+          ],
+          "include_self_mass_mean": 0.7430240050889552,
+          "history_mass_mean": 0.0664674906338763,
+          "include_self_baseline_mean": 0.12320499937050045,
+          "history_baseline_mean": 0.09288710942418557
+        },
+        "higher_unit": {
+          "include_self_mass_by_head": [
+            0.8344604410231113,
+            0.8413817044347525,
+            0.8742738347500563,
+            0.8404591120779514
+          ],
+          "history_mass_by_head": [
+            0.18247471691116574,
+            0.13180916187331432,
+            0.1670567088239775,
+            0.20630356270497238
+          ],
+          "include_self_baseline_by_head": [
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949
+          ],
+          "history_baseline_by_head": [
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562
+          ],
+          "include_self_mass_mean": 0.8476437730714679,
+          "history_mass_mean": 0.17191103757835746,
+          "include_self_baseline_mean": 0.309453628025949,
+          "history_baseline_mean": 0.2914851284402562
+        }
+      }
+    },
+    {
+      "layer": 1,
+      "features": {
+        "local_slot": {
+          "include_self_mass_by_head": [
+            0.43447434436529875,
+            0.4339749924838543,
+            0.5515071898698807,
+            0.5432975217700005
+          ],
+          "history_mass_by_head": [
+            0.12445172221641841,
+            0.11517781277341167,
+            0.11312322987346199,
+            0.13150292916560735
+          ],
+          "include_self_baseline_by_head": [
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045
+          ],
+          "history_baseline_by_head": [
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557
+          ],
+          "include_self_mass_mean": 0.49081351212225854,
+          "history_mass_mean": 0.12106392350722485,
+          "include_self_baseline_mean": 0.12320499937050045,
+          "history_baseline_mean": 0.09288710942418557
+        },
+        "higher_unit": {
+          "include_self_mass_by_head": [
+            0.6774144489318132,
+            0.6400701776146889,
+            0.8060178477317095,
+            0.831650985404849
+          ],
+          "history_mass_by_head": [
+            0.36930473395219937,
+            0.3228957953415518,
+            0.3696379117139681,
+            0.4221268854741975
+          ],
+          "include_self_baseline_by_head": [
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949
+          ],
+          "history_baseline_by_head": [
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562
+          ],
+          "include_self_mass_mean": 0.7387883649207652,
+          "history_mass_mean": 0.37099133162047915,
+          "include_self_baseline_mean": 0.309453628025949,
+          "history_baseline_mean": 0.2914851284402562
+        }
+      }
+    },
+    {
+      "layer": 2,
+      "features": {
+        "local_slot": {
+          "include_self_mass_by_head": [
+            0.5085811000317335,
+            0.5194997396320105,
+            0.5131069421768188,
+            0.5963743403553963
+          ],
+          "history_mass_by_head": [
+            0.09894738868465573,
+            0.09608892122591574,
+            0.12931831192782545,
+            0.11473159339484268
+          ],
+          "include_self_baseline_by_head": [
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045,
+            0.12320499937050045
+          ],
+          "history_baseline_by_head": [
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557,
+            0.09288710942418557
+          ],
+          "include_self_mass_mean": 0.5343905305489898,
+          "history_mass_mean": 0.1097715538083099,
+          "include_self_baseline_mean": 0.12320499937050045,
+          "history_baseline_mean": 0.09288710942418557
+        },
+        "higher_unit": {
+          "include_self_mass_by_head": [
+            0.79169687256217,
+            0.8117900192737579,
+            0.7718888446688652,
+            0.8260179962962866
+          ],
+          "history_mass_by_head": [
+            0.3842924326423585,
+            0.3906806904499925,
+            0.3901378535848903,
+            0.3461834764856053
+          ],
+          "include_self_baseline_by_head": [
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949,
+            0.309453628025949
+          ],
+          "history_baseline_by_head": [
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562,
+            0.2914851284402562
+          ],
+          "include_self_mass_mean": 0.8003484332002699,
+          "history_mass_mean": 0.3778236132907116,
+          "include_self_baseline_mean": 0.309453628025949,
+          "history_baseline_mean": 0.2914851284402562
+        }
+      }
+    }
+  ]
+}

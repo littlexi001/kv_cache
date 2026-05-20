@@ -5,6 +5,7 @@ import os
 import torch
 from transformers import AutoConfig
 
+from analyze_moe_variant_selectivity import load_runtime_config
 from models import MyQwen3ForCausalLM
 from utils import HierarchicalPatternData
 
@@ -30,6 +31,10 @@ def add_args():
     parser.add_argument("--synthetic_num_units_per_layer", type=int, default=64)
     parser.add_argument("--synthetic_seed", type=int, default=0)
     parser.add_argument("--synthetic_min_token_id", type=int, default=1)
+    parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="zipf")
+    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
+    parser.add_argument("--synthetic_zipf_shuffle_ranks", action="store_true", default=True)
+    parser.add_argument("--synthetic_no_zipf_shuffle_ranks", action="store_false", dest="synthetic_zipf_shuffle_ranks")
 
     parser.add_argument("--debug_vocab_size", type=int, default=257)
     parser.add_argument("--debug_hidden_size", type=int, default=128)
@@ -67,7 +72,7 @@ def maybe_override(config, name, value):
         setattr(config, name, value)
 
 
-def build_config(args):
+def build_config(args, runtime_config):
     config = AutoConfig.from_pretrained(args.config_dir, trust_remote_code=True)
     maybe_override(config, "vocab_size", args.debug_vocab_size)
     maybe_override(config, "hidden_size", args.debug_hidden_size)
@@ -87,21 +92,45 @@ def build_config(args):
 
     config._attn_implementation = "eager"
     config.use_cache = False
-    config.attention_stride_pattern = args.attention_stride_pattern or [1] * config.num_hidden_layers
-    config.residual_source_pattern = args.residual_source_pattern or [-1] * config.num_hidden_layers
-    config.use_moe = bool(args.use_moe)
-    config.moe_num_unique_experts = int(args.moe_num_unique_experts)
-    config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
-    config.moe_intermediate_size = int(args.moe_intermediate_size)
-    config.moe_use_common_expert = bool(args.moe_use_common_expert)
-    config.moe_common_intermediate_size = int(args.moe_common_intermediate_size)
-    config.moe_router_bias = bool(args.moe_router_bias)
-    config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
+    config.attention_stride_pattern = runtime_config.get(
+        "attention_stride_pattern",
+        args.attention_stride_pattern or [1] * config.num_hidden_layers,
+    )
+    config.residual_source_pattern = runtime_config.get(
+        "residual_source_pattern",
+        args.residual_source_pattern or [-1] * config.num_hidden_layers,
+    )
+    config.use_moe = bool(runtime_config.get("use_moe", args.use_moe))
+    config.moe_num_unique_experts = int(runtime_config.get("moe_num_unique_experts", args.moe_num_unique_experts))
+    config.moe_num_experts_per_tok = int(runtime_config.get("moe_num_experts_per_tok", args.moe_num_experts_per_tok))
+    config.moe_intermediate_size = int(runtime_config.get("moe_intermediate_size", args.moe_intermediate_size))
+    config.moe_use_common_expert = bool(runtime_config.get("moe_use_common_expert", args.moe_use_common_expert))
+    config.moe_common_intermediate_size = int(
+        runtime_config.get("moe_common_intermediate_size", args.moe_common_intermediate_size)
+    )
+    config.moe_router_bias = bool(runtime_config.get("moe_router_bias", args.moe_router_bias))
+    config.moe_router_type = str(runtime_config.get("moe_router_type", "linear"))
+    config.moe_router_hidden_size = int(runtime_config.get("moe_router_hidden_size", config.hidden_size))
+    config.moe_router_act = str(runtime_config.get("moe_router_act", "silu"))
+    config.moe_normalize_topk_prob = bool(
+        runtime_config.get("moe_normalize_topk_prob", not bool(args.moe_no_normalize_topk_prob))
+    )
+    config.moe_router_input = str(runtime_config.get("moe_router_input", "hidden"))
+    config.moe_head_level = bool(runtime_config.get("moe_head_level", False))
+    config.use_pre_router = bool(runtime_config.get("use_pre_router", False))
+    config.pre_router_input = str(runtime_config.get("pre_router_input", "layer_input"))
+    config.pre_router_controls_attention = bool(runtime_config.get("pre_router_controls_attention", False))
+    config.attention_router_loss_type = str(runtime_config.get("attention_router_loss_type", "kl"))
+    config.attention_router_loss_weight = float(runtime_config.get("attention_router_loss_weight", 0.0))
+    config.attention_router_rho = float(runtime_config.get("attention_router_rho", 0.75))
+    config.router_entropy_floor_loss_weight = float(runtime_config.get("router_entropy_floor_loss_weight", 0.0))
+    config.router_entropy_floor_alpha = float(runtime_config.get("router_entropy_floor_alpha", 0.5))
     return config
 
 
 def load_model(args, device):
-    model = MyQwen3ForCausalLM(build_config(args)).to(device)
+    runtime_config = load_runtime_config(os.path.dirname(args.ckpt_file))
+    model = MyQwen3ForCausalLM(build_config(args, runtime_config)).to(device)
     state = torch.load(args.ckpt_file, map_location=device)
     model.load_state_dict(state)
     model.eval()
@@ -198,6 +227,9 @@ def main():
         num_units_per_layer=args.synthetic_num_units_per_layer,
         seed=args.synthetic_seed,
         min_token_id=args.synthetic_min_token_id,
+        sampling_distribution=args.synthetic_sampling_distribution,
+        zipf_alpha=args.synthetic_zipf_alpha,
+        zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
         return_metadata=True,
     )
     model = load_model(args, device)
