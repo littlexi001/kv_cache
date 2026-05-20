@@ -2,7 +2,7 @@
 
 ## 这一轮要回答的问题
 
-前两轮实验说明，attention score 确实能捕捉 synthetic 数据里的 local slot / higher-level unit，但标准 MoE routing 没有自然形成同样干净的 feature bucket。因此第三轮不再直接假设“改 attention 就能解决 MoE”，而是把问题拆成三步：
+前两轮实验说明，attention 确实能捕捉 synthetic 数据里的 local / higher-level feature slot，但标准 MoE routing 没有自然形成同样干净的 feature bucket。因此第三轮把问题拆成三步：
 
 1. **如果直接按照 ground-truth feature 做 routing，是否真的有好处？**
    有。Ground-truth feature routing 能让模型的 next token prediction accuracy 高于 learned routing, 94%->95%。
@@ -11,10 +11,10 @@
    有，但不够。在训练过程中直接加上 groud-truth routing label loss，训练出的线性 gate 能达到 97% routing 准确率，2 层非线性 MLP 能达到 98% routing 准确率。
 
 3. **如果 gate 已经接近 ground-truth routing，模型性能是否会接近 ground-truth dispatch？**
-   不能。即使达到 97%/98% 准确率的 routing，其 next-token prediction 准确率和 baseline 一致（94%），依旧低于 ground truth routing。
+   不能。即使达到 97%/98% 准确率的 routing，其 next-token prediction 准确率和 baseline 一致（94%），依旧低于 ground truth routing 1%。
 
 下一轮需要验证的假设是：
-1. 98% routing 仍不够，可能因为剩余 2% 错误集中在高价值位置；
+1. 98% routing 仍然不够，是因为剩余 2% 错误集中在高价值位置；
 2. Expert 需要从训练早期就形成稳定 feature ownership，或者因为 top-1 routing accuracy 本身不足以刻画 gate confidence、expert 数据分布和稳定分工。
 
 ## 问题 1：Ground-truth Routing 是否有好处
