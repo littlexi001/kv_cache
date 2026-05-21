@@ -1,0 +1,108 @@
+{
+  "config": {
+    "config_dir": "fdong/Qwen3-0.6B",
+    "checkpoint_root": "fdong/checkpoints",
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null
+  },
+  "intervention": "evaluate supervised-gate checkpoint with forced high-level hash ground_truth dispatch",
+  "runs": [
+    {
+      "step": 1000,
+      "supervised_learned_dispatch": {
+        "loss": 0.2150822109542787,
+        "accuracy": 0.939056396484375,
+        "count": 32768
+      },
+      "supervised_forced_ground_truth_dispatch": {
+        "loss": 0.2308037243783474,
+        "accuracy": 0.937713623046875,
+        "count": 32768
+      }
+    },
+    {
+      "step": 2000,
+      "supervised_learned_dispatch": {
+        "loss": 0.21138001000508666,
+        "accuracy": 0.93963623046875,
+        "count": 32768
+      },
+      "supervised_forced_ground_truth_dispatch": {
+        "loss": 0.22944054147228599,
+        "accuracy": 0.9359130859375,
+        "count": 32768
+      }
+    },
+    {
+      "step": 3000,
+      "supervised_learned_dispatch": {
+        "loss": 0.2099898154847324,
+        "accuracy": 0.93902587890625,
+        "count": 32768
+      },
+      "supervised_forced_ground_truth_dispatch": {
+        "loss": 0.22883612383157015,
+        "accuracy": 0.93414306640625,
+        "count": 32768
+      }
+    },
+    {
+      "step": 4000,
+      "supervised_learned_dispatch": {
+        "loss": 0.20940418122336268,
+        "accuracy": 0.93951416015625,
+        "count": 32768
+      },
+      "supervised_forced_ground_truth_dispatch": {
+        "loss": 0.22782844863831997,
+        "accuracy": 0.93695068359375,
+        "count": 32768
+      }
+    },
+    {
+      "step": 5000,
+      "supervised_learned_dispatch": {
+        "loss": 0.20901388674974442,
+        "accuracy": 0.939544677734375,
+        "count": 32768
+      },
+      "supervised_forced_ground_truth_dispatch": {
+        "loss": 0.22741465270519257,
+        "accuracy": 0.936767578125,
+        "count": 32768
+      }
+    }
+  ],
+  "references": {
+    "baseline_learned_dispatch": {
+      "loss": 0.2093553515151143,
+      "accuracy": 0.93963623046875,
+      "count": 32768
+    },
+    "ground_truth_trained_forced_ground_truth_dispatch": {
+      "loss": 0.19219437194988132,
+      "accuracy": 0.947265625,
+      "count": 32768
+    }
+  }
+}

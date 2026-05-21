@@ -1,0 +1,177 @@
+# 第三轮：Ground-truth Routing 与 Gate Selectivity
+
+## 这一轮要回答的问题
+
+前两轮实验说明，attention 确实能捕捉 synthetic 数据里的 local / higher-level feature slot，但标准 MoE routing 没有自然形成同样干净的 feature bucket。因此第三轮把问题拆成三步：
+
+1. **如果直接按照 ground-truth feature 做 routing，是否真的有好处？**
+   有。Ground-truth feature routing 能让模型的 next token prediction accuracy 高于 learned routing, 94%->95%。
+
+2. **当前表征里，gate 是否有能力学到 ground-truth routing？**
+   有，但不够。在训练过程中直接加上 groud-truth routing label loss，训练出的线性 gate 能达到 97% routing 准确率，2 层非线性 MLP 能达到 98% routing 准确率。
+
+3. **如果 gate 已经接近 ground-truth routing，模型性能是否会接近 ground-truth dispatch？**
+   不能。即使达到 97%/98% 准确率的 routing，其 next-token prediction 准确率和 baseline 一致（94%），依旧低于 ground truth routing 1%。
+
+下一轮需要验证的假设是：
+1. 98% routing 仍然不够，是因为剩余 2% 错误集中在高价值位置；
+2. Expert 需要从训练早期就形成稳定 feature ownership，或者因为 top-1 routing accuracy 本身不足以刻画 gate confidence、expert 数据分布和稳定分工。
+
+## 问题 1：Ground-truth Routing 是否有好处
+
+实验直接用数据生成器里的 feature label 做 expert dispatch：
+
+```text
+local slot id / higher-level unit id -> expert id
+```
+
+映射方式测试了两种：
+
+```text
+hash:
+  expert_id = feature_id % num_experts
+
+frequency_balanced:
+  先估计每个 feature 的出现频率；
+  再把 feature 贪心分配给当前 token load 最低的 expert。
+```
+
+测试组合覆盖 uniform / zipf 两种数据分布，以及 local slot / higher-level unit 两种 feature 层次。
+
+**结论：ground-truth routing 不仅可行，而且 higher-level ground-truth routing 稳定优于 learned gate。**
+
+关键结果如下：
+
+| 数据分布 | routing feature | mapping | loss | accuracy |
+|---|---|---|---:|---:|
+| uniform | learned baseline | learned gate | 0.262 | 91.5% |
+| uniform | local slot | hash | 0.257 | 91.5% |
+| uniform | local slot | frequency-balanced | 0.259 | 91.4% |
+| uniform | higher-level unit | hash | 0.229 | 93.3% |
+| uniform | higher-level unit | frequency-balanced | 0.234 | 93.0% |
+| zipf | learned baseline | learned gate | 0.209 | 94.0% |
+| zipf | local slot | hash | 0.207 | 94.0% |
+| zipf | local slot | frequency-balanced | 0.207 | 94.0% |
+| zipf | higher-level unit | hash | 0.192 | 94.7% |
+| zipf | higher-level unit | frequency-balanced | 0.192 | 94.6% |
+
+复跑 zipf + higher-level + hash / frequency-balanced 后，结果基本不变，说明这个收益不是随机种子偶然造成的。
+
+这一点很关键：MoE 不 selective 并不是因为 feature-based routing 这个目标错了。相反，存在一个明显更好的 routing 函数，只是标准 learned gate 没有自然学到。
+
+## 问题 2：Linear Gate 能否读出 Ground-truth Routing
+
+为避免在线训练时 routing 反过来改变 backbone 表征，我们先做 offline linear probe：加载训练好的模型，冻结全部参数，只在固定表征上训练一个线性分类器，预测 ground-truth expert id。
+
+测试的表征包括：
+
+- learned baseline 的 hidden；
+- attention-output router 模型的 attention output；
+- ground-truth dispatch 模型的 hidden；
+- ground-truth dispatch 模型的 attention output；
+- supervised-gate 模型的 hidden。
+
+**结论：普通 learned gate 的表征只能中等程度线性读出 ground-truth routing；supervised gate 能把可读性推到 97% 左右，但仍不到 100%。**
+
+代表性结果：
+
+| 模型 / 表征 | best probe accuracy |
+|---|---:|
+| learned baseline / hidden | 70.3% |
+| attention-output router / attention output | 74.5% |
+| ground-truth dispatch / hidden | 87.3% |
+| ground-truth dispatch / attention output | 87.2% |
+| supervised gate / hidden | 96.7% |
+
+这说明两件事：
+
+1. 标准模型的表征中确实有 hierarchy signal，但它不是非常干净的线性可分结构。
+2. 通过监督信号，gate/backbone 可以把 ground-truth routing 变得接近线性可读，因此“线性 gate 完全没有能力”不是主要解释。
+
+## 问题 3：Gate 接近 Ground-truth Routing 是否足够
+
+我们进一步训练 supervised gate：用 ground-truth expert id 对 router 加监督 loss，但实际 dispatch 仍由 gate 决定。测试了 linear gate 和两层 MLP gate，也分别测试 hidden / attention output 作为 router input。
+
+**结论：即使 gate 的 routing accuracy 已经达到 97% 左右，next-token 性能仍然接近 baseline，明显不如直接 ground-truth dispatch。**
+
+代表性结果：
+
+| 模型 | routing match | loss | accuracy |
+|---|---:|---:|---:|
+| learned baseline | - | 0.209 | 94.0% |
+| ground-truth dispatch | 100% | 0.192 | 94.7% |
+| supervised linear gate | about 97% | 0.209 | 94.0% |
+| supervised MLP gate / hidden | about 97% | 0.209 | 94.0% |
+| supervised MLP gate / attention output | about 97% | 0.209 | 94.0% |
+
+更关键的是，把 supervised-gate checkpoint 在评估时强行切换为 ground-truth dispatch，loss 反而变差。这说明问题不是“评估时 gate 还差 3% 所以拖累性能”，而是训练过程中 expert 从一开始就没有按照 ground-truth feature 建立稳定 ownership。
+
+因此，最终 gate 分类准确不等价于 expert 已经学成 ground-truth expert。ground-truth dispatch 的收益来自训练全程稳定的 feature-to-expert ownership，而不是训练结束时临时把 token 分到某个看起来正确的 expert。
+
+## 问题 4：Expert Routing 能否作为 KV Cache 的 Reverse Index
+
+**结论 1：early_proxy 结果说明，用 `v` 近似 gate input 做 reverse index 是失败的。**
+失败原因是 `v` 无法正确预测 expert：`v` 与推理时真正输入 gate 的表征 cosine 约为 0.5，预测 expert 准确率约为 45%。
+
+**结论 2：true_router 结果说明，expert reverse indexing 这个 idea 是有潜力的。**
+如果使用真正的 gate routing 结果去压缩 KV，可以在压缩约 65% KV 后，让 next-token accuracy 从约 94% 降到约 93%。
+
+需要注意，第二句话是面向汇报的直观概括；精确实验数字是：true-router top1 保留约 36% KV，accuracy 约 92.4%~92.7%；true-router top2 保留约 58%~60% KV，accuracy 约 93.3%~93.5%。因此更严格地说，当前结果证明 expert reverse indexing 有上界潜力，但压缩率和精度之间仍有明显 tradeoff。
+
+在已经有 supervised selective MoE 的前提下，进一步测试最终系统目标：
+
+```text
+prefill 阶段记录每个历史 token 激活的 expert；
+decode 当前 token 时，根据当前 token 的 expert set 反向索引历史 KV；
+attention 只看 expert set 匹配的历史 token。
+```
+
+测试了两种 routing source：
+
+1. **true-router indexing**：先用模型真实 gate input 算当前 token 的 top-m expert，再用这个 expert set 过滤历史 KV。这个设置不能真实加速，因为它已经依赖 attention 后的表征，但可以验证 expert reverse indexing 这个想法本身是否有上界潜力。
+2. **early-proxy indexing**：在 attention 前，用当前 token 的 `v` 构造 proxy 表征。如果原 router input 是 hidden，则使用 `residual + O(v)`；如果原 router input 是 attention_output，则使用 `O(v)`。这个设置对应真正可部署的同层 reverse indexing 路径。
+
+true-router indexing 的结果说明，如果能拿到真实 gate routing，expert index 和 attention KV 之间确实有相关性：
+
+| indexing source | top-m | KV 保留比例 | loss | accuracy |
+|---|---:|---:|---:|---:|
+| full attention | - | 100% | 0.209 | 94.0% |
+| true-router | top1 | 36% | 0.316~0.333 | 92.4%~92.7% |
+| true-router | top2 | 58%~60% | 0.250~0.258 | 93.3%~93.5% |
+| true-router | top3 | 80% | 0.221~0.225 | 93.7%~93.8% |
+
+因此，更严谨的说法是：使用真实 gate routing 时，保留约 36% KV 可以把 accuracy 从约 94% 降到约 92.5%；保留约 60% KV 时 accuracy 约 93.4%。这说明 expert reverse indexing 不是完全无效，但当前模型里还没有达到“压缩 65% KV 只掉 1% accuracy”的稳定效果。
+
+early-proxy indexing 的结果明显失败：
+
+| router input | early-proxy top1 accuracy | proxy/true router input cosine | top1 expert overlap |
+|---|---:|---:|---:|
+| hidden, linear gate | 61.3% | 0.42 | 0.39 |
+| hidden, MLP gate | 70.3% | 0.58 | 0.44 |
+| attention_output, MLP gate | 66.1% | 0.26 | 0.34 |
+
+这说明 `v -> O(v)` 或 `residual + O(v)` 与真正输入 gate 的 attention 后表征差距较大，无法可靠预测当前 token 的 expert set。失败原因不是单纯 expert index 完全没用，而是当前架构下同层 attention 前的 `v` 不能近似 attention 后的 gate input。
+
+## 当前结论
+
+**结论 1：feature-based expert bucket 是合理目标。**
+在 synthetic hierarchy 数据上，higher-level ground-truth routing 稳定优于 learned gate，说明我们想要的 feature-to-expert assignment 本身不是错的。
+
+**结论 2：当前 learned gate 没学到 ground-truth routing，不只是因为表征里没有 feature。**
+attention / hidden 表征里有 hierarchy signal；监督训练还能把 gate match 提到约 97%。这说明 feature signal 存在，但标准 next-token loss 没有自然把它转化为稳定、干净的 expert ownership。
+
+**结论 3：routing accuracy 高不代表 expert ownership 正确。**
+supervised gate 能接近 ground-truth label，但性能仍接近 baseline；强行 ground-truth dispatch 甚至会伤害 supervised-gate checkpoint。这说明 expert 在训练过程中学到的是与当时动态 routing 绑定的函数，而不是事后可任意替换的 ground-truth expert。
+
+**结论 4：导师关于 inhibition / winner-take-all 的方向仍然成立，但问题应表述得更精确。**
+当前需要的不是简单“让 gate 更强”，而是让 expert 在训练早期就形成稳定、互斥的 feature ownership。否则 gate 即使后来接近 ground-truth routing，也不能把已经学偏的 expert 变成 ground-truth expert。
+
+**结论 5：同层 MoE gate 暂时不能直接作为 attention KV 的可部署 reverse index。**
+真实 gate routing 能提供弱可用的 KV 子集，说明 inverse KV 方向有上界潜力；但 attention 前的 early proxy 无法可靠预测真实 gate routing，因此当前结构不能直接实现同层 KV reverse indexing。若要继续推进，需要让 routing signal 在 attention 前可靠地产生，或者把 reverse indexing 放到跨层/下一层使用。
+
+## 下一步
+
+1. 设计一种训练机制，让 feature-to-expert ownership 在训练早期就固定或逐渐稳定下来，而不是训练结束后再监督 gate。
+2. 比较两类方法：显式 ground-truth warmup / curriculum，以及无监督 inhibition / winner-take-all loss。
+3. 继续观察 expert 内部参数和表征是否随着稳定 ownership 出现更清晰的 feature specialization。
+4. 重新设计可部署 inverse KV 路径：让 attention 前就能得到可靠 routing signal，或者使用前一层/上一 token 已知 routing 结果作为下一层 KV index。

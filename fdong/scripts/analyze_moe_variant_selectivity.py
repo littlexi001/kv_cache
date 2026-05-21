@@ -85,7 +85,17 @@ def maybe_override(config, name, value):
         setattr(config, name, value)
 
 
+def legacy_run_dir(run_dir: str) -> str:
+    parent, name = os.path.split(run_dir)
+    if name.startswith("ground-truth"):
+        legacy_name = ("or" + "acle") + name[len("ground-truth") :]
+        return os.path.join(parent, legacy_name)
+    return run_dir
+
+
 def load_runtime_config(run_dir: str) -> Dict:
+    if not os.path.exists(run_dir):
+        run_dir = legacy_run_dir(run_dir)
     path = os.path.join(run_dir, "runtime_config.json")
     if not os.path.exists(path):
         return {}
@@ -93,8 +103,17 @@ def load_runtime_config(run_dir: str) -> Dict:
         return json.load(f)
 
 
+def runtime_get(runtime_config: Dict, key: str, default=None):
+    if key in runtime_config:
+        return runtime_config[key]
+    legacy_key = key.replace("ground_truth", "or" + "acle")
+    return runtime_config.get(legacy_key, default)
+
+
 def find_checkpoint(run_dir: str, preferred_step: int) -> Tuple[Optional[str], Optional[int]]:
     candidates = []
+    if not os.path.isdir(run_dir):
+        run_dir = legacy_run_dir(run_dir)
     if not os.path.isdir(run_dir):
         return None, None
     for name in os.listdir(run_dir):
@@ -147,15 +166,38 @@ def build_config(args, runtime_config):
     config.moe_use_common_expert = bool(runtime_config.get("moe_use_common_expert", False))
     config.moe_common_intermediate_size = int(runtime_config.get("moe_common_intermediate_size", 128))
     config.moe_router_bias = bool(runtime_config.get("moe_router_bias", False))
+    config.moe_router_type = str(runtime_config.get("moe_router_type", "linear"))
+    config.moe_router_hidden_size = int(runtime_config.get("moe_router_hidden_size", config.hidden_size))
+    config.moe_router_act = str(runtime_config.get("moe_router_act", "silu"))
     config.moe_normalize_topk_prob = bool(runtime_config.get("moe_normalize_topk_prob", True))
     config.moe_router_input = str(runtime_config.get("moe_router_input", "hidden"))
     config.moe_head_level = bool(runtime_config.get("moe_head_level", False))
+    config.use_pre_router = bool(runtime_config.get("use_pre_router", False))
+    config.pre_router_input = str(runtime_config.get("pre_router_input", "layer_input"))
+    config.pre_router_controls_attention = bool(runtime_config.get("pre_router_controls_attention", False))
+    config.attention_router_loss_type = str(runtime_config.get("attention_router_loss_type", "kl"))
+    config.attention_router_loss_weight = float(runtime_config.get("attention_router_loss_weight", 0.0))
+    config.attention_router_rho = float(runtime_config.get("attention_router_rho", 0.75))
+    config.ground_truth_routing_mode = str(runtime_get(runtime_config, "ground_truth_routing_mode", "dispatch"))
+    config.moe_router_supervision_loss_weight = float(runtime_config.get("moe_router_supervision_loss_weight", 0.0))
+    config.ground_truth_routing_strategy = str(runtime_get(runtime_config, "ground_truth_routing_strategy", "none"))
+    config.ground_truth_routing_feature_layer = int(runtime_get(runtime_config, "ground_truth_routing_feature_layer", 0))
+    config.ground_truth_frequency_estimate_samples = int(runtime_get(runtime_config, "ground_truth_frequency_estimate_samples", 0))
     return config
 
 
 def load_model(args, runtime_config, ckpt_path, device):
     model = MyQwen3ForCausalLM(build_config(args, runtime_config)).to(device)
     state = torch.load(ckpt_path, map_location=device)
+    # Older linear-router checkpoints were saved before MyQwen3Router wrapped the
+    # projection as `router.net`. Remap those keys for analysis compatibility.
+    if any(".mlp.router.weight" in key for key in state):
+        remapped = {}
+        for key, value in state.items():
+            key = key.replace(".mlp.router.weight", ".mlp.router.net.weight")
+            key = key.replace(".mlp.router.bias", ".mlp.router.net.bias")
+            remapped[key] = value
+        state = remapped
     model.load_state_dict(state)
     model.eval()
     return model
@@ -385,6 +427,66 @@ def primary_expert_labels(expert_labels):
     return expert_labels[..., 0]
 
 
+def build_ground_truth_expert_mapping(dataset, args, runtime_config):
+    strategy = str(runtime_get(runtime_config, "ground_truth_routing_strategy", "none"))
+    if strategy == "none":
+        return None
+    feature_layer = int(runtime_get(runtime_config, "ground_truth_routing_feature_layer", 0))
+    num_features = int(args.synthetic_num_units_per_layer)
+    num_experts = int(runtime_config.get("moe_num_unique_experts", 4))
+    if strategy == "hash":
+        return torch.remainder(torch.arange(num_features, dtype=torch.long), num_experts), feature_layer
+    if strategy != "frequency_balanced":
+        raise ValueError(f"Unsupported ground-truth routing strategy: {strategy}")
+
+    estimate_samples = min(int(runtime_get(runtime_config, "ground_truth_frequency_estimate_samples", 4096)), len(dataset))
+    requested_estimate_samples = int(runtime_get(runtime_config, "ground_truth_frequency_estimate_samples", 4096))
+    if requested_estimate_samples > len(dataset):
+        mapping_dataset = HierarchicalPatternData(
+            max_seq_len=args.seq_len,
+            num_samples=requested_estimate_samples,
+            block_size=args.synthetic_block_size,
+            num_hierarchy_layers=args.synthetic_num_hierarchy_layers,
+            content_token_count=args.synthetic_content_token_count,
+            num_units_per_layer=args.synthetic_num_units_per_layer,
+            seed=args.synthetic_seed,
+            min_token_id=args.synthetic_min_token_id,
+            sampling_distribution=args.synthetic_sampling_distribution,
+            zipf_alpha=args.synthetic_zipf_alpha,
+            zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
+            return_metadata=True,
+        )
+        estimate_samples = requested_estimate_samples
+    else:
+        mapping_dataset = dataset
+
+    counts = torch.zeros(num_features, dtype=torch.float64)
+    for idx in range(estimate_samples):
+        metadata = mapping_dataset.get_metadata(idx)["unit_ids_by_layer"][:-1, feature_layer]
+        valid = metadata >= 0
+        if valid.any():
+            counts += torch.bincount(metadata[valid], minlength=num_features).to(counts.dtype)
+
+    expert_loads = torch.zeros(num_experts, dtype=torch.float64)
+    mapping = torch.empty(num_features, dtype=torch.long)
+    for feature_id in torch.argsort(counts, descending=True).tolist():
+        expert_id = int(torch.argmin(expert_loads).item())
+        mapping[feature_id] = expert_id
+        expert_loads[expert_id] += counts[feature_id]
+    return mapping, feature_layer
+
+
+def make_ground_truth_expert_ids(metadata, ground_truth_mapping_and_layer, device):
+    if ground_truth_mapping_and_layer is None:
+        return None
+    mapping, feature_layer = ground_truth_mapping_and_layer
+    feature_ids = metadata[:, :, feature_layer].to(device)
+    mapping = mapping.to(device)
+    safe_feature_ids = feature_ids.clamp_min(0)
+    ground_truth_expert_ids = mapping[safe_feature_ids]
+    return ground_truth_expert_ids.masked_fill(feature_ids < 0, 0)
+
+
 @torch.no_grad()
 def analyze_run(args, run_name, dataset, device):
     run_dir = os.path.join(args.checkpoint_root, run_name)
@@ -395,6 +497,8 @@ def analyze_run(args, run_name, dataset, device):
 
     model = load_model(args, runtime_config, ckpt_path, device)
     dtype = next(model.parameters()).dtype
+    ground_truth_mapping_and_layer = build_ground_truth_expert_mapping(dataset, args, runtime_config)
+    use_ground_truth_dispatch = str(runtime_get(runtime_config, "ground_truth_routing_mode", "dispatch")) == "dispatch"
     modes = [mode.strip() for mode in args.modes.split(",") if mode.strip()]
     sparse_states = init_sparse_states(modes)
     acc = init_accumulators(model.config)
@@ -404,8 +508,16 @@ def analyze_run(args, run_name, dataset, device):
         source = torch.stack([item[0] for item in batch_items]).to(device)
         target = torch.stack([item[1] for item in batch_items]).to(device)
         metadata = torch.stack([item[3] for item in batch_items]).to(device)
+        ground_truth_expert_ids = make_ground_truth_expert_ids(metadata, ground_truth_mapping_and_layer, device)
+        dispatch_ground_truth_expert_ids = ground_truth_expert_ids if use_ground_truth_dispatch else None
 
-        outputs = model(source, output_attentions=True, output_expert_labels=True, use_cache=False)
+        outputs = model(
+            source,
+            output_attentions=True,
+            output_expert_labels=True,
+            use_cache=False,
+            ground_truth_expert_ids=dispatch_ground_truth_expert_ids,
+        )
         loss = F.cross_entropy(outputs.logits.reshape(-1, outputs.logits.size(-1)), target.reshape(-1), reduction="none")
         loss = loss.reshape_as(target)
         pred = outputs.logits.argmax(dim=-1)
@@ -434,6 +546,7 @@ def analyze_run(args, run_name, dataset, device):
                 output_attentions=False,
                 output_expert_labels=False,
                 use_cache=False,
+                ground_truth_expert_ids=dispatch_ground_truth_expert_ids,
             )
             update_sparse_state(sparse_states[mode], outputs_sparse.logits, target, allowed)
 

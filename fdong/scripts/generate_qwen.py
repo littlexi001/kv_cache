@@ -8,7 +8,7 @@ USE_MOE = True
 MOE_INTERMEDIATE_SIZE = 1536
 EXPERT_PER_TOKEN = 2
 NUM_EXPERTS = 16
-GATING_REFERENCE = "oracle" # oracle / switch
+GATING_REFERENCE = "ground_truth" # ground_truth / switch
 
 DEVICE = 0
 CONFIG_DIR = "/home/jxzhou/PLM_PER/qwen/Qwen3-0.6B" # 就直接用 qwen3 的 dir 就可以
@@ -94,4 +94,3 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(CONFIG_DIR, trust_remote_code=True)    
 
     generate_main(model, tokenizer)
-

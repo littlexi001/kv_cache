@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import random
 import time
 
 import torch
@@ -29,6 +30,7 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--optimizer", type=str, choices=["AdamW", "sgd"], default="AdamW")
     parser.add_argument("--warmup_steps", type=int, default=2000)
     parser.add_argument("--total_training_steps", type=int, default=1000000)
+    parser.add_argument("--training_seed", type=int, default=-1)
 
     parser.add_argument("--data_shuffle", action="store_true", default=True)
     parser.add_argument("--no_data_shuffle", action="store_false", dest="data_shuffle")
@@ -82,6 +84,9 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--moe_use_common_expert", action="store_true", default=False)
     parser.add_argument("--moe_common_intermediate_size", type=int, default=-1)
     parser.add_argument("--moe_router_bias", action="store_true", default=False)
+    parser.add_argument("--moe_router_type", type=str, choices=["linear", "mlp"], default="linear")
+    parser.add_argument("--moe_router_hidden_size", type=int, default=-1)
+    parser.add_argument("--moe_router_act", type=str, default="silu")
     parser.add_argument("--moe_no_normalize_topk_prob", action="store_true", default=False)
     parser.add_argument(
         "--moe_router_input",
@@ -90,7 +95,84 @@ def add_common_training_args(parser: argparse.ArgumentParser):
         default="hidden",
     )
     parser.add_argument("--moe_head_level", action="store_true", default=False)
+    parser.add_argument("--use_pre_router", action="store_true", default=False)
+    parser.add_argument("--pre_router_input", type=str, choices=["layer_input", "q"], default="layer_input")
+    parser.add_argument(
+        "--pre_router_controls_attention",
+        action="store_true",
+        default=False,
+        help="Use pre-router top-k clusters to mask attention during normal forward.",
+    )
+    parser.add_argument(
+        "--attention_router_loss_type",
+        type=str,
+        choices=["kl", "pairwise", "topk_logits"],
+        default="kl",
+    )
+    parser.add_argument("--attention_router_loss_weight", type=float, default=0.0)
+    parser.add_argument("--attention_router_rho", type=float, default=0.75)
+    parser.add_argument(
+        "--router_entropy_floor_loss_weight",
+        type=float,
+        default=0.0,
+        help="Weight for soft expert-usage entropy floor loss on pre-router logits.",
+    )
+    parser.add_argument(
+        "--router_entropy_floor_alpha",
+        type=float,
+        default=0.5,
+        help="Target entropy fraction: target = alpha * log(num_experts).",
+    )
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--moe_router_inhibition_loss_weight",
+        type=float,
+        default=0.0,
+        help="Weight for winner-take-all router self-inhibition loss.",
+    )
+    parser.add_argument(
+        "--moe_router_inhibition_temperature",
+        type=float,
+        default=1.0,
+        help="Temperature used when computing router inhibition cross-entropy.",
+    )
+    parser.add_argument(
+        "--ground_truth_routing_mode",
+        type=str,
+        choices=["dispatch", "supervise"],
+        default="dispatch",
+        help="dispatch uses ground-truth ids as MoE assignment; supervise trains the learned gate with ground-truth ids but dispatches by gate.",
+    )
+    parser.add_argument(
+        "--moe_router_supervision_loss_weight",
+        type=float,
+        default=0.0,
+        help="Weight for cross-entropy loss between learned router logits and ground-truth expert ids.",
+    )
+    parser.add_argument(
+        "--moe_router_supervision_detach_input",
+        action="store_true",
+        default=False,
+        help="Detach router hidden states before computing router supervision loss.",
+    )
+    parser.add_argument(
+        "--ground_truth_routing_strategy",
+        type=str,
+        choices=["none", "hash", "frequency_balanced"],
+        default="none",
+    )
+    parser.add_argument(
+        "--ground_truth_routing_feature_layer",
+        type=int,
+        default=0,
+        help="Ground-truth metadata layer used by ground-truth routing. 0=local slot, 1=higher-level unit.",
+    )
+    parser.add_argument(
+        "--ground_truth_frequency_estimate_samples",
+        type=int,
+        default=4096,
+        help="Number of synthetic samples used to estimate feature frequencies for frequency-balanced ground-truth routing.",
+    )
 
     parser.add_argument("--attention_stride_pattern", type=parse_int_list, default=None)
     parser.add_argument("--residual_source_pattern", type=parse_int_list, default=None)
@@ -133,6 +215,25 @@ def apply_debug_model_overrides(config, args):
 
 
 def apply_moe_overrides(config, args):
+    if args.use_pre_router:
+        if not args.use_moe:
+            raise ValueError("Pre-router requires `--use_moe`.")
+        if args.moe_head_level:
+            raise ValueError("Pre-router is currently implemented for token-level MoE, not head-level MoE.")
+    if args.router_entropy_floor_loss_weight > 0 and not args.use_pre_router:
+        raise ValueError("Router entropy floor loss currently requires `--use_pre_router`.")
+    if args.ground_truth_routing_strategy != "none":
+        if not args.use_moe:
+            raise ValueError("Ground-truth routing requires `--use_moe`.")
+        if args.moe_head_level:
+            raise ValueError("Ground-truth routing is currently implemented for token-level MoE, not head-level MoE.")
+        if args.moe_num_experts_per_tok != 1:
+            raise ValueError("Ground-truth routing currently requires `--moe_num_experts_per_tok 1`.")
+    if args.ground_truth_routing_mode == "supervise":
+        if args.ground_truth_routing_strategy == "none":
+            raise ValueError("Ground-truth router supervision requires `--ground_truth_routing_strategy` other than `none`.")
+        if args.moe_router_supervision_loss_weight <= 0:
+            raise ValueError("Ground-truth router supervision requires `--moe_router_supervision_loss_weight > 0`.")
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -148,10 +249,33 @@ def apply_moe_overrides(config, args):
         else int(config.moe_intermediate_size)
     )
     config.moe_router_bias = bool(args.moe_router_bias)
+    config.moe_router_type = str(args.moe_router_type)
+    config.moe_router_hidden_size = (
+        int(args.moe_router_hidden_size)
+        if args.moe_router_hidden_size != -1
+        else int(config.hidden_size)
+    )
+    config.moe_router_act = str(args.moe_router_act)
     config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
     config.moe_router_input = str(args.moe_router_input)
     config.moe_head_level = bool(args.moe_head_level)
+    config.use_pre_router = bool(args.use_pre_router)
+    config.pre_router_input = str(args.pre_router_input)
+    config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
+    config.attention_router_loss_type = str(args.attention_router_loss_type)
+    config.attention_router_loss_weight = float(args.attention_router_loss_weight)
+    config.attention_router_rho = float(args.attention_router_rho)
+    config.router_entropy_floor_loss_weight = float(args.router_entropy_floor_loss_weight)
+    config.router_entropy_floor_alpha = float(args.router_entropy_floor_alpha)
     config.moe_load_balance_loss_weight = float(args.moe_load_balance_loss_weight)
+    config.moe_router_inhibition_loss_weight = float(args.moe_router_inhibition_loss_weight)
+    config.moe_router_inhibition_temperature = float(args.moe_router_inhibition_temperature)
+    config.ground_truth_routing_mode = str(args.ground_truth_routing_mode)
+    config.moe_router_supervision_loss_weight = float(args.moe_router_supervision_loss_weight)
+    config.moe_router_supervision_detach_input = bool(args.moe_router_supervision_detach_input)
+    config.ground_truth_routing_strategy = str(args.ground_truth_routing_strategy)
+    config.ground_truth_routing_feature_layer = int(args.ground_truth_routing_feature_layer)
+    config.ground_truth_frequency_estimate_samples = int(args.ground_truth_frequency_estimate_samples)
 
 
 def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pattern, config=None):
@@ -172,10 +296,41 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_use_common_expert": bool(getattr(config, "moe_use_common_expert", False)),
                 "moe_common_intermediate_size": int(getattr(config, "moe_common_intermediate_size", 0)),
                 "moe_router_bias": bool(getattr(config, "moe_router_bias", False)),
+                "moe_router_type": str(getattr(config, "moe_router_type", "linear")),
+                "moe_router_hidden_size": int(getattr(config, "moe_router_hidden_size", 0)),
+                "moe_router_act": str(getattr(config, "moe_router_act", "silu")),
                 "moe_normalize_topk_prob": bool(getattr(config, "moe_normalize_topk_prob", True)),
                 "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
                 "moe_head_level": bool(getattr(config, "moe_head_level", False)),
+                "use_pre_router": bool(getattr(config, "use_pre_router", False)),
+                "pre_router_input": str(getattr(config, "pre_router_input", "layer_input")),
+                "pre_router_controls_attention": bool(
+                    getattr(config, "pre_router_controls_attention", False)
+                ),
+                "attention_router_loss_type": str(getattr(config, "attention_router_loss_type", "kl")),
+                "attention_router_loss_weight": float(getattr(config, "attention_router_loss_weight", 0.0)),
+                "attention_router_rho": float(getattr(config, "attention_router_rho", 0.75)),
+                "router_entropy_floor_loss_weight": float(
+                    getattr(config, "router_entropy_floor_loss_weight", 0.0)
+                ),
+                "router_entropy_floor_alpha": float(getattr(config, "router_entropy_floor_alpha", 0.5)),
                 "moe_load_balance_loss_weight": float(getattr(config, "moe_load_balance_loss_weight", 0.0)),
+                "moe_router_inhibition_loss_weight": float(
+                    getattr(config, "moe_router_inhibition_loss_weight", 0.0)
+                ),
+                "moe_router_inhibition_temperature": float(
+                    getattr(config, "moe_router_inhibition_temperature", 1.0)
+                ),
+                "ground_truth_routing_mode": str(getattr(config, "ground_truth_routing_mode", "dispatch")),
+                "moe_router_supervision_loss_weight": float(
+                    getattr(config, "moe_router_supervision_loss_weight", 0.0)
+                ),
+                "moe_router_supervision_detach_input": bool(
+                    getattr(config, "moe_router_supervision_detach_input", False)
+                ),
+                "ground_truth_routing_strategy": str(getattr(config, "ground_truth_routing_strategy", "none")),
+                "ground_truth_routing_feature_layer": int(getattr(config, "ground_truth_routing_feature_layer", 0)),
+                "ground_truth_frequency_estimate_samples": int(getattr(config, "ground_truth_frequency_estimate_samples", 0)),
             }
         )
     with open(runtime_config_path, "w", encoding="utf-8") as f:
@@ -206,8 +361,25 @@ def prepare_model(local_rank, world_size, device, args):
             f"topk={config.moe_num_experts_per_tok}, moe_intermediate={config.moe_intermediate_size}, "
             f"use_common={config.moe_use_common_expert}, "
             f"common_intermediate={config.moe_common_intermediate_size}, "
+            f"router_type={config.moe_router_type}, "
+            f"router_hidden={config.moe_router_hidden_size}, "
+            f"router_act={config.moe_router_act}, "
             f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
-            f"load_balance_weight={config.moe_load_balance_loss_weight}",
+            f"use_pre_router={config.use_pre_router}, pre_router_input={config.pre_router_input}, "
+            f"pre_router_controls_attention={config.pre_router_controls_attention}, "
+            f"attention_router_loss_type={config.attention_router_loss_type}, "
+            f"attention_router_loss_weight={config.attention_router_loss_weight}, "
+            f"attention_router_rho={config.attention_router_rho}, "
+            f"router_entropy_floor_weight={config.router_entropy_floor_loss_weight}, "
+            f"router_entropy_floor_alpha={config.router_entropy_floor_alpha}, "
+            f"load_balance_weight={config.moe_load_balance_loss_weight}, "
+            f"router_inhibition_weight={config.moe_router_inhibition_loss_weight}, "
+            f"router_inhibition_temperature={config.moe_router_inhibition_temperature}, "
+            f"ground_truth_mode={config.ground_truth_routing_mode}, "
+            f"router_supervision_weight={config.moe_router_supervision_loss_weight}, "
+            f"router_supervision_detach_input={config.moe_router_supervision_detach_input}, "
+            f"ground_truth_strategy={config.ground_truth_routing_strategy}, "
+            f"ground_truth_feature_layer={config.ground_truth_routing_feature_layer}",
             flush=True,
         )
     model = MyQwen3ForCausalLM(config).to(device)
@@ -237,13 +409,49 @@ def prepare_data(local_rank, world_size, args):
             sampling_distribution=args.synthetic_sampling_distribution,
             zipf_alpha=args.synthetic_zipf_alpha,
             zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
+            return_metadata=args.ground_truth_routing_strategy != "none",
         )
     else:
+        if args.ground_truth_routing_strategy != "none":
+            raise ValueError("Ground-truth routing currently requires `dataset_type=hierarchical_pattern`.")
         dataset = TokenizedJSONLData(args.data_dir, args.seq_len, tokenizer)
     print(f"Construct dataset, total {len(dataset)} samples.")
     sampler = DistributedSampler(dataset, num_replicas=world_size, rank=local_rank, shuffle=args.data_shuffle)
     dataloader = DataLoader(dataset, batch_size=args.local_batch_size, num_workers=args.num_workers, sampler=sampler)
-    return dataloader
+    ground_truth_expert_mapping = build_ground_truth_expert_mapping(dataset, args) if args.ground_truth_routing_strategy != "none" else None
+    return dataloader, ground_truth_expert_mapping
+
+
+def build_ground_truth_expert_mapping(dataset, args):
+    if args.ground_truth_routing_feature_layer < 0 or args.ground_truth_routing_feature_layer >= args.synthetic_num_hierarchy_layers:
+        raise ValueError(
+            "`ground_truth_routing_feature_layer` must be in [0, synthetic_num_hierarchy_layers), "
+            f"got {args.ground_truth_routing_feature_layer}."
+        )
+
+    num_features = int(args.synthetic_num_units_per_layer)
+    num_experts = int(args.moe_num_unique_experts)
+    if args.ground_truth_routing_strategy == "hash":
+        return torch.remainder(torch.arange(num_features, dtype=torch.long), num_experts)
+
+    if args.ground_truth_routing_strategy != "frequency_balanced":
+        raise ValueError(f"Unsupported ground-truth routing strategy: {args.ground_truth_routing_strategy}")
+
+    counts = torch.zeros(num_features, dtype=torch.float64)
+    estimate_samples = min(int(args.ground_truth_frequency_estimate_samples), len(dataset))
+    for idx in range(estimate_samples):
+        metadata = dataset.get_metadata(idx)["unit_ids_by_layer"][:-1, args.ground_truth_routing_feature_layer]
+        valid = metadata >= 0
+        if valid.any():
+            counts += torch.bincount(metadata[valid], minlength=num_features).to(counts.dtype)
+
+    expert_loads = torch.zeros(num_experts, dtype=torch.float64)
+    mapping = torch.empty(num_features, dtype=torch.long)
+    for feature_id in torch.argsort(counts, descending=True).tolist():
+        expert_id = int(torch.argmin(expert_loads).item())
+        mapping[feature_id] = expert_id
+        expert_loads[expert_id] += counts[feature_id]
+    return mapping
 
 
 def prepare_loss_optimizer(model, args):
@@ -262,21 +470,85 @@ def prepare_loss_optimizer(model, args):
     return token_loss_fn, optimizer, lr_scheduler, scaler
 
 
-def forward_step(local_rank, device, source, target, model, token_loss_fn, args):
+def set_training_seed(args, local_rank):
+    if args.training_seed < 0:
+        return
+    seed = int(args.training_seed) + int(local_rank)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def make_ground_truth_expert_ids(metadata, ground_truth_expert_mapping, args, device):
+    if ground_truth_expert_mapping is None:
+        return None
+    feature_ids = metadata[:, :, args.ground_truth_routing_feature_layer].to(device)
+    mapping = ground_truth_expert_mapping.to(device)
+    safe_feature_ids = feature_ids.clamp_min(0)
+    ground_truth_expert_ids = mapping[safe_feature_ids]
+    return ground_truth_expert_ids.masked_fill(feature_ids < 0, 0)
+
+
+def forward_step(local_rank, device, source, target, model, token_loss_fn, args, metadata=None, ground_truth_expert_mapping=None):
     source, target = source.to(device), target.to(device)
     use_load_balance = args.moe_load_balance_loss_weight > 0
+    use_router_inhibition = args.moe_router_inhibition_loss_weight > 0
+    use_attention_router_loss = args.attention_router_loss_weight > 0
+    use_router_entropy_floor = args.router_entropy_floor_loss_weight > 0
+    use_router_supervision = args.ground_truth_routing_mode == "supervise"
+    ground_truth_expert_ids = None
+    router_supervision_expert_ids = None
+    if metadata is not None:
+        mapped_ground_truth_expert_ids = make_ground_truth_expert_ids(metadata, ground_truth_expert_mapping, args, device)
+        if args.ground_truth_routing_mode == "dispatch":
+            ground_truth_expert_ids = mapped_ground_truth_expert_ids
+        elif args.ground_truth_routing_mode == "supervise":
+            router_supervision_expert_ids = mapped_ground_truth_expert_ids
     output = model(
         source,
         output_hidden_states=False,
         output_router_aux_loss=use_load_balance,
+        output_router_inhibition_loss=use_router_inhibition,
+        output_router_supervision_loss=use_router_supervision,
+        output_attention_router_loss=use_attention_router_loss,
+        output_router_entropy_floor_loss=use_router_entropy_floor,
+        router_supervision_detach_input=args.moe_router_supervision_detach_input,
+        ground_truth_expert_ids=ground_truth_expert_ids,
+        router_supervision_expert_ids=router_supervision_expert_ids,
     )
     target = target.reshape(-1)
     token_loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
+    loss = token_loss
+    load_balance_loss = None
+    router_inhibition_loss = None
+    router_supervision_loss = None
+    attention_router_loss = None
+    router_entropy_floor_loss = None
     if use_load_balance:
-        loss = token_loss + args.moe_load_balance_loss_weight * output.moe_load_balance_loss
-    else:
-        loss = token_loss
-    return loss
+        load_balance_loss = output.moe_load_balance_loss
+        loss = loss + args.moe_load_balance_loss_weight * load_balance_loss
+    if use_router_inhibition:
+        router_inhibition_loss = output.moe_router_inhibition_loss
+        loss = loss + args.moe_router_inhibition_loss_weight * router_inhibition_loss
+    if use_router_supervision:
+        router_supervision_loss = output.moe_router_supervision_loss
+        loss = loss + args.moe_router_supervision_loss_weight * router_supervision_loss
+    if use_attention_router_loss:
+        attention_router_loss = output.attention_router_loss
+        loss = loss + args.attention_router_loss_weight * attention_router_loss
+    if use_router_entropy_floor:
+        router_entropy_floor_loss = output.router_entropy_floor_loss
+        loss = loss + args.router_entropy_floor_loss_weight * router_entropy_floor_loss
+    return (
+        loss,
+        token_loss.detach(),
+        load_balance_loss,
+        router_inhibition_loss,
+        router_supervision_loss,
+        attention_router_loss,
+        router_entropy_floor_loss,
+    )
 
 
 def update_step(optimizer, scheduler):
@@ -287,10 +559,11 @@ def update_step(optimizer, scheduler):
 
 def thread_main(local_rank, world_size, device, args):
     print(f"running on device {local_rank}")
+    set_training_seed(args, local_rank)
     if local_rank == 0 and args.ckpt_dir and not os.path.exists(args.ckpt_dir):
         os.makedirs(args.ckpt_dir)
 
-    dataloader = prepare_data(local_rank, world_size, args)
+    dataloader, ground_truth_expert_mapping = prepare_data(local_rank, world_size, args)
     model = prepare_model(local_rank, world_size, device, args)
     real_model = model.module if world_size > 1 else model
     if local_rank == 0:
@@ -307,12 +580,27 @@ def thread_main(local_rank, world_size, device, args):
     if gradient_accumulation_steps < 1:
         raise ValueError("global_batch_size must be >= local_batch_size * world_size")
 
-    for local_batch_idx, (source, target, real_lens) in enumerate(dataloader, 1):
+    for local_batch_idx, batch in enumerate(dataloader, 1):
+        if len(batch) == 4:
+            source, target, real_lens, metadata = batch
+        else:
+            source, target, real_lens = batch
+            metadata = None
         global_batch_idx = local_batch_idx // gradient_accumulation_steps
         start_time = time.time()
 
         with torch.amp.autocast(dtype=torch.bfloat16, device_type=device.type, enabled=autocast_enabled):
-            loss = forward_step(local_rank, device, source, target, model, token_loss_fn, args)
+            loss, token_loss, load_balance_loss, router_inhibition_loss, router_supervision_loss, attention_router_loss, router_entropy_floor_loss = forward_step(
+                local_rank,
+                device,
+                source,
+                target,
+                model,
+                token_loss_fn,
+                args,
+                metadata=metadata,
+                ground_truth_expert_mapping=ground_truth_expert_mapping,
+            )
 
         if world_size == 1:
             (loss / gradient_accumulation_steps).backward()
@@ -333,7 +621,23 @@ def thread_main(local_rank, world_size, device, args):
 
         batch_time = time.time() - start_time
         if local_rank == 0:
-            print(f"batch: {global_batch_idx}-{local_batch_idx}, loss: {loss:.3f}, batch_time: {batch_time:.3f}", flush=True)
+            metrics = [
+                f"batch: {global_batch_idx}-{local_batch_idx}",
+                f"loss: {loss:.3f}",
+                f"token_loss: {token_loss:.3f}",
+            ]
+            if load_balance_loss is not None:
+                metrics.append(f"load_balance_loss: {load_balance_loss.detach():.3f}")
+            if router_inhibition_loss is not None:
+                metrics.append(f"router_inhib_loss: {router_inhibition_loss.detach():.3f}")
+            if router_supervision_loss is not None:
+                metrics.append(f"router_sup_loss: {router_supervision_loss.detach():.3f}")
+            if attention_router_loss is not None:
+                metrics.append(f"attn_router_loss: {attention_router_loss.detach():.3f}")
+            if router_entropy_floor_loss is not None:
+                metrics.append(f"router_entropy_floor_loss: {router_entropy_floor_loss.detach():.3f}")
+            metrics.append(f"batch_time: {batch_time:.3f}")
+            print(", ".join(metrics), flush=True)
 
         if global_batch_idx >= args.total_training_steps:
             if local_rank == 0 and args.ckpt_dir:

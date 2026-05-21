@@ -1,0 +1,456 @@
+{
+  "config": {
+    "config_dir": "fdong/Qwen3-0.6B",
+    "checkpoint_root": "fdong/checkpoints",
+    "runs": "inverse-kv-supervised-gate-zipf-high-hash,inverse-kv-mlp-gate-hidden-supervised-zipf-high-hash,inverse-kv-mlp-gate-attention_output-supervised-zipf-high-hash",
+    "checkpoint_step": 5000,
+    "output_path": "fdong/experiments/inverse_kv_indexing_step5000.json",
+    "top_m_values": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null
+  },
+  "device": "cpu",
+  "runs": [
+    {
+      "run": "inverse-kv-supervised-gate-zipf-high-hash",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "fdong/checkpoints/inverse-kv-supervised-gate-zipf-high-hash/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "hidden",
+        "moe_head_level": false,
+        "moe_load_balance_loss_weight": 0.0,
+        "oracle_routing_mode": "supervise",
+        "moe_router_supervision_loss_weight": 1.0,
+        "oracle_routing_strategy": "hash",
+        "oracle_routing_feature_layer": 1,
+        "oracle_frequency_estimate_samples": 4096
+      },
+      "full_attention": {
+        "loss": 0.20901388674974442,
+        "accuracy": 0.939544677734375,
+        "count": 32768
+      },
+      "inverse_kv": {
+        "early_proxy_top1": {
+          "loss": 2.9561005383729935,
+          "accuracy": 0.6131591796875,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.23307131469406167,
+          "mean_proxy_true_router_input_cosine": 0.42168461158871645,
+          "mean_attention_output_cosine_vs_dense": 0.33889811641226214,
+          "mean_attention_output_mse_vs_dense": 0.015290468407329174,
+          "mean_topm_any_overlap_with_true": 0.38732910156249994,
+          "mean_topm_jaccard_with_true": 0.38732910156249994,
+          "mean_topm_exact_match_with_true": 0.38732910156249994
+        },
+        "early_proxy_top2": {
+          "loss": 2.0440428368747234,
+          "accuracy": 0.734954833984375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.4895971102977363,
+          "mean_proxy_true_router_input_cosine": 0.5170011178900799,
+          "mean_attention_output_cosine_vs_dense": 0.5201912506793936,
+          "mean_attention_output_mse_vs_dense": 0.010106237333578369,
+          "mean_topm_any_overlap_with_true": 0.8937276204427086,
+          "mean_topm_jaccard_with_true": 0.5661044660955667,
+          "mean_topm_exact_match_with_true": 0.4022928873697917
+        },
+        "early_proxy_top3": {
+          "loss": 1.0702141746878624,
+          "accuracy": 0.84759521484375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.7513682448019193,
+          "mean_proxy_true_router_input_cosine": 0.6285830133905013,
+          "mean_attention_output_cosine_vs_dense": 0.7410676522801319,
+          "mean_attention_output_mse_vs_dense": 0.005102426697703779,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 0.7754414876302081,
+          "mean_topm_exact_match_with_true": 0.5508829752604166
+        },
+        "early_proxy_top4": {
+          "loss": 0.20901388674974442,
+          "accuracy": 0.939544677734375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 0.7554878890514374,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top1": {
+          "loss": 0.3325355127453804,
+          "accuracy": 0.924224853515625,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.3642552493438321,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9362863066295785,
+          "mean_attention_output_mse_vs_dense": 0.0014350149510088765,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top2": {
+          "loss": 0.24952788231894374,
+          "accuracy": 0.9345703125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.5838557365998195,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9695564676076175,
+          "mean_attention_output_mse_vs_dense": 0.0006304654403569051,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top3": {
+          "loss": 0.22127221385017037,
+          "accuracy": 0.937896728515625,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.7985597945886646,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9890300215532384,
+          "mean_attention_output_mse_vs_dense": 0.00022057808178033156,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top4": {
+          "loss": 0.20901388674974442,
+          "accuracy": 0.939544677734375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        }
+      }
+    },
+    {
+      "run": "inverse-kv-mlp-gate-hidden-supervised-zipf-high-hash",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "fdong/checkpoints/inverse-kv-mlp-gate-hidden-supervised-zipf-high-hash/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_router_type": "mlp",
+        "moe_router_hidden_size": 128,
+        "moe_router_act": "silu",
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "hidden",
+        "moe_head_level": false,
+        "moe_load_balance_loss_weight": 0.0,
+        "oracle_routing_mode": "supervise",
+        "moe_router_supervision_loss_weight": 1.0,
+        "moe_router_supervision_detach_input": false,
+        "oracle_routing_strategy": "hash",
+        "oracle_routing_feature_layer": 1,
+        "oracle_frequency_estimate_samples": 4096
+      },
+      "full_attention": {
+        "loss": 0.2090428238734603,
+        "accuracy": 0.939605712890625,
+        "count": 32768
+      },
+      "inverse_kv": {
+        "early_proxy_top1": {
+          "loss": 2.381755083799362,
+          "accuracy": 0.70257568359375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.25674830959850725,
+          "mean_proxy_true_router_input_cosine": 0.5757969816525775,
+          "mean_attention_output_cosine_vs_dense": 0.4317178850372632,
+          "mean_attention_output_mse_vs_dense": 0.00692567369454385,
+          "mean_topm_any_overlap_with_true": 0.4356892903645834,
+          "mean_topm_jaccard_with_true": 0.4356892903645834,
+          "mean_topm_exact_match_with_true": 0.4356892903645834
+        },
+        "early_proxy_top2": {
+          "loss": 1.6988759264349937,
+          "accuracy": 0.78662109375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.5161413157705872,
+          "mean_proxy_true_router_input_cosine": 0.6481514411667982,
+          "mean_attention_output_cosine_vs_dense": 0.6156493971745175,
+          "mean_attention_output_mse_vs_dense": 0.0042283609315442545,
+          "mean_topm_any_overlap_with_true": 0.9082336425781248,
+          "mean_topm_jaccard_with_true": 0.5780198903133472,
+          "mean_topm_exact_match_with_true": 0.4129130045572917
+        },
+        "early_proxy_top3": {
+          "loss": 0.7505133301019669,
+          "accuracy": 0.88226318359375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.7541159482139927,
+          "mean_proxy_true_router_input_cosine": 0.7151815115163724,
+          "mean_attention_output_cosine_vs_dense": 0.7901976381738982,
+          "mean_attention_output_mse_vs_dense": 0.0020384411812604713,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 0.7524922688802083,
+          "mean_topm_exact_match_with_true": 0.5049845377604165
+        },
+        "early_proxy_top4": {
+          "loss": 0.2090428238734603,
+          "accuracy": 0.939605712890625,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 0.7921434299399455,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top1": {
+          "loss": 0.31615472538396716,
+          "accuracy": 0.9268798828125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.36424387533833646,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9223214530696472,
+          "mean_attention_output_mse_vs_dense": 0.0009169432493460284,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top2": {
+          "loss": 0.2522262488491833,
+          "accuracy": 0.934356689453125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.5929784899934383,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9581856951117518,
+          "mean_attention_output_mse_vs_dense": 0.000442639493636913,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top3": {
+          "loss": 0.22508033458143473,
+          "accuracy": 0.9376220703125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.799920670316601,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9824414302905401,
+          "mean_attention_output_mse_vs_dense": 0.00017429005716470178,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top4": {
+          "loss": 0.2090428238734603,
+          "accuracy": 0.939605712890625,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        }
+      }
+    },
+    {
+      "run": "inverse-kv-mlp-gate-attention_output-supervised-zipf-high-hash",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "fdong/checkpoints/inverse-kv-mlp-gate-attention_output-supervised-zipf-high-hash/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_router_type": "mlp",
+        "moe_router_hidden_size": 128,
+        "moe_router_act": "silu",
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "attention_output",
+        "moe_head_level": false,
+        "moe_load_balance_loss_weight": 0.0,
+        "oracle_routing_mode": "supervise",
+        "moe_router_supervision_loss_weight": 1.0,
+        "moe_router_supervision_detach_input": false,
+        "oracle_routing_strategy": "hash",
+        "oracle_routing_feature_layer": 1,
+        "oracle_frequency_estimate_samples": 4096
+      },
+      "full_attention": {
+        "loss": 0.2090347814373672,
+        "accuracy": 0.939544677734375,
+        "count": 32768
+      },
+      "inverse_kv": {
+        "early_proxy_top1": {
+          "loss": 2.806753359735012,
+          "accuracy": 0.660858154296875,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.2256078845246883,
+          "mean_proxy_true_router_input_cosine": 0.2645180964221557,
+          "mean_attention_output_cosine_vs_dense": 0.38389399213095504,
+          "mean_attention_output_mse_vs_dense": 0.009511722921160983,
+          "mean_topm_any_overlap_with_true": 0.33996582031250006,
+          "mean_topm_jaccard_with_true": 0.33996582031250006,
+          "mean_topm_exact_match_with_true": 0.33996582031250006
+        },
+        "early_proxy_top2": {
+          "loss": 2.166827045381069,
+          "accuracy": 0.73419189453125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.47380550514681746,
+          "mean_proxy_true_router_input_cosine": 0.2896711536062261,
+          "mean_attention_output_cosine_vs_dense": 0.5325243938714267,
+          "mean_attention_output_mse_vs_dense": 0.006537923055778566,
+          "mean_topm_any_overlap_with_true": 0.8685302734375,
+          "mean_topm_jaccard_with_true": 0.48206923933078855,
+          "mean_topm_exact_match_with_true": 0.28883870442708337
+        },
+        "early_proxy_top3": {
+          "loss": 1.0312527492642403,
+          "accuracy": 0.84368896484375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.7405738329949967,
+          "mean_proxy_true_router_input_cosine": 0.32673732982948417,
+          "mean_attention_output_cosine_vs_dense": 0.7770338915288447,
+          "mean_attention_output_mse_vs_dense": 0.0025439277621141327,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 0.6963907877604169,
+          "mean_topm_exact_match_with_true": 0.3927815755208334
+        },
+        "early_proxy_top4": {
+          "loss": 0.2090347814373672,
+          "accuracy": 0.939544677734375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 0.35867033728087944,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top1": {
+          "loss": 0.3213400524109602,
+          "accuracy": 0.924652099609375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.36431980883981296,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9510943970332544,
+          "mean_attention_output_mse_vs_dense": 0.0008684193044246057,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top2": {
+          "loss": 0.25769299268722534,
+          "accuracy": 0.93341064453125,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.5959541541072015,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.9754171408712865,
+          "mean_attention_output_mse_vs_dense": 0.00038662475511349237,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top3": {
+          "loss": 0.22423648601397872,
+          "accuracy": 0.937255859375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 0.8059604274319223,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 0.988947710643212,
+          "mean_attention_output_mse_vs_dense": 0.00015581810028682716,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        },
+        "true_router_top4": {
+          "loss": 0.2090347814373672,
+          "accuracy": 0.939544677734375,
+          "count": 32768,
+          "mean_kv_selected_fraction": 1.0,
+          "mean_proxy_true_router_input_cosine": 1.0,
+          "mean_attention_output_cosine_vs_dense": 1.0,
+          "mean_attention_output_mse_vs_dense": 0.0,
+          "mean_topm_any_overlap_with_true": 1.0,
+          "mean_topm_jaccard_with_true": 1.0,
+          "mean_topm_exact_match_with_true": 1.0
+        }
+      }
+    }
+  ]
+}

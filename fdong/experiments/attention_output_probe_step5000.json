@@ -1,0 +1,457 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "ckpt_file": "../checkpoints/inverse-kv-local-h128-l3-top1/5000.pth",
+    "output_path": "../experiments/attention_output_probe_step5000.json",
+    "seq_len": 128,
+    "num_train_samples": 256,
+    "num_test_samples": 128,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "uniform",
+    "synthetic_zipf_alpha": 1.0,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null,
+    "use_moe": true,
+    "moe_num_unique_experts": 4,
+    "moe_num_experts_per_tok": 1,
+    "moe_intermediate_size": 128,
+    "moe_use_common_expert": false,
+    "moe_common_intermediate_size": 128,
+    "moe_router_bias": false,
+    "moe_no_normalize_topk_prob": false,
+    "moe_router_input": "hidden",
+    "moe_head_level": false,
+    "probe_epochs": 60,
+    "probe_lr": 0.05,
+    "probe_batch_size": 4096,
+    "probe_weight_decay": 0.0,
+    "max_probe_tokens": 32768,
+    "probe_seed": 123
+  },
+  "device": "cpu",
+  "majority_baselines": {
+    "local_slot": {
+      "train": 0.040771484375,
+      "test": 0.037841796875
+    },
+    "higher_unit": {
+      "train": 0.02197265625,
+      "test": 0.0244140625
+    }
+  },
+  "layers": [
+    {
+      "layer": 0,
+      "probes": {
+        "layer_input": {
+          "local_slot": {
+            "train_accuracy": 0.72088623046875,
+            "test_accuracy": 0.71917724609375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.2119140625,
+            "test_accuracy": 0.203125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "layer_output": {
+          "local_slot": {
+            "train_accuracy": 0.992401123046875,
+            "test_accuracy": 0.98773193359375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.705078125,
+            "test_accuracy": 0.646728515625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "attn_output_wo_residual": {
+          "local_slot": {
+            "train_accuracy": 0.992340087890625,
+            "test_accuracy": 0.97735595703125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.685394287109375,
+            "test_accuracy": 0.62799072265625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_attn_output_flat": {
+          "local_slot": {
+            "train_accuracy": 0.9976806640625,
+            "test_accuracy": 0.98590087890625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.75177001953125,
+            "test_accuracy": 0.66815185546875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_0_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.618408203125,
+            "test_accuracy": 0.6099853515625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.32086181640625,
+            "test_accuracy": 0.2945556640625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_1_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.65179443359375,
+            "test_accuracy": 0.64031982421875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.33477783203125,
+            "test_accuracy": 0.30633544921875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_2_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.615081787109375,
+            "test_accuracy": 0.59954833984375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.3240966796875,
+            "test_accuracy": 0.304443359375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_3_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.609222412109375,
+            "test_accuracy": 0.59234619140625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.31707763671875,
+            "test_accuracy": 0.30450439453125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        }
+      }
+    },
+    {
+      "layer": 1,
+      "probes": {
+        "layer_input": {
+          "local_slot": {
+            "train_accuracy": 0.992401123046875,
+            "test_accuracy": 0.98773193359375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.705078125,
+            "test_accuracy": 0.646728515625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "layer_output": {
+          "local_slot": {
+            "train_accuracy": 0.998016357421875,
+            "test_accuracy": 0.99664306640625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.8045654296875,
+            "test_accuracy": 0.752685546875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "attn_output_wo_residual": {
+          "local_slot": {
+            "train_accuracy": 0.957000732421875,
+            "test_accuracy": 0.9251708984375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.792755126953125,
+            "test_accuracy": 0.72747802734375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_attn_output_flat": {
+          "local_slot": {
+            "train_accuracy": 0.989654541015625,
+            "test_accuracy": 0.95062255859375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.8487548828125,
+            "test_accuracy": 0.75775146484375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_0_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.6510009765625,
+            "test_accuracy": 0.62982177734375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.5447998046875,
+            "test_accuracy": 0.5174560546875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_1_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.592803955078125,
+            "test_accuracy": 0.58331298828125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.600067138671875,
+            "test_accuracy": 0.5645751953125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_2_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.59228515625,
+            "test_accuracy": 0.56884765625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.5262451171875,
+            "test_accuracy": 0.4893798828125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_3_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.59466552734375,
+            "test_accuracy": 0.5765380859375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.547576904296875,
+            "test_accuracy": 0.510986328125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        }
+      }
+    },
+    {
+      "layer": 2,
+      "probes": {
+        "layer_input": {
+          "local_slot": {
+            "train_accuracy": 0.998016357421875,
+            "test_accuracy": 0.99664306640625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.8045654296875,
+            "test_accuracy": 0.752685546875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "layer_output": {
+          "local_slot": {
+            "train_accuracy": 0.95172119140625,
+            "test_accuracy": 0.95135498046875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.766357421875,
+            "test_accuracy": 0.7257080078125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "attn_output_wo_residual": {
+          "local_slot": {
+            "train_accuracy": 0.965667724609375,
+            "test_accuracy": 0.94110107421875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.804290771484375,
+            "test_accuracy": 0.7578125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_attn_output_flat": {
+          "local_slot": {
+            "train_accuracy": 0.99566650390625,
+            "test_accuracy": 0.96630859375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.876617431640625,
+            "test_accuracy": 0.791259765625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_0_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.6470947265625,
+            "test_accuracy": 0.63037109375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.59454345703125,
+            "test_accuracy": 0.5555419921875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_1_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.6016845703125,
+            "test_accuracy": 0.58380126953125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.55767822265625,
+            "test_accuracy": 0.521728515625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_2_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.7203369140625,
+            "test_accuracy": 0.70416259765625,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.5828857421875,
+            "test_accuracy": 0.556396484375,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        },
+        "head_3_attn_output": {
+          "local_slot": {
+            "train_accuracy": 0.666259765625,
+            "test_accuracy": 0.63555908203125,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          },
+          "higher_unit": {
+            "train_accuracy": 0.58123779296875,
+            "test_accuracy": 0.55633544921875,
+            "train_count": 32768,
+            "test_count": 16384,
+            "num_classes": 64
+          }
+        }
+      }
+    }
+  ]
+}
