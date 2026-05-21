@@ -61,6 +61,10 @@ ATTENTION_CLUSTER_TEMPERATURE=${ATTENTION_CLUSTER_TEMPERATURE:-1.0}
 ATTENTION_CLUSTER_TOPK=${ATTENTION_CLUSTER_TOPK:-4}
 ATTENTION_CLUSTER_INCLUDE_SELF=${ATTENTION_CLUSTER_INCLUDE_SELF:-false}
 ATTENTION_CLUSTER_DETACH_ATTENTION=${ATTENTION_CLUSTER_DETACH_ATTENTION:-true}
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=${ATTENTION_CLUSTER_NEGATIVE_WEIGHT:-0.01}
+ATTENTION_CLUSTER_NEGATIVE_FEATURE_LAYER=${ATTENTION_CLUSTER_NEGATIVE_FEATURE_LAYER:-1}
+ATTENTION_CLUSTER_NEGATIVE_HISTORY_ONLY=${ATTENTION_CLUSTER_NEGATIVE_HISTORY_ONLY:-false}
+MOE_LOAD_BALANCE_LOSS_WEIGHT=${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}
 EXPERT_REPULSION_WEIGHT=${EXPERT_REPULSION_WEIGHT:-0.0}
 ===========================================================
 EOF
@@ -120,6 +124,7 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --moe_normalize_topk_prob "${MOE_NORMALIZE_TOPK_PROB:-true}" \
   --moe_router_input "${MOE_ROUTER_INPUT:-attention_output}" \
   --moe_head_level "${MOE_HEAD_LEVEL:-false}" \
+  --moe_load_balance_loss_weight "${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}" \
   --gate_inhibition_weight "${GATE_INHIBITION_WEIGHT:-0.0}" \
   --gate_inhibition_temperature "${GATE_INHIBITION_TEMPERATURE:-1.0}" \
   --attention_cluster_weight "${ATTENTION_CLUSTER_WEIGHT:-0.05}" \
@@ -127,6 +132,9 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --attention_cluster_topk "${ATTENTION_CLUSTER_TOPK:-4}" \
   --attention_cluster_include_self "${ATTENTION_CLUSTER_INCLUDE_SELF:-false}" \
   --attention_cluster_detach_attention "${ATTENTION_CLUSTER_DETACH_ATTENTION:-true}" \
+  --attention_cluster_negative_weight "${ATTENTION_CLUSTER_NEGATIVE_WEIGHT:-0.01}" \
+  --attention_cluster_negative_feature_layer "${ATTENTION_CLUSTER_NEGATIVE_FEATURE_LAYER:-1}" \
+  --attention_cluster_negative_history_only "${ATTENTION_CLUSTER_NEGATIVE_HISTORY_ONLY:-false}" \
   --expert_repulsion_weight "${EXPERT_REPULSION_WEIGHT:-0.0}" \
   --expert_repulsion_margin "${EXPERT_REPULSION_MARGIN:-0.0}" \
   "$@"

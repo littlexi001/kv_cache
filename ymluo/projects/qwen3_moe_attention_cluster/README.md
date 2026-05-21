@@ -18,12 +18,26 @@ same_expert_prob(i, j) = dot(router_prob_i, router_prob_j)
 loss = - attention(i, j) * log(same_expert_prob(i, j))
 ```
 
+To avoid the trivial solution where every token enters one expert, the project
+also supports a negative-pair term:
+
+```text
+negative pairs = token pairs from different higher-level units
+loss_neg = -log(1 - dot(router_prob_i, router_prob_j))
+```
+
+This pushes different higher-level units away from each other in router space.
+By default the negative feature layer is `1`, which is the higher-level unit id
+in the fdong hierarchical metadata.
+
 By default only the top attended history tokens are used:
 
 ```text
 ATTENTION_CLUSTER_TOPK=4
 ATTENTION_CLUSTER_INCLUDE_SELF=false
 ATTENTION_CLUSTER_DETACH_ATTENTION=true
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01
+MOE_LOAD_BALANCE_LOSS_WEIGHT=0.0
 ```
 
 Run:
@@ -45,6 +59,8 @@ Useful overrides:
 
 ```bash
 ATTENTION_CLUSTER_WEIGHT=0.1 \
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01 \
+MOE_LOAD_BALANCE_LOSS_WEIGHT=0.01 \
 ATTENTION_CLUSTER_TOPK=8 \
 MOE_HEAD_LEVEL=false \
 MOE_ROUTER_INPUT=attention_output \
@@ -63,6 +79,8 @@ MOE_HEAD_LEVEL=false
 MOE_NUM_EXPERTS_PER_TOK=1
 GATE_INHIBITION_WEIGHT=0.0
 ATTENTION_CLUSTER_WEIGHT=0.05
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01
+MOE_LOAD_BALANCE_LOSS_WEIGHT=0.0
 EXPERT_REPULSION_WEIGHT=0.0
 ```
 
@@ -73,6 +91,8 @@ Main metrics:
 - `higher_mass_by_layer`: attention mass on same higher-level history tokens;
 - `expert_load_by_layer`: per-layer expert load;
 - `attn_cluster`: training value of the attention-cluster auxiliary loss.
+- `attn_neg`: training value of the different-higher-unit negative-pair loss;
+- `load_balance`: training value of optional MoE load-balance loss.
 
 Eval a checkpoint:
 

@@ -183,6 +183,7 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--moe_normalize_topk_prob", type=str2bool, default=True)
     parser.add_argument("--moe_router_input", choices=["hidden", "attention_output"], default="attention_output")
     parser.add_argument("--moe_head_level", type=str2bool, default=True)
+    parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
 
     parser.add_argument("--single_token_update", type=str2bool, default=defaults["single_token_update"])
     parser.add_argument("--single_token_position", choices=["random", "last", "cycle"], default="random")
@@ -198,6 +199,9 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     )
     parser.add_argument("--attention_cluster_include_self", type=str2bool, default=False)
     parser.add_argument("--attention_cluster_detach_attention", type=str2bool, default=True)
+    parser.add_argument("--attention_cluster_negative_weight", type=float, default=0.0)
+    parser.add_argument("--attention_cluster_negative_feature_layer", type=int, default=1)
+    parser.add_argument("--attention_cluster_negative_history_only", type=str2bool, default=False)
     parser.add_argument("--expert_repulsion_weight", type=float, default=defaults["expert_repulsion_weight"])
     parser.add_argument("--expert_repulsion_margin", type=float, default=0.0)
     parser.add_argument("--orthogonalize_gate", type=str2bool, default=defaults["orthogonalize_gate"])
@@ -879,6 +883,89 @@ def attention_cluster_loss(
     return torch.stack(losses).mean()
 
 
+def negative_router_pair_loss_for_probs(
+    router_probs: torch.Tensor,
+    feature_ids: torch.Tensor,
+    history_only: bool,
+) -> torch.Tensor | None:
+    if router_probs.dim() != 3:
+        raise ValueError(f"router_probs must have shape [batch, seq, experts], got {tuple(router_probs.shape)}")
+    same_expert_prob = torch.einsum("bqe,bke->bqk", router_probs.float(), router_probs.float())
+    different_feature = feature_ids[:, :, None] != feature_ids[:, None, :]
+    valid = (feature_ids[:, :, None] >= 0) & (feature_ids[:, None, :] >= 0)
+    not_self = ~torch.eye(feature_ids.shape[1], dtype=torch.bool, device=feature_ids.device)[None, :, :]
+    mask = different_feature & valid & not_self
+    if history_only:
+        history = torch.tril(
+            torch.ones(feature_ids.shape[1], feature_ids.shape[1], dtype=torch.bool, device=feature_ids.device),
+            diagonal=-1,
+        )
+        mask = mask & history[None, :, :]
+    if not bool(mask.any()):
+        return None
+    return -torch.log((1.0 - same_expert_prob[mask]).clamp_min(1e-8)).mean()
+
+
+def attention_cluster_negative_pair_loss(
+    router_logits: list[torch.Tensor],
+    metadata: torch.Tensor,
+    model: MyQwen3ForCausalLM,
+    args: argparse.Namespace,
+) -> torch.Tensor | None:
+    if not router_logits:
+        return None
+    feature_layer = int(args.attention_cluster_negative_feature_layer)
+    if feature_layer < 0:
+        return None
+    feature_layer = min(feature_layer, metadata.shape[-1] - 1)
+    feature_ids = metadata[:, :, feature_layer]
+    losses = []
+    num_layers = int(model.config.num_hidden_layers)
+    num_heads = int(model.config.num_attention_heads)
+    num_experts = int(model.config.moe_num_unique_experts)
+    moe_head_level = bool(model.config.moe_head_level)
+    temp = max(float(args.attention_cluster_temperature), 1e-6)
+    if moe_head_level:
+        if len(router_logits) < num_layers * num_heads:
+            return None
+        logit_idx = 0
+        for _layer_idx in range(num_layers):
+            head_losses = []
+            batch = metadata.shape[0]
+            seq_len = metadata.shape[1]
+            for _head_idx in range(num_heads):
+                logits = router_logits[logit_idx].reshape(batch, seq_len, num_experts)
+                logit_idx += 1
+                probs = F.softmax(logits.float() / temp, dim=-1)
+                loss = negative_router_pair_loss_for_probs(
+                    probs,
+                    feature_ids,
+                    bool(args.attention_cluster_negative_history_only),
+                )
+                if loss is not None:
+                    head_losses.append(loss)
+            if head_losses:
+                losses.append(torch.stack(head_losses).mean())
+    else:
+        if len(router_logits) < num_layers:
+            return None
+        batch = metadata.shape[0]
+        seq_len = metadata.shape[1]
+        for layer_idx in range(num_layers):
+            logits = router_logits[layer_idx].reshape(batch, seq_len, num_experts)
+            probs = F.softmax(logits.float() / temp, dim=-1)
+            loss = negative_router_pair_loss_for_probs(
+                probs,
+                feature_ids,
+                bool(args.attention_cluster_negative_history_only),
+            )
+            if loss is not None:
+                losses.append(loss)
+    if not losses:
+        return None
+    return torch.stack(losses).mean()
+
+
 def same_feature_same_expert_rate(labels: torch.Tensor, feature_ids: torch.Tensor) -> float | None:
     if labels is None:
         return None
@@ -1150,6 +1237,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
         "prediction_loss_sum": 0.0,
         "gate_inhibition_loss_sum": 0.0,
         "attention_cluster_loss_sum": 0.0,
+        "attention_negative_loss_sum": 0.0,
+        "load_balance_loss_sum": 0.0,
         "expert_repulsion_loss_sum": 0.0,
         "forced_router_loss_sum": 0.0,
         "correct": 0,
@@ -1172,8 +1261,10 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
             tracker.enabled = (
                 args.gate_inhibition_weight > 0.0
                 or args.attention_cluster_weight > 0.0
+                or args.attention_cluster_negative_weight > 0.0
                 or (forced_ids is not None and args.forced_warmup_router_loss_weight > 0.0)
             )
+            use_load_balance = args.moe_load_balance_loss_weight > 0.0
             with autocast_context(args, device):
                 output = model(
                     batch.source,
@@ -1181,6 +1272,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                     output_attentions=args.attention_cluster_weight > 0.0,
                     output_expert_labels=False,
                     output_hidden_states=False,
+                    output_router_aux_loss=use_load_balance,
                 )
                 prediction_loss, correct, count, selected_position = compute_prediction_loss(
                     output.logits,
@@ -1210,6 +1302,21 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                     )
                     if attention_cluster_loss_value is not None:
                         total_loss = total_loss + args.attention_cluster_weight * attention_cluster_loss_value
+                attention_negative_loss_value = None
+                if args.attention_cluster_negative_weight > 0.0:
+                    attention_negative_loss_value = attention_cluster_negative_pair_loss(
+                        tracker.logits,
+                        batch.metadata,
+                        model,
+                        args,
+                    )
+                    if attention_negative_loss_value is not None:
+                        total_loss = total_loss + args.attention_cluster_negative_weight * attention_negative_loss_value
+                load_balance_loss_value = None
+                if use_load_balance:
+                    load_balance_loss_value = getattr(output, "moe_load_balance_loss", None)
+                    if load_balance_loss_value is not None:
+                        total_loss = total_loss + args.moe_load_balance_loss_weight * load_balance_loss_value
                 expert_loss_value = None
                 if args.expert_repulsion_weight > 0.0:
                     expert_loss_value = expert_repulsion_loss(model, args.expert_repulsion_margin)
@@ -1226,6 +1333,10 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 rolling["forced_router_loss_sum"] += float(forced_router_loss_value.detach().cpu()) * count
             if attention_cluster_loss_value is not None:
                 rolling["attention_cluster_loss_sum"] += float(attention_cluster_loss_value.detach().cpu()) * count
+            if attention_negative_loss_value is not None:
+                rolling["attention_negative_loss_sum"] += float(attention_negative_loss_value.detach().cpu()) * count
+            if load_balance_loss_value is not None:
+                rolling["load_balance_loss_sum"] += float(load_balance_loss_value.detach().cpu()) * count
             if expert_loss_value is not None:
                 rolling["expert_repulsion_loss_sum"] += float(expert_loss_value.detach().cpu()) * count
             rolling["correct"] += correct
@@ -1252,6 +1363,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 "accuracy": rolling["correct"] / count,
                 "gate_inhibition_loss": rolling["gate_inhibition_loss_sum"] / count,
                 "attention_cluster_loss": rolling["attention_cluster_loss_sum"] / count,
+                "attention_negative_loss": rolling["attention_negative_loss_sum"] / count,
+                "load_balance_loss": rolling["load_balance_loss_sum"] / count,
                 "forced_router_loss": rolling["forced_router_loss_sum"] / count,
                 "expert_repulsion_loss": rolling["expert_repulsion_loss_sum"] / count,
                 "count": rolling["count"],
@@ -1268,6 +1381,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 f"step {step}: loss={row['prediction_loss']:.4f} "
                 f"acc={row['accuracy']:.4f} gate_inhib={row['gate_inhibition_loss']:.4f} "
                 f"attn_cluster={row['attention_cluster_loss']:.4f} "
+                f"attn_neg={row['attention_negative_loss']:.4f} "
+                f"load_balance={row['load_balance_loss']:.4f} "
                 f"forced_router={row['forced_router_loss']:.4f} "
                 f"expert_repulse={row['expert_repulsion_loss']:.4f}",
                 flush=True,
