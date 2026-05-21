@@ -1165,6 +1165,10 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
                 f"higher_mass_by_layer={format_layer_metric(layers, 'higher_level_history_mass')}",
                 flush=True,
             )
+            print(
+                f"step {step}: expert_load_by_layer={format_layer_metric(layers, 'expert_load')}",
+                flush=True,
+            )
             if forced_eval_metrics is not None:
                 forced_layers = forced_eval_metrics.get("layers", {})
                 forced_mean_layers = forced_eval_metrics.get("mean_layers", {})
@@ -1262,6 +1266,10 @@ def run_eval_only(experiment_type: str, argv: list[str] | None = None) -> None:
         f"same_higher_occurrence_by_layer="
         f"{format_layer_metric(metrics.get('layers', {}), 'same_higher_occurrence_same_expert')} "
         f"higher_mass_by_layer={format_layer_metric(metrics.get('layers', {}), 'higher_level_history_mass')}",
+        flush=True,
+    )
+    print(
+        f"eval_only: expert_load_by_layer={format_layer_metric(metrics.get('layers', {}), 'expert_load')}",
         flush=True,
     )
     if "forced_oracle" in payload:

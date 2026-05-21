@@ -6,6 +6,36 @@
 
 实验目的：让别的 expert / gate 的其它列向量拿到反向负梯度，观察是否能提升 expert selectivity。
 
+
+
+```
+total_loss = prediction_loss + gate_inhibition_weight * gate_inhibition_loss + expert_repulsion_weight * expert_repulsion_loss
+```
+
+```py
+winners = argmax(router_logits)
+gate_inhibition_loss  = CE(router_logits / T, winners)
+
+code：
+    def gate_inhibition_loss(self, temperature: float) -> torch.Tensor | None:
+        losses = []
+        temp = max(float(temperature), 1e-6)
+        for logits in self.logits:
+            flat_logits = logits.reshape(-1, logits.shape[-1])
+            if flat_logits.shape[-1] <= 1:
+                continue
+            winners = flat_logits.detach().argmax(dim=-1)
+            losses.append(F.cross_entropy(flat_logits.float() / temp, winners))
+        if not losses:
+            return None
+        return torch.stack(losses).mean()
+```
+
+```
+不同 expert 的参数向量不应太相似
+sim = vectors @ vectors.T
+```
+
 | step  |   loss |    acc | same_higher_by_layer          | higher_mass_by_layer          | expert_load                      |
 | ----- | -----: | -----: | ----------------------------- | ----------------------------- | -------------------------------- |
 | 100   | 1.4925 | 0.7676 | L0:0.4316 L1:0.5558 L2:0.6765 | L0:0.2997 L1:0.2578 L2:0.3173 | [0.1736, 0.2397, 0.2717, 0.3149] |
