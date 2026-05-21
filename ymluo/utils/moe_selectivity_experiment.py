@@ -21,7 +21,25 @@ if str(FDONG_SCRIPTS_DIR) not in sys.path:
 
 from models import MyQwen3ForCausalLM  # noqa: E402
 from models.myqwen import MyQwen3HeadMoE, MyQwen3MoE  # noqa: E402
-from transformers import AutoConfig, get_cosine_schedule_with_warmup  # noqa: E402
+from transformers import AutoConfig  # noqa: E402
+try:
+    from transformers import get_cosine_schedule_with_warmup  # noqa: E402
+except ImportError:  # noqa: E402
+    try:
+        from transformers.optimization import get_cosine_schedule_with_warmup  # noqa: E402
+    except ImportError:  # noqa: E402
+        def get_cosine_schedule_with_warmup(  # noqa: E402
+            optimizer: torch.optim.Optimizer,
+            num_warmup_steps: int,
+            num_training_steps: int,
+        ) -> torch.optim.lr_scheduler.LambdaLR:
+            def lr_lambda(current_step: int) -> float:
+                if current_step < num_warmup_steps:
+                    return float(current_step) / float(max(1, num_warmup_steps))
+                progress = float(current_step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+                return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
+
+            return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 from utils import HierarchicalPatternData  # noqa: E402
 
 
