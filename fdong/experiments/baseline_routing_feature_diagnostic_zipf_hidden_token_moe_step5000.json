@@ -1,0 +1,1139 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "runs": "inverse-kv-zipf-baseline",
+    "checkpoint_step": 5000,
+    "output_path": "../experiments/baseline_routing_feature_diagnostic_zipf_hidden_token_moe_step5000.json",
+    "seq_len": 128,
+    "num_samples": 256,
+    "batch_size": 8,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true,
+    "debug_vocab_size": 257,
+    "debug_hidden_size": 128,
+    "debug_intermediate_size": 256,
+    "debug_num_hidden_layers": 3,
+    "debug_num_attention_heads": 4,
+    "debug_num_key_value_heads": 2,
+    "debug_head_dim": 32,
+    "debug_max_position_embeddings": 256,
+    "attention_stride_pattern": null,
+    "residual_source_pattern": null,
+    "attention_rho": 0.75,
+    "cluster_sample_limit": 8192,
+    "top_candidates": 8
+  },
+  "device": "cpu",
+  "metric_notes": {
+    "feature_to_expert_purity": "For each feature value, fraction covered by its dominant expert.",
+    "expert_to_feature_purity": "For each expert, fraction covered by its dominant feature value.",
+    "same_feature_same_expert_rate": "Pairwise probability that two tokens with the same feature share expert.",
+    "feature_expert_nmi": "Normalized MI between feature id and expert id; robust against trivial purity inflation."
+  },
+  "runs": [
+    {
+      "run": "inverse-kv-zipf-baseline",
+      "checkpoint_step": 5000,
+      "checkpoint_path": "../checkpoints/inverse-kv-zipf-baseline/5000.pth",
+      "runtime_config": {
+        "attention_stride_pattern": [
+          1,
+          1,
+          1
+        ],
+        "residual_source_pattern": [
+          -1,
+          -1,
+          -1
+        ],
+        "use_moe": true,
+        "moe_num_unique_experts": 4,
+        "moe_num_experts_per_tok": 1,
+        "moe_intermediate_size": 128,
+        "moe_use_common_expert": false,
+        "moe_common_intermediate_size": 128,
+        "moe_router_bias": false,
+        "moe_normalize_topk_prob": true,
+        "moe_router_input": "hidden",
+        "moe_head_level": false
+      },
+      "ntp": {
+        "loss": 0.2093553515151143,
+        "accuracy": 0.93963623046875,
+        "count": 32768
+      },
+      "layers": [
+        {
+          "layer": 0,
+          "expert_load": {
+            "3": 9761,
+            "0": 10662,
+            "1": 6077,
+            "2": 6268
+          },
+          "expert_entropy": 1.3549407324036997,
+          "effective_expert_count": 3.8765311971385623,
+          "max_expert_fraction": 0.32537841796875,
+          "candidate_metrics": {
+            "local_slot": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.30456326613910256,
+              "feature_expert_nmi": 0.13606572550543986,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.485931396484375,
+              "expert_to_feature_purity": 0.1048583984375,
+              "same_feature_same_expert_rate": 0.30954731227486837
+            },
+            "higher_unit": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.09703280469090621,
+              "feature_expert_nmi": 0.04564353607547821,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.406982421875,
+              "expert_to_feature_purity": 0.234222412109375,
+              "same_feature_same_expert_rate": 0.28046253315649866
+            },
+            "token_id": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9747607006573121,
+              "feature_expert_nmi": 0.3857946203360011,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.849700927734375,
+              "expert_to_feature_purity": 0.0836181640625,
+              "same_feature_same_expert_rate": 0.7734309531160412
+            },
+            "target_token": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030275852217922,
+              "feature_expert_nmi": 0.3178505242316205,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.781158447265625,
+              "expert_to_feature_purity": 0.089569091796875,
+              "same_feature_same_expert_rate": 0.7052552750980133
+            },
+            "slot_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.0458782652648611,
+              "feature_expert_nmi": 0.033474886285172346,
+              "feature_entropy": 1.3862943611158907,
+              "feature_to_expert_purity": 0.4024658203125,
+              "expert_to_feature_purity": 0.33795166015625,
+              "same_feature_same_expert_rate": 0.29006859564012094
+            },
+            "local_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.02669793075570148,
+              "feature_expert_nmi": 0.022493606474220156,
+              "feature_entropy": 1.039720770836918,
+              "feature_to_expert_purity": 0.36785888671875,
+              "expert_to_feature_purity": 0.5,
+              "same_feature_same_expert_rate": 0.27644770196143614
+            },
+            "higher_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.14386996357781967,
+              "feature_expert_nmi": 0.07422791437170087,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45965576171875,
+              "expert_to_feature_purity": 0.132415771484375,
+              "same_feature_same_expert_rate": 0.34012276785714285
+            },
+            "higher_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.054048651079889196,
+              "feature_expert_nmi": 0.06820878945203876,
+              "feature_entropy": 0.46341355882342994,
+              "feature_to_expert_purity": 0.3883056640625,
+              "expert_to_feature_purity": 0.875,
+              "same_feature_same_expert_rate": 0.2778725137515944
+            },
+            "zipf_rank": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.09703280469090621,
+              "feature_expert_nmi": 0.04564353607547821,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.406982421875,
+              "expert_to_feature_purity": 0.234222412109375,
+              "same_feature_same_expert_rate": 0.28046253315649866
+            },
+            "zipf_rank_bucket": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 8,
+              "feature_expert_mi": 0.007861198047407609,
+              "feature_expert_nmi": 0.005638262985698819,
+              "feature_entropy": 1.434717906769858,
+              "feature_to_expert_purity": 0.3385009765625,
+              "expert_to_feature_purity": 0.57568359375,
+              "same_feature_same_expert_rate": 0.27320695656691607
+            },
+            "attn_top1_key_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16834119515603288,
+              "feature_expert_nmi": 0.07567062981123739,
+              "feature_entropy": 3.6521587575694987,
+              "feature_to_expert_purity": 0.4613681102362205,
+              "expert_to_feature_purity": 0.1283833661417323,
+              "same_feature_same_expert_rate": 0.2992923068264956
+            },
+            "attn_top1_key_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.07511556393906223,
+              "feature_expert_nmi": 0.035546217773218175,
+              "feature_entropy": 3.2953124752595193,
+              "feature_to_expert_purity": 0.3963767224409449,
+              "expert_to_feature_purity": 0.23686638779527558,
+              "same_feature_same_expert_rate": 0.2775720862732084
+            },
+            "attn_topmass_majority_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.05297116925176546,
+              "feature_expert_nmi": 0.02462915223669634,
+              "feature_entropy": 3.413530008993553,
+              "feature_to_expert_purity": 0.3827509842519685,
+              "expert_to_feature_purity": 0.1351193405511811,
+              "same_feature_same_expert_rate": 0.27546206789884775
+            },
+            "attn_topmass_majority_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.02636236775107132,
+              "feature_expert_nmi": 0.013010450097763722,
+              "feature_entropy": 3.029756447738015,
+              "feature_to_expert_purity": 0.3623277559055118,
+              "expert_to_feature_purity": 0.30078125,
+              "same_feature_same_expert_rate": 0.26777175147660154
+            },
+            "hidden_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.07583567817008526,
+              "feature_expert_nmi": 0.10611807090535914,
+              "feature_entropy": 0.3769191109126862,
+              "feature_to_expert_purity": 0.34307861328125,
+              "expert_to_feature_purity": 0.914581298828125,
+              "same_feature_same_expert_rate": 0.2646095405086486
+            },
+            "attention_output_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.054791981186302206,
+              "feature_expert_nmi": 0.04973954607002409,
+              "feature_entropy": 0.8955917294482727,
+              "feature_to_expert_purity": 0.37152099609375,
+              "expert_to_feature_purity": 0.6763916015625,
+              "same_feature_same_expert_rate": 0.280572134356909
+            }
+          },
+          "top_by_nmi": [
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9747607006573121,
+              "feature_expert_nmi": 0.3857946203360011,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.849700927734375,
+              "expert_to_feature_purity": 0.0836181640625,
+              "same_feature_same_expert_rate": 0.7734309531160412
+            },
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030275852217922,
+              "feature_expert_nmi": 0.3178505242316205,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.781158447265625,
+              "expert_to_feature_purity": 0.089569091796875,
+              "same_feature_same_expert_rate": 0.7052552750980133
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.30456326613910256,
+              "feature_expert_nmi": 0.13606572550543986,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.485931396484375,
+              "expert_to_feature_purity": 0.1048583984375,
+              "same_feature_same_expert_rate": 0.30954731227486837
+            },
+            {
+              "feature": "hidden_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.07583567817008526,
+              "feature_expert_nmi": 0.10611807090535914,
+              "feature_entropy": 0.3769191109126862,
+              "feature_to_expert_purity": 0.34307861328125,
+              "expert_to_feature_purity": 0.914581298828125,
+              "same_feature_same_expert_rate": 0.2646095405086486
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16834119515603288,
+              "feature_expert_nmi": 0.07567062981123739,
+              "feature_entropy": 3.6521587575694987,
+              "feature_to_expert_purity": 0.4613681102362205,
+              "expert_to_feature_purity": 0.1283833661417323,
+              "same_feature_same_expert_rate": 0.2992923068264956
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.14386996357781967,
+              "feature_expert_nmi": 0.07422791437170087,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45965576171875,
+              "expert_to_feature_purity": 0.132415771484375,
+              "same_feature_same_expert_rate": 0.34012276785714285
+            },
+            {
+              "feature": "higher_boundary",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.054048651079889196,
+              "feature_expert_nmi": 0.06820878945203876,
+              "feature_entropy": 0.46341355882342994,
+              "feature_to_expert_purity": 0.3883056640625,
+              "expert_to_feature_purity": 0.875,
+              "same_feature_same_expert_rate": 0.2778725137515944
+            },
+            {
+              "feature": "attention_output_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.054791981186302206,
+              "feature_expert_nmi": 0.04973954607002409,
+              "feature_entropy": 0.8955917294482727,
+              "feature_to_expert_purity": 0.37152099609375,
+              "expert_to_feature_purity": 0.6763916015625,
+              "same_feature_same_expert_rate": 0.280572134356909
+            }
+          ],
+          "top_by_feature_to_expert_purity": [
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9747607006573121,
+              "feature_expert_nmi": 0.3857946203360011,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.849700927734375,
+              "expert_to_feature_purity": 0.0836181640625,
+              "same_feature_same_expert_rate": 0.7734309531160412
+            },
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030275852217922,
+              "feature_expert_nmi": 0.3178505242316205,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.781158447265625,
+              "expert_to_feature_purity": 0.089569091796875,
+              "same_feature_same_expert_rate": 0.7052552750980133
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.30456326613910256,
+              "feature_expert_nmi": 0.13606572550543986,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.485931396484375,
+              "expert_to_feature_purity": 0.1048583984375,
+              "same_feature_same_expert_rate": 0.30954731227486837
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16834119515603288,
+              "feature_expert_nmi": 0.07567062981123739,
+              "feature_entropy": 3.6521587575694987,
+              "feature_to_expert_purity": 0.4613681102362205,
+              "expert_to_feature_purity": 0.1283833661417323,
+              "same_feature_same_expert_rate": 0.2992923068264956
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.14386996357781967,
+              "feature_expert_nmi": 0.07422791437170087,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45965576171875,
+              "expert_to_feature_purity": 0.132415771484375,
+              "same_feature_same_expert_rate": 0.34012276785714285
+            },
+            {
+              "feature": "higher_unit",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.09703280469090621,
+              "feature_expert_nmi": 0.04564353607547821,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.406982421875,
+              "expert_to_feature_purity": 0.234222412109375,
+              "same_feature_same_expert_rate": 0.28046253315649866
+            },
+            {
+              "feature": "zipf_rank",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.09703280469090621,
+              "feature_expert_nmi": 0.04564353607547821,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.406982421875,
+              "expert_to_feature_purity": 0.234222412109375,
+              "same_feature_same_expert_rate": 0.28046253315649866
+            },
+            {
+              "feature": "slot_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.0458782652648611,
+              "feature_expert_nmi": 0.033474886285172346,
+              "feature_entropy": 1.3862943611158907,
+              "feature_to_expert_purity": 0.4024658203125,
+              "expert_to_feature_purity": 0.33795166015625,
+              "same_feature_same_expert_rate": 0.29006859564012094
+            }
+          ]
+        },
+        {
+          "layer": 1,
+          "expert_load": {
+            "0": 7828,
+            "2": 9554,
+            "1": 10083,
+            "3": 5303
+          },
+          "expert_entropy": 1.3587796717444414,
+          "effective_expert_count": 3.891441566947755,
+          "max_expert_fraction": 0.307708740234375,
+          "candidate_metrics": {
+            "local_slot": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.32665923672043007,
+              "feature_expert_nmi": 0.14573094876992324,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.507720947265625,
+              "expert_to_feature_purity": 0.11212158203125,
+              "same_feature_same_expert_rate": 0.3407020642837351
+            },
+            "higher_unit": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            },
+            "token_id": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.851890511843263,
+              "feature_expert_nmi": 0.3366879443616012,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.790679931640625,
+              "expert_to_feature_purity": 0.082672119140625,
+              "same_feature_same_expert_rate": 0.7112424469633485
+            },
+            "target_token": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030444651938468,
+              "feature_expert_nmi": 0.31740786944011606,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.76824951171875,
+              "expert_to_feature_purity": 0.088226318359375,
+              "same_feature_same_expert_rate": 0.7008942337341967
+            },
+            "slot_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.021205982756522843,
+              "feature_expert_nmi": 0.01545098443827423,
+              "feature_entropy": 1.3862943611158907,
+              "feature_to_expert_purity": 0.34307861328125,
+              "expert_to_feature_purity": 0.30621337890625,
+              "same_feature_same_expert_rate": 0.27219907699092744
+            },
+            "local_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.017147048408021316,
+              "feature_expert_nmi": 0.014426350961379156,
+              "feature_entropy": 1.039720770836918,
+              "feature_to_expert_purity": 0.34307861328125,
+              "expert_to_feature_purity": 0.5,
+              "same_feature_same_expert_rate": 0.2712324426529255
+            },
+            "higher_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.11647954271197905,
+              "feature_expert_nmi": 0.06001121370896398,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.426910400390625,
+              "expert_to_feature_purity": 0.1334228515625,
+              "same_feature_same_expert_rate": 0.32455008370535715
+            },
+            "higher_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.03212876093356523,
+              "feature_expert_nmi": 0.0404888170531552,
+              "feature_entropy": 0.46341355882342994,
+              "feature_to_expert_purity": 0.34539794921875,
+              "expert_to_feature_purity": 0.875,
+              "same_feature_same_expert_rate": 0.26856402961575254
+            },
+            "zipf_rank": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            },
+            "zipf_rank_bucket": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 8,
+              "feature_expert_mi": 0.016594878853089055,
+              "feature_expert_nmi": 0.01188546852943057,
+              "feature_entropy": 1.434717906769858,
+              "feature_to_expert_purity": 0.34136962890625,
+              "expert_to_feature_purity": 0.57568359375,
+              "same_feature_same_expert_rate": 0.273155003117207
+            },
+            "attn_top1_key_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16415261722186839,
+              "feature_expert_nmi": 0.07395236098196031,
+              "feature_entropy": 3.6262637580702117,
+              "feature_to_expert_purity": 0.4519869586614173,
+              "expert_to_feature_purity": 0.1296751968503937,
+              "same_feature_same_expert_rate": 0.307821621353232
+            },
+            "attn_top1_key_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.08400796711504688,
+              "feature_expert_nmi": 0.03967073081876741,
+              "feature_entropy": 3.3004138631988686,
+              "feature_to_expert_purity": 0.39954478346456695,
+              "expert_to_feature_purity": 0.2328986220472441,
+              "same_feature_same_expert_rate": 0.2776917969149045
+            },
+            "attn_topmass_majority_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.05447035110141132,
+              "feature_expert_nmi": 0.0250205330630863,
+              "feature_entropy": 3.488149474772059,
+              "feature_to_expert_purity": 0.36540354330708663,
+              "expert_to_feature_purity": 0.1241080216535433,
+              "same_feature_same_expert_rate": 0.27980807351760173
+            },
+            "attn_topmass_majority_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.04240768382049632,
+              "feature_expert_nmi": 0.020219696873060154,
+              "feature_entropy": 3.2374843639252733,
+              "feature_to_expert_purity": 0.3715243602362205,
+              "expert_to_feature_purity": 0.24498646653543307,
+              "same_feature_same_expert_rate": 0.27325765060929297
+            },
+            "hidden_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.09764919986818663,
+              "feature_expert_nmi": 0.11494670736130495,
+              "feature_entropy": 0.5311231927033901,
+              "feature_to_expert_purity": 0.352325439453125,
+              "expert_to_feature_purity": 0.86627197265625,
+              "same_feature_same_expert_rate": 0.27105081817806526
+            },
+            "attention_output_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.0361398342614715,
+              "feature_expert_nmi": 0.027783059685807684,
+              "feature_entropy": 1.2452688610546359,
+              "feature_to_expert_purity": 0.37127685546875,
+              "expert_to_feature_purity": 0.49383544921875,
+              "same_feature_same_expert_rate": 0.27849744214921407
+            }
+          },
+          "top_by_nmi": [
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.851890511843263,
+              "feature_expert_nmi": 0.3366879443616012,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.790679931640625,
+              "expert_to_feature_purity": 0.082672119140625,
+              "same_feature_same_expert_rate": 0.7112424469633485
+            },
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030444651938468,
+              "feature_expert_nmi": 0.31740786944011606,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.76824951171875,
+              "expert_to_feature_purity": 0.088226318359375,
+              "same_feature_same_expert_rate": 0.7008942337341967
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.32665923672043007,
+              "feature_expert_nmi": 0.14573094876992324,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.507720947265625,
+              "expert_to_feature_purity": 0.11212158203125,
+              "same_feature_same_expert_rate": 0.3407020642837351
+            },
+            {
+              "feature": "hidden_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.09764919986818663,
+              "feature_expert_nmi": 0.11494670736130495,
+              "feature_entropy": 0.5311231927033901,
+              "feature_to_expert_purity": 0.352325439453125,
+              "expert_to_feature_purity": 0.86627197265625,
+              "same_feature_same_expert_rate": 0.27105081817806526
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16415261722186839,
+              "feature_expert_nmi": 0.07395236098196031,
+              "feature_entropy": 3.6262637580702117,
+              "feature_to_expert_purity": 0.4519869586614173,
+              "expert_to_feature_purity": 0.1296751968503937,
+              "same_feature_same_expert_rate": 0.307821621353232
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.11647954271197905,
+              "feature_expert_nmi": 0.06001121370896398,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.426910400390625,
+              "expert_to_feature_purity": 0.1334228515625,
+              "same_feature_same_expert_rate": 0.32455008370535715
+            },
+            {
+              "feature": "higher_unit",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            },
+            {
+              "feature": "zipf_rank",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            }
+          ],
+          "top_by_feature_to_expert_purity": [
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.851890511843263,
+              "feature_expert_nmi": 0.3366879443616012,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.790679931640625,
+              "expert_to_feature_purity": 0.082672119140625,
+              "same_feature_same_expert_rate": 0.7112424469633485
+            },
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.8030444651938468,
+              "feature_expert_nmi": 0.31740786944011606,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.76824951171875,
+              "expert_to_feature_purity": 0.088226318359375,
+              "same_feature_same_expert_rate": 0.7008942337341967
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.32665923672043007,
+              "feature_expert_nmi": 0.14573094876992324,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.507720947265625,
+              "expert_to_feature_purity": 0.11212158203125,
+              "same_feature_same_expert_rate": 0.3407020642837351
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.16415261722186839,
+              "feature_expert_nmi": 0.07395236098196031,
+              "feature_entropy": 3.6262637580702117,
+              "feature_to_expert_purity": 0.4519869586614173,
+              "expert_to_feature_purity": 0.1296751968503937,
+              "same_feature_same_expert_rate": 0.307821621353232
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.11647954271197905,
+              "feature_expert_nmi": 0.06001121370896398,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.426910400390625,
+              "expert_to_feature_purity": 0.1334228515625,
+              "same_feature_same_expert_rate": 0.32455008370535715
+            },
+            {
+              "feature": "higher_unit",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            },
+            {
+              "feature": "zipf_rank",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.10174779247455752,
+              "feature_expert_nmi": 0.04779377363756358,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.416748046875,
+              "expert_to_feature_purity": 0.22265625,
+              "same_feature_same_expert_rate": 0.2838403514588859
+            },
+            {
+              "feature": "attn_top1_key_higher_unit",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.08400796711504688,
+              "feature_expert_nmi": 0.03967073081876741,
+              "feature_entropy": 3.3004138631988686,
+              "feature_to_expert_purity": 0.39954478346456695,
+              "expert_to_feature_purity": 0.2328986220472441,
+              "same_feature_same_expert_rate": 0.2776917969149045
+            }
+          ]
+        },
+        {
+          "layer": 2,
+          "expert_load": {
+            "3": 8603,
+            "2": 10093,
+            "0": 5597,
+            "1": 8475
+          },
+          "expert_entropy": 1.3654455872275308,
+          "effective_expert_count": 3.917468236958428,
+          "max_expert_fraction": 0.308013916015625,
+          "candidate_metrics": {
+            "local_slot": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.4104096725363376,
+              "feature_expert_nmi": 0.18264666991974177,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.544769287109375,
+              "expert_to_feature_purity": 0.146728515625,
+              "same_feature_same_expert_rate": 0.38617865059573286
+            },
+            "higher_unit": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.12564581613078624,
+              "feature_expert_nmi": 0.058875102978153376,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.426544189453125,
+              "expert_to_feature_purity": 0.224609375,
+              "same_feature_same_expert_rate": 0.2913938163129973
+            },
+            "token_id": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.90167807589162,
+              "feature_expert_nmi": 0.3554942791964967,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.79571533203125,
+              "expert_to_feature_purity": 0.07977294921875,
+              "same_feature_same_expert_rate": 0.7221805671944603
+            },
+            "target_token": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9370418053822643,
+              "feature_expert_nmi": 0.3694659203549312,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.808563232421875,
+              "expert_to_feature_purity": 0.08441162109375,
+              "same_feature_same_expert_rate": 0.746751244438571
+            },
+            "slot_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.05035932723892857,
+              "feature_expert_nmi": 0.03660285759092439,
+              "feature_entropy": 1.3862943611158907,
+              "feature_to_expert_purity": 0.35906982421875,
+              "expert_to_feature_purity": 0.337310791015625,
+              "same_feature_same_expert_rate": 0.28319524949596775
+            },
+            "local_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.04516044926664383,
+              "feature_expert_nmi": 0.03790204950794109,
+              "feature_entropy": 1.039720770836918,
+              "feature_to_expert_purity": 0.34027099609375,
+              "expert_to_feature_purity": 0.522735595703125,
+              "same_feature_same_expert_rate": 0.2829330119680851
+            },
+            "higher_position": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.16340245301560677,
+              "feature_expert_nmi": 0.08398053685879783,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45751953125,
+              "expert_to_feature_purity": 0.14385986328125,
+              "same_feature_same_expert_rate": 0.3398350306919643
+            },
+            "higher_boundary": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.0648015123092902,
+              "feature_expert_nmi": 0.08146359543949087,
+              "feature_entropy": 0.46341355882342994,
+              "feature_to_expert_purity": 0.35369873046875,
+              "expert_to_feature_purity": 0.875,
+              "same_feature_same_expert_rate": 0.27155848911830355
+            },
+            "zipf_rank": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.12564581613078624,
+              "feature_expert_nmi": 0.058875102978153376,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.426544189453125,
+              "expert_to_feature_purity": 0.224609375,
+              "same_feature_same_expert_rate": 0.2913938163129973
+            },
+            "zipf_rank_bucket": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 8,
+              "feature_expert_mi": 0.010612869562082045,
+              "feature_expert_nmi": 0.007582499110305283,
+              "feature_entropy": 1.434717906769858,
+              "feature_to_expert_purity": 0.32012939453125,
+              "expert_to_feature_purity": 0.57568359375,
+              "same_feature_same_expert_rate": 0.2693927074674425
+            },
+            "attn_top1_key_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.14305162087560214,
+              "feature_expert_nmi": 0.06417556493554638,
+              "feature_entropy": 3.6396568158490767,
+              "feature_to_expert_purity": 0.4398375984251969,
+              "expert_to_feature_purity": 0.12844488188976377,
+              "same_feature_same_expert_rate": 0.3053915464068566
+            },
+            "attn_top1_key_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.09427520905386605,
+              "feature_expert_nmi": 0.044233765088885546,
+              "feature_entropy": 3.3273728182251685,
+              "feature_to_expert_purity": 0.405880905511811,
+              "expert_to_feature_purity": 0.21665846456692914,
+              "same_feature_same_expert_rate": 0.28201706886098776
+            },
+            "attn_topmass_majority_local_slot": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.06521888948253296,
+              "feature_expert_nmi": 0.03011835885652431,
+              "feature_entropy": 3.434776340255459,
+              "feature_to_expert_purity": 0.3777682086614173,
+              "expert_to_feature_purity": 0.13124384842519685,
+              "same_feature_same_expert_rate": 0.2850543702206472
+            },
+            "attn_topmass_majority_higher_unit": {
+              "num_valid_tokens": 32512,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.04686781545325768,
+              "feature_expert_nmi": 0.022456705559343666,
+              "feature_entropy": 3.190594435544816,
+              "feature_to_expert_purity": 0.3550073818897638,
+              "expert_to_feature_purity": 0.2595349409448819,
+              "same_feature_same_expert_rate": 0.27636512259307605
+            },
+            "hidden_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.09207037882253534,
+              "feature_expert_nmi": 0.0680165193293022,
+              "feature_entropy": 1.3419509886053107,
+              "feature_to_expert_purity": 0.426055908203125,
+              "expert_to_feature_purity": 0.426055908203125,
+              "same_feature_same_expert_rate": 0.3070175594387089
+            },
+            "attention_output_kmeans_cluster": {
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.0786861781325436,
+              "feature_expert_nmi": 0.06485984900899372,
+              "feature_entropy": 1.0778805579579491,
+              "feature_to_expert_purity": 0.37872314453125,
+              "expert_to_feature_purity": 0.55670166015625,
+              "same_feature_same_expert_rate": 0.2901346136073569
+            }
+          },
+          "top_by_nmi": [
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9370418053822643,
+              "feature_expert_nmi": 0.3694659203549312,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.808563232421875,
+              "expert_to_feature_purity": 0.08441162109375,
+              "same_feature_same_expert_rate": 0.746751244438571
+            },
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.90167807589162,
+              "feature_expert_nmi": 0.3554942791964967,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.79571533203125,
+              "expert_to_feature_purity": 0.07977294921875,
+              "same_feature_same_expert_rate": 0.7221805671944603
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.4104096725363376,
+              "feature_expert_nmi": 0.18264666991974177,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.544769287109375,
+              "expert_to_feature_purity": 0.146728515625,
+              "same_feature_same_expert_rate": 0.38617865059573286
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.16340245301560677,
+              "feature_expert_nmi": 0.08398053685879783,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45751953125,
+              "expert_to_feature_purity": 0.14385986328125,
+              "same_feature_same_expert_rate": 0.3398350306919643
+            },
+            {
+              "feature": "higher_boundary",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 3,
+              "feature_expert_mi": 0.0648015123092902,
+              "feature_expert_nmi": 0.08146359543949087,
+              "feature_entropy": 0.46341355882342994,
+              "feature_to_expert_purity": 0.35369873046875,
+              "expert_to_feature_purity": 0.875,
+              "same_feature_same_expert_rate": 0.27155848911830355
+            },
+            {
+              "feature": "hidden_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.09207037882253534,
+              "feature_expert_nmi": 0.0680165193293022,
+              "feature_entropy": 1.3419509886053107,
+              "feature_to_expert_purity": 0.426055908203125,
+              "expert_to_feature_purity": 0.426055908203125,
+              "same_feature_same_expert_rate": 0.3070175594387089
+            },
+            {
+              "feature": "attention_output_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.0786861781325436,
+              "feature_expert_nmi": 0.06485984900899372,
+              "feature_entropy": 1.0778805579579491,
+              "feature_to_expert_purity": 0.37872314453125,
+              "expert_to_feature_purity": 0.55670166015625,
+              "same_feature_same_expert_rate": 0.2901346136073569
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.14305162087560214,
+              "feature_expert_nmi": 0.06417556493554638,
+              "feature_entropy": 3.6396568158490767,
+              "feature_to_expert_purity": 0.4398375984251969,
+              "expert_to_feature_purity": 0.12844488188976377,
+              "same_feature_same_expert_rate": 0.3053915464068566
+            }
+          ],
+          "top_by_feature_to_expert_purity": [
+            {
+              "feature": "target_token",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.9370418053822643,
+              "feature_expert_nmi": 0.3694659203549312,
+              "feature_entropy": 4.710801075539472,
+              "feature_to_expert_purity": 0.808563232421875,
+              "expert_to_feature_purity": 0.08441162109375,
+              "same_feature_same_expert_rate": 0.746751244438571
+            },
+            {
+              "feature": "token_id",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 162,
+              "feature_expert_mi": 0.90167807589162,
+              "feature_expert_nmi": 0.3554942791964967,
+              "feature_entropy": 4.7115454981972515,
+              "feature_to_expert_purity": 0.79571533203125,
+              "expert_to_feature_purity": 0.07977294921875,
+              "same_feature_same_expert_rate": 0.7221805671944603
+            },
+            {
+              "feature": "local_slot",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.4104096725363376,
+              "feature_expert_nmi": 0.18264666991974177,
+              "feature_entropy": 3.697747569534239,
+              "feature_to_expert_purity": 0.544769287109375,
+              "expert_to_feature_purity": 0.146728515625,
+              "same_feature_same_expert_rate": 0.38617865059573286
+            },
+            {
+              "feature": "higher_position",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 16,
+              "feature_expert_mi": 0.16340245301560677,
+              "feature_expert_nmi": 0.08398053685879783,
+              "feature_entropy": 2.7725887222237806,
+              "feature_to_expert_purity": 0.45751953125,
+              "expert_to_feature_purity": 0.14385986328125,
+              "same_feature_same_expert_rate": 0.3398350306919643
+            },
+            {
+              "feature": "attn_top1_key_local_slot",
+              "num_valid_tokens": 32512,
+              "num_feature_values": 61,
+              "feature_expert_mi": 0.14305162087560214,
+              "feature_expert_nmi": 0.06417556493554638,
+              "feature_entropy": 3.6396568158490767,
+              "feature_to_expert_purity": 0.4398375984251969,
+              "expert_to_feature_purity": 0.12844488188976377,
+              "same_feature_same_expert_rate": 0.3053915464068566
+            },
+            {
+              "feature": "higher_unit",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.12564581613078624,
+              "feature_expert_nmi": 0.058875102978153376,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.426544189453125,
+              "expert_to_feature_purity": 0.224609375,
+              "same_feature_same_expert_rate": 0.2913938163129973
+            },
+            {
+              "feature": "zipf_rank",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 64,
+              "feature_expert_mi": 0.12564581613078624,
+              "feature_expert_nmi": 0.058875102978153376,
+              "feature_entropy": 3.3354797279908,
+              "feature_to_expert_purity": 0.426544189453125,
+              "expert_to_feature_purity": 0.224609375,
+              "same_feature_same_expert_rate": 0.2913938163129973
+            },
+            {
+              "feature": "hidden_kmeans_cluster",
+              "num_valid_tokens": 32768,
+              "num_feature_values": 4,
+              "feature_expert_mi": 0.09207037882253534,
+              "feature_expert_nmi": 0.0680165193293022,
+              "feature_entropy": 1.3419509886053107,
+              "feature_to_expert_purity": 0.426055908203125,
+              "expert_to_feature_purity": 0.426055908203125,
+              "same_feature_same_expert_rate": 0.3070175594387089
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

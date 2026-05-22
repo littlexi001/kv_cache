@@ -198,6 +198,15 @@ def load_model(args, runtime_config, ckpt_path, device):
             key = key.replace(".mlp.router.bias", ".mlp.router.net.bias")
             remapped[key] = value
         state = remapped
+    if any(".mlp.routers." in key and key.endswith(".weight") and ".net." not in key for key in state):
+        remapped = {}
+        for key, value in state.items():
+            if ".mlp.routers." in key and key.endswith(".weight") and ".net." not in key:
+                key = key[:-len(".weight")] + ".net.weight"
+            if ".mlp.routers." in key and key.endswith(".bias") and ".net." not in key:
+                key = key[:-len(".bias")] + ".net.bias"
+            remapped[key] = value
+        state = remapped
     model.load_state_dict(state)
     model.eval()
     return model

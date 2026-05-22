@@ -1,4 +1,4 @@
-# 第四轮：Baseline MoE 到底按什么分发，以及如何构造可用于 Reverse Indexing 的 Routing Objective
+# 第四轮：Baseline MoE 为什么没有形成 Ground-truth Slot Specialization
 
 ## 这一轮要回答的问题
 
@@ -10,12 +10,13 @@
 4. Supervised gate 即使能达到很高 routing accuracy，也不能自动复现 ground-truth dispatch 的收益。
 5. Naive inhibition loss 目前主要表现为让 routing 变 sharp 甚至 collapse，并不能证明它形成了有意义的 feature specialization。
 
-因此，Round 4 暂时不继续围绕 naive inhibition 展开，而是聚焦两个问题：
+因此，Round 4 暂时不继续围绕 naive inhibition 展开，而是聚焦三个问题：
 
 1. **Baseline MoE 没有按 ground-truth slot 分发，那它到底在按什么分发？**
-2. **能否用 attention-derived signal 训练一个 pre-attention routing，使 expert bucket 对齐 attention retrieval bucket？**
+2. **为什么 baseline MoE 不按 ground-truth slot 分发也能学会任务？**
+3. **能否构造一个 pre-attention routing，使 expert bucket 对齐 attention retrieval bucket，并服务 KV reverse indexing？**
 
-这两个问题分别对应 specialization 和 reverse indexing。前者解释现有 MoE 的自然 routing 机制；后者尝试构造一个真正能在 attention 前产生、并可用于 KV reverse index 的 routing signal。
+问题 1 是诊断问题：解释现有 MoE 的自然 routing 机制。问题 2 是必要性问题：解释为什么 ground-truth slot specialization 没有被训练目标强迫出来。问题 3 是结构问题：尝试构造一个真正能在 attention 前产生、并可用于 KV reverse index 的 routing signal。
 
 ## 问题 1：Baseline MoE 到底按什么分发
 
@@ -68,7 +69,76 @@ baseline MoE 不是按 ground-truth slot 分；
 
 如果所有 candidate features 都无法解释 expert assignment，说明 baseline MoE 的 routing 更接近训练噪声或不稳定分工；如果某些 candidate feature 能解释 routing，则下一步需要判断它们是否可能服务于 reverse indexing。
 
-## 问题 2：如何用 Attention-derived Signal 构造 Routing Objective
+### 当前观察：Baseline MoE 更接近按 token id / target token 分发
+
+对 zipf 数据上的 baseline 与若干 MoE 变体做 routing-feature diagnostic 后，目前观察到一个稳定现象：**baseline MoE 没有按 ground-truth local / higher slot 分发，而是更接近按 token id / target token 这种低层 feature 分发。**
+
+在最基础的 hidden token-level MoE 中，token id 是最强解释变量。三层的 token-id NMI 分别约为 `0.386 / 0.337 / 0.355`，feature-to-expert purity 约为 `0.850 / 0.791 / 0.796`，same-token same-expert rate 约为 `0.773 / 0.711 / 0.722`。相比之下，local slot NMI 只有约 `0.136 / 0.146 / 0.183`，higher-level slot 更弱。
+
+换成 attention output 分发后，token-id 分发被削弱，但没有消失。token-level attention-output router 的平均 token-id NMI 约为 `0.226`，平均 feature-to-expert purity 约为 `0.679`，仍然显著强于 local / higher slot。head-level MoE 也类似：全局指标会被不同 head 的 expert 编号稀释，但逐 head 观察时，每个 head 内仍然稳定存在 token-id routing。hidden head-level MoE 的 per-head token-id NMI 大约在 `0.296 ~ 0.374`，attention-output head-level MoE 大约在 `0.260 ~ 0.324`。
+
+这说明按 token id 分发不是某个层或某个 head 的偶然现象，而是当前训练目标下 MoE gate 很容易学到的稳定 shortcut。它也解释了为什么按 token id 分发不等于按 slot 分发：synthetic 数据允许同一个 token 出现在不同 local slot 中，因此 token identity 与 slot identity 不是一回事。这一点反而更接近真实语言，因为真实语言中同一个词也会出现在不同语义上下文里。
+
+### 当前观察：Load-balance loss 只均衡负载，不产生 slot specialization
+
+为了判断 token-id routing 是否只是 expert load 不均衡的副作用，又测试了 attention-output router 加不同强度 load-balance loss 的模型。
+
+| run | avg max expert frac | avg effective experts | avg token-id NMI | avg token-id purity | avg same-token same-expert |
+|---|---:|---:|---:|---:|---:|
+| no load balance | 0.398 | 3.701 | 0.226 | 0.679 | 0.599 |
+| load balance 0.001 | 0.255 | 4.000 | 0.213 | 0.635 | 0.541 |
+| load balance 0.01 | 0.254 | 4.000 | 0.213 | 0.635 | 0.543 |
+| load balance 0.1 | 0.252 | 4.000 | 0.227 | 0.653 | 0.570 |
+
+结果说明，load-balance loss 的直接作用是把 expert load 拉到接近均匀：max expert fraction 从约 `0.398` 降到约 `0.252 ~ 0.255`，effective experts 接近 `4.0`。但它没有让 routing 更接近 ground-truth hierarchy。相反，local / higher slot 的解释力进一步下降：
+
+| run | avg local-slot NMI | avg higher-slot NMI |
+|---|---:|---:|
+| no load balance | 0.115 | 0.047 |
+| load balance 0.001 | 0.075 | 0.015 |
+| load balance 0.01 | 0.068 | 0.013 |
+| load balance 0.1 | 0.064 | 0.010 |
+
+因此，baseline MoE 不是因为负载不均衡才没有形成 ground-truth slot specialization。Load-balance loss 解决的是 expert usage shape，不解决 routing semantics；它会削弱 token-id shortcut 一些，但也会进一步打散本来就弱的 slot / higher-slot signal。
+
+## 问题 2：为什么不按 Ground-truth Slot 分发也能学会
+
+**目标：判断 baseline MoE 没有形成 ground-truth slot specialization，是因为模型学不到，还是因为当前任务根本不需要它学。**
+
+当前 synthetic 数据虽然显式具有 local slot / higher-level slot 结构，但模型不按这些 slot 分发也能获得较高 NTP accuracy。这说明 ground-truth slot routing 可能不是完成当前任务的必要条件。
+
+一个合理假设是：**当前数据太简单、模型相对太大，因此模型有很多替代解。** 即使 routing 不按真实 slot 分发，attention、MLP 或 embedding 也能用其他方式记住或拟合这个规则。只有当数据更难、模型更小、或者上下文依赖更强时，ground-truth slot specialization 才可能变成更优甚至必要的解。
+
+这个解释也符合真实语言建模的直觉。大多数 next-token prediction 并不需要完整长程上下文，模型往往可以只根据最近一个或几个 token 做出很强的猜测。只有在更难的句子中，尤其是需要逻辑推理、变量绑定、长程指代或跨段信息整合的场景里，长 context 和更抽象的 hierarchy feature 才真正变得必要。因此，当前模型优先按 token id / target token 分发，并不奇怪；这可能只是说明当前 synthetic task 没有足够强迫模型使用 ground-truth slot。
+
+这个问题可以拆成三个假设：
+
+1. **数据太简单：** 当前 next-token prediction 主要依赖局部或短程规则，不需要 clean hierarchy routing。
+2. **模型太大：** 现有 3-layer / hidden 128 小模型对当前 synthetic 任务仍然过参数化，足以绕开 slot specialization。
+3. **训练目标约束太弱：** NTP 只要求预测正确，不要求内部 routing 可解释；只要 loss 能降，模型没有动力选择 ground-truth slot routing。
+
+### 实验方向
+
+为了验证这个假设，应做 controlled scaling，而不是继续盲目设计 routing loss：
+
+1. **固定数据，缩小模型容量：** 降低 hidden size、intermediate size、layer 数、expert hidden size，观察 baseline MoE 是否开始更依赖 ground-truth slot。
+2. **固定模型，提高数据难度：** 增加 hierarchy 层数、增加 slot 数、减少重复 pattern、引入更长程依赖，观察 baseline routing 是否更接近真实 slot。
+3. **对比 baseline routing 与 ground-truth routing 的 gap：** 如果任务变难后 baseline 明显掉点，而 ground-truth routing 仍保持优势，说明真实 slot specialization 具有必要性。
+4. **观察 attention 与 MoE 的替代路径：** 如果 baseline 不按 slot 分发但仍能学会，需要分析它是靠 attention、token id、位置、target 还是 MLP 参数记忆完成任务。
+
+### 预期输出
+
+这个问题最终应回答：
+
+```text
+baseline MoE 不按 ground-truth slot 也能学会，是因为当前任务存在其他低成本解；
+当数据更难 / 模型更小时，ground-truth slot routing 是否会变得更有必要；
+如果仍然不必要，说明我们构造的数据没有真正迫使模型使用 hierarchy specialization。
+```
+
+如果 capacity / difficulty scaling 后，baseline 仍然不需要 slot routing，就说明当前 synthetic task 不能作为证明 feature specialization 必要性的强实验；如果 scaling 后 ground-truth routing 优势扩大，则说明“普通 MoE 不学 slot”不是因为 slot 无用，而是因为当前实验太容易。
+
+## 问题 3：如何构造可用于 Reverse Indexing 的 Pre-attention Routing
 
 **目标：让 routing bucket 对齐模型实际使用的 attention retrieval bucket，并且这个 routing signal 必须能在 attention 前产生。**
 
@@ -194,16 +264,22 @@ attention: 只访问同 bucket 或 top bucket 匹配的 KV
 1. **Baseline routing diagnostic**
    分析 baseline expert assignment 与所有 candidate features 的关系，确定 baseline MoE 实际按什么分发。
 
-2. **Attention-derived bucket quality**
+2. **Capacity / difficulty scaling**
+   通过缩小模型容量、增加数据难度，验证 baseline 不按 ground-truth slot 也能学会，是因为当前任务太简单 / 模型太大，还是因为 ground-truth slot routing 本身不是必要结构。
+
+3. **Ground-truth routing advantage under harder settings**
+   在更难数据或更小模型上比较 baseline routing 与 ground-truth routing。如果 ground-truth routing 的优势随难度上升而扩大，说明 slot specialization 具有必要性；否则说明 synthetic task 没有真正迫使模型使用 hierarchy feature。
+
+4. **Attention-derived bucket quality**
    验证 attention mass coverage 得到的 `S_i` 是否稳定、是否与 higher-level slot 对齐、是否保留 NTP 所需信息。
 
-3. **Pre-attention routing learning**
+5. **Pre-attention routing learning**
    用 attention-derived positive set 训练 pre-attention router，测试它能否预测 `S_i` 或其 bucket structure。
 
-4. **Anti-collapse 检查**
+6. **Anti-collapse 检查**
    所有 routing objective 都必须报告 expert load entropy、MI/NMI 和 effective expert count，防止 naive inhibition 式 collapse。
 
-5. **Reverse indexing eval**
+7. **Reverse indexing eval**
    用 learned pre-attention routing 过滤 KV，测试 KV 保留比例、NTP loss / accuracy，以及相对 full attention 的下降。
 
 ## 已完成的新结构实验
@@ -347,12 +423,13 @@ Round 4 到目前为止最重要的结论是：
 4. **当前 routing bucket 有用，但不是干净的 hierarchy bucket**：routing 与 local slot 有非随机对齐，但对 higher-level slot 对齐弱；attention history mass 也没有稳定集中在 ground-truth hierarchy slot。
 5. **标准 load balance 不应作为主线**：它让负载均匀、压缩比稳定，但削弱 NTP 与 feature selectivity。
 
-下一步研究重点应从 “如何防 collapse” 转为 “如何让 pre-router cluster 更语义化”。也就是说，要保留 pre-router-controlled attention 这个结构，同时研究更合适的 routing inductive bias 或 objective，让 bucket 不只是可用，而是更接近 hierarchy feature。
+下一步研究重点应先回到问题 1 和问题 2：理解 baseline MoE 到底学了什么，以及为什么不学 ground-truth slot 也能完成任务。只有证明 ground-truth slot specialization 在更难数据或更小模型下具有必要性之后，继续设计新的 routing objective 才有足够性价比。
 
 ## 当前预期结论形式
 
-这一轮最终需要给出三类结论：
+这一轮最终需要给出四类结论：
 
 1. **Baseline MoE 到底按什么分发：** 它是否按 token、位置、边界、频率、target、attention cluster 或 representation cluster 分发。
-2. **Attention-derived routing 是否可学：** pre-attention router 是否能预测 attention retrieval bucket，且不发生 expert collapse。
-3. **这对 inverse KV 是否有帮助：** 如果 pre-attention routing 能保留足够 NTP accuracy 并减少 KV 访问，它就是比当前 gate / `v` proxy 更合理的 reverse indexing signal。
+2. **为什么不按 ground-truth slot 也能学会：** 当前任务是否太简单、模型是否过参数化、是否存在绕开 slot specialization 的替代解。
+3. **Attention-derived routing 是否可学：** pre-attention router 是否能预测 attention retrieval bucket，且不发生 expert collapse。
+4. **这对 inverse KV 是否有帮助：** 如果 pre-attention routing 能保留足够 NTP accuracy 并减少 KV 访问，它就是比当前 gate / `v` proxy 更合理的 reverse indexing signal。
