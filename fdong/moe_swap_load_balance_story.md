@@ -49,7 +49,7 @@ MoE 模型通过稀疏激活扩大参数容量：每个 token 只激活少量 ex
 
 如果数据 feature 本身是层次化的，那么 MoE 的 expert 结构也不应只是一个 flat expert pool。更自然的结构是 Hierarchical Common-Unique MoE：每个层级都包含一个 common expert 和若干 unique experts，common expert 负责该层级所有样本共享的高频 feature，unique experts 负责该层级内部更细、更低频的差异。
 
-![Hierarchical Common-Unique MoE](figures/hierarchical_common_unique_moe.svg)
+![Hierarchical Common-Unique MoE](figures/model_arch.png)
 
 图 1：一个两级 $4\times4$ Hierarchical Common-Unique MoE 示例。顶层包含 1 个 global common expert 和 4 个 unique expert groups；图中展开其中一个 group，展示其内部的 1 个 group common expert 和 4 个 group unique experts。global common expert 与被选中 group 的 common expert 构成高频常驻路径，group unique experts 对应长尾 feature，是主要的动态 swapping 对象。
 

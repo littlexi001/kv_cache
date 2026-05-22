@@ -1,5 +1,29 @@
 # Inverse KV Overview
 
+
+我们想做 specizalization，认为做到了就有一万个好的下游性质：1 预测&端侧；2 kv；3 遗忘；
+怎么做：
+1. 如何定义 specialization
+   1. synthetic：生成序列数据，同一个 local slot 里面应当是同一个 feature，发到同一个 expert
+   2. real corpus：next token logits 一样的是同一个 feature，发到同一个 expert
+2. 为什么现在的 MoE 没做到 specialization
+   1. 现在的 MoE 如何分发？：HRJ，syn & real
+      1. 同一个 expert 的 token 有啥关系
+      2. 不同 expert 的 token 有啥关系
+   2. 理想情况下的 specialization：CAR，真实数据
+      1. 同一个 expert 的 token 有啥关系
+      2. 不同 expert 的 token 有啥关系
+   3. 模型各种结构/训练因素对 specialization 有何影响 ZX: 真实数据
+      1. load-balance loss -
+      2. 残差链接 (oracle)
+      3. attention：attention 已经捕捉到 near ground truth -(oracle, syn) ZX: real
+3. 什么结构能做到 specialization，并且有助于我们的三个下游任务：DF, LYM synthe; LET: real
+   1. oracle：去掉残差
+   2. SD on forward representation：
+   3. head-level
+   4. hierarchical
+   5. 为了服务于最后的 kv cache，moe input 不能是 attention output，可以是 layer input ,q ,k, v 
+
 ## 总体目标
 
 我们希望模型形成更好的 expert selectivity：具有相同或相近 feature 的 token 应当被路由到稳定的 expert bucket 中。
@@ -23,52 +47,47 @@ hierarchical / compositional sequence feature
 
 结论：
 
-- Attention 对 ground-truth slot feature 有明显敏感性，有 75% 的注意力 mass 集中在 same-slot 中。
+- Attention 对 ground-truth slot feature 有明显敏感性，有 75% 的 attention score 集中在 same-slot 中。
 - 标准 MoE routing 基本没有自然形成和 local slot / higher-level slot 对齐的 expert bucket。
 
 这一轮确认：标准 Attention 能看到 feature，但标准 MoE 不会自然给出我们想要的 feature-level routing。
 
-## Round 2：Attention 是否已经提供可用 Feature Signal
+## Round 2：Attention 捕捉的 feature 是否已经提供接近 Gound-Truth Signal
 
 文件：[inverse_kv_round2_notes.md](./inverse_kv_round2_notes.md)
 
 结论：
 
-- Attention 捕捉到的关键结构更接近 higher-level slot，而不只是 local slot。
-- 只保留 same higher-level slot 的 KV，next-token accuracy 几乎不下降，说明模型真正依赖的 retrieval bucket 接近 higher-level feature。
-- Attention output / hidden representation 中可以线性读出较强的 ground-truth feature signal。
-- MoE routing 与 attention 捕捉到的 feature 有一定相关性，但 selectivity 仍然不够干净。
+- Attention 捕捉到的关键结构更接近 higher-level slot，已经提供了可用 feature signal.
 
 这一轮确认：问题不在于 attention 完全没有学到 feature；相反，attention 已经提供了可用 feature signal。真正的问题是 MoE gate / expert 没有把这个 signal 转化为稳定 routing bucket。
 
-## Round 3：Ground-truth Routing 与 Gate Selectivity
+## Round 3：Ground-truth Routing 对模型有好处吗？
 
 文件：[inverse_kv_round3_plan.md](./inverse_kv_round3_plan.md)
 
 结论：
 
-- 直接按照 ground-truth higher-level slot 做 routing 能提升 next-token prediction，说明 feature-based expert bucket 是合理目标。
-- Offline probe 说明当前表征中存在可读 feature，gate 并非完全没有能力读出 ground-truth routing。
-- Supervised gate 即使达到约 97%/98% routing accuracy，next-token performance 仍接近 baseline，低于 ground-truth dispatch。
-- True-router indexing 显示 expert routing 作为 KV reverse index 有潜力；但 early-proxy indexing 失败，说明当前架构还不能直接在同层 attention 前用 `v` 近似 gate input 做可部署 reverse indexing。
+- 有好处。直接按照 ground-truth higher-level slot 做 routing 能提升 next-token prediction，说明 feature-based expert 是合理目标。
+- Supervised gate 达到 98% routing accuracy 时，expert routing 作为 KV reverse index 有潜力 能实现 35% 的 kv_cache 只损失 1.5% next-token-prediction 精度。
 
 这一轮确认：feature-based routing 本身有价值，但 learned gate 的问题不是简单分类准确率，而是训练过程中的 ownership formation。
 
-## Round 4：Baseline MoE 到底按什么分发，以及如何构造可用于 Reverse Indexing 的 Routing Objective
+## Round 4：Baseline MoE 为什么没学到 ground truth feature? 
 
 文件：[inverse_kv_round4_plan.md](./inverse_kv_round4_plan.md)
 
-这一轮不再把 naive inhibition 作为主线。已有结果显示，naive inhibition 主要让 routing 变 sharp 甚至 collapse，不能直接证明模型形成了有意义的 feature specialization。
-
-Round 4 只回答两个问题：
-
+子问题 & 结论：
 1. **Baseline MoE 没按 ground-truth slot 分，那它到底按什么分？**
-   这一部分会把 expert assignment 与 local slot、higher-level slot、token id、slot 内位置、boundary、target token、feature frequency、attention cluster 和 representation cluster 做统一相关性分析。
+   1. 同一 input token id, 75% 会被分发进几乎同一 expert 中。
+   2. 输入同一 expert 的不同 token，关系是：
+   3. 输入不同 expert 的不同 token，关系是：
 
-2. **能否用 attention-derived signal 训练一个 pre-attention routing，使 expert bucket 对齐 attention retrieval bucket？**
-   这一部分会用 attention mass coverage 构造 positive set，而不是用固定 token 数量。目标是训练一个 attention 前就能产生的 routing signal，使它可以真正用于同层 KV reverse indexing。
+2. **能否用 attention-derived signal 训练一个 routing，使 expert load 对齐 attention score？**
+   可以。
+   1. 约束发到同一 expert 的 token 相互 attention score 高，不同 expert 的 token 之间 attention score 低，能实现 expert 上的 token 和 attention score 80% 匹配。
+   2. 这种分发与 ground truth slot 的匹配程度达到 95%。
 
-这一轮确认：下一步重点不是继续问 inhibition 是否有效，而是先解释 baseline routing 的真实依据，再设计一个显式对齐 attention retrieval bucket、且具备 anti-collapse 约束的 routing objective。
 
 ## 当前主结论
 
