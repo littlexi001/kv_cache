@@ -26,8 +26,8 @@ python "${PROJECT_DIR}/src/eval_attention_cluster.py" \
   --synthetic_seed "${SYNTHETIC_SEED:-0}" \
   --synthetic_pad_token_id "${SYNTHETIC_PAD_TOKEN_ID:-0}" \
   --synthetic_min_token_id "${SYNTHETIC_MIN_TOKEN_ID:-1}" \
-  --synthetic_sampling_distribution "${SYNTHETIC_SAMPLING_DISTRIBUTION:-uniform}" \
-  --synthetic_zipf_alpha "${SYNTHETIC_ZIPF_ALPHA:-1.0}" \
+  --synthetic_sampling_distribution "${SYNTHETIC_SAMPLING_DISTRIBUTION:-zipf}" \
+  --synthetic_zipf_alpha "${SYNTHETIC_ZIPF_ALPHA:-1.1}" \
   --synthetic_zipf_shuffle_ranks "${SYNTHETIC_ZIPF_SHUFFLE_RANKS:-true}" \
   --debug_vocab_size "${DEBUG_VOCAB_SIZE:-257}" \
   --debug_hidden_size "${DEBUG_HIDDEN_SIZE:-128}" \
@@ -50,6 +50,7 @@ python "${PROJECT_DIR}/src/eval_attention_cluster.py" \
   --moe_router_input "${MOE_ROUTER_INPUT:-attention_output}" \
   --moe_head_level "${MOE_HEAD_LEVEL:-false}" \
   --use_pre_router "${USE_PRE_ROUTER:-true}" \
-  --pre_router_input "${PRE_ROUTER_INPUT:-layer_input}" \
+  --pre_router_input "${PRE_ROUTER_INPUT:-q}" \
   --pre_router_controls_attention "${PRE_ROUTER_CONTROLS_ATTENTION:-false}" \
+  --moe_expert_input_attention_topk "${MOE_EXPERT_INPUT_ATTENTION_TOPK:-0}" \
   "$@"

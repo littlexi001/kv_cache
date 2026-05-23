@@ -16,6 +16,12 @@ the expert input remains the normal post-attention MLP input. Attention weights
 are only used as a training teacher for the auxiliary loss; inference can route
 from the pre-attention feature before doing full QK retrieval.
 
+Set `MOE_EXPERT_INPUT_ATTENTION_TOPK > 0` to feed the experts from a sparse
+attention output: the model first selects the top-k attended K/V positions per
+query/head from the full attention weights, renormalizes those weights, and uses
+that V-weighted output for the MLP/expert input. The main attention residual
+still uses full attention, so this isolates the expert-input ablation.
+
 The auxiliary loss is differentiable. It does not hard-code a ground-truth
 expert id. For each layer, it computes:
 
@@ -42,8 +48,8 @@ By default only the top attended history tokens are used:
 ATTENTION_CLUSTER_TOPK=4
 ATTENTION_CLUSTER_INCLUDE_SELF=false
 ATTENTION_CLUSTER_DETACH_ATTENTION=true
-ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01
-MOE_LOAD_BALANCE_LOSS_WEIGHT=0.0
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0
+MOE_LOAD_BALANCE_LOSS_WEIGHT=0.01
 ```
 
 Run:
@@ -71,6 +77,7 @@ ATTENTION_CLUSTER_TOPK=8 \
 MOE_HEAD_LEVEL=false \
 USE_PRE_ROUTER=true \
 PRE_ROUTER_INPUT=q \
+MOE_EXPERT_INPUT_ATTENTION_TOPK=8 \
 RUN_NAME=attn-cluster-w01-top8 \
 bash ymluo/projects/qwen3_moe_attention_cluster/scripts/run_train.sh
 ```
@@ -81,16 +88,18 @@ Important defaults:
 SYNTHETIC_BLOCK_SIZE=4
 SYNTHETIC_NUM_HIERARCHY_LAYERS=2
 SYNTHETIC_NUM_UNITS_PER_LAYER=64
-SYNTHETIC_SAMPLING_DISTRIBUTION=uniform
+SYNTHETIC_SAMPLING_DISTRIBUTION=zipf
+SYNTHETIC_ZIPF_ALPHA=1.1
 MOE_HEAD_LEVEL=false
 USE_PRE_ROUTER=true
-PRE_ROUTER_INPUT=layer_input
+PRE_ROUTER_INPUT=q
 PRE_ROUTER_CONTROLS_ATTENTION=false
+MOE_EXPERT_INPUT_ATTENTION_TOPK=0
 MOE_NUM_EXPERTS_PER_TOK=1
 GATE_INHIBITION_WEIGHT=0.0
-ATTENTION_CLUSTER_WEIGHT=0.05
-ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01
-MOE_LOAD_BALANCE_LOSS_WEIGHT=0.0
+ATTENTION_CLUSTER_WEIGHT=0.01
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0
+MOE_LOAD_BALANCE_LOSS_WEIGHT=0.01
 EXPERT_REPULSION_WEIGHT=0.0
 ```
 

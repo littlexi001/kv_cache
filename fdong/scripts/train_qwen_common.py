@@ -104,6 +104,12 @@ def add_common_training_args(parser: argparse.ArgumentParser):
         help="Use pre-router top-k clusters to mask attention during normal forward.",
     )
     parser.add_argument(
+        "--moe_expert_input_attention_topk",
+        type=int,
+        default=0,
+        help="If >0, feed experts with attention output recomputed from only the top-k attended K/V positions.",
+    )
+    parser.add_argument(
         "--attention_router_loss_type",
         type=str,
         choices=["kl", "pairwise", "topk_logits"],
@@ -222,6 +228,10 @@ def apply_moe_overrides(config, args):
             raise ValueError("Pre-router is currently implemented for token-level MoE, not head-level MoE.")
     if args.router_entropy_floor_loss_weight > 0 and not args.use_pre_router:
         raise ValueError("Router entropy floor loss currently requires `--use_pre_router`.")
+    if args.moe_expert_input_attention_topk < 0:
+        raise ValueError("`--moe_expert_input_attention_topk` must be >= 0.")
+    if args.moe_expert_input_attention_topk > 0 and args.attn_implementation != "eager":
+        raise ValueError("`--moe_expert_input_attention_topk > 0` currently requires `--attn_implementation eager`.")
     if args.ground_truth_routing_strategy != "none":
         if not args.use_moe:
             raise ValueError("Ground-truth routing requires `--use_moe`.")
@@ -262,6 +272,7 @@ def apply_moe_overrides(config, args):
     config.use_pre_router = bool(args.use_pre_router)
     config.pre_router_input = str(args.pre_router_input)
     config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
+    config.moe_expert_input_attention_topk = int(args.moe_expert_input_attention_topk)
     config.attention_router_loss_type = str(args.attention_router_loss_type)
     config.attention_router_loss_weight = float(args.attention_router_loss_weight)
     config.attention_router_rho = float(args.attention_router_rho)
@@ -306,6 +317,9 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "pre_router_input": str(getattr(config, "pre_router_input", "layer_input")),
                 "pre_router_controls_attention": bool(
                     getattr(config, "pre_router_controls_attention", False)
+                ),
+                "moe_expert_input_attention_topk": int(
+                    getattr(config, "moe_expert_input_attention_topk", 0)
                 ),
                 "attention_router_loss_type": str(getattr(config, "attention_router_loss_type", "kl")),
                 "attention_router_loss_weight": float(getattr(config, "attention_router_loss_weight", 0.0)),
@@ -367,6 +381,7 @@ def prepare_model(local_rank, world_size, device, args):
             f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
             f"use_pre_router={config.use_pre_router}, pre_router_input={config.pre_router_input}, "
             f"pre_router_controls_attention={config.pre_router_controls_attention}, "
+            f"expert_input_attention_topk={config.moe_expert_input_attention_topk}, "
             f"attention_router_loss_type={config.attention_router_loss_type}, "
             f"attention_router_loss_weight={config.attention_router_loss_weight}, "
             f"attention_router_rho={config.attention_router_rho}, "

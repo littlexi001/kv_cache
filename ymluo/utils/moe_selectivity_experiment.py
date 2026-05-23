@@ -191,6 +191,12 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
         default=False,
         help="Use pre-router top-k buckets as an attention KV mask during normal forward.",
     )
+    parser.add_argument(
+        "--moe_expert_input_attention_topk",
+        type=int,
+        default=0,
+        help="If >0, feed experts with attention output recomputed from only the top-k attended K/V positions.",
+    )
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
 
     parser.add_argument("--single_token_update", type=str2bool, default=defaults["single_token_update"])
@@ -289,6 +295,7 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--use_pre_router", type=str2bool, default=False)
     parser.add_argument("--pre_router_input", choices=["layer_input", "q", "k", "v"], default="layer_input")
     parser.add_argument("--pre_router_controls_attention", type=str2bool, default=False)
+    parser.add_argument("--moe_expert_input_attention_topk", type=int, default=0)
 
     parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
     parser.add_argument("--forced_warmup_higher_unit_len", type=int, default=-1)
@@ -551,6 +558,10 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
             raise ValueError("Pre-router requires `--use_moe true`.")
         if bool(args.moe_head_level):
             raise ValueError("Pre-router is currently implemented for token-level MoE, not head-level MoE.")
+    if int(args.moe_expert_input_attention_topk) < 0:
+        raise ValueError("`--moe_expert_input_attention_topk` must be >= 0.")
+    if int(args.moe_expert_input_attention_topk) > 0 and args.attn_implementation != "eager":
+        raise ValueError("`--moe_expert_input_attention_topk > 0` currently requires `--attn_implementation eager`.")
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -572,6 +583,7 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
     config.use_pre_router = bool(args.use_pre_router)
     config.pre_router_input = str(args.pre_router_input)
     config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
+    config.moe_expert_input_attention_topk = int(args.moe_expert_input_attention_topk)
 
 
 def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_value: int) -> list[int]:
@@ -718,7 +730,8 @@ def prepare_model(args: argparse.Namespace, device: torch.device) -> MyQwen3ForC
         f"vocab={config.vocab_size} use_moe={config.use_moe} "
         f"head_level={config.moe_head_level} router_input={config.moe_router_input} "
         f"use_pre_router={config.use_pre_router} pre_router_input={config.pre_router_input} "
-        f"pre_router_controls_attention={config.pre_router_controls_attention}",
+        f"pre_router_controls_attention={config.pre_router_controls_attention} "
+        f"expert_input_attention_topk={config.moe_expert_input_attention_topk}",
         flush=True,
     )
     print(f"attention_stride_pattern={config.attention_stride_pattern}", flush=True)
@@ -1200,6 +1213,7 @@ def save_checkpoint(
         "use_pre_router": bool(getattr(model.config, "use_pre_router", False)),
         "pre_router_input": str(getattr(model.config, "pre_router_input", "layer_input")),
         "pre_router_controls_attention": bool(getattr(model.config, "pre_router_controls_attention", False)),
+        "moe_expert_input_attention_topk": int(getattr(model.config, "moe_expert_input_attention_topk", 0)),
     }
     (ckpt_dir / "runtime_config.json").write_text(json.dumps(runtime_config, indent=2), encoding="utf-8")
     print(f"saved checkpoint: {ckpt_dir / f'{step}.pth'}", flush=True)

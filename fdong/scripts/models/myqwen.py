@@ -664,6 +664,23 @@ def eager_attention_forward(
     return attn_output, attn_weights
 
 
+def topk_attention_output_from_weights(
+    attn_weights: torch.Tensor,
+    value: torch.Tensor,
+    num_key_value_groups: int,
+    topk: int,
+) -> torch.Tensor:
+    value_states = repeat_kv(value, num_key_value_groups)
+    key_len = attn_weights.shape[-1]
+    k = max(1, min(int(topk), key_len))
+    top_values, top_indices = torch.topk(attn_weights.float(), k=k, dim=-1)
+    sparse_weights = torch.zeros_like(attn_weights, dtype=top_values.dtype)
+    sparse_weights.scatter_(-1, top_indices, top_values)
+    sparse_weights = sparse_weights / sparse_weights.sum(dim=-1, keepdim=True).clamp_min(1e-8)
+    sparse_output = torch.matmul(sparse_weights.to(value_states.dtype), value_states)
+    return sparse_output.transpose(1, 2).contiguous()
+
+
 class MyQwen3Attention(nn.Module):
     def __init__(self, config: Qwen3Config, layer_idx: int):
         super().__init__()
@@ -674,6 +691,7 @@ class MyQwen3Attention(nn.Module):
         self.scaling = self.head_dim**-0.5
         self.attention_dropout = config.attention_dropout
         self.is_causal = True
+        self.moe_expert_input_attention_topk = int(getattr(config, "moe_expert_input_attention_topk", 0))
 
         self.q_proj = nn.Linear(
             config.hidden_size, config.num_attention_heads * self.head_dim, bias=config.attention_bias
@@ -705,7 +723,7 @@ class MyQwen3Attention(nn.Module):
         past_key_value: Optional[Cache] = None,
         cache_position: Optional[torch.LongTensor] = None,
         **kwargs: Unpack[FlashAttentionKwargs],
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor]:
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], torch.Tensor, torch.Tensor, torch.Tensor]:
         # print(hidden_states.shape)
         input_shape = hidden_states.shape[:-1]
         hidden_shape = (*input_shape, -1, self.head_dim)
@@ -741,9 +759,25 @@ class MyQwen3Attention(nn.Module):
         )
 
         head_attn_output = attn_output
+        if self.moe_expert_input_attention_topk > 0:
+            if attn_weights is None:
+                raise ValueError("`moe_expert_input_attention_topk` requires attention weights; use eager attention.")
+            expert_head_attn_output = topk_attention_output_from_weights(
+                attn_weights,
+                value_states,
+                self.num_key_value_groups,
+                self.moe_expert_input_attention_topk,
+            )
+        else:
+            expert_head_attn_output = head_attn_output
         attn_output = attn_output.reshape(*input_shape, -1).contiguous()
         attn_output = self.o_proj(attn_output)
-        return attn_output, attn_weights, head_attn_output
+        if self.moe_expert_input_attention_topk > 0:
+            expert_attn_output = expert_head_attn_output.reshape(*input_shape, -1).contiguous()
+            expert_attn_output = self.o_proj(expert_attn_output)
+        else:
+            expert_attn_output = attn_output
+        return attn_output, attn_weights, head_attn_output, expert_attn_output, expert_head_attn_output
 
 
 class MyQwen3DecoderLayer(nn.Module):
@@ -851,7 +885,13 @@ class MyQwen3DecoderLayer(nn.Module):
                 attention_mask = kv_mask if attention_mask is None else attention_mask + kv_mask
 
         # Self Attention
-        attn_output_wo_res, self_attn_weights, head_attn_output = self.self_attn(
+        (
+            attn_output_wo_res,
+            self_attn_weights,
+            head_attn_output,
+            expert_attn_output_wo_res,
+            expert_head_attn_output,
+        ) = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
             position_ids=position_ids,
@@ -863,10 +903,11 @@ class MyQwen3DecoderLayer(nn.Module):
             **kwargs,
         )
         hidden_states = residual_source + attn_output_wo_res
+        expert_hidden_states = residual_source + expert_attn_output_wo_res
 
         # Fully Connected
         residual = hidden_states
-        mlp_input = self.post_attention_layernorm(hidden_states)
+        mlp_input = self.post_attention_layernorm(expert_hidden_states)
         expert_labels = None
         router_aux_loss = None
         router_inhibition_loss = None
@@ -881,7 +922,7 @@ class MyQwen3DecoderLayer(nn.Module):
             residual_heads = residual_source.reshape(
                 residual_source.shape[0], residual_source.shape[1], self.num_attention_heads, self.head_dim
             )
-            head_expert_input = residual_heads + head_attn_output
+            head_expert_input = residual_heads + expert_head_attn_output
             if self.moe_router_input == "attention_output":
                 head_router_input = head_attn_output
             else:
