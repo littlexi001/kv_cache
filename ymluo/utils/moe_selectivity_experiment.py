@@ -183,6 +183,14 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--moe_normalize_topk_prob", type=str2bool, default=True)
     parser.add_argument("--moe_router_input", choices=["hidden", "attention_output"], default="attention_output")
     parser.add_argument("--moe_head_level", type=str2bool, default=True)
+    parser.add_argument("--use_pre_router", type=str2bool, default=False)
+    parser.add_argument("--pre_router_input", choices=["layer_input", "q", "k", "v"], default="layer_input")
+    parser.add_argument(
+        "--pre_router_controls_attention",
+        type=str2bool,
+        default=False,
+        help="Use pre-router top-k buckets as an attention KV mask during normal forward.",
+    )
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
 
     parser.add_argument("--single_token_update", type=str2bool, default=defaults["single_token_update"])
@@ -278,6 +286,9 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--moe_normalize_topk_prob", type=str2bool, default=True)
     parser.add_argument("--moe_router_input", choices=["hidden", "attention_output"], default="attention_output")
     parser.add_argument("--moe_head_level", type=str2bool, default=True)
+    parser.add_argument("--use_pre_router", type=str2bool, default=False)
+    parser.add_argument("--pre_router_input", choices=["layer_input", "q", "k", "v"], default="layer_input")
+    parser.add_argument("--pre_router_controls_attention", type=str2bool, default=False)
 
     parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
     parser.add_argument("--forced_warmup_higher_unit_len", type=int, default=-1)
@@ -535,6 +546,11 @@ def apply_debug_model_overrides(config: Any, args: argparse.Namespace) -> None:
 
 
 def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
+    if bool(args.use_pre_router):
+        if not bool(args.use_moe):
+            raise ValueError("Pre-router requires `--use_moe true`.")
+        if bool(args.moe_head_level):
+            raise ValueError("Pre-router is currently implemented for token-level MoE, not head-level MoE.")
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -553,6 +569,9 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
     config.moe_normalize_topk_prob = bool(args.moe_normalize_topk_prob)
     config.moe_router_input = str(args.moe_router_input)
     config.moe_head_level = bool(args.moe_head_level)
+    config.use_pre_router = bool(args.use_pre_router)
+    config.pre_router_input = str(args.pre_router_input)
+    config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
 
 
 def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_value: int) -> list[int]:
@@ -697,7 +716,9 @@ def prepare_model(args: argparse.Namespace, device: torch.device) -> MyQwen3ForC
         f"layers={config.num_hidden_layers} hidden={config.hidden_size} "
         f"heads={config.num_attention_heads} kv_heads={config.num_key_value_heads} "
         f"vocab={config.vocab_size} use_moe={config.use_moe} "
-        f"head_level={config.moe_head_level} router_input={config.moe_router_input}",
+        f"head_level={config.moe_head_level} router_input={config.moe_router_input} "
+        f"use_pre_router={config.use_pre_router} pre_router_input={config.pre_router_input} "
+        f"pre_router_controls_attention={config.pre_router_controls_attention}",
         flush=True,
     )
     print(f"attention_stride_pattern={config.attention_stride_pattern}", flush=True)
@@ -1176,6 +1197,9 @@ def save_checkpoint(
         "moe_num_experts_per_tok": int(model.config.moe_num_experts_per_tok),
         "moe_router_input": str(model.config.moe_router_input),
         "moe_head_level": bool(model.config.moe_head_level),
+        "use_pre_router": bool(getattr(model.config, "use_pre_router", False)),
+        "pre_router_input": str(getattr(model.config, "pre_router_input", "layer_input")),
+        "pre_router_controls_attention": bool(getattr(model.config, "pre_router_controls_attention", False)),
     }
     (ckpt_dir / "runtime_config.json").write_text(json.dumps(runtime_config, indent=2), encoding="utf-8")
     print(f"saved checkpoint: {ckpt_dir / f'{step}.pth'}", flush=True)
@@ -1194,6 +1218,8 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
         raise ValueError("--gradient_accumulation_steps must be >= 1")
     if args.synthetic_num_hierarchy_layers < 2:
         raise ValueError("These metrics expect at least 2 synthetic hierarchy layers.")
+    if args.use_pre_router and args.forced_warmup_steps > 0:
+        raise ValueError("`--use_pre_router` is not compatible with forced warmup in this runner.")
 
     torch.manual_seed(args.seed)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -1475,6 +1501,8 @@ def run_eval_only(experiment_type: str, argv: list[str] | None = None) -> None:
 
     if args.synthetic_num_hierarchy_layers < 2:
         raise ValueError("These metrics expect at least 2 synthetic hierarchy layers.")
+    if args.use_pre_router and args.eval_forced_warmup_routing:
+        raise ValueError("`--use_pre_router` is not compatible with forced warmup eval in this runner.")
 
     torch.manual_seed(args.seed)
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")

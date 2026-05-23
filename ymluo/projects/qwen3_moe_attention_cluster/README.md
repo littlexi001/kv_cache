@@ -10,6 +10,12 @@ If token i attends strongly to token j, then token i and token j should have
 similar router distributions and high probability of using the same expert.
 ```
 
+For KV-cache compression experiments, the default runner now uses a
+pre-attention router. The router can read `layer_input`, `q`, `k`, or `v`, while
+the expert input remains the normal post-attention MLP input. Attention weights
+are only used as a training teacher for the auxiliary loss; inference can route
+from the pre-attention feature before doing full QK retrieval.
+
 The auxiliary loss is differentiable. It does not hard-code a ground-truth
 expert id. For each layer, it computes:
 
@@ -63,7 +69,8 @@ ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01 \
 MOE_LOAD_BALANCE_LOSS_WEIGHT=0.01 \
 ATTENTION_CLUSTER_TOPK=8 \
 MOE_HEAD_LEVEL=false \
-MOE_ROUTER_INPUT=attention_output \
+USE_PRE_ROUTER=true \
+PRE_ROUTER_INPUT=q \
 RUN_NAME=attn-cluster-w01-top8 \
 bash ymluo/projects/qwen3_moe_attention_cluster/scripts/run_train.sh
 ```
@@ -76,6 +83,9 @@ SYNTHETIC_NUM_HIERARCHY_LAYERS=2
 SYNTHETIC_NUM_UNITS_PER_LAYER=64
 SYNTHETIC_SAMPLING_DISTRIBUTION=uniform
 MOE_HEAD_LEVEL=false
+USE_PRE_ROUTER=true
+PRE_ROUTER_INPUT=layer_input
+PRE_ROUTER_CONTROLS_ATTENTION=false
 MOE_NUM_EXPERTS_PER_TOK=1
 GATE_INHIBITION_WEIGHT=0.0
 ATTENTION_CLUSTER_WEIGHT=0.05

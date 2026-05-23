@@ -96,7 +96,7 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     )
     parser.add_argument("--moe_head_level", action="store_true", default=False)
     parser.add_argument("--use_pre_router", action="store_true", default=False)
-    parser.add_argument("--pre_router_input", type=str, choices=["layer_input", "q"], default="layer_input")
+    parser.add_argument("--pre_router_input", type=str, choices=["layer_input", "q", "k", "v"], default="layer_input")
     parser.add_argument(
         "--pre_router_controls_attention",
         action="store_true",

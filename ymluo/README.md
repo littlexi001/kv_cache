@@ -1,6 +1,6 @@
 # Qwen3 KV Cache 研究工作区
 
-> 文档中文化与最近同步日期：2026-05-18
+> 文档中文化与最近同步日期：2026-05-22
 
 ## 研究主题
 
@@ -40,6 +40,7 @@ KVCache_Indexing_Knowledge_Retrieval_2026-05-09.md
 | `projects/qwen3_kcache_norm_analysis` | Qwen3-0.6B 的 K-cache norm、attention energy、pruning loss/PPL 分析。 |
 | `projects/qwen3_kcache_value_delta_analysis` | Qwen3-8B 的 K-cache 取值、范数、相邻 token delta 分布分析。 |
 | `projects/qwen3_kcache_cosine_heatmap` | Qwen3-0.6B 的 K-cache token-token cosine 热力图分析，按 layer 和 KV head 输出。 |
+| `projects/qwen3_moe_attention_cluster` | MoE 专家选择性实验：用 attention 权重引导 router 做 token 聚类。 |
 | `logs/` | 历史日志或 workspace snapshot，普通实验入口不依赖它。 |
 | `utils/` | 预留共享工具目录。 |
 
@@ -699,6 +700,94 @@ QUERY_POSITIONS=last
 结论：前置强制选择 expert 的初始化会在前 1000 步让 `same_higher_by_layer` 明显上升，但去除 force 选择后该指标明显下降，1w step 后下降到接近正常水平。
 
 Exp3 总结：初始化参数对模型后续训练影响较小，模型会逐渐将参数向 baseline 靠近。
+
+### Exp4：Attention Cluster — 用注意力权重引导 router 聚类
+
+新增日期：2026-05-22
+
+实验目的：用 attention 权重作为监督信号，让彼此关注度高的 token 被路由到同一个 expert，从而形成 token 的语义聚类。核心 idea 是"如果模型自己认为两个 token 相关（attention 高），那么它们应该用同一个 expert 处理"。
+
+**方法**
+
+训练循环中开启 `output_attentions=True`，通过 `RouterLogitTracker` hook 收集每层 MoE router 的 logits，然后计算 attention_cluster_loss 作为辅助 loss 加入 total_loss。
+
+核心 loss 由三个函数组成：
+
+1. `prepare_attention_cluster_weights`（`moe_selectivity_experiment.py:800`）— 预处理 attention 权重：
+   - `detach_attention=True`：将 attention 从计算图断开，不训练 attention 参数本身。
+   - `include_self=False`：遮盖对角线，不看 token 自身。
+   - `topk=4`：每个 query 只保留 top-k 被关注的历史 token，减少噪声。
+
+2. `attention_weighted_router_consistency_loss`（`moe_selectivity_experiment.py:817`）— 核心一致性 loss：
+   ```
+   same_expert_prob[q,k] = Σ_e P(expert_e | token_q) × P(expert_e | token_k)
+   loss = -Σ_{q,k} attention[q,k] × log(same_expert_prob[q,k]) / Σ attention
+   ```
+   直觉：attention 权重越高的 token 对，越被鼓励分到同一个 expert。
+
+3. `attention_cluster_negative_pair_loss`（`moe_selectivity_experiment.py:909`）— 负样本 loss：
+   对不同 feature 的 token 对，惩罚它们被分到同一个 expert：`-log(1 - same_expert_prob)`。
+
+**关键超参数**
+
+| 参数 | 默认值 | 作用 |
+| --- | ---: | --- |
+| `attention_cluster_weight` | 0.05 | attention cluster loss 的总权重 |
+| `attention_cluster_temperature` | 1.0 | router softmax 温度 |
+| `attention_cluster_topk` | 4 | 每个 query 只取 top-k attended tokens |
+| `attention_cluster_include_self` | false | 是否包含自身 token |
+| `attention_cluster_detach_attention` | true | 是否切断 attention 梯度 |
+| `attention_cluster_negative_weight` | 0.01 | 负样本 loss 权重 |
+| `attention_cluster_negative_feature_layer` | 1 | 用哪层 hierarchy feature 区分不同 token |
+
+模型配置：3 层、128 hidden、4 attention heads、2 KV heads、head_dim=32、4 experts、head-level MoE。
+
+**实验结果**
+
+| step | loss | acc | same_higher_by_layer | higher_mass_by_layer | expert_load |
+| --- | ---: | ---: | --- | --- | --- |
+| 10000 | 0.2015 | 0.9422 | L0:0.7944 L1:0.9988 L2:0.9997 | L0:0.3256 L1:0.3194 L2:0.4631 | [0.283, 0.285, 0.242, 0.190] |
+
+深入看 step 10000 的详细指标：
+
+- **同 higher-unit 同 expert 率（same_higher_same_expert）**：整体 0.9310。L1 和 L2 几乎完美（0.9988、0.9997），L0 稍低（0.7944），说明深层 MoE 几乎完全按 higher-level unit 聚类，浅层还有一定混合。
+- **同 higher-occurrence 同 expert 率**：整体与 same_higher 一致（L0:0.8322, L1:0.9981, L2:0.9995），确认是按语义单元而非位置做路由。
+- **attention 在同类 token 上的质量（higher_mass）**：L2 最高（0.4631），L0/L1 分别为 0.3256 和 0.3194。说明深层 attention 更集中地关注同类 token。
+- **expert 负载**：整体 [0.283, 0.285, 0.242, 0.190]，有一定不均衡但未出现严重 collapse。逐层看 L2 最不均衡（[0.359, 0.242, 0.227, 0.172]），Expert 0 在深层承载更多负载。
+
+**与之前实验的对比**
+
+| 实验 | same_higher_by_layer (L2) | expert_load 范围 |
+| --- | ---: | --- |
+| Exp1 negative gradient | 1.0000 | [0.140, 0.323] |
+| Exp2 single token | 0.6161 | [0.226, 0.287] |
+| Exp3.1 orthogonal init | 0.3410 | [0.237, 0.272] |
+| Exp3.2 forced warmup | 0.3158 | [0.151, 0.336] |
+| **Exp4 attention cluster** | **0.9997** | **[0.172, 0.359]** |
+
+**结论**
+
+Attention cluster 方法在训练结束时几乎达到了与 Exp1（反向负梯度）同等的 selectivity（L2=0.9997 vs L2=1.0000），同时 expert 负载更均衡（最不均衡比例 2.09x vs Exp1 的 2.31x）。与 Exp3.2 forced warmup 去掉强制后 selectivity 下降不同，attention cluster 在整个训练过程中持续受益于 attention 信号，不会"遗忘"已经学到的聚类模式。
+
+attention cluster 的核心优势在于它是一种 **自监督** 信号——不需要外部标注哪个 token 属于哪个 unit，直接从模型自身的 attention pattern 中提取路由指导，这更接近生物神经网络的可塑性机制。
+
+运行命令：
+
+```bash
+ATTENTION_CLUSTER_WEIGHT=0.05 \
+ATTENTION_CLUSTER_TOPK=4 \
+ATTENTION_CLUSTER_TEMPERATURE=1.0 \
+ATTENTION_CLUSTER_NEGATIVE_WEIGHT=0.01 \
+bash ymluo/projects/qwen3_moe_attention_cluster/scripts/run_train.sh
+```
+
+主要输出：
+
+```text
+ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/metrics.jsonl
+ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/checkpoints/<step>.pth
+ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/checkpoints/runtime_config.json
+```
 
 ## 推荐阅读顺序
 

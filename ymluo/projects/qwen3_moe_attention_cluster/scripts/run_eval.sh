@@ -49,4 +49,7 @@ python "${PROJECT_DIR}/src/eval_attention_cluster.py" \
   --moe_normalize_topk_prob "${MOE_NORMALIZE_TOPK_PROB:-true}" \
   --moe_router_input "${MOE_ROUTER_INPUT:-attention_output}" \
   --moe_head_level "${MOE_HEAD_LEVEL:-false}" \
+  --use_pre_router "${USE_PRE_ROUTER:-true}" \
+  --pre_router_input "${PRE_ROUTER_INPUT:-layer_input}" \
+  --pre_router_controls_attention "${PRE_ROUTER_CONTROLS_ATTENTION:-false}" \
   "$@"

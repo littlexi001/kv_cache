@@ -753,6 +753,7 @@ class MyQwen3DecoderLayer(nn.Module):
         self.layer_idx = layer_idx
         self.hidden_size = config.hidden_size
         self.num_attention_heads = int(config.num_attention_heads)
+        self.num_key_value_heads = int(config.num_key_value_heads)
         self.head_dim = int(getattr(config, "head_dim", config.hidden_size // config.num_attention_heads))
         self.moe_router_input = str(getattr(config, "moe_router_input", "hidden"))
         self.moe_head_level = bool(getattr(config, "moe_head_level", False))
@@ -764,8 +765,8 @@ class MyQwen3DecoderLayer(nn.Module):
         self.router_entropy_floor_alpha = float(getattr(config, "router_entropy_floor_alpha", 0.5))
         if self.moe_router_input not in {"hidden", "attention_output"}:
             raise ValueError("`moe_router_input` must be either 'hidden' or 'attention_output'.")
-        if self.pre_router_input not in {"layer_input", "q"}:
-            raise ValueError("`pre_router_input` must be either 'layer_input' or 'q'.")
+        if self.pre_router_input not in {"layer_input", "q", "k", "v"}:
+            raise ValueError("`pre_router_input` must be one of 'layer_input', 'q', 'k', or 'v'.")
         self.self_attn = MyQwen3Attention(config=config, layer_idx=layer_idx)
         if bool(getattr(config, "use_moe", False)):
             self.mlp = MyQwen3HeadMoE(config) if self.moe_head_level else MyQwen3MoE(config)
@@ -813,6 +814,24 @@ class MyQwen3DecoderLayer(nn.Module):
                     self.self_attn.q_proj(hidden_states).view(
                         *hidden_states.shape[:-1], self.num_attention_heads, self.head_dim
                     )
+                ).reshape(*hidden_states.shape[:-1], -1)
+            elif self.pre_router_input == "k":
+                pre_router_states = self.self_attn.k_norm(
+                    self.self_attn.k_proj(hidden_states).view(
+                        *hidden_states.shape[:-1], self.num_key_value_heads, self.head_dim
+                    )
+                )
+                pre_router_states = pre_router_states.repeat_interleave(
+                    self.self_attn.num_key_value_groups,
+                    dim=-2,
+                ).reshape(*hidden_states.shape[:-1], -1)
+            elif self.pre_router_input == "v":
+                pre_router_states = self.self_attn.v_proj(hidden_states).view(
+                    *hidden_states.shape[:-1], self.num_key_value_heads, self.head_dim
+                )
+                pre_router_states = pre_router_states.repeat_interleave(
+                    self.self_attn.num_key_value_groups,
+                    dim=-2,
                 ).reshape(*hidden_states.shape[:-1], -1)
             else:
                 pre_router_states = hidden_states

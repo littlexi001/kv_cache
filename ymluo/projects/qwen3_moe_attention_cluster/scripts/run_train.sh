@@ -55,6 +55,9 @@ MOE_INTERMEDIATE_SIZE=${MOE_INTERMEDIATE_SIZE:-128}
 MOE_USE_COMMON_EXPERT=${MOE_USE_COMMON_EXPERT:-false}
 MOE_ROUTER_INPUT=${MOE_ROUTER_INPUT:-attention_output}
 MOE_HEAD_LEVEL=${MOE_HEAD_LEVEL:-false}
+USE_PRE_ROUTER=${USE_PRE_ROUTER:-true}
+PRE_ROUTER_INPUT=${PRE_ROUTER_INPUT:-layer_input}
+PRE_ROUTER_CONTROLS_ATTENTION=${PRE_ROUTER_CONTROLS_ATTENTION:-false}
 GATE_INHIBITION_WEIGHT=${GATE_INHIBITION_WEIGHT:-0.0}
 ATTENTION_CLUSTER_WEIGHT=${ATTENTION_CLUSTER_WEIGHT:-0.05}
 ATTENTION_CLUSTER_TEMPERATURE=${ATTENTION_CLUSTER_TEMPERATURE:-1.0}
@@ -124,6 +127,9 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --moe_normalize_topk_prob "${MOE_NORMALIZE_TOPK_PROB:-true}" \
   --moe_router_input "${MOE_ROUTER_INPUT:-attention_output}" \
   --moe_head_level "${MOE_HEAD_LEVEL:-false}" \
+  --use_pre_router "${USE_PRE_ROUTER:-true}" \
+  --pre_router_input "${PRE_ROUTER_INPUT:-layer_input}" \
+  --pre_router_controls_attention "${PRE_ROUTER_CONTROLS_ATTENTION:-false}" \
   --moe_load_balance_loss_weight "${MOE_LOAD_BALANCE_LOSS_WEIGHT:-0.0}" \
   --gate_inhibition_weight "${GATE_INHIBITION_WEIGHT:-0.0}" \
   --gate_inhibition_temperature "${GATE_INHIBITION_TEMPERATURE:-1.0}" \
