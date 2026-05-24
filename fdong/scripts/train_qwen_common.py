@@ -94,7 +94,44 @@ def add_common_training_args(parser: argparse.ArgumentParser):
         choices=["hidden", "attention_output"],
         default="hidden",
     )
+    parser.add_argument(
+        "--moe_router_input_pos",
+        type=str,
+        choices=["hidden", "attention_output_residual", "attention_output", "layer_input", "q", "k", "v"],
+        default="hidden",
+        help="Representation position used by the MoE router. 'hidden' is kept as alias for attention_output_residual.",
+    )
+    parser.add_argument(
+        "--moe_router_input_shape",
+        type=str,
+        choices=["full", "head", "spectral"],
+        default="full",
+        help="Representation shape used by the MoE router.",
+    )
+    parser.add_argument(
+        "--moe_expert_input_pos",
+        type=str,
+        choices=["hidden", "attention_output_residual", "attention_output", "layer_input", "q", "k", "v"],
+        default="attention_output_residual",
+        help="Representation position consumed by the MoE experts.",
+    )
+    parser.add_argument(
+        "--moe_expert_input_shape",
+        type=str,
+        choices=["full", "head", "spectral"],
+        default="full",
+        help="Representation shape consumed by the MoE experts.",
+    )
     parser.add_argument("--moe_head_level", action="store_true", default=False)
+    parser.add_argument("--moe_spectral_band_dims", type=parse_int_list, default=None)
+    parser.add_argument("--moe_spectral_num_experts_per_band", type=parse_int_list, default=None)
+    parser.add_argument("--moe_spectral_topk_per_band", type=parse_int_list, default=None)
+    parser.add_argument("--moe_spectral_intermediate_sizes", type=parse_int_list, default=None)
+    parser.add_argument("--moe_spectral_update_interval", type=int, default=100)
+    parser.add_argument("--moe_spectral_warmup_steps", type=int, default=100)
+    parser.add_argument("--moe_spectral_sample_size", type=int, default=4096)
+    parser.add_argument("--moe_spectral_basis_momentum", type=float, default=0.0)
+    parser.add_argument("--moe_spectral_no_include_top_in_router", action="store_true", default=False)
     parser.add_argument("--use_pre_router", action="store_true", default=False)
     parser.add_argument("--pre_router_input", type=str, choices=["layer_input", "q", "k", "v"], default="layer_input")
     parser.add_argument(
@@ -244,6 +281,26 @@ def apply_moe_overrides(config, args):
             raise ValueError("Ground-truth router supervision requires `--ground_truth_routing_strategy` other than `none`.")
         if args.moe_router_supervision_loss_weight <= 0:
             raise ValueError("Ground-truth router supervision requires `--moe_router_supervision_loss_weight > 0`.")
+    if args.moe_router_input_shape == "spectral":
+        if args.moe_head_level:
+            raise ValueError("Spectral MoE is incompatible with `--moe_head_level`.")
+        if args.moe_expert_input_shape != "full":
+            raise ValueError("Spectral MoE v1 requires `--moe_expert_input_shape full`.")
+        if args.use_pre_router:
+            raise ValueError("Spectral MoE is not currently compatible with `--use_pre_router`.")
+        if args.ground_truth_routing_strategy != "none":
+            raise ValueError("Spectral MoE is not currently compatible with ground-truth routing.")
+    if args.moe_router_input_shape == "head" or args.moe_expert_input_shape == "head":
+        if args.moe_router_input_shape == "head" and args.moe_expert_input_shape == "full":
+            args.moe_head_level = False
+        elif args.moe_router_input_shape == "head" and args.moe_expert_input_shape == "head":
+            args.moe_head_level = True
+        else:
+            raise ValueError(
+                "Supported head-shaped MoE modes are "
+                "`moe_router_input_shape=head, moe_expert_input_shape=full` and "
+                "`moe_router_input_shape=head, moe_expert_input_shape=head`."
+            )
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -268,7 +325,25 @@ def apply_moe_overrides(config, args):
     config.moe_router_act = str(args.moe_router_act)
     config.moe_normalize_topk_prob = not bool(args.moe_no_normalize_topk_prob)
     config.moe_router_input = str(args.moe_router_input)
+    config.moe_router_input_pos = str(args.moe_router_input_pos)
+    if config.moe_router_input_pos == "hidden" and config.moe_router_input == "attention_output":
+        config.moe_router_input_pos = "attention_output"
+    config.moe_router_input_shape = str(args.moe_router_input_shape)
+    config.moe_expert_input_pos = str(args.moe_expert_input_pos)
+    config.moe_expert_input_shape = str(args.moe_expert_input_shape)
     config.moe_head_level = bool(args.moe_head_level)
+    if config.moe_head_level:
+        config.moe_router_input_shape = "head"
+        config.moe_expert_input_shape = "head"
+    config.moe_spectral_band_dims = args.moe_spectral_band_dims
+    config.moe_spectral_num_experts_per_band = args.moe_spectral_num_experts_per_band
+    config.moe_spectral_topk_per_band = args.moe_spectral_topk_per_band
+    config.moe_spectral_intermediate_sizes = args.moe_spectral_intermediate_sizes
+    config.moe_spectral_update_interval = int(args.moe_spectral_update_interval)
+    config.moe_spectral_warmup_steps = int(args.moe_spectral_warmup_steps)
+    config.moe_spectral_sample_size = int(args.moe_spectral_sample_size)
+    config.moe_spectral_basis_momentum = float(args.moe_spectral_basis_momentum)
+    config.moe_spectral_include_top_in_router = not bool(args.moe_spectral_no_include_top_in_router)
     config.use_pre_router = bool(args.use_pre_router)
     config.pre_router_input = str(args.pre_router_input)
     config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
@@ -312,7 +387,20 @@ def write_runtime_config(ckpt_dir, attention_stride_pattern, residual_source_pat
                 "moe_router_act": str(getattr(config, "moe_router_act", "silu")),
                 "moe_normalize_topk_prob": bool(getattr(config, "moe_normalize_topk_prob", True)),
                 "moe_router_input": str(getattr(config, "moe_router_input", "hidden")),
+                "moe_router_input_pos": str(getattr(config, "moe_router_input_pos", "hidden")),
+                "moe_router_input_shape": str(getattr(config, "moe_router_input_shape", "full")),
+                "moe_expert_input_pos": str(getattr(config, "moe_expert_input_pos", "attention_output_residual")),
+                "moe_expert_input_shape": str(getattr(config, "moe_expert_input_shape", "full")),
                 "moe_head_level": bool(getattr(config, "moe_head_level", False)),
+                "moe_spectral_band_dims": getattr(config, "moe_spectral_band_dims", None),
+                "moe_spectral_num_experts_per_band": getattr(config, "moe_spectral_num_experts_per_band", None),
+                "moe_spectral_topk_per_band": getattr(config, "moe_spectral_topk_per_band", None),
+                "moe_spectral_intermediate_sizes": getattr(config, "moe_spectral_intermediate_sizes", None),
+                "moe_spectral_update_interval": int(getattr(config, "moe_spectral_update_interval", 100)),
+                "moe_spectral_warmup_steps": int(getattr(config, "moe_spectral_warmup_steps", 100)),
+                "moe_spectral_sample_size": int(getattr(config, "moe_spectral_sample_size", 4096)),
+                "moe_spectral_basis_momentum": float(getattr(config, "moe_spectral_basis_momentum", 0.0)),
+                "moe_spectral_include_top_in_router": bool(getattr(config, "moe_spectral_include_top_in_router", True)),
                 "use_pre_router": bool(getattr(config, "use_pre_router", False)),
                 "pre_router_input": str(getattr(config, "pre_router_input", "layer_input")),
                 "pre_router_controls_attention": bool(
@@ -378,7 +466,16 @@ def prepare_model(local_rank, world_size, device, args):
             f"router_type={config.moe_router_type}, "
             f"router_hidden={config.moe_router_hidden_size}, "
             f"router_act={config.moe_router_act}, "
-            f"router_input={config.moe_router_input}, head_level={config.moe_head_level}, "
+            f"router_input={config.moe_router_input}, "
+            f"router_input_pos={config.moe_router_input_pos}, "
+            f"router_input_shape={config.moe_router_input_shape}, "
+            f"expert_input_pos={config.moe_expert_input_pos}, "
+            f"expert_input_shape={config.moe_expert_input_shape}, "
+            f"head_level={config.moe_head_level}, "
+            f"spectral_bands={config.moe_spectral_band_dims}, "
+            f"spectral_experts={config.moe_spectral_num_experts_per_band}, "
+            f"spectral_intermediates={config.moe_spectral_intermediate_sizes}, "
+            f"spectral_update_interval={config.moe_spectral_update_interval}, "
             f"use_pre_router={config.use_pre_router}, pre_router_input={config.pre_router_input}, "
             f"pre_router_controls_attention={config.pre_router_controls_attention}, "
             f"expert_input_attention_topk={config.moe_expert_input_attention_topk}, "

@@ -1,0 +1,343 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "runs": "capacity-2layer-uniform-v2-h32,capacity-2layer-uniform-v2-h48,capacity-2layer-uniform-v2-h64,capacity-2layer-uniform-v2-h96,capacity-2layer-uniform-v2-h128",
+    "checkpoint_step": 1000,
+    "output_path": "../experiments/capacity_2layer_uniform_boundary_eval.json",
+    "seq_len": 128,
+    "num_samples": 512,
+    "batch_size": 16,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 256,
+    "synthetic_num_units_per_layer": 64,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "uniform",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true
+  },
+  "runs": [
+    {
+      "run": "capacity-2layer-uniform-v2-h32",
+      "checkpoint": "../checkpoints/capacity-2layer-uniform-v2-h32/1000.pth",
+      "model": {
+        "hidden_size": 32,
+        "intermediate_size": 64,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 8,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.3967142514884472,
+          "accuracy": 0.9083251953125,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.08948906453389044,
+          "accuracy": 0.9935335710400677,
+          "count": 49641
+        },
+        "local_boundary": {
+          "loss": 1.3561961953690234,
+          "accuracy": 0.6422145328719723,
+          "count": 15895
+        },
+        "local_boundary_not_high": {
+          "loss": 0.5740635498988397,
+          "accuracy": 0.8386150234741784,
+          "count": 11928
+        },
+        "high_boundary": {
+          "loss": 3.7060713182914573,
+          "accuracy": 0.052409339294585196,
+          "count": 4026
+        },
+        "inside_high": {
+          "loss": 0.18010765625158764,
+          "accuracy": 0.9643472606080312,
+          "count": 61510
+        },
+        "position_mod_0": {
+          "loss": 0.1081823268905282,
+          "accuracy": 0.9852294921875,
+          "count": 16384
+        },
+        "position_mod_1": {
+          "loss": 0.06331882195081562,
+          "accuracy": 0.9998779296875,
+          "count": 16384
+        },
+        "position_mod_2": {
+          "loss": 0.07545307604596019,
+          "accuracy": 0.99993896484375,
+          "count": 16384
+        },
+        "position_mod_3": {
+          "loss": 1.339902799576521,
+          "accuracy": 0.64825439453125,
+          "count": 16384
+        }
+      }
+    },
+    {
+      "run": "capacity-2layer-uniform-v2-h48",
+      "checkpoint": "../checkpoints/capacity-2layer-uniform-v2-h48/1000.pth",
+      "model": {
+        "hidden_size": 48,
+        "intermediate_size": 96,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 12,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.29993892926722765,
+          "accuracy": 0.9123687744140625,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.036873435424674354,
+          "accuracy": 0.9948429725428577,
+          "count": 49641
+        },
+        "local_boundary": {
+          "loss": 1.1215076025344546,
+          "accuracy": 0.6547971060081786,
+          "count": 15895
+        },
+        "local_boundary_not_high": {
+          "loss": 0.32682934997067364,
+          "accuracy": 0.8469148222669349,
+          "count": 11928
+        },
+        "high_boundary": {
+          "loss": 3.509623088353437,
+          "accuracy": 0.07600596125186289,
+          "count": 4026
+        },
+        "inside_high": {
+          "loss": 0.08985620237253407,
+          "accuracy": 0.9671110388554707,
+          "count": 61510
+        },
+        "position_mod_0": {
+          "loss": 0.04700395534746349,
+          "accuracy": 0.98944091796875,
+          "count": 16384
+        },
+        "position_mod_1": {
+          "loss": 0.022765283298213035,
+          "accuracy": 0.99993896484375,
+          "count": 16384
+        },
+        "position_mod_2": {
+          "loss": 0.025568727403879166,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_3": {
+          "loss": 1.104417759925127,
+          "accuracy": 0.66009521484375,
+          "count": 16384
+        }
+      }
+    },
+    {
+      "run": "capacity-2layer-uniform-v2-h64",
+      "checkpoint": "../checkpoints/capacity-2layer-uniform-v2-h64/1000.pth",
+      "model": {
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 16,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.2789297504350543,
+          "accuracy": 0.913421630859375,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.024616012224362722,
+          "accuracy": 0.9953667331439737,
+          "count": 49641
+        },
+        "local_boundary": {
+          "loss": 1.0731661882667505,
+          "accuracy": 0.657502359232463,
+          "count": 15895
+        },
+        "local_boundary_not_high": {
+          "loss": 0.27559594129412707,
+          "accuracy": 0.8488430583501007,
+          "count": 11928
+        },
+        "high_boundary": {
+          "loss": 3.4705713672893768,
+          "accuracy": 0.08097367113760556,
+          "count": 4026
+        },
+        "inside_high": {
+          "loss": 0.07002795583309149,
+          "accuracy": 0.9679076572914973,
+          "count": 61510
+        },
+        "position_mod_0": {
+          "loss": 0.03351185127394274,
+          "accuracy": 0.99066162109375,
+          "count": 16384
+        },
+        "position_mod_1": {
+          "loss": 0.013022784172790125,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_2": {
+          "loss": 0.013324355270015076,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_3": {
+          "loss": 1.0558599941432476,
+          "accuracy": 0.66302490234375,
+          "count": 16384
+        }
+      }
+    },
+    {
+      "run": "capacity-2layer-uniform-v2-h96",
+      "checkpoint": "../checkpoints/capacity-2layer-uniform-v2-h96/1000.pth",
+      "model": {
+        "hidden_size": 96,
+        "intermediate_size": 192,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 24,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.2702038288116455,
+          "accuracy": 0.9133758544921875,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.01832780595756634,
+          "accuracy": 0.9953062992284604,
+          "count": 49641
+        },
+        "local_boundary": {
+          "loss": 1.0568271767759367,
+          "accuracy": 0.657502359232463,
+          "count": 15895
+        },
+        "local_boundary_not_high": {
+          "loss": 0.25780820558728346,
+          "accuracy": 0.8486753856472167,
+          "count": 11928
+        },
+        "high_boundary": {
+          "loss": 3.4589481192682134,
+          "accuracy": 0.08147044212617983,
+          "count": 4026
+        },
+        "inside_high": {
+          "loss": 0.06149168019177681,
+          "accuracy": 0.9678263696959843,
+          "count": 61510
+        },
+        "position_mod_0": {
+          "loss": 0.026262076513376087,
+          "accuracy": 0.990966796875,
+          "count": 16384
+        },
+        "position_mod_1": {
+          "loss": 0.007419683111947961,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_2": {
+          "loss": 0.0072602277650730684,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_3": {
+          "loss": 1.0398733392357826,
+          "accuracy": 0.66253662109375,
+          "count": 16384
+        }
+      }
+    },
+    {
+      "run": "capacity-2layer-uniform-v2-h128",
+      "checkpoint": "../checkpoints/capacity-2layer-uniform-v2-h128/1000.pth",
+      "model": {
+        "hidden_size": 128,
+        "intermediate_size": 256,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 32,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.2671327842399478,
+          "accuracy": 0.9134979248046875,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.016084248522863397,
+          "accuracy": 0.9956084688060273,
+          "count": 49641
+        },
+        "local_boundary": {
+          "loss": 1.0511718250813444,
+          "accuracy": 0.6570619691726958,
+          "count": 15895
+        },
+        "local_boundary_not_high": {
+          "loss": 0.25168532352972,
+          "accuracy": 0.8480046948356808,
+          "count": 11928
+        },
+        "high_boundary": {
+          "loss": 3.4548197489026404,
+          "accuracy": 0.08171882762046696,
+          "count": 4026
+        },
+        "inside_high": {
+          "loss": 0.05848984250865745,
+          "accuracy": 0.9679401723297025,
+          "count": 61510
+        },
+        "position_mod_0": {
+          "loss": 0.024042339995503426,
+          "accuracy": 0.99090576171875,
+          "count": 16384
+        },
+        "position_mod_1": {
+          "loss": 0.005460172382299788,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_2": {
+          "loss": 0.004840473586227745,
+          "accuracy": 1.0,
+          "count": 16384
+        },
+        "position_mod_3": {
+          "loss": 1.0341881699860096,
+          "accuracy": 0.6630859375,
+          "count": 16384
+        }
+      }
+    }
+  ]
+}

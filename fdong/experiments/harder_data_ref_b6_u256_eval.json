@@ -1,0 +1,97 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "runs": "harder-data-ref-b6-u256",
+    "checkpoint_step": 1000,
+    "output_path": "../experiments/harder_data_ref_b6_u256_eval.json",
+    "seq_len": 128,
+    "num_samples": 512,
+    "batch_size": 16,
+    "synthetic_block_size": 6,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 512,
+    "synthetic_num_units_per_layer": 256,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true
+  },
+  "runs": [
+    {
+      "run": "harder-data-ref-b6-u256",
+      "checkpoint": "../checkpoints/harder-data-ref-b6-u256/1000.pth",
+      "model": {
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 16,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.28286261623725295,
+          "accuracy": 0.956695556640625,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.09671011513380667,
+          "accuracy": 0.9925177020220454,
+          "count": 54796
+        },
+        "local_boundary": {
+          "loss": 1.2326216884165502,
+          "accuracy": 0.7739292364990689,
+          "count": 10740
+        },
+        "local_boundary_not_high": {
+          "loss": 0.6941897529393184,
+          "accuracy": 0.8786376374218582,
+          "count": 9278
+        },
+        "high_boundary": {
+          "loss": 4.652604793949309,
+          "accuracy": 0.10914051841746249,
+          "count": 1466
+        },
+        "inside_high": {
+          "loss": 0.18287757003067323,
+          "accuracy": 0.9760886530357421,
+          "count": 64070
+        },
+        "position_mod_0": {
+          "loss": 0.16431798548860985,
+          "accuracy": 0.9723899147727273,
+          "count": 11264
+        },
+        "position_mod_1": {
+          "loss": 0.0836097618395632,
+          "accuracy": 0.9975142045454546,
+          "count": 11264
+        },
+        "position_mod_2": {
+          "loss": 0.08355789649344626,
+          "accuracy": 0.9966517857142857,
+          "count": 10752
+        },
+        "position_mod_3": {
+          "loss": 0.06683494877957162,
+          "accuracy": 0.9988839285714286,
+          "count": 10752
+        },
+        "position_mod_4": {
+          "loss": 0.08041846610250927,
+          "accuracy": 0.9982328869047619,
+          "count": 10752
+        },
+        "position_mod_5": {
+          "loss": 1.2335698405901592,
+          "accuracy": 0.7738095238095238,
+          "count": 10752
+        }
+      }
+    }
+  ]
+}

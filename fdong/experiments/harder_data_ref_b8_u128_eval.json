@@ -1,0 +1,107 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "runs": "harder-data-ref-b8-u128",
+    "checkpoint_step": 1000,
+    "output_path": "../experiments/harder_data_ref_b8_u128_eval.json",
+    "seq_len": 128,
+    "num_samples": 512,
+    "batch_size": 16,
+    "synthetic_block_size": 8,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 512,
+    "synthetic_num_units_per_layer": 128,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true
+  },
+  "runs": [
+    {
+      "run": "harder-data-ref-b8-u128",
+      "checkpoint": "../checkpoints/harder-data-ref-b8-u128/1000.pth",
+      "model": {
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 16,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.12881356594152749,
+          "accuracy": 0.980865478515625,
+          "count": 65536
+        },
+        "inside_local": {
+          "loss": 0.03948774738407815,
+          "accuracy": 0.9987977208970048,
+          "count": 57391
+        },
+        "local_boundary": {
+          "loss": 0.7582178629857035,
+          "accuracy": 0.85451197053407,
+          "count": 8145
+        },
+        "local_boundary_not_high": {
+          "loss": 0.340879461033891,
+          "accuracy": 0.9508219559765951,
+          "count": 7178
+        },
+        "high_boundary": {
+          "loss": 3.85888036485796,
+          "accuracy": 0.1393188854489164,
+          "count": 969
+        },
+        "inside_high": {
+          "loss": 0.07283396520527036,
+          "accuracy": 0.993495129090712,
+          "count": 64567
+        },
+        "position_mod_0": {
+          "loss": 0.060959429014474154,
+          "accuracy": 0.9940185546875,
+          "count": 8192
+        },
+        "position_mod_1": {
+          "loss": 0.03556942712748423,
+          "accuracy": 0.9996337890625,
+          "count": 8192
+        },
+        "position_mod_2": {
+          "loss": 0.03552005236269906,
+          "accuracy": 0.9998779296875,
+          "count": 8192
+        },
+        "position_mod_3": {
+          "loss": 0.03263780439738184,
+          "accuracy": 0.9998779296875,
+          "count": 8192
+        },
+        "position_mod_4": {
+          "loss": 0.033968606672715396,
+          "accuracy": 0.9998779296875,
+          "count": 8192
+        },
+        "position_mod_5": {
+          "loss": 0.031685623805969954,
+          "accuracy": 1.0,
+          "count": 8192
+        },
+        "position_mod_6": {
+          "loss": 0.042052992852404714,
+          "accuracy": 0.9993896484375,
+          "count": 8192
+        },
+        "position_mod_7": {
+          "loss": 0.7581145837903023,
+          "accuracy": 0.854248046875,
+          "count": 8192
+        }
+      }
+    }
+  ]
+}

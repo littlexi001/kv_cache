@@ -1,0 +1,87 @@
+{
+  "config": {
+    "config_dir": "../Qwen3-0.6B",
+    "checkpoint_root": "../checkpoints",
+    "runs": "round5-dense-b4-u512-h64-s2000",
+    "checkpoint_step": 2000,
+    "output_path": "../experiments/round5_dense_b4_u512_h64_s2000_boundary.json",
+    "seq_len": 128,
+    "num_samples": 1024,
+    "batch_size": 16,
+    "synthetic_block_size": 4,
+    "synthetic_num_hierarchy_layers": 2,
+    "synthetic_content_token_count": 512,
+    "synthetic_num_units_per_layer": 512,
+    "synthetic_seed": 0,
+    "synthetic_min_token_id": 1,
+    "synthetic_sampling_distribution": "zipf",
+    "synthetic_zipf_alpha": 1.0,
+    "synthetic_zipf_shuffle_ranks": true
+  },
+  "runs": [
+    {
+      "run": "round5-dense-b4-u512-h64-s2000",
+      "checkpoint": "../checkpoints/round5-dense-b4-u512-h64-s2000/2000.pth",
+      "model": {
+        "hidden_size": 64,
+        "intermediate_size": 128,
+        "num_hidden_layers": 2,
+        "num_attention_heads": 4,
+        "head_dim": 16,
+        "use_moe": false
+      },
+      "metrics": {
+        "overall": {
+          "loss": 0.3792270738631487,
+          "accuracy": 0.9268646240234375,
+          "count": 131072
+        },
+        "inside_local": {
+          "loss": 0.05854088321173344,
+          "accuracy": 0.9897830551206718,
+          "count": 98366
+        },
+        "local_boundary": {
+          "loss": 1.3437173120590449,
+          "accuracy": 0.7376322387329542,
+          "count": 32706
+        },
+        "local_boundary_not_high": {
+          "loss": 0.33349773483015244,
+          "accuracy": 0.9333199114153412,
+          "count": 24835
+        },
+        "high_boundary": {
+          "loss": 4.530285129525371,
+          "accuracy": 0.11985303433422019,
+          "count": 7893
+        },
+        "inside_high": {
+          "loss": 0.11323773162489745,
+          "accuracy": 0.9785758936182304,
+          "count": 123179
+        },
+        "position_mod_0": {
+          "loss": 0.1121449502534233,
+          "accuracy": 0.97296142578125,
+          "count": 32768
+        },
+        "position_mod_1": {
+          "loss": 0.030819978972431272,
+          "accuracy": 0.998443603515625,
+          "count": 32768
+        },
+        "position_mod_2": {
+          "loss": 0.02909939191886224,
+          "accuracy": 0.998748779296875,
+          "count": 32768
+        },
+        "position_mod_3": {
+          "loss": 1.3448439817875624,
+          "accuracy": 0.7373046875,
+          "count": 32768
+        }
+      }
+    }
+  ]
+}

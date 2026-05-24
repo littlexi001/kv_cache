@@ -52,9 +52,22 @@ MOE_ROUTER_TYPE="${MOE_ROUTER_TYPE:-linear}"  # linear/mlp
 MOE_ROUTER_HIDDEN_SIZE="${MOE_ROUTER_HIDDEN_SIZE:--1}"
 MOE_ROUTER_ACT="${MOE_ROUTER_ACT:-silu}"
 MOE_ROUTER_INPUT="${MOE_ROUTER_INPUT:-hidden}"  # hidden/attention_output
+MOE_ROUTER_INPUT_POS="${MOE_ROUTER_INPUT_POS:-hidden}"  # hidden/attention_output_residual/attention_output/layer_input/q/k/v
+MOE_ROUTER_INPUT_SHAPE="${MOE_ROUTER_INPUT_SHAPE:-full}"  # full/head/spectral
+MOE_EXPERT_INPUT_POS="${MOE_EXPERT_INPUT_POS:-attention_output_residual}"  # hidden/attention_output_residual/attention_output/layer_input/q/k/v
+MOE_EXPERT_INPUT_SHAPE="${MOE_EXPERT_INPUT_SHAPE:-full}"  # full/head/spectral
 MOE_HEAD_LEVEL="${MOE_HEAD_LEVEL:-false}"  # true/false
+MOE_SPECTRAL_BAND_DIMS="${MOE_SPECTRAL_BAND_DIMS:-}"  # e.g. 16,64,128
+MOE_SPECTRAL_NUM_EXPERTS_PER_BAND="${MOE_SPECTRAL_NUM_EXPERTS_PER_BAND:-}"  # e.g. 0,4,4 where 0=common
+MOE_SPECTRAL_TOPK_PER_BAND="${MOE_SPECTRAL_TOPK_PER_BAND:-}"  # e.g. 1,1,1
+MOE_SPECTRAL_INTERMEDIATE_SIZES="${MOE_SPECTRAL_INTERMEDIATE_SIZES:-}"  # e.g. 32,48,48
+MOE_SPECTRAL_UPDATE_INTERVAL="${MOE_SPECTRAL_UPDATE_INTERVAL:-100}"
+MOE_SPECTRAL_WARMUP_STEPS="${MOE_SPECTRAL_WARMUP_STEPS:-100}"
+MOE_SPECTRAL_SAMPLE_SIZE="${MOE_SPECTRAL_SAMPLE_SIZE:-4096}"
+MOE_SPECTRAL_BASIS_MOMENTUM="${MOE_SPECTRAL_BASIS_MOMENTUM:-0.0}"
+MOE_SPECTRAL_INCLUDE_TOP_IN_ROUTER="${MOE_SPECTRAL_INCLUDE_TOP_IN_ROUTER:-true}"  # true/false
 USE_PRE_ROUTER="${USE_PRE_ROUTER:-false}"  # true/false
-PRE_ROUTER_INPUT="${PRE_ROUTER_INPUT:-layer_input}"  # layer_input/q
+PRE_ROUTER_INPUT="${PRE_ROUTER_INPUT:-layer_input}"  # layer_input/q/k/v
 PRE_ROUTER_CONTROLS_ATTENTION="${PRE_ROUTER_CONTROLS_ATTENTION:-false}"  # true/false
 ATTENTION_ROUTER_LOSS_TYPE="${ATTENTION_ROUTER_LOSS_TYPE:-kl}"  # kl/pairwise/topk_logits
 ATTENTION_ROUTER_LOSS_WEIGHT="${ATTENTION_ROUTER_LOSS_WEIGHT:-0.0}"
@@ -126,8 +139,31 @@ ARGS+=" --moe_router_type $MOE_ROUTER_TYPE"
 ARGS+=" --moe_router_hidden_size $MOE_ROUTER_HIDDEN_SIZE"
 ARGS+=" --moe_router_act $MOE_ROUTER_ACT"
 ARGS+=" --moe_router_input $MOE_ROUTER_INPUT"
+ARGS+=" --moe_router_input_pos $MOE_ROUTER_INPUT_POS"
+ARGS+=" --moe_router_input_shape $MOE_ROUTER_INPUT_SHAPE"
+ARGS+=" --moe_expert_input_pos $MOE_EXPERT_INPUT_POS"
+ARGS+=" --moe_expert_input_shape $MOE_EXPERT_INPUT_SHAPE"
 if [ "$MOE_HEAD_LEVEL" = "true" ]; then
   ARGS+=" --moe_head_level"
+fi
+if [ -n "$MOE_SPECTRAL_BAND_DIMS" ]; then
+  ARGS+=" --moe_spectral_band_dims=${MOE_SPECTRAL_BAND_DIMS}"
+fi
+if [ -n "$MOE_SPECTRAL_NUM_EXPERTS_PER_BAND" ]; then
+  ARGS+=" --moe_spectral_num_experts_per_band=${MOE_SPECTRAL_NUM_EXPERTS_PER_BAND}"
+fi
+if [ -n "$MOE_SPECTRAL_TOPK_PER_BAND" ]; then
+  ARGS+=" --moe_spectral_topk_per_band=${MOE_SPECTRAL_TOPK_PER_BAND}"
+fi
+if [ -n "$MOE_SPECTRAL_INTERMEDIATE_SIZES" ]; then
+  ARGS+=" --moe_spectral_intermediate_sizes=${MOE_SPECTRAL_INTERMEDIATE_SIZES}"
+fi
+ARGS+=" --moe_spectral_update_interval $MOE_SPECTRAL_UPDATE_INTERVAL"
+ARGS+=" --moe_spectral_warmup_steps $MOE_SPECTRAL_WARMUP_STEPS"
+ARGS+=" --moe_spectral_sample_size $MOE_SPECTRAL_SAMPLE_SIZE"
+ARGS+=" --moe_spectral_basis_momentum $MOE_SPECTRAL_BASIS_MOMENTUM"
+if [ "$MOE_SPECTRAL_INCLUDE_TOP_IN_ROUTER" != "true" ]; then
+  ARGS+=" --moe_spectral_no_include_top_in_router"
 fi
 if [ "$USE_PRE_ROUTER" = "true" ]; then
   ARGS+=" --use_pre_router"
