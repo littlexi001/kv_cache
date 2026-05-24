@@ -10,16 +10,26 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen1.5-MoE-A2.7B}"
 DATA_PATH="${DATA_PATH:-/mnt/workspace/dclm}"
-OUT_DIR="${OUT_DIR:-${PROJECT_DIR}/outputs/qwen15-moe-real-attn-cluster}"
-RUN_NAME="${RUN_NAME:-qwen15-moe-real-attn-cluster}"
+MODEL_SIZE_PRESET="${MODEL_SIZE_PRESET:-moe_0_6b}"
+OUT_DIR="${OUT_DIR:-${PROJECT_DIR}/outputs/qwen15-moe-0p6b-real-attn-cluster}"
+RUN_NAME="${RUN_NAME:-qwen15-moe-0p6b-real-attn-cluster}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-$((20000 + RANDOM % 40000))}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
-DEEPSPEED_CONFIG="${DEEPSPEED_CONFIG:-${PROJECT_DIR}/configs/deepspeed_zero3.json}"
+if [[ -z "${DEEPSPEED_CONFIG+x}" ]]; then
+  if [[ "${MODEL_SIZE_PRESET}" == "none" ]]; then
+    DEEPSPEED_CONFIG="${PROJECT_DIR}/configs/deepspeed_zero3.json"
+  else
+    DEEPSPEED_CONFIG=""
+  fi
+fi
 
 EXTRA_ARGS=()
 if [[ -n "${DEEPSPEED_CONFIG:-}" ]]; then
   EXTRA_ARGS+=(--deepspeed_config "${DEEPSPEED_CONFIG}")
+fi
+if [[ -n "${MODEL_CONFIG_OVERRIDES:-}" ]]; then
+  EXTRA_ARGS+=(--model_config_overrides "${MODEL_CONFIG_OVERRIDES}")
 fi
 
 torchrun \
@@ -34,6 +44,7 @@ torchrun \
   --run_name "${RUN_NAME}" \
   --init_from_scratch "${INIT_FROM_SCRATCH:-true}" \
   --resume_from_checkpoint "${RESUME_FROM_CHECKPOINT:-}" \
+  --model_size_preset "${MODEL_SIZE_PRESET}" \
   --seed "${SEED:-1234}" \
   --seq_length "${SEQ_LENGTH:-1024}" \
   --min_text_chars "${MIN_TEXT_CHARS:-20}" \
@@ -47,7 +58,7 @@ torchrun \
   --load_balance_loss_weight "${LOAD_BALANCE_LOSS_WEIGHT:-0.01}" \
   --load_balance_temperature "${LOAD_BALANCE_TEMPERATURE:-1.0}" \
   --per_device_train_batch_size "${PER_DEVICE_TRAIN_BATCH_SIZE:-1}" \
-  --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-16}" \
+  --gradient_accumulation_steps "${GRADIENT_ACCUMULATION_STEPS:-4}" \
   --learning_rate "${LEARNING_RATE:-1e-4}" \
   --weight_decay "${WEIGHT_DECAY:-0.01}" \
   --max_steps "${MAX_STEPS:-10000}" \

@@ -6,7 +6,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs}"
 mkdir -p "${LOG_DIR}"
 
-RUN_NAME="${RUN_NAME:-qwen15-moe-real-attn-cluster}"
+RUN_NAME="${RUN_NAME:-qwen15-moe-0p6b-real-attn-cluster}"
 LOG_FILE="${LOG_DIR}/${RUN_NAME}_$(date +%Y%m%d_%H%M%S).log"
 PID_FILE="${LOG_DIR}/${RUN_NAME}.pid"
 

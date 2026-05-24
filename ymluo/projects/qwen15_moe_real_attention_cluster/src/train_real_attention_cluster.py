@@ -36,6 +36,17 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Use a checkpoint path, 'auto' to resume the latest checkpoint under output_dir, or empty for no resume.",
     )
+    parser.add_argument(
+        "--model_size_preset",
+        choices=["none", "moe_0_6b"],
+        default="none",
+        help="Optionally shrink the loaded MoE config before random initialization.",
+    )
+    parser.add_argument(
+        "--model_config_overrides",
+        default="",
+        help="Optional JSON object of config fields to override after --model_size_preset.",
+    )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--seq_length", type=int, default=1024)
     parser.add_argument("--min_text_chars", type=int, default=20)
@@ -221,9 +232,57 @@ def infer_router_top_k(model: torch.nn.Module) -> int:
     return 1
 
 
+def model_config_summary(config: Any) -> dict[str, Any]:
+    names = [
+        "hidden_size",
+        "intermediate_size",
+        "moe_intermediate_size",
+        "shared_expert_intermediate_size",
+        "num_hidden_layers",
+        "num_attention_heads",
+        "num_key_value_heads",
+        "num_experts",
+        "num_experts_per_tok",
+        "decoder_sparse_step",
+        "tie_word_embeddings",
+    ]
+    return {name: getattr(config, name) for name in names if hasattr(config, name)}
+
+
+MOE_0_6B_CONFIG_OVERRIDES: dict[str, Any] = {
+    "hidden_size": 768,
+    "intermediate_size": 2048,
+    "moe_intermediate_size": 1024,
+    "shared_expert_intermediate_size": 1024,
+    "num_hidden_layers": 12,
+    "num_attention_heads": 12,
+    "num_key_value_heads": 4,
+    "num_experts": 12,
+    "num_experts_per_tok": 2,
+    "decoder_sparse_step": 1,
+    "mlp_only_layers": [],
+}
+
+
+def apply_model_config_overrides(config: Any, args: argparse.Namespace) -> None:
+    overrides: dict[str, Any] = {}
+    if args.model_size_preset == "moe_0_6b":
+        overrides.update(MOE_0_6B_CONFIG_OVERRIDES)
+
+    if args.model_config_overrides.strip():
+        user_overrides = json.loads(args.model_config_overrides)
+        if not isinstance(user_overrides, dict):
+            raise ValueError("--model_config_overrides must be a JSON object.")
+        overrides.update(user_overrides)
+
+    for name, value in overrides.items():
+        setattr(config, name, value)
+
+
 def load_model(args: argparse.Namespace, dtype: torch.dtype):
     if args.init_from_scratch:
         config = AutoConfig.from_pretrained(args.model_name_or_path, trust_remote_code=True)
+        apply_model_config_overrides(config, args)
         config._attn_implementation = args.attn_implementation
         config.use_cache = False
         return AutoModelForCausalLM.from_config(config, trust_remote_code=True).to(dtype=dtype)
@@ -284,6 +343,8 @@ def main() -> None:
         total_params = sum(param.numel() for param in model.parameters())
         print(f"patched_moe_layers={cluster_patch.num_patched_layers}", flush=True)
         print(f"router_top_k={router_top_k}", flush=True)
+        print(f"model_size_preset={args.model_size_preset}", flush=True)
+        print(f"model_config={json.dumps(model_config_summary(model.config), sort_keys=True)}", flush=True)
         print(f"total_parameters={total_params:,}", flush=True)
 
     train_dataset = RandomDclmLineBlockDataset(

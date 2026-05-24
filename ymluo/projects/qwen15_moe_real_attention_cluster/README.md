@@ -1,7 +1,9 @@
 # Qwen1.5 MoE Real Attention Cluster
 
-Train `/mnt/workspace/Qwen1.5-MoE-A2.7B` from random initialization on DCLM text
-with the real-data version of the attention-cluster experiment.
+Train a resized Qwen1.5-MoE-style model from random initialization on DCLM text
+with the real-data version of the attention-cluster experiment. The default run
+uses the tokenizer/model class from `/mnt/workspace/Qwen1.5-MoE-A2.7B`, but
+shrinks the config to a roughly 0.6B-parameter MoE before initialization.
 
 ## What This Changes
 
@@ -56,6 +58,7 @@ Main defaults:
 ```text
 MODEL_PATH=/mnt/workspace/Qwen1.5-MoE-A2.7B
 DATA_PATH=/mnt/workspace/dclm
+MODEL_SIZE_PRESET=moe_0_6b
 NPROC_PER_NODE=8
 SEQ_LENGTH=1024
 ATTENTION_TOP_RATIO=0.10
@@ -63,17 +66,41 @@ EXPERT_INPUT_TOP_RATIO=0.10
 ATTENTION_CLUSTER_WEIGHT=0.01
 LOAD_BALANCE_LOSS_WEIGHT=0.01
 INIT_FROM_SCRATCH=true
-DEEPSPEED_CONFIG=configs/deepspeed_zero3.json
+GRADIENT_ACCUMULATION_STEPS=4
+DEEPSPEED_CONFIG=
 ```
 
-The script uses ZeRO-3 by default. This is required for Qwen1.5-MoE-A2.7B
-training from scratch: plain DDP replicates Adam states on every GPU and will
-run out of 96GB memory during the first optimizer step.
+The `moe_0_6b` preset applies these config overrides before random
+initialization:
 
-To deliberately disable DeepSpeed for a smaller debug model:
+```text
+hidden_size=768
+intermediate_size=2048
+moe_intermediate_size=1024
+shared_expert_intermediate_size=1024
+num_hidden_layers=12
+num_attention_heads=12
+num_key_value_heads=4
+num_experts=12
+num_experts_per_tok=2
+decoder_sparse_step=1
+mlp_only_layers=[]
+```
+
+This smaller model fits without ZeRO-3 on typical 8-GPU training nodes. To run
+the original full model config, use:
 
 ```bash
-DEEPSPEED_CONFIG= \
+MODEL_SIZE_PRESET=none \
+DEEPSPEED_CONFIG=ymluo/projects/qwen15_moe_real_attention_cluster/configs/deepspeed_zero3.json \
+bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
+```
+
+To keep the 0.6B preset but change a few dimensions, pass JSON config
+overrides:
+
+```bash
+MODEL_CONFIG_OVERRIDES='{"num_hidden_layers": 8, "num_experts": 8}' \
 bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
 ```
 

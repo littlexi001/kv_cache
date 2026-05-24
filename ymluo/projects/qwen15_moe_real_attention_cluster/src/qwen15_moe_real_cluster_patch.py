@@ -116,21 +116,28 @@ def top_ratio_attention_weights(
     if ratio <= 0.0:
         return torch.zeros_like(attention_weights)
 
-    batch, heads, query_len, key_len = attention_weights.shape
+    _batch, _heads, query_len, key_len = attention_weights.shape
     if query_len != key_len:
         raise ValueError("This training patch currently expects full-sequence no-cache attention.")
     valid = _valid_history_mask(query_len, attention_weights.device, include_self)
     valid = valid[None, None, :, :]
     weights = attention_weights.float().masked_fill(~valid, 0.0)
 
-    valid_counts = valid.expand(batch, heads, query_len, key_len).sum(dim=-1)
+    valid_counts = torch.arange(query_len, device=weights.device)
+    if include_self:
+        valid_counts = valid_counts + 1
     keep_counts = torch.ceil(valid_counts.float() * ratio).long().clamp(min=1, max=key_len)
-    sorted_values, sorted_indices = torch.sort(weights, dim=-1, descending=True)
-    ranks = torch.arange(key_len, device=weights.device)[None, None, None, :]
-    keep_sorted = (ranks < keep_counts[..., None]) & (sorted_values > 0)
-    keep = torch.zeros_like(keep_sorted)
-    keep.scatter_(-1, sorted_indices, keep_sorted)
-    selected = weights * keep.to(weights.dtype)
+
+    max_valid_count = query_len if include_self else max(query_len - 1, 0)
+    max_keep = max(1, min(math.ceil(max_valid_count * ratio), key_len))
+    if max_keep >= key_len:
+        selected = weights
+    else:
+        top_values, top_indices = torch.topk(weights, k=max_keep, dim=-1, largest=True, sorted=True)
+        ranks = torch.arange(max_keep, device=weights.device)
+        keep_top = (ranks[None, None, None, :] < keep_counts[None, None, :, None]) & (top_values > 0)
+        selected = torch.zeros_like(weights)
+        selected.scatter_(-1, top_indices, top_values * keep_top.to(top_values.dtype))
 
     denom = selected.sum(dim=-1, keepdim=True)
     fallback = denom <= 0
