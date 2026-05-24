@@ -63,12 +63,17 @@ EXPERT_INPUT_TOP_RATIO=0.10
 ATTENTION_CLUSTER_WEIGHT=0.01
 LOAD_BALANCE_LOSS_WEIGHT=0.01
 INIT_FROM_SCRATCH=true
+DEEPSPEED_CONFIG=configs/deepspeed_zero3.json
 ```
 
-If the full model does not fit with plain DDP, enable ZeRO-3:
+The script uses ZeRO-3 by default. This is required for Qwen1.5-MoE-A2.7B
+training from scratch: plain DDP replicates Adam states on every GPU and will
+run out of 96GB memory during the first optimizer step.
+
+To deliberately disable DeepSpeed for a smaller debug model:
 
 ```bash
-DEEPSPEED_CONFIG=ymluo/projects/qwen15_moe_real_attention_cluster/configs/deepspeed_zero3.json \
+DEEPSPEED_CONFIG= \
 bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
 ```
 

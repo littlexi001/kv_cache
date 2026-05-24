@@ -6,6 +6,7 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen1.5-MoE-A2.7B}"
 DATA_PATH="${DATA_PATH:-/mnt/workspace/dclm}"
@@ -14,6 +15,7 @@ RUN_NAME="${RUN_NAME:-qwen15-moe-real-attn-cluster}"
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-$((20000 + RANDOM % 40000))}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
+DEEPSPEED_CONFIG="${DEEPSPEED_CONFIG:-${PROJECT_DIR}/configs/deepspeed_zero3.json}"
 
 EXTRA_ARGS=()
 if [[ -n "${DEEPSPEED_CONFIG:-}" ]]; then
