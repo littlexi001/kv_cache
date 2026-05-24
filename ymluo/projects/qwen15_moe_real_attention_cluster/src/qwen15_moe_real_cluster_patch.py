@@ -42,24 +42,18 @@ def _replace_first_tensor_arg(
     return (value, *args), kwargs
 
 
-def _module_config(module: torch.nn.Module):
-    current = module
-    while current is not None:
-        config = getattr(current, "config", None)
-        if config is not None:
-            return config
-        current = getattr(current, "_real_cluster_parent", None)
-    return None
-
-
 def _num_heads(attn: torch.nn.Module) -> int:
     for name in ("num_heads", "num_attention_heads"):
         value = getattr(attn, name, None)
         if value is not None:
             return int(value)
-    config = _module_config(attn)
+    config = getattr(attn, "config", None)
     if config is not None:
         return int(getattr(config, "num_attention_heads"))
+    q_proj = getattr(attn, "q_proj", None)
+    head_dim = getattr(attn, "head_dim", None)
+    if q_proj is not None and head_dim is not None:
+        return int(q_proj.out_features) // int(head_dim)
     raise AttributeError("Could not infer number of attention heads.")
 
 
@@ -68,9 +62,13 @@ def _num_key_value_heads(attn: torch.nn.Module) -> int:
         value = getattr(attn, name, None)
         if value is not None:
             return int(value)
-    config = _module_config(attn)
+    config = getattr(attn, "config", None)
     if config is not None:
         return int(getattr(config, "num_key_value_heads", getattr(config, "num_attention_heads")))
+    k_proj = getattr(attn, "k_proj", None)
+    head_dim = getattr(attn, "head_dim", None)
+    if k_proj is not None and head_dim is not None:
+        return int(k_proj.out_features) // int(head_dim)
     return _num_heads(attn)
 
 
@@ -78,10 +76,13 @@ def _head_dim(attn: torch.nn.Module) -> int:
     value = getattr(attn, "head_dim", None)
     if value is not None:
         return int(value)
-    config = _module_config(attn)
+    config = getattr(attn, "config", None)
     if config is not None:
         hidden_size = int(getattr(config, "hidden_size"))
         return hidden_size // _num_heads(attn)
+    q_proj = getattr(attn, "q_proj", None)
+    if q_proj is not None:
+        return int(q_proj.out_features) // _num_heads(attn)
     raise AttributeError("Could not infer attention head dimension.")
 
 
@@ -230,8 +231,6 @@ class RealAttentionClusterPatch:
                 mlp = getattr(module, "mlp")
                 if hasattr(mlp, "gate") and hasattr(mlp, "experts"):
                     layers.append(module)
-                    getattr(module, "self_attn")._real_cluster_parent = module
-                    mlp._real_cluster_parent = module
         return layers
 
     def _patch_layer(self, layer: torch.nn.Module) -> None:
