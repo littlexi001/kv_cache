@@ -1,0 +1,315 @@
+root: rq.specialization
+
+ui:
+  layout: LR
+  expanded: [rq.specialization, rq.define_feature, rq.why_baseline_fails, rq.design_specialized_moe]
+
+nodes:
+  - id: rq.specialization
+    title: How can MoE experts form feature-level specialization?
+    type: question
+    summary: The project investigates how to make MoE routing assign token contexts with similar features to stable, interpretable expert buckets.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [specialization, moe, inverse-kv]
+
+  - id: concept.specialization
+    title: Expert specialization
+    type: concept
+    summary: Expert specialization means different MoE experts form stable, interpretable, reusable divisions of labor over token or context features.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [definition]
+
+  - id: concept.feature_synthetic
+    title: Synthetic ground-truth feature
+    type: concept
+    summary: In synthetic data, a feature is explicitly defined by the generator, such as local slot or higher-level slot membership.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [definition, synthetic]
+
+  - id: concept.feature_real
+    title: Real-corpus proxy feature
+    type: concept
+    summary: In real corpora, positions with similar next-token logits distributions are treated as having similar downstream behavior and therefore similar features.
+    file: ../main_specialization/specialization_overview.md
+    status: draft
+    tags: [definition, real-data]
+
+  - id: rq.define_feature
+    title: How should feature be defined?
+    type: question
+    summary: The first subproblem is to define when two token positions should be considered the same feature.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [definition]
+
+  - id: claim.feature_definition
+    title: Feature should be defined by downstream behavior
+    type: claim
+    summary: Ground-truth slot labels in synthetic data and next-token logits similarity in real data are compatible definitions of feature because both capture downstream predictive behavior.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [definition, hypothesis]
+
+  - id: rq.why_baseline_fails
+    title: Why does baseline MoE fail to specialize?
+    type: question
+    summary: The second subproblem is to diagnose what standard MoE routing actually learns when it does not follow ground-truth features.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [diagnosis, baseline]
+
+  - id: claim.baseline_shortcuts
+    title: Baseline MoE tends to learn shortcuts
+    type: claim
+    summary: Synthetic evidence suggests baseline MoE does not naturally route by local or higher-level slots and instead often aligns with token id, target token, or local shortcuts.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round4_plan.md
+    status: active
+    tags: [baseline, synthetic]
+
+  - id: claim.load_balance_not_specialization
+    title: Load balance is not specialization
+    type: claim
+    summary: Load-balance loss can make expert usage more uniform but does not by itself create feature-level expert specialization.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [regularization, diagnosis]
+
+  - id: claim.residual_helps_gate
+    title: Residual stream helps gating
+    type: claim
+    summary: Current evidence suggests residual-plus-normalized representations make features easier for the gate to read, while pure attention output hurts gating quality.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [representation, diagnosis]
+
+  - id: claim.attention_weak_feature_signal
+    title: Attention only weakly separates features
+    type: claim
+    summary: Existing attention analyses do not show a clean head that almost exclusively attends within the same feature group.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [attention, diagnosis]
+
+  - id: rq.design_specialized_moe
+    title: What structure can produce specialization?
+    type: question
+    summary: The third subproblem is to design MoE routing and expert inputs that produce useful feature-level expert buckets.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [architecture, round5]
+
+  - id: method.ground_truth_routing
+    title: Ground-truth routing
+    type: method
+    summary: Use known synthetic feature labels for routing as an upper-bound test of whether feature-based expert buckets are useful.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round3_plan.md
+    status: done
+    tags: [oracle-control, synthetic]
+
+  - id: method.head_level_moe
+    title: Head-level routing
+    type: method
+    summary: Route each attention head or head-derived representation separately to test whether head subspaces form cleaner feature buckets.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [architecture, head-level]
+
+  - id: method.key_head_router
+    title: k/head router
+    type: method
+    summary: Use attention key representations as router input and split them by head before routing.
+    file: ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [architecture, pre-attention, synthetic]
+
+  - id: method.full_expert_input
+    title: Full residual expert input
+    type: method
+    summary: Let the router use feature-selective inputs, but let experts process the full residual token state to preserve prediction quality.
+    file: ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [architecture, expert-input]
+
+  - id: method.spectral_router
+    title: Spectral routing
+    type: method
+    summary: Use SVD or PCA-style spectral coordinates of representations to route feature subspaces.
+    file: ../fdong/inverse_kv_round5_plan.md
+    status: draft
+    tags: [architecture, spectral]
+
+  - id: method.attention_derived_routing_loss
+    title: Attention-derived routing objective
+    type: method
+    summary: Explicitly constrain router logits so tokens with high attention retrieval relation route to similar expert buckets.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [regularization, next-step]
+
+  - id: claim.round5_summary
+    title: Round5 synthetic conclusion
+    type: claim
+    summary: Full and head MoE structures have similar NTP, spectral currently fails, and k/head is the most promising natural router for specialization but still needs harder routing constraints.
+    file: ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [round5, conclusion]
+
+  - id: evidence.round5_results
+    title: Round5 specialization sweep results
+    type: evidence
+    summary: Round5 experiments show k/head plus common expert improves local and high-slot specialization, while spectral routing underperforms and natural routing remains insufficiently deterministic.
+    files:
+      - ../fdong/inverse_kv_round5_plan.md
+      - ../fdong/experiments/round5_moe_structure_analysis_step2000.md
+      - ../fdong/experiments/round5_expert_input_pos_targeted_analysis.md
+      - ../fdong/experiments/round5_overnight_headhead_capacity_analysis.md
+    status: active
+    tags: [evidence, synthetic, round5]
+
+  - id: rq.reverse_kv
+    title: Can specialization support KV reverse indexing?
+    type: question
+    summary: If expert buckets correspond to feature buckets, decode-time routing could retrieve only historical KV entries from matching or related expert buckets.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [inverse-kv, systems]
+
+  - id: claim.reverse_kv_requires_pre_attention_routing
+    title: Reverse KV needs pre-attention routing
+    type: claim
+    summary: To reduce same-layer attention KV access during decode, the routing signal must be available before attention is computed.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [inverse-kv, deployability]
+
+  - id: task.harden_specialization
+    title: Add harder specialization constraints
+    type: task
+    summary: Test attention-derived gate constraints and related objectives to make k/head routing more deterministic.
+    file: ../fdong/inverse_kv_round5_plan.md
+    status: active
+    tags: [next-step, synthetic]
+
+  - id: task.real_data_validation
+    title: Validate specialization on real data
+    type: task
+    summary: Test whether next-token-logits-defined feature groups align with expert routing in real corpora and whether the same constraints improve routing.
+    file: ../main_specialization/specialization_overview.md
+    status: draft
+    tags: [next-step, real-data]
+
+  - id: output.specialization_overview
+    title: Specialization overview
+    type: output
+    summary: Main narrative document for the specialization research direction.
+    file: ../main_specialization/specialization_overview.md
+    status: active
+    tags: [overview]
+
+edges:
+  - from: rq.specialization
+    to: rq.define_feature
+    kind: decomposes
+  - from: rq.specialization
+    to: rq.why_baseline_fails
+    kind: decomposes
+  - from: rq.specialization
+    to: rq.design_specialized_moe
+    kind: decomposes
+  - from: rq.specialization
+    to: rq.reverse_kv
+    kind: decomposes
+  - from: concept.specialization
+    to: rq.specialization
+    kind: depends_on
+  - from: concept.feature_synthetic
+    to: rq.define_feature
+    kind: depends_on
+  - from: concept.feature_real
+    to: rq.define_feature
+    kind: depends_on
+  - from: claim.feature_definition
+    to: rq.define_feature
+    kind: answers
+  - from: claim.feature_definition
+    to: concept.feature_synthetic
+    kind: depends_on
+  - from: claim.feature_definition
+    to: concept.feature_real
+    kind: depends_on
+  - from: claim.baseline_shortcuts
+    to: rq.why_baseline_fails
+    kind: answers
+  - from: claim.load_balance_not_specialization
+    to: rq.why_baseline_fails
+    kind: answers
+  - from: claim.residual_helps_gate
+    to: rq.why_baseline_fails
+    kind: answers
+  - from: claim.attention_weak_feature_signal
+    to: rq.why_baseline_fails
+    kind: answers
+  - from: method.ground_truth_routing
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: method.head_level_moe
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: method.key_head_router
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: method.full_expert_input
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: method.spectral_router
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: method.attention_derived_routing_loss
+    to: rq.design_specialized_moe
+    kind: operationalizes
+  - from: evidence.round5_results
+    to: claim.round5_summary
+    kind: supports
+  - from: claim.round5_summary
+    to: rq.design_specialized_moe
+    kind: answers
+  - from: evidence.round5_results
+    to: method.spectral_router
+    kind: contradicts
+  - from: evidence.round5_results
+    to: method.key_head_router
+    kind: supports
+  - from: evidence.round5_results
+    to: method.full_expert_input
+    kind: supports
+  - from: claim.reverse_kv_requires_pre_attention_routing
+    to: rq.reverse_kv
+    kind: answers
+  - from: method.key_head_router
+    to: claim.reverse_kv_requires_pre_attention_routing
+    kind: depends_on
+  - from: claim.round5_summary
+    to: task.harden_specialization
+    kind: leads_to
+  - from: method.attention_derived_routing_loss
+    to: task.harden_specialization
+    kind: operationalizes
+  - from: claim.feature_definition
+    to: task.real_data_validation
+    kind: leads_to
+  - from: output.specialization_overview
+    to: rq.specialization
+    kind: cites

@@ -9,7 +9,6 @@ venv/
 env/
 .venv-transformers451/
 .side/
-research/
 skills/research-graph-sop
 skills/scholar-mode
 skills/sidecar-thinking
