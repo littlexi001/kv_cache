@@ -9,6 +9,15 @@ venv/
 env/
 .venv-transformers451/
 .side/
+research/
+skills/research-graph-sop
+skills/scholar-mode
+skills/sidecar-thinking
+skills/writing-explanatory-reports
+
+# Agent Skills
+.agents/
+.claude/
 
 # Test / tooling caches
 .pytest_cache/

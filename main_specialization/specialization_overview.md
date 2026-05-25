@@ -19,7 +19,7 @@
 
    这一设定的优点是 ground truth 清晰，可以直接计算 local slot / higher-level slot 与 expert assignment 的一致性，例如 feature-to-expert purity、same-feature same-expert rate、MI / NMI 等指标。
 2. **Real corpus：**
-   一个可行定义是：如果两个 token 的 next-token logits 分布相似，说明模型认为它们应当被映射到相近的新状态，因此它们可以被视为表达相近 feature。
+   ：如果两个 token 的 next-token logits 分布相似，说明模型认为它们应当被映射到相近的新状态，因此它们可以被视为同一 feature。
 
    更形式化地说，对每个 token position，可以取模型在该位置的 next-token logits 或概率分布作为语义状态表示。如果两个位置的预测分布接近，它们应当具有相近的 downstream behavior；理想的 expert specialization 应当让这些位置更倾向于进入相同或相近 expert bucket。
 
@@ -44,24 +44,23 @@
    3. next-token logits 的 cos-sim 较低：～0.05；
 3. Gating 是否主要由 token id、target token、token frequency、position、local context、attention bucket 或 representation cluster 解释；
    1. 真实数据：Gating 被表征空间的 SVD 头部子空间（top 5% 能解释 90% 的分发结果）决定；
-   2. Synthetic 数据：头部子空间反而不重要，Gating 被表征空间 5%~20% 解释 90% 的分发结果。
+   2. Synthetic 数据：头部子空间反而不重要，Gating 被表征空间 5%\~20% 解释 90% 的分发结果。可能是 synthetic 数据集里面的 common 不够 common？
 4. 上述规律在不同 layer 中稳定存在；
 
 ### 2.2. 按我们的理想 specialization 定义，gating 结果应当有何特征？。CAR：real。
 
 理想 specialization 定义：分到同一 expert 的 token，其 next-token logits 分布应当相似。
+
 1. 同一个 expert 中的 token / context，其表征 cossim 高：～0.97；
 2. 不同 expert 中的 token / context，表征 cossim 低，～0.20；
 3. 也有反例，表征 cossim 高，但一起学的效果很差：反例比例约～10%：
 4. 线性分发无法支持 ground truth feature 分发
 
-这个定义很重要，因为 specialization 不是简单追求所有 expert 负载均匀，也不是简单追求 routing sharp。一个 routing 可以非常 sharp 但没有语义；也可以负载非常均匀但破坏 feature locality。真正需要的是既有可用负载形态，又有可解释 feature structure 的 expert bucket。
-
 ### 2.3. 模型结构与训练范式如何影响 specialization。ZX：real。
 
 1. **Load-balance loss：** 它能显著提升 expert usage 的均匀性，但不一定直接带来 feature specialization。依据是：加入 load-balance 以后，effective expert count 明显上升，说明流量分布被显著拉平；但与此同时，routing 与 feature 对齐相关的指标变化很小，expert purity 也没有同步提升。也就是说，load-balance loss 主要改变的是“token 是否更平均地分到各个 expert”，而不是“expert 是否更清楚地按 feature 分工”。
 2. **残差链接：** 残差在这里更像是在帮助 gate，而不是干扰 gate。依据是：当 gate 使用标准的 residual-plus-normalized 表征时，feature 更容易被线性读出，最终 routing 与 feature 的对齐也更好；而当 gate 只看 pure attention output 时，这两个结果都会下降。也就是说，在当前 ordinary MoE 设定里，残差路径并没有明显削弱 gate 对 feature 的识别，相反，它更可能给 gate 提供了一个更容易利用的输入表示。
-3. **Attention：** 如果问题是“attention 有没有学会 ground-truth feature relation”，那当前结果更像是：学到了一点，但没有证据表明存在某个 head 会让 token 几乎只在同一 feature 内部 attend。依据是：在本地 `qwen3-0.6B` 的正式 attention 分析里，用整层 attention output 做 feature probe，最好的 layer 也只有 `0.0688`，最好的单头 probe 只有 `0.0656`，整体绝对值仍然偏低；同时，直接看 attention pattern 时，表现最强的 head 对同 feature token 的偏好仍然很弱，而且这种偏好只在大约 `21%` 的位置上出现，远达不到“某个 head 基本只在同一 feature 内 attend”的程度。也就是说，当前 attention 最多只能说明它弱地捕捉到了一部分 feature relation，还不能说明它已经形成了清晰而强的 feature-internal attention structure。
+3. **Attention：** 没有证据表明存在某个 head 会让 token 几乎只在同一 feature 内部 attend。依据是：在本地 `qwen3-0.6B` 的正式 attention 分析里，用整层 attention output 做 feature probe，最好的 layer 也只有 `0.0688`，最好的单头 probe 只有 `0.0656`，整体绝对值仍然偏低；同时，直接看 attention pattern 时，表现最强的 head 对同 feature token 的偏好仍然很弱，而且这种偏好只在大约 `21%` 的位置上出现，远达不到“某个 head 基本只在同一 feature 内 attend”的程度。也就是说，当前 attention 最多只能说明它弱地捕捉到了一部分 feature relation，还不能说明它已经形成了清晰而强的 feature-internal attention structure。
 
 ## 3. 什么结构能做到 Specialization（DF & LYM：synthetic，LET：real）
 
@@ -69,17 +68,19 @@
 尤其对于 KV cache reverse indexing，routing signal 必须尽可能在 attention 前产生，否则它无法在同一层 attention 计算前减少 KV 访问。
 
 ### 结论：
+
 在 synthetic 数据上
-1. gate input representation: 
-   1. query/key vector 最好：NTP 能达到最优的同时，分发结果更逼近我们定义的 specialization：purity ~97%。
-   2. layer input 其次：specilization purity ~80%
+
+1. gate input representation:
+   1. query/key vector 最好：NTP 能达到最优的同时，分发结果更逼近我们定义的 specialization：purity \~97%。
+   2. layer input 其次：specilization purity \~80%
 2. gate granilarity：
    1. head-level gating 优于 full token gating；
    2. SVD-based hierarchical gating 实现困难：SVD 结果不稳定：受采样数据的影响、受参数变化的影响。
 3. expert input representation:full token vector 显著好于去掉 residual 的。NTP ACC：94% v.s. 90%
-4. regularization：必须 explictyly 使用 attention score 对 gating 结果添加约束，才能让 gate 的分发逼近 synthetic data slot，purity ~80%；
-   1. 具体实现：让 attention score 相关性高的 token，它们的 router logits cossim 尽可能大。
-
+4. regularization：
+   1. 合成数据具体实现：让 attention score 相关性高的 token，它们的 router logits cossim 尽可能大。
+   2. 真实数据上的一种实现：约束输入同一 expert 的 token，其最终输出的 next-token logits 相似性高
 
 ### 候选技术方案：
 
