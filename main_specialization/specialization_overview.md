@@ -35,23 +35,24 @@
 这一问题的目标是诊断现有 MoE routing 的真实规律，而不是只证明它没有达到我们的预期。需要分析：
 
 1. 同一个 expert 接收的 token / context 之间有什么共同点：
-   1. Token ID 相同；
-   2. 表征向量 cos-sim 更高；
-   3. next-token logits 的 cos-sim 更高；
+   1. Token ID 相同：～0.8，同一 token 有 80% 被分到同一个 expert；
+   2. 表征向量 cos-sim 更高：～0.5；
+   3. next-token logits 的 cos-sim 更高:～0.1；
 2. 不同 expert 接收的 token / context 之间有什么差异；
-   1. Token ID 不同
-   2. 表征向量 cos-sim 较低；
-   3. next-token logits 的 cos-sim 较低；
+   1. Token ID 不同；
+   2. 表征向量 cos-sim 较低：～0.2；
+   3. next-token logits 的 cos-sim 较低：～0.05；
 3. Gating 是否主要由 token id、target token、token frequency、position、local context、attention bucket 或 representation cluster 解释；
    1. 真实数据：Gating 被表征空间的 SVD 头部子空间（top 5% 能解释 90% 的分发结果）决定；
    2. Synthetic 数据：头部子空间反而不重要，Gating 被表征空间 5%~20% 解释 90% 的分发结果。
 4. 上述规律在不同 layer 中稳定存在；
 
-### 2.2. 按我们的理想 specialization 定义，gating 结果有何特征？。CAR：real。
+### 2.2. 按我们的理想 specialization 定义，gating 结果应当有何特征？。CAR：real。
 
+理想 specialization 定义：分到同一 expert 的 token，其 next-token logits 分布应当相似。
 1. 同一个 expert 中的 token / context，其表征 cossim 高：～0.97；
 2. 不同 expert 中的 token / context，表征 cossim 低，～0.20；
-3. 也有反例，表征 cossim 高，但一起学的效果很差：～10%：
+3. 也有反例，表征 cossim 高，但一起学的效果很差：反例比例约～10%：
 4. 线性分发无法支持 ground truth feature 分发
 
 这个定义很重要，因为 specialization 不是简单追求所有 expert 负载均匀，也不是简单追求 routing sharp。一个 routing 可以非常 sharp 但没有语义；也可以负载非常均匀但破坏 feature locality。真正需要的是既有可用负载形态，又有可解释 feature structure 的 expert bucket。
@@ -66,6 +67,19 @@
 
 基于上述对现有 MoE 为何没实现 specialization 的理解，我们针对性提出方案实现 specialization。
 尤其对于 KV cache reverse indexing，routing signal 必须尽可能在 attention 前产生，否则它无法在同一层 attention 计算前减少 KV 访问。
+
+### 结论：
+在 synthetic 数据上
+1. gate input representation: 
+   1. query/key vector 最好：NTP 能达到最优的同时，分发结果更逼近我们定义的 specialization：purity ~97%。
+   2. layer input 其次：specilization purity ~80%
+2. gate granilarity：
+   1. head-level gating 优于 full token gating；
+   2. SVD-based hierarchical gating 实现困难：SVD 结果不稳定：受采样数据的影响、受参数变化的影响。
+3. expert input representation:full token vector 显著好于去掉 residual 的。NTP ACC：94% v.s. 90%
+4. regularization：必须 explictyly 使用 attention score 对 gating 结果添加约束，才能让 gate 的分发逼近 synthetic data slot，purity ~80%；
+   1. 具体实现：让 attention score 相关性高的 token，它们的 router logits cossim 尽可能大。
+
 
 ### 候选技术方案：
 
