@@ -40,7 +40,7 @@
 4. 这些规律是否在不同 layer、不同 head、不同数据分布中稳定存在；
 
 
-## 2.2. 理想情况下的 specialization。CAR：real。
+### 2.2. 理想情况下的 specialization。CAR：real。
 这一问题的目标是定义“好的 specialization 应该长什么样”。理想情况下：
 
 1. 同一个 expert 中的 token / context 应当在某种 feature 维度上高度相似；
@@ -51,11 +51,9 @@
 这个定义很重要，因为 specialization 不是简单追求所有 expert 负载均匀，也不是简单追求 routing sharp。一个 routing 可以非常 sharp 但没有语义；也可以负载非常均匀但破坏 feature locality。真正需要的是既有可用负载形态，又有可解释 feature structure 的 expert bucket。
 
 ### 2.3. 模型结构与训练范式如何影响 specialization。ZX：real。
-1. **Load-balance loss：** 它能让 expert usage 更均匀，但不一定产生 feature specialization。已有实验显示，load-balance loss 主要改变负载形态，可能削弱本来存在的 feature selectivity。已有 synthetic 结论见 [Round4 当前观察：Load-balance loss 只均衡负载，不产生 slot specialization](../fdong/inverse_kv_round4_plan.md#当前观察load-balance-loss-只均衡负载不产生-slot-specialization)。
-2. **残差链接：** 残差可能让 gate 输入混入大量 token identity 或局部 shortcut，从而影响 expert ownership 的形成。去掉残差或改变 gate 输入，可能改变 routing 依赖的 feature。
-3. **Attention：** attention 已经在一定程度上捕捉 near ground-truth feature。问题在于 MoE gate / expert 是否能把 attention 中的 feature relation 转化为稳定 expert bucket。已有 synthetic 结论见 [Round1：标准 Attention / MoE 是否自然形成 feature bucket](../fdong/inverse_kv_round1_notes.md#结果)
-
-因此，结构分析不应只看 NTP accuracy，还应同时报告 expert load、feature-to-expert purity、same-feature same-expert rate、MI / NMI、attention bucket 对齐程度，以及这些指标在 layer / head 上的分布。
+1. **Load-balance loss：** 它能显著提升 expert usage 的均匀性，但不一定直接带来 feature specialization。依据是：加入 load-balance 以后，effective expert count 明显上升，说明流量分布被显著拉平；但与此同时，routing 与 feature 对齐相关的指标变化很小，expert purity 也没有同步提升。也就是说，load-balance loss 主要改变的是“token 是否更平均地分到各个 expert”，而不是“expert 是否更清楚地按 feature 分工”。
+2. **残差链接：** 残差在这里更像是在帮助 gate，而不是干扰 gate。依据是：当 gate 使用标准的 residual-plus-normalized 表征时，feature 更容易被线性读出，最终 routing 与 feature 的对齐也更好；而当 gate 只看 pure attention output 时，这两个结果都会下降。也就是说，在当前 ordinary MoE 设定里，残差路径并没有明显削弱 gate 对 feature 的识别，相反，它更可能给 gate 提供了一个更容易利用的输入表示。
+3. **Attention：** 如果问题是“attention 有没有学会 ground-truth feature relation”，那当前结果更像是：学到了一点，但没有证据表明存在某个 head 会让 token 几乎只在同一 feature 内部 attend。依据是：在本地 `qwen3-0.6B` 的正式 attention 分析里，用整层 attention output 做 feature probe，最好的 layer 也只有 `0.0688`，最好的单头 probe 只有 `0.0656`，整体绝对值仍然偏低；同时，直接看 attention pattern 时，表现最强的 head 对同 feature token 的偏好仍然很弱，而且这种偏好只在大约 `21%` 的位置上出现，远达不到“某个 head 基本只在同一 feature 内 attend”的程度。也就是说，当前 attention 最多只能说明它弱地捕捉到了一部分 feature relation，还不能说明它已经形成了清晰而强的 feature-internal attention structure。
 
 ## 3. 什么结构能做到 Specialization（DF & LYM：synthetic，LET：real）
 
