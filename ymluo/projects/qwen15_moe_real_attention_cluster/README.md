@@ -58,6 +58,7 @@ Main defaults:
 ```text
 MODEL_PATH=/mnt/workspace/Qwen1.5-MoE-A2.7B
 DATA_PATH=/mnt/workspace/dclm
+EXPERIMENT_MODE=attention_cluster
 MODEL_SIZE_PRESET=moe_0_6b
 NPROC_PER_NODE=8
 SEQ_LENGTH=1024
@@ -69,6 +70,18 @@ INIT_FROM_SCRATCH=true
 GRADIENT_ACCUMULATION_STEPS=4
 DEEPSPEED_CONFIG=
 ```
+
+To run an unpatched MoE baseline with the same 0.6B model size and training
+hyperparameters:
+
+```bash
+EXPERIMENT_MODE=baseline \
+bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
+```
+
+Baseline mode skips the attention-cluster patch completely: no gate-input
+replacement, no sparse expert attention replacement, and no forced
+`output_attentions=True`.
 
 The `moe_0_6b` preset applies these config overrides before random
 initialization:
