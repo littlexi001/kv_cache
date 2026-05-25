@@ -35,7 +35,7 @@
 这一问题的目标是诊断现有 MoE routing 的真实规律，而不是只证明它没有达到我们的预期。需要分析：
 
 1. 同一个 expert 接收的 token / context 之间有什么共同点：
-   1. Token ID 相同：～0.8，同一 token 有 80% 被分到同一个 expert；
+   1. Token ID 相同：～0.7，同一 token 有 70% 被分到同一个 expert；
    2. 表征向量 cos-sim 更高：～0.5；
    3. next-token logits 的 cos-sim 更高:～0.1；
 2. 不同 expert 接收的 token / context 之间有什么差异；
