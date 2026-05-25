@@ -11,8 +11,21 @@ export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:T
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen1.5-MoE-A2.7B}"
 DATA_PATH="${DATA_PATH:-/mnt/workspace/dclm}"
 MODEL_SIZE_PRESET="${MODEL_SIZE_PRESET:-moe_0_6b}"
-OUT_DIR="${OUT_DIR:-${PROJECT_DIR}/outputs/qwen15-moe-0p6b-real-attn-cluster}"
-RUN_NAME="${RUN_NAME:-qwen15-moe-0p6b-real-attn-cluster}"
+EXPERIMENT_MODE="${EXPERIMENT_MODE:-attention_cluster}"
+if [[ -z "${OUT_DIR+x}" ]]; then
+  if [[ "${EXPERIMENT_MODE}" == "baseline" ]]; then
+    OUT_DIR="${PROJECT_DIR}/outputs/qwen15-moe-0p6b-baseline"
+  else
+    OUT_DIR="${PROJECT_DIR}/outputs/qwen15-moe-0p6b-real-attn-cluster"
+  fi
+fi
+if [[ -z "${RUN_NAME+x}" ]]; then
+  if [[ "${EXPERIMENT_MODE}" == "baseline" ]]; then
+    RUN_NAME="qwen15-moe-0p6b-baseline"
+  else
+    RUN_NAME="qwen15-moe-0p6b-real-attn-cluster"
+  fi
+fi
 MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
 MASTER_PORT="${MASTER_PORT:-$((20000 + RANDOM % 40000))}"
 NPROC_PER_NODE="${NPROC_PER_NODE:-8}"
@@ -42,6 +55,7 @@ torchrun \
   --data_files_glob "${DATA_FILES_GLOB:-**/*.txt}" \
   --output_dir "${OUT_DIR}" \
   --run_name "${RUN_NAME}" \
+  --experiment_mode "${EXPERIMENT_MODE}" \
   --init_from_scratch "${INIT_FROM_SCRATCH:-true}" \
   --resume_from_checkpoint "${RESUME_FROM_CHECKPOINT:-}" \
   --model_size_preset "${MODEL_SIZE_PRESET}" \

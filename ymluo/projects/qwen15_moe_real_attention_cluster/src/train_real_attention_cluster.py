@@ -30,6 +30,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--data_files_glob", default="**/*.txt")
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--run_name", default="qwen15-moe-real-attn-cluster")
+    parser.add_argument(
+        "--experiment_mode",
+        choices=["attention_cluster", "baseline"],
+        default="attention_cluster",
+        help="Use 'baseline' for unpatched causal MoE training.",
+    )
     parser.add_argument("--init_from_scratch", type=str2bool, default=True)
     parser.add_argument(
         "--resume_from_checkpoint",
@@ -325,23 +331,26 @@ def main() -> None:
         if hasattr(model, "enable_input_require_grads"):
             model.enable_input_require_grads()
 
-    cluster_cfg = RealAttentionClusterConfig(
-        attention_top_ratio=args.attention_top_ratio,
-        expert_input_top_ratio=args.expert_input_top_ratio,
-        include_self=args.include_self,
-        attention_cluster_temperature=args.attention_cluster_temperature,
-        attention_cluster_detach_attention=args.attention_cluster_detach_attention,
-        attention_cluster_detach_key_router=args.attention_cluster_detach_key_router,
-        load_balance_temperature=args.load_balance_temperature,
-    )
-    cluster_patch = RealAttentionClusterPatch(model, cluster_cfg)
-    cluster_patch.apply()
+    cluster_patch = None
+    if args.experiment_mode == "attention_cluster":
+        cluster_cfg = RealAttentionClusterConfig(
+            attention_top_ratio=args.attention_top_ratio,
+            expert_input_top_ratio=args.expert_input_top_ratio,
+            include_self=args.include_self,
+            attention_cluster_temperature=args.attention_cluster_temperature,
+            attention_cluster_detach_attention=args.attention_cluster_detach_attention,
+            attention_cluster_detach_key_router=args.attention_cluster_detach_key_router,
+            load_balance_temperature=args.load_balance_temperature,
+        )
+        cluster_patch = RealAttentionClusterPatch(model, cluster_cfg)
+        cluster_patch.apply()
     router_top_k = infer_router_top_k(model)
 
     rank, _world_size = distributed_rank_info()
     if rank == 0:
         total_params = sum(param.numel() for param in model.parameters())
-        print(f"patched_moe_layers={cluster_patch.num_patched_layers}", flush=True)
+        print(f"experiment_mode={args.experiment_mode}", flush=True)
+        print(f"patched_moe_layers={cluster_patch.num_patched_layers if cluster_patch is not None else 0}", flush=True)
         print(f"router_top_k={router_top_k}", flush=True)
         print(f"model_size_preset={args.model_size_preset}", flush=True)
         print(f"model_config={json.dumps(model_config_summary(model.config), sort_keys=True)}", flush=True)
@@ -382,20 +391,29 @@ def main() -> None:
         deepspeed=args.deepspeed_config or None,
     )
 
-    trainer = RealAttentionClusterTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        data_collator=causal_lm_collator,
-        cluster_patch=cluster_patch,
-        attention_cluster_weight=args.attention_cluster_weight,
-        load_balance_loss_weight=args.load_balance_loss_weight,
-        router_top_k=router_top_k,
-    )
+    if cluster_patch is None:
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            data_collator=causal_lm_collator,
+        )
+    else:
+        trainer = RealAttentionClusterTrainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            data_collator=causal_lm_collator,
+            cluster_patch=cluster_patch,
+            attention_cluster_weight=args.attention_cluster_weight,
+            load_balance_loss_weight=args.load_balance_loss_weight,
+            router_top_k=router_top_k,
+        )
     trainer.train(resume_from_checkpoint=resolve_resume_checkpoint(args))
     trainer.save_model(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
-    cluster_patch.close()
+    if cluster_patch is not None:
+        cluster_patch.close()
 
 
 if __name__ == "__main__":

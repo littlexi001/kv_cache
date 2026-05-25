@@ -6,7 +6,16 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs}"
 mkdir -p "${LOG_DIR}"
 
-RUN_NAME="${RUN_NAME:-qwen15-moe-0p6b-real-attn-cluster}"
+EXPERIMENT_MODE="${EXPERIMENT_MODE:-attention_cluster}"
+export EXPERIMENT_MODE
+if [[ -z "${RUN_NAME+x}" ]]; then
+  if [[ "${EXPERIMENT_MODE}" == "baseline" ]]; then
+    RUN_NAME="qwen15-moe-0p6b-baseline"
+  else
+    RUN_NAME="qwen15-moe-0p6b-real-attn-cluster"
+  fi
+fi
+export RUN_NAME
 LOG_FILE="${LOG_DIR}/${RUN_NAME}_$(date +%Y%m%d_%H%M%S).log"
 PID_FILE="${LOG_DIR}/${RUN_NAME}.pid"
 
