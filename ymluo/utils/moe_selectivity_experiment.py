@@ -267,6 +267,12 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
         default=1.0,
         help="Gradient multiplier magnitude for secondary selected experts; 1.0 means exact gradient ascent.",
     )
+    parser.add_argument(
+        "--negative_update_primary_slots",
+        type=int,
+        default=1,
+        help="Number of top-k selected expert slots updated normally before reversing the remaining selected experts.",
+    )
 
     parser.add_argument("--single_token_update", type=str2bool, default=defaults["single_token_update"])
     parser.add_argument("--single_token_position", choices=["random", "last", "cycle"], default="random")
@@ -357,6 +363,7 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--moe_expert_input_attention_topk", type=int, default=0)
     parser.add_argument("--negative_update_secondaries", type=str2bool, default=experiment_type == "topk_negative_update")
     parser.add_argument("--negative_update_scale", type=float, default=1.0)
+    parser.add_argument("--negative_update_primary_slots", type=int, default=1)
 
     parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
     parser.add_argument("--forced_warmup_higher_unit_len", type=int, default=-1)
@@ -454,10 +461,11 @@ def _maybe_reverse_secondary_expert_grads(
     slot_idx: torch.Tensor,
     enabled: bool,
     scale: float,
+    primary_slots: int,
 ) -> torch.Tensor:
     if not enabled or scale == 0.0 or expert_output.numel() == 0:
         return expert_output
-    secondary = (slot_idx > 0).to(expert_output.dtype).unsqueeze(-1)
+    secondary = (slot_idx >= int(primary_slots)).to(expert_output.dtype).unsqueeze(-1)
     if not bool(secondary.any()):
         return expert_output
     flipped = expert_output.detach() - float(scale) * (expert_output - expert_output.detach())
@@ -510,6 +518,7 @@ def _patched_moe_forward(
             slot_idx,
             negative_update_secondaries,
             negative_update_scale,
+            int(getattr(self.config, "moe_negative_update_primary_slots", 1)),
         )
         final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
 
@@ -584,6 +593,7 @@ def _patched_head_moe_forward(
                 slot_idx,
                 negative_update_secondaries,
                 negative_update_scale,
+                int(getattr(self.config, "moe_negative_update_primary_slots", 1)),
             )
             final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
 
@@ -658,6 +668,10 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
         raise ValueError("`--negative_update_secondaries true` requires `--moe_num_experts_per_tok >= 2`.")
     if float(args.negative_update_scale) < 0.0:
         raise ValueError("`--negative_update_scale` must be >= 0.")
+    if int(args.negative_update_primary_slots) < 1:
+        raise ValueError("`--negative_update_primary_slots` must be >= 1.")
+    if int(args.negative_update_primary_slots) > int(args.moe_num_experts_per_tok):
+        raise ValueError("`--negative_update_primary_slots` must be <= `--moe_num_experts_per_tok`.")
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -682,6 +696,7 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
     config.moe_expert_input_attention_topk = int(args.moe_expert_input_attention_topk)
     config.moe_negative_update_secondaries = bool(args.negative_update_secondaries)
     config.moe_negative_update_scale = float(args.negative_update_scale)
+    config.moe_negative_update_primary_slots = int(args.negative_update_primary_slots)
 
 
 def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_value: int) -> list[int]:
@@ -1355,6 +1370,7 @@ def save_checkpoint(
         "moe_expert_input_attention_topk": int(getattr(model.config, "moe_expert_input_attention_topk", 0)),
         "moe_negative_update_secondaries": bool(getattr(model.config, "moe_negative_update_secondaries", False)),
         "moe_negative_update_scale": float(getattr(model.config, "moe_negative_update_scale", 1.0)),
+        "moe_negative_update_primary_slots": int(getattr(model.config, "moe_negative_update_primary_slots", 1)),
     }
     (ckpt_dir / "runtime_config.json").write_text(json.dumps(runtime_config, indent=2), encoding="utf-8")
     print(f"saved checkpoint: {ckpt_dir / f'{step}.pth'}", flush=True)
