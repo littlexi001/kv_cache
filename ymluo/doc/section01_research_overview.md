@@ -40,7 +40,8 @@ KVCache_Indexing_Knowledge_Retrieval_2026-05-09.md
 | `projects/qwen3_interval_subseq_retrieval` | arithmetic subsequence next-token 训练和 attention score dump。 |
 | `projects/pyramid_kv_compression` | 继续预训练实验：用学习到的 summary 替换旧的中间层 KV blocks。 |
 | `projects/qwen3_kcache_value_delta_analysis` | Qwen3-8B 的 K-cache 取值、范数、相邻 token delta 分布分析。 |
-| `projects/qwen3_moe_attention_cluster` | MoE 专家选择性实验：用 attention 权重引导 router 做 token 聚类。 |
+| `projects/qwen3_moe_attention_cluster` | MoE 专家选择性实验：用 attention 权重引导 router 做 token 聚类（合成数据）。 |
+| `projects/qwen15_moe_real_attention_cluster` | 同上核心思想在真实 Qwen1.5-MoE + DCLM 文本上的迁移实验。 |
 | `logs/` | 历史日志或 workspace snapshot。 |
 | `utils/` | 共享工具目录。 |
 

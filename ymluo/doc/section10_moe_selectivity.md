@@ -182,3 +182,99 @@ ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/m
 ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/checkpoints/<step>.pth
 ymluo/projects/qwen3_moe_attention_cluster/outputs/train/moe-attention-cluster/checkpoints/runtime_config.json
 ```
+
+---
+
+## Exp5 — Attention Cluster 真实数据实验（Qwen1.5-MoE + DCLM）
+
+> 新增日期：2026-05-25
+
+### 实验目的
+
+将 Exp4 的 attention cluster 核心思想从合成数据迁移到真实 MoE 模型和真实文本，验证该方法在真实场景下的可行性。
+
+### 与合成数据版的核心差异
+
+| 维度 | 合成数据版 (Exp4) | 真实数据版 (Exp5) |
+| --- | --- | --- |
+| 模型 | 自定义 `MyQwen3ForCausalLM`（3 层，hidden=128） | 真实 **Qwen1.5-MoE-A2.7B** 缩至 **0.6B**（12 层，hidden=768，12 experts） |
+| 数据集 | fdong hierarchical synthetic data | **DCLM** 真实文本（随机采样行 → tokenize → 固定长度 block） |
+| Top-k 方式 | 绝对数量 top-k（如 top-4 个 token） | **比例 top-ratio**（默认前 10% 历史 token） |
+| Router 输入 | 可配置（`layer_input` / `q` / `k` / `v`） | **固定用 Q 投影**（`q_proj` + `q_norm` 后的状态） |
+| Expert 输入 | 标准 post-attention MLP 输入 | **替换为稀疏 attention 输出**（top-10% V 加权 + `o_proj`） |
+| 负样本对 loss | 有（基于 hierarchical metadata 特征 ID） | **无**（真实文本无层级标注） |
+| Head-level 路由 | 支持 `moe_head_level` | **不支持**，仅 per-layer 路由 |
+| 训练框架 | 自定义训练循环 | **HuggingFace Trainer + DeepSpeed ZeRO-3** + 8 GPU |
+
+### 辅助损失函数
+
+合成版和真实版的核心 loss 公式一致：
+
+```
+same_expert_prob(i, j) = dot(router_prob_i, router_prob_j)
+L_attn_cluster = -attention(i, j) * log(same_expert_prob(i, j))
+```
+
+真实版在实现上支持两个额外选项：
+- `attention_cluster_detach_attention`（默认 true）：detach attention 权重，使其不通过 cluster loss 回传梯度到 attention 参数。
+- `attention_cluster_detach_key_router`（默认 false）：detach key 侧的 router 概率，只让 query 侧的 router 被优化。
+
+总训练损失：
+
+```
+L = L_lm + attention_cluster_weight * L_attn_cluster + load_balance_loss_weight * L_load_balance
+```
+
+
+
+前向的时候分发到k个expert上面，k << num_expert , 然后反向更新参数的时候，只修改1个expert，然后剩下的k-1个expert负向更新梯度。
+
+
+
+### Patch 机制
+
+真实版通过 PyTorch forward hooks（而非修改模型代码）注入 attention cluster 逻辑：
+
+1. **Layer pre-hook**：保存残差连接的输入（用于后续还原）。
+2. **Attention pre-hook**：保存 attention 输入 hidden states。
+3. **Attention hook**：从 attention 输出中提取 attention weights；用保存的 hidden states 计算 Q 投影作为 router 输入；用 sparse top-ratio attention 计算新的 expert 输入（稀疏 V 加权 + `o_proj`），替代标准 post-attention 输出进入 MLP。
+4. **MLP pre-hook**：将 expert 输入替换为上一步计算的稀疏 attention 输出。
+5. **Gate pre-hook**：将 gate 输入替换为 Q 投影状态（即 router 看到的是 pre-attention 的 Q 信息）。
+6. **Gate hook**：收集每层的 router logits 和 attention weights 用于计算辅助 loss。
+
+### Baseline 模式
+
+设 `EXPERIMENT_MODE=baseline` 可跳过所有 patch，训练标准 MoE LM，用于对照实验。
+
+### 运行命令
+
+```bash
+# attention_cluster 模式（默认 0.6B preset）
+bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
+
+# baseline 对照
+EXPERIMENT_MODE=baseline \
+bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
+
+# 自定义参数
+ATTENTION_CLUSTER_WEIGHT=0.1 \
+ATTENTION_TOP_RATIO=0.15 \
+MAX_STEPS=20000 \
+bash ymluo/projects/qwen15_moe_real_attention_cluster/scripts/nohup_train.sh
+```
+
+### 主要默认参数
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `ATTENTION_TOP_RATIO` | 0.10 | attention cluster loss 使用的 top 历史 token 比例 |
+| `EXPERT_INPUT_TOP_RATIO` | 0.10 | expert 输入使用的稀疏 attention 比例 |
+| `ATTENTION_CLUSTER_WEIGHT` | 0.01 | cluster loss 权重 |
+| `LOAD_BALANCE_LOSS_WEIGHT` | 0.01 | load balance loss 权重 |
+| `SEQ_LENGTH` | 1024 | 训练序列长度 |
+| `MODEL_SIZE_PRESET` | moe_0_6b | 模型规模 preset（12 层，hidden=768，12 experts） |
+| `GRADIENT_ACCUMULATION_STEPS` | 4 | 梯度累积步数 |
+
+### 当前状态
+
+项目代码已完成，待实际训练运行和结果记录。

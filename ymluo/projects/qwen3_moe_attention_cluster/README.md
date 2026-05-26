@@ -82,9 +82,25 @@ RUN_NAME=attn-cluster-w01-top8 \
 bash ymluo/projects/qwen3_moe_attention_cluster/scripts/run_train.sh
 ```
 
+Fixed-unit synthetic data:
+
+```bash
+SYNTHETIC_DATA_MODE=fixed_units \
+SEQ_LEN=999 \
+FIXED_UNIT_PATTERNS=123,124 \
+FIXED_UNIT_PROBABILITIES=0.7,0.3 \
+RUN_NAME=fixed-123-124-p70-p30 \
+bash ymluo/projects/qwen3_moe_attention_cluster/scripts/run_train.sh
+```
+
+With `SEQ_LEN=999`, the input side contains 333 complete length-3 units. The
+dataset still generates one extra token for next-token labels, so the final
+target token comes from the next sampled unit.
+
 Important defaults:
 
 ```text
+SYNTHETIC_DATA_MODE=hierarchical
 SYNTHETIC_BLOCK_SIZE=4
 SYNTHETIC_NUM_HIERARCHY_LAYERS=2
 SYNTHETIC_NUM_UNITS_PER_LAYER=64

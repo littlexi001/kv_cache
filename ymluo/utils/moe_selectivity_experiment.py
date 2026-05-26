@@ -40,7 +40,7 @@ except ImportError:  # noqa: E402
                 return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
 
             return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-from utils import HierarchicalPatternData  # noqa: E402
+from utils import FixedUnitPatternData, HierarchicalPatternData  # noqa: E402
 
 
 EXPERIMENT_DEFAULTS = {
@@ -104,6 +104,18 @@ EXPERIMENT_DEFAULTS = {
         "forced_warmup_router_loss_weight": 0.0,
         "eval_forced_warmup_routing": False,
     },
+    "topk_negative_update": {
+        "run_name": "moe-topk-negative-update",
+        "single_token_update": False,
+        "gate_inhibition_weight": 0.0,
+        "attention_cluster_weight": 0.0,
+        "expert_repulsion_weight": 0.0,
+        "orthogonalize_gate": False,
+        "orthogonalize_experts": False,
+        "forced_warmup_steps": 0,
+        "forced_warmup_router_loss_weight": 0.0,
+        "eval_forced_warmup_routing": False,
+    },
 }
 
 
@@ -122,6 +134,27 @@ def parse_int_list(value: str | None) -> list[int] | None:
     if value is None or value == "":
         return None
     return [int(item.strip()) for item in value.split(",") if item.strip()]
+
+
+def parse_float_list(value: str | None) -> list[float]:
+    if value is None or value == "":
+        return []
+    return [float(item.strip()) for item in value.split(",") if item.strip()]
+
+
+def parse_fixed_unit_patterns(value: str | None) -> list[tuple[int, ...]]:
+    if value is None or value.strip() == "":
+        return [(1, 2, 3), (1, 2, 4)]
+    units = []
+    for raw_unit in value.replace(";", ",").split(","):
+        item = raw_unit.strip()
+        if not item:
+            continue
+        if " " in item:
+            units.append(tuple(int(token) for token in item.split()))
+        else:
+            units.append(tuple(int(char) for char in item))
+    return units
 
 
 def build_parser(experiment_type: str) -> argparse.ArgumentParser:
@@ -150,6 +183,7 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
 
     parser.add_argument("--seq_len", type=int, default=128)
+    parser.add_argument("--synthetic_data_mode", choices=["hierarchical", "fixed_units"], default="hierarchical")
     parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
     parser.add_argument("--synthetic_block_size", type=int, default=4)
     parser.add_argument("--synthetic_num_hierarchy_layers", type=int, default=2)
@@ -161,6 +195,8 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
     parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
     parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
+    parser.add_argument("--fixed_unit_patterns", type=parse_fixed_unit_patterns, default=[(1, 2, 3), (1, 2, 4)])
+    parser.add_argument("--fixed_unit_probabilities", type=parse_float_list, default=[0.7, 0.3])
 
     parser.add_argument("--debug_vocab_size", type=int, default=257)
     parser.add_argument("--debug_hidden_size", type=int, default=128)
@@ -198,6 +234,18 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
         help="If >0, feed experts with attention output recomputed from only the top-k attended K/V positions.",
     )
     parser.add_argument("--moe_load_balance_loss_weight", type=float, default=0.0)
+    parser.add_argument(
+        "--negative_update_secondaries",
+        type=str2bool,
+        default=experiment_type == "topk_negative_update",
+        help="Reverse expert-parameter gradients for selected top-k slots after slot 0.",
+    )
+    parser.add_argument(
+        "--negative_update_scale",
+        type=float,
+        default=1.0,
+        help="Gradient multiplier magnitude for secondary selected experts; 1.0 means exact gradient ascent.",
+    )
 
     parser.add_argument("--single_token_update", type=str2bool, default=defaults["single_token_update"])
     parser.add_argument("--single_token_position", choices=["random", "last", "cycle"], default="random")
@@ -257,6 +305,7 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
 
     parser.add_argument("--seq_len", type=int, default=128)
+    parser.add_argument("--synthetic_data_mode", choices=["hierarchical", "fixed_units"], default="hierarchical")
     parser.add_argument("--eval_batch_size", type=int, default=16)
     parser.add_argument("--eval_batches", type=int, default=32)
     parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
@@ -270,6 +319,8 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
     parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
     parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
+    parser.add_argument("--fixed_unit_patterns", type=parse_fixed_unit_patterns, default=[(1, 2, 3), (1, 2, 4)])
+    parser.add_argument("--fixed_unit_probabilities", type=parse_float_list, default=[0.7, 0.3])
 
     parser.add_argument("--debug_vocab_size", type=int, default=257)
     parser.add_argument("--debug_hidden_size", type=int, default=128)
@@ -296,6 +347,8 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--pre_router_input", choices=["layer_input", "q", "k", "v"], default="layer_input")
     parser.add_argument("--pre_router_controls_attention", type=str2bool, default=False)
     parser.add_argument("--moe_expert_input_attention_topk", type=int, default=0)
+    parser.add_argument("--negative_update_secondaries", type=str2bool, default=experiment_type == "topk_negative_update")
+    parser.add_argument("--negative_update_scale", type=float, default=1.0)
 
     parser.add_argument("--forced_warmup_steps", type=int, default=defaults["forced_warmup_steps"])
     parser.add_argument("--forced_warmup_higher_unit_len", type=int, default=-1)
@@ -388,6 +441,21 @@ def _forced_topk_from_targets(
     return topk_weights, topk_indices
 
 
+def _maybe_reverse_secondary_expert_grads(
+    expert_output: torch.Tensor,
+    slot_idx: torch.Tensor,
+    enabled: bool,
+    scale: float,
+) -> torch.Tensor:
+    if not enabled or scale == 0.0 or expert_output.numel() == 0:
+        return expert_output
+    secondary = (slot_idx > 0).to(expert_output.dtype).unsqueeze(-1)
+    if not bool(secondary.any()):
+        return expert_output
+    flipped = expert_output.detach() - float(scale) * (expert_output - expert_output.detach())
+    return expert_output * (1.0 - secondary) + flipped * secondary
+
+
 def _patched_moe_forward(
     self,
     hidden_states,
@@ -420,6 +488,8 @@ def _patched_moe_forward(
             self.normalize_topk_prob,
         )
     topk_weights = topk_weights.to(flat_states.dtype)
+    negative_update_secondaries = bool(getattr(self.config, "moe_negative_update_secondaries", False))
+    negative_update_scale = float(getattr(self.config, "moe_negative_update_scale", 1.0))
 
     final_states = torch.zeros_like(flat_states)
     for expert_idx, expert in enumerate(self.experts):
@@ -427,6 +497,12 @@ def _patched_moe_forward(
         if token_idx.numel() == 0:
             continue
         expert_output = expert(flat_states[token_idx])
+        expert_output = _maybe_reverse_secondary_expert_grads(
+            expert_output,
+            slot_idx,
+            negative_update_secondaries,
+            negative_update_scale,
+        )
         final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
 
     if self.common_expert is not None:
@@ -486,6 +562,8 @@ def _patched_head_moe_forward(
                 self.normalize_topk_prob,
             )
         topk_weights = topk_weights.to(head_states.dtype)
+        negative_update_secondaries = bool(getattr(self.config, "moe_negative_update_secondaries", False))
+        negative_update_scale = float(getattr(self.config, "moe_negative_update_scale", 1.0))
 
         final_states = torch.zeros_like(head_states)
         for expert_idx, expert in enumerate(self.experts[head_idx]):
@@ -493,6 +571,12 @@ def _patched_head_moe_forward(
             if token_idx.numel() == 0:
                 continue
             expert_output = expert(head_states[token_idx])
+            expert_output = _maybe_reverse_secondary_expert_grads(
+                expert_output,
+                slot_idx,
+                negative_update_secondaries,
+                negative_update_scale,
+            )
             final_states[token_idx] += expert_output * topk_weights[token_idx, slot_idx].unsqueeze(-1)
 
         if self.common_experts is not None:
@@ -562,6 +646,10 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
         raise ValueError("`--moe_expert_input_attention_topk` must be >= 0.")
     if int(args.moe_expert_input_attention_topk) > 0 and args.attn_implementation != "eager":
         raise ValueError("`--moe_expert_input_attention_topk > 0` currently requires `--attn_implementation eager`.")
+    if bool(args.negative_update_secondaries) and int(args.moe_num_experts_per_tok) < 2:
+        raise ValueError("`--negative_update_secondaries true` requires `--moe_num_experts_per_tok >= 2`.")
+    if float(args.negative_update_scale) < 0.0:
+        raise ValueError("`--negative_update_scale` must be >= 0.")
     config.use_moe = bool(args.use_moe)
     config.moe_num_unique_experts = int(args.moe_num_unique_experts)
     config.moe_num_experts_per_tok = int(args.moe_num_experts_per_tok)
@@ -584,6 +672,8 @@ def apply_moe_overrides(config: Any, args: argparse.Namespace) -> None:
     config.pre_router_input = str(args.pre_router_input)
     config.pre_router_controls_attention = bool(args.pre_router_controls_attention)
     config.moe_expert_input_attention_topk = int(args.moe_expert_input_attention_topk)
+    config.moe_negative_update_secondaries = bool(args.negative_update_secondaries)
+    config.moe_negative_update_scale = float(args.negative_update_scale)
 
 
 def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_value: int) -> list[int]:
@@ -594,7 +684,17 @@ def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_va
     return [int(value) for value in pattern]
 
 
-def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData:
+def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData | FixedUnitPatternData:
+    if args.synthetic_data_mode == "fixed_units":
+        return FixedUnitPatternData(
+            max_seq_len=args.seq_len,
+            num_samples=args.synthetic_num_samples,
+            units=args.fixed_unit_patterns,
+            probabilities=args.fixed_unit_probabilities,
+            seed=args.synthetic_seed,
+            pad_token_id=args.synthetic_pad_token_id,
+            return_metadata=True,
+        )
     return HierarchicalPatternData(
         max_seq_len=args.seq_len,
         num_samples=args.synthetic_num_samples,
@@ -612,7 +712,12 @@ def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData:
     )
 
 
-def sample_batch(dataset: HierarchicalPatternData, args: argparse.Namespace, generator: torch.Generator, device: torch.device) -> Batch:
+def sample_batch(
+    dataset: HierarchicalPatternData | FixedUnitPatternData,
+    args: argparse.Namespace,
+    generator: torch.Generator,
+    device: torch.device,
+) -> Batch:
     indices = torch.randint(0, len(dataset), (args.batch_size,), generator=generator)
     items = [dataset[int(index)] for index in indices.tolist()]
     source = torch.stack([item[0] for item in items]).to(device)
@@ -757,6 +862,8 @@ def choose_single_token_position(args: argparse.Namespace, step: int, seq_len: i
 def forced_higher_unit_len(args: argparse.Namespace) -> int:
     if args.forced_warmup_higher_unit_len > 0:
         return int(args.forced_warmup_higher_unit_len)
+    if getattr(args, "synthetic_data_mode", "hierarchical") == "fixed_units":
+        return len(args.fixed_unit_patterns[0])
     return int(args.synthetic_block_size ** args.synthetic_num_hierarchy_layers)
 
 
@@ -1099,7 +1206,7 @@ def aggregate_eval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
 @torch.no_grad()
 def evaluate(
     model: MyQwen3ForCausalLM,
-    dataset: HierarchicalPatternData,
+    dataset: HierarchicalPatternData | FixedUnitPatternData,
     args: argparse.Namespace,
     device: torch.device,
     generator: torch.Generator,
@@ -1214,6 +1321,8 @@ def save_checkpoint(
         "pre_router_input": str(getattr(model.config, "pre_router_input", "layer_input")),
         "pre_router_controls_attention": bool(getattr(model.config, "pre_router_controls_attention", False)),
         "moe_expert_input_attention_topk": int(getattr(model.config, "moe_expert_input_attention_topk", 0)),
+        "moe_negative_update_secondaries": bool(getattr(model.config, "moe_negative_update_secondaries", False)),
+        "moe_negative_update_scale": float(getattr(model.config, "moe_negative_update_scale", 1.0)),
     }
     (ckpt_dir / "runtime_config.json").write_text(json.dumps(runtime_config, indent=2), encoding="utf-8")
     print(f"saved checkpoint: {ckpt_dir / f'{step}.pth'}", flush=True)
@@ -1230,7 +1339,7 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
         raise ValueError("--batch_size must be >= 1")
     if args.gradient_accumulation_steps < 1:
         raise ValueError("--gradient_accumulation_steps must be >= 1")
-    if args.synthetic_num_hierarchy_layers < 2:
+    if args.synthetic_data_mode == "hierarchical" and args.synthetic_num_hierarchy_layers < 2:
         raise ValueError("These metrics expect at least 2 synthetic hierarchy layers.")
     if args.use_pre_router and args.forced_warmup_steps > 0:
         raise ValueError("`--use_pre_router` is not compatible with forced warmup in this runner.")
@@ -1251,14 +1360,16 @@ def run_experiment(experiment_type: str, argv: list[str] | None = None) -> None:
     print(f"device={device}", flush=True)
     print(
         "synthetic: "
+        f"mode={args.synthetic_data_mode} "
         f"seq_len={args.seq_len} block={args.synthetic_block_size} "
         f"layers={args.synthetic_num_hierarchy_layers} units={args.synthetic_num_units_per_layer} "
-        f"distribution={args.synthetic_sampling_distribution}",
+        f"distribution={args.synthetic_sampling_distribution} "
+        f"fixed_units={args.fixed_unit_patterns} fixed_probs={args.fixed_unit_probabilities}",
         flush=True,
     )
 
     dataset = prepare_dataset(args)
-    if args.forced_warmup_steps > 0:
+    if args.forced_warmup_steps > 0 or args.negative_update_secondaries:
         install_forced_routing_patch()
     model = prepare_model(args, device)
     tracker = RouterLogitTracker(model)
@@ -1513,7 +1624,7 @@ def run_eval_only(experiment_type: str, argv: list[str] | None = None) -> None:
     args.forced_warmup_router_loss_weight = 0.0
     args.orthogonal_init_mode = "preserve_norm"
 
-    if args.synthetic_num_hierarchy_layers < 2:
+    if args.synthetic_data_mode == "hierarchical" and args.synthetic_num_hierarchy_layers < 2:
         raise ValueError("These metrics expect at least 2 synthetic hierarchy layers.")
     if args.use_pre_router and args.eval_forced_warmup_routing:
         raise ValueError("`--use_pre_router` is not compatible with forced warmup eval in this runner.")

@@ -34,6 +34,7 @@ DEVICE=${DEVICE:-cuda:0}
 USE_BF16=${USE_BF16:-false}
 ATTN_IMPLEMENTATION=${ATTN_IMPLEMENTATION:-eager}
 SEQ_LEN=${SEQ_LEN:-128}
+SYNTHETIC_DATA_MODE=${SYNTHETIC_DATA_MODE:-hierarchical}
 SYNTHETIC_NUM_SAMPLES=${SYNTHETIC_NUM_SAMPLES:-200000}
 SYNTHETIC_BLOCK_SIZE=${SYNTHETIC_BLOCK_SIZE:-4}
 SYNTHETIC_NUM_HIERARCHY_LAYERS=${SYNTHETIC_NUM_HIERARCHY_LAYERS:-2}
@@ -42,6 +43,8 @@ SYNTHETIC_NUM_UNITS_PER_LAYER=${SYNTHETIC_NUM_UNITS_PER_LAYER:-64}
 SYNTHETIC_SEED=${SYNTHETIC_SEED:-0}
 SYNTHETIC_SAMPLING_DISTRIBUTION=${SYNTHETIC_SAMPLING_DISTRIBUTION:-zipf}
 SYNTHETIC_ZIPF_ALPHA=${SYNTHETIC_ZIPF_ALPHA:-1.1}
+FIXED_UNIT_PATTERNS=${FIXED_UNIT_PATTERNS:-123,124}
+FIXED_UNIT_PROBABILITIES=${FIXED_UNIT_PROBABILITIES:-0.7,0.3}
 DEBUG_VOCAB_SIZE=${DEBUG_VOCAB_SIZE:-257}
 DEBUG_HIDDEN_SIZE=${DEBUG_HIDDEN_SIZE:-128}
 DEBUG_INTERMEDIATE_SIZE=${DEBUG_INTERMEDIATE_SIZE:-256}
@@ -98,6 +101,7 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --use_bf16 "${USE_BF16:-false}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --seq_len "${SEQ_LEN:-128}" \
+  --synthetic_data_mode "${SYNTHETIC_DATA_MODE:-hierarchical}" \
   --synthetic_num_samples "${SYNTHETIC_NUM_SAMPLES:-200000}" \
   --synthetic_block_size "${SYNTHETIC_BLOCK_SIZE:-4}" \
   --synthetic_num_hierarchy_layers "${SYNTHETIC_NUM_HIERARCHY_LAYERS:-2}" \
@@ -109,6 +113,8 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --synthetic_sampling_distribution "${SYNTHETIC_SAMPLING_DISTRIBUTION:-zipf}" \
   --synthetic_zipf_alpha "${SYNTHETIC_ZIPF_ALPHA:-1.1}" \
   --synthetic_zipf_shuffle_ranks "${SYNTHETIC_ZIPF_SHUFFLE_RANKS:-true}" \
+  --fixed_unit_patterns "${FIXED_UNIT_PATTERNS:-123,124}" \
+  --fixed_unit_probabilities "${FIXED_UNIT_PROBABILITIES:-0.7,0.3}" \
   --debug_vocab_size "${DEBUG_VOCAB_SIZE:-257}" \
   --debug_hidden_size "${DEBUG_HIDDEN_SIZE:-128}" \
   --debug_intermediate_size "${DEBUG_INTERMEDIATE_SIZE:-256}" \
@@ -116,7 +122,7 @@ python "${PROJECT_DIR}/src/train_attention_cluster.py" \
   --debug_num_attention_heads "${DEBUG_NUM_ATTENTION_HEADS:-4}" \
   --debug_num_key_value_heads "${DEBUG_NUM_KEY_VALUE_HEADS:-2}" \
   --debug_head_dim "${DEBUG_HEAD_DIM:-32}" \
-  --debug_max_position_embeddings "${DEBUG_MAX_POSITION_EMBEDDINGS:-256}" \
+  --debug_max_position_embeddings "${DEBUG_MAX_POSITION_EMBEDDINGS:-1024}" \
   --attention_stride_pattern "${ATTENTION_STRIDE_PATTERN:-}" \
   --residual_source_pattern "${RESIDUAL_SOURCE_PATTERN:-}" \
   --use_moe "${USE_MOE:-true}" \
