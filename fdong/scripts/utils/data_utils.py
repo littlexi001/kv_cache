@@ -351,6 +351,254 @@ class FixedUnitPatternData(Dataset):
         return token_ids[:-1], token_ids[1:], len(token_ids)
 
 
+class StructuredLanguageData(Dataset):
+    """
+    Synthetic next-token dataset with topic spans, ambiguous entities, shared
+    function tokens, long-ish dependencies, and filler noise.
+
+    Metadata columns:
+      0: syntax role id
+      1: topic id
+      2: entity id
+      3: span id
+      4: relation/template id
+    """
+
+    ROLE_NOISE = 0
+    ROLE_TOPIC = 1
+    ROLE_ENTITY = 2
+    ROLE_VERB = 3
+    ROLE_OBJECT = 4
+    ROLE_FUNCTION = 5
+    ROLE_COPY = 6
+
+    TEMPLATE_STATEMENT = 0
+    TEMPLATE_COPY = 1
+    TEMPLATE_BRIDGE = 2
+
+    def __init__(
+        self,
+        max_seq_len,
+        num_samples=100000,
+        topic_count=8,
+        entities_per_topic=8,
+        shared_entity_count=16,
+        verb_count=12,
+        function_token_count=12,
+        noise_token_count=32,
+        seed=0,
+        pad_token_id=0,
+        min_token_id=1,
+        topic_zipf_alpha=1.1,
+        noise_rate=0.25,
+        ambiguity_rate=0.35,
+        copy_rate=0.25,
+        bridge_rate=0.25,
+        min_span_units=2,
+        max_span_units=8,
+        padding=False,
+        return_metadata=False,
+    ) -> None:
+        super().__init__()
+        if max_seq_len < 1:
+            raise ValueError("max_seq_len must be positive")
+        if topic_count < 2:
+            raise ValueError("topic_count must be at least 2")
+        if entities_per_topic < 1:
+            raise ValueError("entities_per_topic must be positive")
+        if shared_entity_count < 1:
+            raise ValueError("shared_entity_count must be positive")
+        if verb_count < 1 or function_token_count < 1 or noise_token_count < 1:
+            raise ValueError("verb/function/noise token counts must be positive")
+        if topic_zipf_alpha <= 0:
+            raise ValueError("topic_zipf_alpha must be positive")
+        for name, value in [
+            ("noise_rate", noise_rate),
+            ("ambiguity_rate", ambiguity_rate),
+            ("copy_rate", copy_rate),
+            ("bridge_rate", bridge_rate),
+        ]:
+            if value < 0 or value > 1:
+                raise ValueError(f"{name} must be in [0, 1]")
+        if min_span_units < 1 or max_span_units < min_span_units:
+            raise ValueError("span unit bounds are invalid")
+
+        self.max_seq_len = max_seq_len
+        self.num_samples = num_samples
+        self.topic_count = topic_count
+        self.entities_per_topic = entities_per_topic
+        self.shared_entity_count = shared_entity_count
+        self.verb_count = verb_count
+        self.function_token_count = function_token_count
+        self.noise_token_count = noise_token_count
+        self.seed = seed
+        self.pad_token_id = pad_token_id
+        self.min_token_id = min_token_id
+        self.topic_zipf_alpha = topic_zipf_alpha
+        self.noise_rate = noise_rate
+        self.ambiguity_rate = ambiguity_rate
+        self.copy_rate = copy_rate
+        self.bridge_rate = bridge_rate
+        self.min_span_units = min_span_units
+        self.max_span_units = max_span_units
+        self.padding = padding
+        self.return_metadata = return_metadata
+
+        cursor = self.min_token_id
+        self.topic_tokens = list(range(cursor, cursor + self.topic_count))
+        cursor += self.topic_count
+        self.private_entity_tokens = []
+        for _topic_idx in range(self.topic_count):
+            topic_entities = list(range(cursor, cursor + self.entities_per_topic))
+            self.private_entity_tokens.append(topic_entities)
+            cursor += self.entities_per_topic
+        self.shared_entity_tokens = list(range(cursor, cursor + self.shared_entity_count))
+        cursor += self.shared_entity_count
+        self.verb_tokens = list(range(cursor, cursor + self.verb_count))
+        cursor += self.verb_count
+        self.function_tokens = list(range(cursor, cursor + self.function_token_count))
+        cursor += self.function_token_count
+        self.noise_tokens = list(range(cursor, cursor + self.noise_token_count))
+        cursor += self.noise_token_count
+        self.vocab_upper_bound = cursor
+        self.topic_weights = [1.0 / ((idx + 1) ** self.topic_zipf_alpha) for idx in range(self.topic_count)]
+
+    def __len__(self):
+        return self.num_samples
+
+    def _rng(self, *items):
+        seed = self.seed
+        for item in items:
+            seed = (seed * 1000003 + int(item)) % (2**32)
+        return random.Random(seed)
+
+    def _append(self, tokens, metadata, token_id, role, topic_id, entity_id, span_id, template_id):
+        tokens.append(int(token_id))
+        if metadata is not None:
+            metadata.append([
+                int(role),
+                int(topic_id),
+                int(entity_id),
+                int(span_id),
+                int(template_id),
+            ])
+
+    def _sample_topic(self, rng):
+        return rng.choices(range(self.topic_count), weights=self.topic_weights, k=1)[0]
+
+    def _sample_entity(self, rng, topic_id):
+        local_entity = rng.randrange(self.entities_per_topic)
+        if rng.random() < self.ambiguity_rate:
+            shared_idx = rng.randrange(self.shared_entity_count)
+            return self.shared_entity_tokens[shared_idx], self.topic_count * self.entities_per_topic + shared_idx
+        return self.private_entity_tokens[topic_id][local_entity], topic_id * self.entities_per_topic + local_entity
+
+    def _maybe_noise(self, rng, tokens, metadata, span_id, template_id, topic_id=-1):
+        if rng.random() >= self.noise_rate:
+            return
+        noise_len = 1 + int(rng.random() < 0.35)
+        for _ in range(noise_len):
+            self._append(
+                tokens,
+                metadata,
+                rng.choice(self.noise_tokens),
+                self.ROLE_NOISE,
+                topic_id,
+                -1,
+                span_id,
+                template_id,
+            )
+
+    def _emit_statement(self, rng, tokens, metadata, topic_id, span_id):
+        template_id = self.TEMPLATE_STATEMENT
+        entity_token, entity_id = self._sample_entity(rng, topic_id)
+        object_token, object_id = self._sample_entity(rng, topic_id)
+        verb_token = self.verb_tokens[(topic_id + entity_id) % self.verb_count]
+        self._append(tokens, metadata, self.topic_tokens[topic_id], self.ROLE_TOPIC, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, rng.choice(self.function_tokens), self.ROLE_FUNCTION, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, entity_token, self.ROLE_ENTITY, topic_id, entity_id, span_id, template_id)
+        self._maybe_noise(rng, tokens, metadata, span_id, template_id, topic_id)
+        self._append(tokens, metadata, verb_token, self.ROLE_VERB, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, object_token, self.ROLE_OBJECT, topic_id, object_id, span_id, template_id)
+        self._append(tokens, metadata, rng.choice(self.function_tokens), self.ROLE_FUNCTION, topic_id, -1, span_id, template_id)
+
+    def _emit_copy(self, rng, tokens, metadata, topic_id, span_id):
+        template_id = self.TEMPLATE_COPY
+        entity_token, entity_id = self._sample_entity(rng, topic_id)
+        gap = rng.randint(1, 4)
+        self._append(tokens, metadata, self.topic_tokens[topic_id], self.ROLE_TOPIC, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, entity_token, self.ROLE_ENTITY, topic_id, entity_id, span_id, template_id)
+        for _ in range(gap):
+            self._maybe_noise(rng, tokens, metadata, span_id, template_id, topic_id)
+            self._append(tokens, metadata, rng.choice(self.function_tokens), self.ROLE_FUNCTION, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, self.verb_tokens[entity_id % self.verb_count], self.ROLE_VERB, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, entity_token, self.ROLE_COPY, topic_id, entity_id, span_id, template_id)
+
+    def _emit_bridge(self, rng, tokens, metadata, topic_id, span_id):
+        template_id = self.TEMPLATE_BRIDGE
+        other_topic = self._sample_topic(rng)
+        if other_topic == topic_id:
+            other_topic = (topic_id + 1) % self.topic_count
+        left_token, left_entity = self._sample_entity(rng, topic_id)
+        right_token, right_entity = self._sample_entity(rng, other_topic)
+        self._append(tokens, metadata, self.topic_tokens[topic_id], self.ROLE_TOPIC, topic_id, -1, span_id, template_id)
+        self._append(tokens, metadata, left_token, self.ROLE_ENTITY, topic_id, left_entity, span_id, template_id)
+        self._append(tokens, metadata, rng.choice(self.function_tokens), self.ROLE_FUNCTION, -1, -1, span_id, template_id)
+        self._append(tokens, metadata, self.topic_tokens[other_topic], self.ROLE_TOPIC, other_topic, -1, span_id, template_id)
+        self._append(tokens, metadata, right_token, self.ROLE_OBJECT, other_topic, right_entity, span_id, template_id)
+
+    def _generate_tokens(self, index, with_metadata=False):
+        rng = self._rng(1009, index)
+        required_len = self.max_seq_len + 1
+        tokens = []
+        metadata = [] if with_metadata else None
+        span_id = 0
+        while len(tokens) < required_len:
+            topic_id = self._sample_topic(rng)
+            span_units = rng.randint(self.min_span_units, self.max_span_units)
+            for _ in range(span_units):
+                roll = rng.random()
+                if roll < self.copy_rate:
+                    self._emit_copy(rng, tokens, metadata, topic_id, span_id)
+                elif roll < self.copy_rate + self.bridge_rate:
+                    self._emit_bridge(rng, tokens, metadata, topic_id, span_id)
+                else:
+                    self._emit_statement(rng, tokens, metadata, topic_id, span_id)
+                if len(tokens) >= required_len:
+                    break
+            span_id += 1
+
+        tokens = tokens[:required_len]
+        if metadata is not None:
+            metadata = metadata[:required_len]
+
+        if self.padding and len(tokens) < required_len:
+            pad_len = required_len - len(tokens)
+            tokens.extend([self.pad_token_id] * pad_len)
+            if metadata is not None:
+                metadata.extend([[-1, -1, -1, -1, -1] for _ in range(pad_len)])
+
+        token_tensor = torch.tensor(tokens, dtype=torch.long)
+        if metadata is None:
+            return token_tensor
+        metadata_tensor = torch.tensor(metadata, dtype=torch.long)
+        return token_tensor, metadata_tensor
+
+    def get_metadata(self, index):
+        token_ids, metadata = self._generate_tokens(index, with_metadata=True)
+        return {
+            "token_ids": token_ids,
+            "unit_ids_by_layer": metadata,
+        }
+
+    def __getitem__(self, index):
+        if self.return_metadata:
+            token_ids, metadata = self._generate_tokens(index, with_metadata=True)
+            return token_ids[:-1], token_ids[1:], len(token_ids), metadata[:-1]
+        token_ids = self._generate_tokens(index)
+        return token_ids[:-1], token_ids[1:], len(token_ids)
+
+
 class ControlledReusedTokenData(Dataset):
     """
     Synthetic dataset with controlled slot-level input/output reuse.

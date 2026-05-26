@@ -40,7 +40,7 @@ except ImportError:  # noqa: E402
                 return max(0.0, 0.5 * (1.0 + math.cos(math.pi * progress)))
 
             return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
-from utils import FixedUnitPatternData, HierarchicalPatternData  # noqa: E402
+from utils import FixedUnitPatternData, HierarchicalPatternData, StructuredLanguageData  # noqa: E402
 
 
 EXPERIMENT_DEFAULTS = {
@@ -157,6 +157,40 @@ def parse_fixed_unit_patterns(value: str | None) -> list[tuple[int, ...]]:
     return units
 
 
+def add_synthetic_data_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--synthetic_data_mode",
+        choices=["hierarchical", "fixed_units", "structured_language"],
+        default="hierarchical",
+    )
+    parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
+    parser.add_argument("--synthetic_block_size", type=int, default=4)
+    parser.add_argument("--synthetic_num_hierarchy_layers", type=int, default=2)
+    parser.add_argument("--synthetic_content_token_count", type=int, default=256)
+    parser.add_argument("--synthetic_num_units_per_layer", type=int, default=64)
+    parser.add_argument("--synthetic_seed", type=int, default=0)
+    parser.add_argument("--synthetic_pad_token_id", type=int, default=0)
+    parser.add_argument("--synthetic_min_token_id", type=int, default=1)
+    parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
+    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
+    parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
+    parser.add_argument("--fixed_unit_patterns", type=parse_fixed_unit_patterns, default=[(1, 2, 3), (1, 2, 4)])
+    parser.add_argument("--fixed_unit_probabilities", type=parse_float_list, default=[0.7, 0.3])
+    parser.add_argument("--structured_topic_count", type=int, default=8)
+    parser.add_argument("--structured_entities_per_topic", type=int, default=8)
+    parser.add_argument("--structured_shared_entity_count", type=int, default=16)
+    parser.add_argument("--structured_verb_count", type=int, default=12)
+    parser.add_argument("--structured_function_token_count", type=int, default=12)
+    parser.add_argument("--structured_noise_token_count", type=int, default=32)
+    parser.add_argument("--structured_topic_zipf_alpha", type=float, default=1.1)
+    parser.add_argument("--structured_noise_rate", type=float, default=0.25)
+    parser.add_argument("--structured_ambiguity_rate", type=float, default=0.35)
+    parser.add_argument("--structured_copy_rate", type=float, default=0.25)
+    parser.add_argument("--structured_bridge_rate", type=float, default=0.25)
+    parser.add_argument("--structured_min_span_units", type=int, default=2)
+    parser.add_argument("--structured_max_span_units", type=int, default=8)
+
+
 def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     defaults = EXPERIMENT_DEFAULTS[experiment_type]
     parser = argparse.ArgumentParser(description=f"Train fdong-style MoE selectivity experiment: {experiment_type}")
@@ -183,20 +217,7 @@ def build_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
 
     parser.add_argument("--seq_len", type=int, default=128)
-    parser.add_argument("--synthetic_data_mode", choices=["hierarchical", "fixed_units"], default="hierarchical")
-    parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
-    parser.add_argument("--synthetic_block_size", type=int, default=4)
-    parser.add_argument("--synthetic_num_hierarchy_layers", type=int, default=2)
-    parser.add_argument("--synthetic_content_token_count", type=int, default=256)
-    parser.add_argument("--synthetic_num_units_per_layer", type=int, default=64)
-    parser.add_argument("--synthetic_seed", type=int, default=0)
-    parser.add_argument("--synthetic_pad_token_id", type=int, default=0)
-    parser.add_argument("--synthetic_min_token_id", type=int, default=1)
-    parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
-    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
-    parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
-    parser.add_argument("--fixed_unit_patterns", type=parse_fixed_unit_patterns, default=[(1, 2, 3), (1, 2, 4)])
-    parser.add_argument("--fixed_unit_probabilities", type=parse_float_list, default=[0.7, 0.3])
+    add_synthetic_data_args(parser)
 
     parser.add_argument("--debug_vocab_size", type=int, default=257)
     parser.add_argument("--debug_hidden_size", type=int, default=128)
@@ -305,22 +326,9 @@ def build_eval_parser(experiment_type: str) -> argparse.ArgumentParser:
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
 
     parser.add_argument("--seq_len", type=int, default=128)
-    parser.add_argument("--synthetic_data_mode", choices=["hierarchical", "fixed_units"], default="hierarchical")
     parser.add_argument("--eval_batch_size", type=int, default=16)
     parser.add_argument("--eval_batches", type=int, default=32)
-    parser.add_argument("--synthetic_num_samples", type=int, default=200_000)
-    parser.add_argument("--synthetic_block_size", type=int, default=4)
-    parser.add_argument("--synthetic_num_hierarchy_layers", type=int, default=2)
-    parser.add_argument("--synthetic_content_token_count", type=int, default=256)
-    parser.add_argument("--synthetic_num_units_per_layer", type=int, default=64)
-    parser.add_argument("--synthetic_seed", type=int, default=0)
-    parser.add_argument("--synthetic_pad_token_id", type=int, default=0)
-    parser.add_argument("--synthetic_min_token_id", type=int, default=1)
-    parser.add_argument("--synthetic_sampling_distribution", choices=["uniform", "zipf"], default="uniform")
-    parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
-    parser.add_argument("--synthetic_zipf_shuffle_ranks", type=str2bool, default=True)
-    parser.add_argument("--fixed_unit_patterns", type=parse_fixed_unit_patterns, default=[(1, 2, 3), (1, 2, 4)])
-    parser.add_argument("--fixed_unit_probabilities", type=parse_float_list, default=[0.7, 0.3])
+    add_synthetic_data_args(parser)
 
     parser.add_argument("--debug_vocab_size", type=int, default=257)
     parser.add_argument("--debug_hidden_size", type=int, default=128)
@@ -684,7 +692,7 @@ def resolve_layer_pattern(pattern: list[int] | None, num_layers: int, default_va
     return [int(value) for value in pattern]
 
 
-def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData | FixedUnitPatternData:
+def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData | FixedUnitPatternData | StructuredLanguageData:
     if args.synthetic_data_mode == "fixed_units":
         return FixedUnitPatternData(
             max_seq_len=args.seq_len,
@@ -693,6 +701,28 @@ def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData | Fixed
             probabilities=args.fixed_unit_probabilities,
             seed=args.synthetic_seed,
             pad_token_id=args.synthetic_pad_token_id,
+            return_metadata=True,
+        )
+    if args.synthetic_data_mode == "structured_language":
+        return StructuredLanguageData(
+            max_seq_len=args.seq_len,
+            num_samples=args.synthetic_num_samples,
+            topic_count=args.structured_topic_count,
+            entities_per_topic=args.structured_entities_per_topic,
+            shared_entity_count=args.structured_shared_entity_count,
+            verb_count=args.structured_verb_count,
+            function_token_count=args.structured_function_token_count,
+            noise_token_count=args.structured_noise_token_count,
+            seed=args.synthetic_seed,
+            pad_token_id=args.synthetic_pad_token_id,
+            min_token_id=args.synthetic_min_token_id,
+            topic_zipf_alpha=args.structured_topic_zipf_alpha,
+            noise_rate=args.structured_noise_rate,
+            ambiguity_rate=args.structured_ambiguity_rate,
+            copy_rate=args.structured_copy_rate,
+            bridge_rate=args.structured_bridge_rate,
+            min_span_units=args.structured_min_span_units,
+            max_span_units=args.structured_max_span_units,
             return_metadata=True,
         )
     return HierarchicalPatternData(
@@ -713,7 +743,7 @@ def prepare_dataset(args: argparse.Namespace) -> HierarchicalPatternData | Fixed
 
 
 def sample_batch(
-    dataset: HierarchicalPatternData | FixedUnitPatternData,
+    dataset: HierarchicalPatternData | FixedUnitPatternData | StructuredLanguageData,
     args: argparse.Namespace,
     generator: torch.Generator,
     device: torch.device,
@@ -864,6 +894,8 @@ def forced_higher_unit_len(args: argparse.Namespace) -> int:
         return int(args.forced_warmup_higher_unit_len)
     if getattr(args, "synthetic_data_mode", "hierarchical") == "fixed_units":
         return len(args.fixed_unit_patterns[0])
+    if getattr(args, "synthetic_data_mode", "hierarchical") == "structured_language":
+        return 1
     return int(args.synthetic_block_size ** args.synthetic_num_hierarchy_layers)
 
 
@@ -1206,7 +1238,7 @@ def aggregate_eval_metrics(rows: list[dict[str, Any]]) -> dict[str, Any]:
 @torch.no_grad()
 def evaluate(
     model: MyQwen3ForCausalLM,
-    dataset: HierarchicalPatternData | FixedUnitPatternData,
+    dataset: HierarchicalPatternData | FixedUnitPatternData | StructuredLanguageData,
     args: argparse.Namespace,
     device: torch.device,
     generator: torch.Generator,

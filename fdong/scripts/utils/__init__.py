@@ -2,5 +2,6 @@
     ControlledReusedTokenData,
     FixedUnitPatternData,
     HierarchicalPatternData,
+    StructuredLanguageData,
     TokenizedJSONLData,
 )
