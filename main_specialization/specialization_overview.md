@@ -24,31 +24,49 @@
 
 ### Round2: Synthetic Data with Reused Tokens
 
-第二轮 synthetic 数据放宽第一轮的“完全不重复”假设，允许 token 在不同 local slot 或不同 higher-level slot 中重复出现。这样做的动机是让 synthetic 数据更接近真实语言：真实语料中同一个 token 可以在不同上下文中表达不同含义，不同 token 也可以在相近上下文中表达相似功能。
+第二轮 synthetic 数据不是简单地“让 token 随机重复”，而是从更根本的语言建模出发重新定义 feature。我们把语言看成一个概率状态机：当前位置状态 `s_t` 诱导出未来 token 的条件分布 `P(x_{t+1} | s_t)`。因此，最细粒度的 functional feature 不是 token id，也不是某个唯一 next token，而是由未来分布诱导出的等价类。
 
-例如，如果数据中同时存在：
+在这个定义下，feature 可以有不同粒度。最细粒度 feature 是完整的 next-token distribution；更粗粒度 feature 可以是这个分布的某个 projection，例如 `P(next=A)`、某类 token group 的概率，或者未来分布在某个子空间上的坐标。复杂状态可以看成多个 distributional features 的组合。
+
+Round1 的 clean synthetic 数据相比真实语言缺少两类关键现象：
+
+1. **same-input-different-output：** 同一个输入状态可以对应多个可能输出 token，本质上是同一个条件分布的多次采样；
+2. **different-input-same-output：** 不同输入状态可以共享相同或相近的 output-side distributional feature。
+
+例如，`slot_size=4` 时，slot 被写成：
 
 ```text
-ABC
-ABD
+input = (前三个 token)
+output = (第四个 token)
 ```
 
-那么 `C` 和 `D` 可能代表同一语义模式下的两个可替换 token，也可能对应两个不同的 next-token behavior。又例如，如果数据中同时存在：
+则：
 
 ```text
-ABC
-EBF
+ABCX
+ABCY
+ABCZ
 ```
 
-那么 token `B` 是否应当被分到同一个 expert，取决于我们认为 feature 是由 token identity 决定，还是由上下文中的 local slot / sequence pattern 决定。
+属于 same-input-different-output。它表示同一个状态 `ABC` 的 next-token distribution 可以产生 `X/Y/Z`。这些样本不应被理解成三个互斥的 deterministic label，而应被看成同一个状态分布 feature 的不同观测。
 
-在这一轮设定中，我们更关心的是：**当 token identity 与 slot-level feature 不再一一对应时，MoE gate 到底会按什么分发。** 一种朴素但重要的假设是，理想 specialization 不应只按 token id 分发，而应更接近数据生成时定义的 local slot 或 higher-level slot；也就是说，expert bucket 应当捕捉 context-dependent feature，而不是只捕捉 surface token identity。
+而：
+
+```text
+ABCX
+DEFX
+GHIX
+```
+
+属于 different-input-same-output。它表示不同输入状态共享 `P(next=X)` 高这一 output-side projected feature；如果它们完整 next-token distribution 相同，则它们就是完整的 distributional equivalence class。
+
+因此，Round2 更关心的是：当 token identity、input prefix、output token 与 distributional feature 不再一一对应时，MoE gate 到底会按什么分发。理想 specialization 不应只按 surface token id 分发，而应与 future-distribution feature 的相似性单调相关。
 
 这个设定也自然连接到 real corpus。对真实语料而言，我们通常无法提前知道某个 token position 的 ground-truth feature label，因此可以用 downstream behavior 来定义 feature：如果两个 token position 的 next-token logits 分布相似，说明模型认为它们应当被映射到相近的新状态，因此它们可以被视为具有相似 feature。
 
 更形式化地说，对每个 token position，可以取模型在该位置的 next-token logits 或概率分布作为语义状态表示。如果两个位置的预测分布接近，它们应当具有相近的 downstream behavior；理想的 expert specialization 应当让这些位置更倾向于进入相同或相近 expert bucket。
 
-因此，Round1 / Round2 synthetic 与 real corpus 的 feature 定义并不是两套互不相干的定义。它们的共同核心是：**feature 不只是 token id，而是决定模型后续行为的可复用结构。** Synthetic 数据给出可控的 ground truth，real corpus 则需要通过 next-token logits、representation similarity 或 attention retrieval pattern 等 proxy 来近似这一结构。
+因此，Round1 / Round2 synthetic 与 real corpus 的 feature 定义并不是两套互不相干的定义。它们的共同核心是：**feature 不只是 token id，而是决定模型未来分布的可复用结构。** Synthetic 数据给出可控的 ground truth，real corpus 则需要通过 next-token logits、representation similarity 或 attention retrieval pattern 等 proxy 来近似这一结构。Round2 的完整建模与实验记录见 [Round6 文档](../fdong/inverse_kv_round6_plan.md)。
 
 ## 2. 为什么现在的 MoE 没做到 Specialization
 
@@ -72,15 +90,33 @@ EBF
 
 #### Round2: reused-token synthetic
 
-Round2 需要专门回答：当 token id 与 slot-level feature 解耦后，baseline gate 仍然按 token id 分发，还是开始按 context-dependent feature 分发。
+Round2 需要专门回答：当 token id、input prefix、output token 与 future-distribution feature 解耦后，baseline gate 仍然按 token id / surface form 分发，还是开始按 distributional feature 分发。
 
-建议后续补充以下结论：
+当前 synthetic 结果显示，普通 hidden-router MoE 仍然没有形成强 feature-level specialization：
 
-1. **same-token different-slot same-expert rate：** 同一个 token 出现在不同 local / higher-level slot 时，是否仍然被分到同一个 expert；
-2. **different-token same-slot same-expert rate：** 不同 token 属于同一个 local / higher-level slot 时，是否会被分到同一个 expert；
-3. **token-id NMI / local-slot NMI / high-slot NMI / target-token NMI：** 直接比较 routing 更像哪一种 feature label；
-4. **conditional purity：** 固定 token id 后，expert 是否还能区分不同 slot；固定 slot 后，expert 是否能忽略 token id 差异；
-5. **next-token logits similarity vs same-expert rate：** 判断同 expert token 是否真的具有相似 downstream behavior。
+```text
+moe-hidden-full-top1:
+token same-expert: 66.30%
+base unit same-expert: 31.32%
+same-input-different-output group same-expert: 33.65%
+different-input-same-output group same-expert: 37.68%
+```
+
+这说明 ordinary MoE 仍然更接近 surface-token / local shortcut，而不是我们定义的 distributional feature specialization。
+
+使用 `k` 作为 router input 后，分发更接近 feature：
+
+```text
+moe-rfull-k-eresid:
+NTP acc: 89.56%
+token same-expert: 93.25%
+target same-expert: 61.66%
+base unit same-expert: 56.27%
+same-input-different-output group same-expert: 66.09%
+different-input-same-output group same-expert: 66.32%
+```
+
+因此，Round2 synthetic 的当前结论是：`k`-based routing 比 ordinary hidden-router 更接近 distributional / output-side feature，但仍未达到很硬的 expert specialization。
 
 #### Real corpus
 
@@ -102,6 +138,15 @@ Round2 需要专门回答：当 token id 与 slot-level feature 解耦后，base
 
 #### Reused token synthetic
 
+在 reused-token synthetic 中，理想 specialization 不再是简单的“同 token 同 expert”或“同 slot 同 expert”。更准确的定义是：expert assignment 应当与 future-distribution feature 的相似性单调相关。
+
+具体到本轮 controlled reused-token 数据：
+
+1. **same-input-different-output group 应当有较高 expert overlap：** 因为它们是同一个 input state 的 next-token distribution 的不同观测；
+2. **different-input-same-output group 应当有较高 expert overlap：** 因为不同 input state 共享相同 output-side projected feature；
+3. **token same-expert 不是充分证据：** token-level purity 高可能只是 surface-token specialization；
+4. **target same-expert / A-B group same-expert 更接近我们关心的 distributional specialization。**
+
 
 ### 2.4. 模型结构与训练范式如何影响 specialization。ZX：real。
 
@@ -116,18 +161,25 @@ Round2 需要专门回答：当 token id 与 slot-level feature 解耦后，base
 
 ### 结论：
 
-在 synthetic 数据上
+在 synthetic 数据上，Round2 的 controlled reused-token data 与 Round1 的 clean synthetic data 给出的结构判断总体一致：specialization 不是靠 ordinary hidden-router 自然出现的，而更依赖 router input 是否接近 attention retrieval feature，以及 expert input 是否保留完整预测信息。Round2 的价值是把 feature 从简单 slot 扩展到 next-token distribution 诱导出的等价类，因此它是当前更重要的结论来源。
 
-1. gate input representation:
-   1. query/key vector 最好：NTP 能达到最优的同时，分发结果更逼近我们定义的 specialization：purity \~97%。
-   2. layer input 其次：specialization purity \~80%。
-2. gate granularity：
-   1. head-level gating 优于 full token gating；
-   2. SVD-based hierarchical gating 实现困难：SVD 结果不稳定：受采样数据的影响、受参数变化的影响。
-3. expert input representation：full token vector 显著好于去掉 residual 的 attention output。NTP acc 约为 94% vs. 90%。
-4. regularization：
-   1. 合成数据具体实现：让 attention score 相关性高的 token，它们的 router logits cossim 尽可能大。
-   2. 真实数据上的一种实现：约束输入同一 expert 的 token，其最终输出的 next-token logits 相似性高
+#### Round2 当前结论
+
+1. **Gate input representation：** `k` 仍然是最强 router input。`moe-rfull-k-eresid` 达到 `NTP=89.56%`、`same-input-different-output group same-expert=66.09%`、`different-input-same-output group same-expert=66.32%`，明显优于 ordinary hidden router。这说明 attention key 表征更接近 retrieval / output-side feature，而不只是 residual stream 中的 surface token identity。
+
+2. **Gate granularity：** `k/head` 对 different-input-same-output 更强，`B group same-expert` 可到 `75.57%`；但 `full-k` 对 A/B 两类更平衡。因此不能简单说 head-level 全面优于 full-token routing，而应区分目标 feature 类型：如果更关心 output-side feature，`k/head` 更好；如果希望 A/B 两类分布式 feature 都更稳，`full-k` 更合适。
+
+3. **Expert input representation：** expert 输入仍应优先使用 full token vector / `attention_output + residual`。head/head 结构可以提高 routing-attention 对齐，但通常把 NTP 降到 `86%~88%`，说明只让 expert 看 head 子空间会损伤表达能力。
+
+4. **Expert input shape：** expert 使用完整 hidden state 仍然更稳。head/head 结构能提高 attention-expert mass，例如部分结构可到 `80%+`，但整体 NTP 低于 full expert input。因此，当前推荐是 router 可以更 feature-selective，但 expert 尽量处理 full residual token vector。
+
+5. **Regularization：** reused-token 数据显示自然训练仍不能得到很硬的 distributional specialization。后续 regularization 应从 local/high slot 对齐进一步升级为 distributional feature 对齐，例如约束 same-input-different-output group、different-input-same-output group 或 next-token logits 相似的 token 进入相同/相近 expert bucket。
+
+#### Round1 归档对照
+
+Round1 在 clean synthetic data 上得到的主结论与 Round2 基本一致：query/key vector 比 ordinary hidden router 更容易形成 slot-level specialization；expert 输入使用 full token vector / `attention_output + residual` 比 pure attention output 更稳；自然训练不足以得到足够硬的 specialization，需要额外 routing objective。
+
+主要差异是：Round1 中 `k/head` 在简单 slot feature 上表现更像明确最优；Round2 中 feature 变成 distributional feature 后，`k/head` 对 different-input-same-output 更强，但 `full-k` 对 same-input-different-output 与 different-input-same-output 更平衡。因此 Round2 把结论从“head-level 更好”修正为“router input 用 `k` 最稳定，router granularity 取决于希望对齐哪类 feature”。
 
 ### 候选技术方案：
 

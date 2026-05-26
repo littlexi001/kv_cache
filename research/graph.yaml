@@ -2,7 +2,7 @@ root: rq.specialization
 
 ui:
   layout: LR
-  expanded: [rq.specialization, rq.define_feature, rq.why_baseline_fails, rq.design_specialized_moe]
+  expanded: [rq.specialization, rq.define_feature, rq.why_baseline_fails, rq.design_specialized_moe, rq.reverse_kv]
 
 nodes:
   - id: rq.specialization
@@ -24,10 +24,20 @@ nodes:
   - id: concept.feature_synthetic
     title: Synthetic ground-truth feature
     type: concept
-    summary: In synthetic data, a feature is explicitly defined by the generator, such as local slot or higher-level slot membership.
+    summary: In clean synthetic data, a feature is explicitly defined by the generator, such as local slot or higher-level slot membership.
     file: ../main_specialization/specialization_overview.md
     status: active
     tags: [definition, synthetic]
+
+  - id: concept.feature_distributional
+    title: Distribution-induced feature
+    type: concept
+    summary: In reused-token synthetic data, a feature is defined by the next-token distribution induced by a state, or by a projection of that distribution.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round6_plan.md
+    status: active
+    tags: [definition, synthetic, round2]
 
   - id: concept.feature_real
     title: Real-corpus proxy feature
@@ -48,10 +58,20 @@ nodes:
   - id: claim.feature_definition
     title: Feature should be defined by downstream behavior
     type: claim
-    summary: Ground-truth slot labels in synthetic data and next-token logits similarity in real data are compatible definitions of feature because both capture downstream predictive behavior.
+    summary: Clean slot labels, distribution-induced synthetic labels, and next-token logits similarity in real data are compatible definitions because all describe reusable structure that determines downstream prediction behavior.
     file: ../main_specialization/specialization_overview.md
     status: active
     tags: [definition, hypothesis]
+
+  - id: method.controlled_reused_token_data
+    title: Controlled reused-token synthetic data
+    type: method
+    summary: Generate same-input-different-output and different-input-same-output slots to test whether specialization tracks distributional features rather than surface token identity.
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round6_plan.md
+    status: active
+    tags: [synthetic, dataset, round2]
 
   - id: rq.why_baseline_fails
     title: Why does baseline MoE fail to specialize?
@@ -64,7 +84,7 @@ nodes:
   - id: claim.baseline_shortcuts
     title: Baseline MoE tends to learn shortcuts
     type: claim
-    summary: Synthetic evidence suggests baseline MoE does not naturally route by local or higher-level slots and instead often aligns with token id, target token, or local shortcuts.
+    summary: Synthetic evidence suggests baseline MoE does not naturally route by clean slots or reused-token distributional features and instead often aligns with token id, target token, or local shortcuts.
     files:
       - ../main_specialization/specialization_overview.md
       - ../fdong/inverse_kv_round4_plan.md
@@ -104,6 +124,16 @@ nodes:
       - ../fdong/inverse_kv_round5_plan.md
     status: active
     tags: [architecture, round5]
+
+  - id: claim.round2_structure_summary
+    title: Round2 reused-token structure conclusion
+    type: claim
+    summary: "Round2 preserves the main Round1 structure conclusion: k-based routing is strongest, full residual expert input is safest, and natural training is not enough for hard distributional specialization."
+    files:
+      - ../main_specialization/specialization_overview.md
+      - ../fdong/inverse_kv_round6_plan.md
+    status: active
+    tags: [round2, conclusion, architecture]
 
   - id: method.ground_truth_routing
     title: Ground-truth routing
@@ -167,6 +197,16 @@ nodes:
     status: active
     tags: [round5, conclusion]
 
+  - id: evidence.round6_results
+    title: Round2 controlled reused-token results
+    type: evidence
+    summary: Controlled reused-token experiments show ordinary hidden-router MoE remains weak on A/B feature groups, while k-based routing improves same-input-different-output and different-input-same-output expert overlap.
+    files:
+      - ../fdong/inverse_kv_round6_plan.md
+      - ../fdong/experiments/round6_controlled_reuse_analysis.md
+    status: active
+    tags: [evidence, synthetic, round2]
+
   - id: evidence.round5_results
     title: Round5 specialization sweep results
     type: evidence
@@ -198,7 +238,7 @@ nodes:
   - id: task.harden_specialization
     title: Add harder specialization constraints
     type: task
-    summary: Test attention-derived gate constraints and related objectives to make k/head routing more deterministic.
+    summary: Test distributional or attention-derived gate constraints so k-based routing becomes a harder specialization signal rather than a soft correlation.
     file: ../fdong/inverse_kv_round5_plan.md
     status: active
     tags: [next-step, synthetic]
@@ -238,6 +278,9 @@ edges:
   - from: concept.feature_synthetic
     to: rq.define_feature
     kind: depends_on
+  - from: concept.feature_distributional
+    to: rq.define_feature
+    kind: depends_on
   - from: concept.feature_real
     to: rq.define_feature
     kind: depends_on
@@ -248,8 +291,14 @@ edges:
     to: concept.feature_synthetic
     kind: depends_on
   - from: claim.feature_definition
+    to: concept.feature_distributional
+    kind: depends_on
+  - from: claim.feature_definition
     to: concept.feature_real
     kind: depends_on
+  - from: method.controlled_reused_token_data
+    to: claim.feature_definition
+    kind: operationalizes
   - from: claim.baseline_shortcuts
     to: rq.why_baseline_fails
     kind: answers
@@ -280,6 +329,15 @@ edges:
   - from: method.attention_derived_routing_loss
     to: rq.design_specialized_moe
     kind: operationalizes
+  - from: evidence.round6_results
+    to: claim.baseline_shortcuts
+    kind: supports
+  - from: evidence.round6_results
+    to: claim.round2_structure_summary
+    kind: supports
+  - from: claim.round2_structure_summary
+    to: rq.design_specialized_moe
+    kind: answers
   - from: evidence.round5_results
     to: claim.round5_summary
     kind: supports
@@ -302,6 +360,9 @@ edges:
     to: claim.reverse_kv_requires_pre_attention_routing
     kind: depends_on
   - from: claim.round5_summary
+    to: task.harden_specialization
+    kind: leads_to
+  - from: claim.round2_structure_summary
     to: task.harden_specialization
     kind: leads_to
   - from: method.attention_derived_routing_loss

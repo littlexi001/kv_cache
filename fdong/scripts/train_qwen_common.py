@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader, DistributedSampler
 from transformers import AutoConfig, AutoTokenizer, get_cosine_schedule_with_warmup
 
 from models import MyQwen3ForCausalLM
-from utils import HierarchicalPatternData, TokenizedJSONLData
+from utils import ControlledReusedTokenData, HierarchicalPatternData, TokenizedJSONLData
 
 
 def parse_int_list(value):
@@ -46,7 +46,7 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--dataset_type",
         type=str,
-        choices=["jsonl", "pruned", "synthetic_indexed", "hierarchical_pattern"],
+        choices=["jsonl", "pruned", "synthetic_indexed", "hierarchical_pattern", "controlled_reused_token"],
         default="jsonl",
     )
     parser.add_argument("--per", type=float, default=1.0)
@@ -67,6 +67,31 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
     parser.add_argument("--synthetic_zipf_shuffle_ranks", action="store_true", default=True)
     parser.add_argument("--synthetic_no_zipf_shuffle_ranks", action="store_false", dest="synthetic_zipf_shuffle_ranks")
+    parser.add_argument("--controlled_same_input_diff_output_rate", type=float, default=0.3)
+    parser.add_argument("--controlled_same_input_diff_output_size", type=int, default=4)
+    parser.add_argument(
+        "--controlled_same_input_diff_output_distribution",
+        type=str,
+        choices=["uniform", "zipf"],
+        default="zipf",
+    )
+    parser.add_argument("--controlled_same_input_diff_output_zipf_alpha", type=float, default=1.0)
+    parser.add_argument("--controlled_diff_input_same_output_rate", type=float, default=0.3)
+    parser.add_argument("--controlled_diff_input_same_output_size", type=int, default=4)
+    parser.add_argument(
+        "--controlled_diff_input_same_output_distribution",
+        type=str,
+        choices=["uniform", "zipf"],
+        default="zipf",
+    )
+    parser.add_argument("--controlled_diff_input_same_output_zipf_alpha", type=float, default=1.0)
+    parser.add_argument(
+        "--controlled_top_sampling_distribution",
+        type=str,
+        choices=["uniform", "zipf"],
+        default="zipf",
+    )
+    parser.add_argument("--controlled_top_sampling_zipf_alpha", type=float, default=1.0)
 
     parser.add_argument("--debug_vocab_size", type=int, default=-1)
     parser.add_argument("--debug_hidden_size", type=int, default=-1)
@@ -522,6 +547,30 @@ def prepare_data(local_rank, world_size, args):
             zipf_alpha=args.synthetic_zipf_alpha,
             zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
             return_metadata=args.ground_truth_routing_strategy != "none",
+        )
+    elif args.dataset_type == "controlled_reused_token":
+        if args.ground_truth_routing_strategy != "none":
+            raise ValueError("Ground-truth routing currently supports only `dataset_type=hierarchical_pattern`.")
+        dataset = ControlledReusedTokenData(
+            max_seq_len=args.seq_len,
+            num_samples=args.synthetic_num_samples,
+            slot_size=args.synthetic_block_size,
+            num_hierarchy_layers=args.synthetic_num_hierarchy_layers,
+            content_token_count=args.synthetic_content_token_count,
+            num_units_per_layer=args.synthetic_num_units_per_layer,
+            seed=args.synthetic_seed,
+            pad_token_id=args.synthetic_pad_token_id,
+            min_token_id=args.synthetic_min_token_id,
+            same_input_diff_output_rate=args.controlled_same_input_diff_output_rate,
+            same_input_diff_output_size=args.controlled_same_input_diff_output_size,
+            same_input_diff_output_distribution=args.controlled_same_input_diff_output_distribution,
+            same_input_diff_output_zipf_alpha=args.controlled_same_input_diff_output_zipf_alpha,
+            diff_input_same_output_rate=args.controlled_diff_input_same_output_rate,
+            diff_input_same_output_size=args.controlled_diff_input_same_output_size,
+            diff_input_same_output_distribution=args.controlled_diff_input_same_output_distribution,
+            diff_input_same_output_zipf_alpha=args.controlled_diff_input_same_output_zipf_alpha,
+            top_sampling_distribution=args.controlled_top_sampling_distribution,
+            top_sampling_zipf_alpha=args.controlled_top_sampling_zipf_alpha,
         )
     else:
         if args.ground_truth_routing_strategy != "none":

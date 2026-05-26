@@ -244,3 +244,413 @@ class HierarchicalPatternData(Dataset):
             return token_ids[:-1], token_ids[1:], len(token_ids), metadata[:-1]
         token_ids = self._generate_tokens(index)
         return token_ids[:-1], token_ids[1:], len(token_ids)
+
+
+class ControlledReusedTokenData(Dataset):
+    """
+    Synthetic dataset with controlled slot-level input/output reuse.
+
+    Each hierarchy level builds fixed-size slots:
+      slot = (u_1, ..., u_{slot_size - 1}, v)
+      input = (u_1, ..., u_{slot_size - 1})
+      output = v
+
+    Slots are split into three disjoint structural groups:
+      1. same input, different output
+      2. different input, same output
+      3. normal one-to-one
+
+    Higher layers use lower-layer unit ids as their symbols. The generated
+    top-layer units are recursively flattened back to raw token ids so the
+    dataset remains compatible with causal LM training.
+    """
+
+    SLOT_TYPE_NORMAL = 0
+    SLOT_TYPE_SAME_INPUT_DIFF_OUTPUT = 1
+    SLOT_TYPE_DIFF_INPUT_SAME_OUTPUT = 2
+
+    def __init__(
+        self,
+        max_seq_len,
+        num_samples=100000,
+        slot_size=4,
+        num_hierarchy_layers=2,
+        content_token_count=512,
+        num_units_per_layer=512,
+        seed=0,
+        pad_token_id=0,
+        min_token_id=1,
+        same_input_diff_output_rate=0.3,
+        same_input_diff_output_size=4,
+        same_input_diff_output_distribution="zipf",
+        same_input_diff_output_zipf_alpha=1.0,
+        diff_input_same_output_rate=0.3,
+        diff_input_same_output_size=4,
+        diff_input_same_output_distribution="zipf",
+        diff_input_same_output_zipf_alpha=1.0,
+        top_sampling_distribution="zipf",
+        top_sampling_zipf_alpha=1.0,
+        padding=False,
+        return_metadata=False,
+    ) -> None:
+        super().__init__()
+        self.max_seq_len = max_seq_len
+        self.num_samples = num_samples
+        self.slot_size = slot_size
+        self.num_hierarchy_layers = num_hierarchy_layers
+        self.content_token_count = content_token_count
+        self.num_units_per_layer = num_units_per_layer
+        self.seed = seed
+        self.pad_token_id = pad_token_id
+        self.min_token_id = min_token_id
+        self.same_input_diff_output_rate = same_input_diff_output_rate
+        self.same_input_diff_output_size = same_input_diff_output_size
+        self.same_input_diff_output_distribution = same_input_diff_output_distribution
+        self.same_input_diff_output_zipf_alpha = same_input_diff_output_zipf_alpha
+        self.diff_input_same_output_rate = diff_input_same_output_rate
+        self.diff_input_same_output_size = diff_input_same_output_size
+        self.diff_input_same_output_distribution = diff_input_same_output_distribution
+        self.diff_input_same_output_zipf_alpha = diff_input_same_output_zipf_alpha
+        self.top_sampling_distribution = top_sampling_distribution
+        self.top_sampling_zipf_alpha = top_sampling_zipf_alpha
+        self.padding = padding
+        self.return_metadata = return_metadata
+
+        self._validate_args()
+        self.units_by_layer = self._build_units()
+        self.top_layer = self.num_hierarchy_layers - 1
+        self.top_units = self.units_by_layer[self.top_layer]
+        self.top_unit_sample_weights = self._build_top_unit_sample_weights()
+
+    def __len__(self):
+        return self.num_samples
+
+    def _validate_args(self):
+        if self.max_seq_len < 1:
+            raise ValueError("max_seq_len must be positive")
+        if self.slot_size < 2:
+            raise ValueError("slot_size must be at least 2")
+        if self.num_hierarchy_layers < 1:
+            raise ValueError("num_hierarchy_layers must be at least 1")
+        if self.content_token_count < self.slot_size:
+            raise ValueError("content_token_count must be >= slot_size")
+        if self.num_units_per_layer < 1:
+            raise ValueError("num_units_per_layer must be positive")
+        if self.same_input_diff_output_rate < 0 or self.diff_input_same_output_rate < 0:
+            raise ValueError("reuse rates must be non-negative")
+        if self.same_input_diff_output_rate + self.diff_input_same_output_rate > 1.0:
+            raise ValueError(
+                "same_input_diff_output_rate + diff_input_same_output_rate must be <= 1"
+            )
+        if self.same_input_diff_output_size < 2:
+            raise ValueError("same_input_diff_output_size must be at least 2")
+        if self.diff_input_same_output_size < 2:
+            raise ValueError("diff_input_same_output_size must be at least 2")
+
+        valid_distributions = {"uniform", "zipf"}
+        for name, value in [
+            ("same_input_diff_output_distribution", self.same_input_diff_output_distribution),
+            ("diff_input_same_output_distribution", self.diff_input_same_output_distribution),
+            ("top_sampling_distribution", self.top_sampling_distribution),
+        ]:
+            if value not in valid_distributions:
+                raise ValueError(f"{name} must be one of {sorted(valid_distributions)}")
+        if self.same_input_diff_output_zipf_alpha <= 0:
+            raise ValueError("same_input_diff_output_zipf_alpha must be positive")
+        if self.diff_input_same_output_zipf_alpha <= 0:
+            raise ValueError("diff_input_same_output_zipf_alpha must be positive")
+        if self.top_sampling_zipf_alpha <= 0:
+            raise ValueError("top_sampling_zipf_alpha must be positive")
+
+    def _rng(self, *items):
+        seed = self.seed
+        for item in items:
+            seed = (seed * 1000003 + int(item)) % (2**32)
+        return random.Random(seed)
+
+    def _num_group_slots(self, rate, group_size):
+        requested = int(self.num_units_per_layer * rate)
+        return (requested // group_size) * group_size
+
+    def _split_symbols(self, symbols, rng, same_output_count, diff_output_count, normal_output_count):
+        shuffled = list(symbols)
+        rng.shuffle(shuffled)
+
+        num_symbols = len(shuffled)
+        required_count = same_output_count + diff_output_count + normal_output_count
+        if required_count > num_symbols:
+            raise ValueError(
+                "controlled disjoint generation needs more unique output symbols than available; "
+                "increase content_token_count/num_units_per_layer or reduce rates/sizes"
+            )
+
+        extra_count = num_symbols - required_count
+        total_rate = self.same_input_diff_output_rate + self.diff_input_same_output_rate
+        normal_rate = max(0.0, 1.0 - total_rate)
+        rate_sum = total_rate + normal_rate
+
+        same_extra = int(extra_count * (self.same_input_diff_output_rate / rate_sum))
+        diff_extra = int(extra_count * (self.diff_input_same_output_rate / rate_sum))
+        normal_extra = extra_count - same_extra - diff_extra
+
+        same_count = same_output_count + same_extra
+        diff_count = diff_output_count + diff_extra
+        normal_count = normal_output_count + normal_extra
+
+        same_symbols = shuffled[:same_count]
+        diff_symbols = shuffled[same_count:same_count + diff_count]
+        normal_symbols = shuffled[same_count + diff_count:same_count + diff_count + normal_count]
+
+        return same_symbols, diff_symbols, normal_symbols
+
+    def _group_weights(self, size, distribution, alpha):
+        if distribution == "uniform":
+            return [1.0] * size
+        return [1.0 / ((idx + 1) ** alpha) for idx in range(size)]
+
+    def _sample_prefix(self, rng, symbols, used_prefixes):
+        if len(symbols) < 1:
+            raise ValueError("cannot sample prefix from an empty symbol set")
+
+        for _ in range(10000):
+            prefix = tuple(rng.choice(symbols) for _ in range(self.slot_size - 1))
+            if prefix not in used_prefixes:
+                used_prefixes.add(prefix)
+                return prefix
+        raise ValueError("failed to sample a unique prefix; increase symbol count")
+
+    def _sample_outputs(self, rng, symbols, size, used_outputs):
+        candidates = [symbol for symbol in symbols if symbol not in used_outputs]
+        if len(candidates) < size:
+            raise ValueError(
+                "not enough output symbols for disjoint controlled groups; "
+                "increase content_token_count/num_units_per_layer or reduce rates/sizes"
+            )
+        outputs = rng.sample(candidates, size)
+        used_outputs.update(outputs)
+        return outputs
+
+    def _build_units(self):
+        units_by_layer = []
+        layer_symbols = list(range(self.min_token_id, self.min_token_id + self.content_token_count))
+
+        for layer_idx in range(self.num_hierarchy_layers):
+            rng = self._rng(17, layer_idx)
+            layer_units = self._build_layer_units(layer_idx, layer_symbols, rng)
+            units_by_layer.append(layer_units)
+            layer_symbols = list(range(len(layer_units)))
+
+        return units_by_layer
+
+    def _build_layer_units(self, layer_idx, symbols, rng):
+        same_slots = self._num_group_slots(
+            self.same_input_diff_output_rate,
+            self.same_input_diff_output_size,
+        )
+        diff_slots = self._num_group_slots(
+            self.diff_input_same_output_rate,
+            self.diff_input_same_output_size,
+        )
+        normal_slots = self.num_units_per_layer - same_slots - diff_slots
+        same_output_count = same_slots
+        diff_output_count = diff_slots // self.diff_input_same_output_size
+        normal_output_count = normal_slots
+        same_symbols, diff_symbols, normal_symbols = self._split_symbols(
+            symbols,
+            rng,
+            same_output_count,
+            diff_output_count,
+            normal_output_count,
+        )
+
+        units = []
+        used_prefixes = set()
+        used_outputs = set()
+        group_id = 0
+
+        same_groups = same_slots // self.same_input_diff_output_size
+        same_weights = self._group_weights(
+            self.same_input_diff_output_size,
+            self.same_input_diff_output_distribution,
+            self.same_input_diff_output_zipf_alpha,
+        )
+        for _ in range(same_groups):
+            prefix = self._sample_prefix(rng, same_symbols, used_prefixes)
+            outputs = self._sample_outputs(
+                rng,
+                same_symbols,
+                self.same_input_diff_output_size,
+                used_outputs,
+            )
+            for output, weight in zip(outputs, same_weights):
+                units.append({
+                    "symbols": tuple(prefix) + (output,),
+                    "slot_type": self.SLOT_TYPE_SAME_INPUT_DIFF_OUTPUT,
+                    "group_id": group_id,
+                    "variant_weight": float(weight),
+                })
+            group_id += 1
+
+        diff_groups = diff_slots // self.diff_input_same_output_size
+        diff_weights = self._group_weights(
+            self.diff_input_same_output_size,
+            self.diff_input_same_output_distribution,
+            self.diff_input_same_output_zipf_alpha,
+        )
+        for _ in range(diff_groups):
+            outputs = self._sample_outputs(rng, diff_symbols, 1, used_outputs)
+            output = outputs[0]
+            for weight in diff_weights:
+                prefix = self._sample_prefix(rng, diff_symbols, used_prefixes)
+                units.append({
+                    "symbols": tuple(prefix) + (output,),
+                    "slot_type": self.SLOT_TYPE_DIFF_INPUT_SAME_OUTPUT,
+                    "group_id": group_id,
+                    "variant_weight": float(weight),
+                })
+            group_id += 1
+
+        normal_outputs = self._sample_outputs(rng, normal_symbols, normal_slots, used_outputs)
+        for output in normal_outputs:
+            prefix = self._sample_prefix(rng, normal_symbols, used_prefixes)
+            units.append({
+                "symbols": tuple(prefix) + (output,),
+                "slot_type": self.SLOT_TYPE_NORMAL,
+                "group_id": group_id,
+                "variant_weight": 1.0,
+            })
+            group_id += 1
+
+        rng.shuffle(units)
+        for unit_idx, unit in enumerate(units):
+            unit["unit_id"] = unit_idx
+            unit["layer_idx"] = layer_idx
+        return units
+
+    def _build_top_unit_sample_weights(self):
+        weights = [float(unit["variant_weight"]) for unit in self.top_units]
+        if self.top_sampling_distribution == "uniform":
+            return weights
+
+        zipf_weights = [
+            1.0 / ((idx + 1) ** self.top_sampling_zipf_alpha)
+            for idx in range(len(self.top_units))
+        ]
+        rng = self._rng(7919)
+        rng.shuffle(zipf_weights)
+        return [weight * zipf_weight for weight, zipf_weight in zip(weights, zipf_weights)]
+
+    def _flatten_unit(
+        self,
+        layer_idx,
+        unit_idx,
+        output,
+        metadata=None,
+        ancestor_unit_ids=None,
+        ancestor_slot_type_ids=None,
+        ancestor_group_ids=None,
+    ):
+        if ancestor_unit_ids is None:
+            ancestor_unit_ids = [-1] * self.num_hierarchy_layers
+        if ancestor_slot_type_ids is None:
+            ancestor_slot_type_ids = [-1] * self.num_hierarchy_layers
+        if ancestor_group_ids is None:
+            ancestor_group_ids = [-1] * self.num_hierarchy_layers
+
+        ancestor_unit_ids = list(ancestor_unit_ids)
+        ancestor_slot_type_ids = list(ancestor_slot_type_ids)
+        ancestor_group_ids = list(ancestor_group_ids)
+
+        unit = self.units_by_layer[layer_idx][unit_idx]
+        ancestor_unit_ids[layer_idx] = int(unit["unit_id"])
+        ancestor_slot_type_ids[layer_idx] = int(unit["slot_type"])
+        ancestor_group_ids[layer_idx] = int(unit["group_id"])
+
+        if layer_idx == 0:
+            for local_pos, token_id in enumerate(unit["symbols"]):
+                output.append(int(token_id))
+                if metadata is not None:
+                    metadata["unit_ids_by_layer"].append(list(ancestor_unit_ids))
+                    metadata["slot_type_ids_by_layer"].append(list(ancestor_slot_type_ids))
+                    metadata["group_ids_by_layer"].append(list(ancestor_group_ids))
+                    metadata["position_in_base_slot"].append(int(local_pos))
+            return
+
+        for child_idx in unit["symbols"]:
+            self._flatten_unit(
+                layer_idx - 1,
+                int(child_idx),
+                output,
+                metadata,
+                ancestor_unit_ids,
+                ancestor_slot_type_ids,
+                ancestor_group_ids,
+            )
+
+    def _generate_tokens(self, index, with_metadata=False):
+        rng = self._rng(1009, index)
+        required_len = self.max_seq_len + 1
+        tokens = []
+        metadata = None
+        if with_metadata:
+            metadata = {
+                "unit_ids_by_layer": [],
+                "slot_type_ids_by_layer": [],
+                "group_ids_by_layer": [],
+                "position_in_base_slot": [],
+            }
+
+        while len(tokens) < required_len:
+            unit_idx = rng.choices(
+                range(len(self.top_units)),
+                weights=self.top_unit_sample_weights,
+                k=1,
+            )[0]
+            self._flatten_unit(self.top_layer, unit_idx, tokens, metadata)
+
+        tokens = tokens[:required_len]
+        if metadata is not None:
+            for key in metadata:
+                metadata[key] = metadata[key][:required_len]
+
+        if self.padding and len(tokens) < required_len:
+            pad_len = required_len - len(tokens)
+            tokens.extend([self.pad_token_id] * pad_len)
+            if metadata is not None:
+                metadata["unit_ids_by_layer"].extend([[-1] * self.num_hierarchy_layers for _ in range(pad_len)])
+                metadata["slot_type_ids_by_layer"].extend([[-1] * self.num_hierarchy_layers for _ in range(pad_len)])
+                metadata["group_ids_by_layer"].extend([[-1] * self.num_hierarchy_layers for _ in range(pad_len)])
+                metadata["position_in_base_slot"].extend([-1] * pad_len)
+
+        token_tensor = torch.tensor(tokens, dtype=torch.long)
+        if metadata is None:
+            return token_tensor
+
+        metadata_tensors = {
+            "unit_ids_by_layer": torch.tensor(metadata["unit_ids_by_layer"], dtype=torch.long),
+            "slot_type_ids_by_layer": torch.tensor(metadata["slot_type_ids_by_layer"], dtype=torch.long),
+            "group_ids_by_layer": torch.tensor(metadata["group_ids_by_layer"], dtype=torch.long),
+            "position_in_base_slot": torch.tensor(metadata["position_in_base_slot"], dtype=torch.long),
+        }
+        return token_tensor, metadata_tensors
+
+    def get_metadata(self, index):
+        token_ids, metadata = self._generate_tokens(index, with_metadata=True)
+        metadata = dict(metadata)
+        metadata["token_ids"] = token_ids
+        return metadata
+
+    def get_layer_units(self, layer_idx):
+        return self.units_by_layer[layer_idx]
+
+    def __getitem__(self, index):
+        if self.return_metadata:
+            token_ids, metadata = self._generate_tokens(index, with_metadata=True)
+            sliced_metadata = {
+                key: value[:-1]
+                for key, value in metadata.items()
+            }
+            return token_ids[:-1], token_ids[1:], len(token_ids), sliced_metadata
+
+        token_ids = self._generate_tokens(index)
+        return token_ids[:-1], token_ids[1:], len(token_ids)
