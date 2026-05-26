@@ -38,6 +38,26 @@ Run:
 bash ymluo/projects/qwen3_moe_structured_language/scripts/run_train.sh
 ```
 
+Four paired experiment runners:
+
+```bash
+# Small-data MoE baseline: no attention-cluster auxiliary loss.
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_train_baseline.sh
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_eval_baseline.sh
+
+# Small-data test: attention-cluster enabled.
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_train_test.sh
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_eval_test.sh
+
+# Larger/harder data baseline.
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_train_big_baseline.sh
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_eval_big_baseline.sh
+
+# Larger/harder data test: attention-cluster enabled.
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_train_big_test.sh
+bash ymluo/projects/qwen3_moe_structured_language/scripts/run_eval_big_test.sh
+```
+
 Useful sweeps:
 
 ```bash
