@@ -1,4 +1,5 @@
-from .data_utils import (
+﻿from .data_utils import (
+    ControlledReusedTokenData,
     FixedUnitPatternData,
     HierarchicalPatternData,
     TokenizedJSONLData,
