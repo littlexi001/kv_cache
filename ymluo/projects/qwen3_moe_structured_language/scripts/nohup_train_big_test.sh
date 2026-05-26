@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+LOG_DIR="${LOG_DIR:-${PROJECT_DIR}/logs}"
+
+mkdir -p "${LOG_DIR}"
+
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+RUN_NAME_VALUE="${RUN_NAME:-structured-big-test-attn-cluster}"
+LOG_PATH="${LOG_PATH:-${LOG_DIR}/train_${RUN_NAME_VALUE}_${TIMESTAMP}.log}"
+PID_PATH="${PID_PATH:-${LOG_DIR}/train_${RUN_NAME_VALUE}.pid}"
+
+nohup bash "${SCRIPT_DIR}/run_train_big_test.sh" "$@" >"${LOG_PATH}" 2>&1 &
+PID="$!"
+echo "${PID}" >"${PID_PATH}"
+
+echo "started structured-language big attention-cluster test training"
+echo "pid: ${PID}"
+echo "log: ${LOG_PATH}"
+echo "pid_file: ${PID_PATH}"
