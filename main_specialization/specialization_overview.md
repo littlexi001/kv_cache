@@ -92,37 +92,9 @@ GHIX
 
 Round2 需要专门回答：当 token id、input prefix、output token 与 future-distribution feature 解耦后，baseline gate 仍然按 token id / surface form 分发，还是开始按 distributional feature 分发。
 
-当前 synthetic 结果显示，普通 hidden-router MoE 仍然没有形成强 feature-level specialization：
-
-```text
-moe-hidden-full-top1:
-token same-expert: 66.30%
-base unit same-expert: 31.32%
-same-input-different-output group same-expert: 33.65%
-different-input-same-output group same-expert: 37.68%
-```
-
-这说明 ordinary MoE 仍然更接近 surface-token / local shortcut，而不是我们定义的 distributional feature specialization。
-
-使用 `k` 作为 router input 后，分发更接近 feature：
-
-```text
-moe-rfull-k-eresid:
-NTP acc: 89.56%
-token same-expert: 93.25%
-target same-expert: 61.66%
-base unit same-expert: 56.27%
-same-input-different-output group same-expert: 66.09%
-different-input-same-output group same-expert: 66.32%
-```
-
-因此，Round2 synthetic 的当前结论是：`k`-based routing 比 ordinary hidden-router 更接近 distributional / output-side feature，但仍未达到很硬的 expert specialization。
-
-#### Real corpus
-
-真实数据中没有显式 ground-truth slot label，因此需要用 proxy feature 解释 gating。当前结论是：真实数据里的 gating 更容易被表征空间的 SVD 头部子空间解释，top 5% 子空间可以解释约 90% 的分发结果。
-
-后续需要继续判断：真实 MoE routing 更接近 token identity、representation cluster、next-token logits cluster、frequency / Zipf rank、position shortcut，还是 attention retrieval bucket。
+1. (与 round1 相同)同一个 token id 大约有 70% 会被分到同一个 expert；
+2. 具有同一 feature 的 token 中，50% 的 token 会集中在 10% 的 expert 上；90% 的 token 会集中在 30% 的 expert 上
+3. 数据为 zip'f 分布后， gate 的分发被表征中协方差最大的几个方向主导，与真实数据上的模型一致，说明当前 synthetic 数据性质已足以解释真实数据的 gating 行为。
 
 
 ### 2.3. 按我们的理想 specialization 定义，gating 结果应当有何特征？CAR：real。
@@ -138,17 +110,17 @@ different-input-same-output group same-expert: 66.32%
 
 #### Reused token synthetic
 
-在 reused-token synthetic 中，理想 specialization 不再是简单的“同 token 同 expert”或“同 slot 同 expert”。更准确的定义是：expert assignment 应当与 future-distribution feature 的相似性单调相关。
-
-具体到本轮 controlled reused-token 数据：
-
-1. **same-input-different-output group 应当有较高 expert overlap：** 因为它们是同一个 input state 的 next-token distribution 的不同观测；
-2. **different-input-same-output group 应当有较高 expert overlap：** 因为不同 input state 共享相同 output-side projected feature；
-3. **token same-expert 不是充分证据：** token-level purity 高可能只是 surface-token specialization；
-4. **target same-expert / A-B group same-expert 更接近我们关心的 distributional specialization。**
+1. 同一 expert 拿到的 token 其表征 cossim 高；
+2. 数据服从 zip'f 分布后，同一 expert 拿到的 token，其所含 feature 在整体 feature 中的频率位次接近。
 
 
 ### 2.4. 模型结构与训练范式如何影响 specialization。ZX：real。
+
+#### Reused token synthetic
+
+1. 按我们定义的 ground truth feature 分发后，模型的学习效率提升。
+
+#### Real data
 
 1. **Load-balance loss：** 它能显著提升 expert usage 的均匀性，但不一定直接带来 feature specialization。依据是：加入 load-balance 以后，effective expert count 明显上升，说明流量分布被显著拉平；但与此同时，routing 与 feature 对齐相关的指标变化很小，expert purity 也没有同步提升。也就是说，load-balance loss 主要改变的是“token 是否更平均地分到各个 expert”，而不是“expert 是否更清楚地按 feature 分工”。
 2. **残差链接：** 残差在这里更像是在帮助 gate，而不是干扰 gate。依据是：当 gate 使用标准的 residual-plus-normalized 表征时，feature 更容易被线性读出，最终 routing 与 feature 的对齐也更好；而当 gate 只看 pure attention output 时，这两个结果都会下降。也就是说，在当前 ordinary MoE 设定里，残差路径并没有明显削弱 gate 对 feature 的识别，相反，它更可能给 gate 提供了一个更容易利用的输入表示。
@@ -161,7 +133,9 @@ different-input-same-output group same-expert: 66.32%
 
 ### 结论：
 
-在 synthetic 数据上，Round2 的 controlled reused-token data 与 Round1 的 clean synthetic data 给出的结构判断总体一致：specialization 不是靠 ordinary hidden-router 自然出现的，而更依赖 router input 是否接近 attention retrieval feature，以及 expert input 是否保留完整预测信息。Round2 的价值是把 feature 从简单 slot 扩展到 next-token distribution 诱导出的等价类，因此它是当前更重要的结论来源。
+与一阶段结论一致：
+1. Attention 会自发捕捉到我们定义的 feature：同 slot（无论是 same input diff output 还是 diff input same output），attention score 的集中度约 80%；
+2. Q/K 表征做分发时，即使不加任何约束，也有 60% 的同 feature token 被分发到同一 expert；zip'f 数据上，80% 的数据被分发到 2 个 expert 上。
 
 #### Round2 当前结论
 
