@@ -100,6 +100,29 @@ Main files:
 incrementally as each SVD/head comparison finishes, so a long run still leaves
 usable partial results if it is stopped.
 
+You can also regenerate plots from whatever CSV rows already exist:
+
+```bash
+bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/plot_outputs.sh
+```
+
+Useful filters:
+
+```bash
+LAYERS=0-3 \
+HEADS=0,1 \
+CACHE_KINDS=key \
+MAX_RANK=64 \
+bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/plot_outputs.sh
+```
+
+This writes:
+
+- `plots_from_csv/singular_values_by_head/`
+- `plots_from_csv/energy_by_head/`
+- `plots_from_csv/cosine_by_head_pair/`
+- `plots_from_csv/layer_head_heatmaps/`
+
 By default, cosine values are sign-invariant: `abs(cos)` is used because SVD
 vector signs are arbitrary.
 
