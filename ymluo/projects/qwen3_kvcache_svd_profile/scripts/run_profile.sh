@@ -29,10 +29,12 @@ python "${PROJECT_DIR}/src/profile_qwen3_kvcache_svd.py" \
   --cache_kinds "${CACHE_KINDS:-key,value}" \
   --percentiles "${PERCENTILES:-1,5,25,50,75,95,99}" \
   --svd_device "${SVD_DEVICE:-auto}" \
+  --svd_devices "${SVD_DEVICES:-}" \
   --svd_dtype "${SVD_DTYPE:-float32}" \
   --max_svd_rank "${MAX_SVD_RANK:-128}" \
   --svd_full_matrices "${SVD_FULL_MATRICES:-false}" \
   --save_svd_tensors "${SAVE_SVD_TENSORS:-false}" \
+  --offload_cache_to_cpu "${OFFLOAD_CACHE_TO_CPU:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
   --plot_dpi "${PLOT_DPI:-160}" \
   --sample_seed "${SAMPLE_SEED:-1234}"

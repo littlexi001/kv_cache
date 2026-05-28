@@ -43,6 +43,22 @@ MAX_SVD_RANK=128 \
 bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/run_profile.sh
 ```
 
+Use all 8 GPUs for the SVD stage:
+
+```bash
+SVD_DEVICES=cuda:0,cuda:1,cuda:2,cuda:3,cuda:4,cuda:5,cuda:6,cuda:7 \
+bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/run_profile.sh
+```
+
+`DEVICE_MAP=auto` controls multi-GPU model placement during KV-cache profiling.
+`SVD_DEVICES` controls parallel SVD jobs after the cache has been built. When
+`SVD_DEVICES` is set, it overrides `SVD_DEVICE`.
+
+`OFFLOAD_CACHE_TO_CPU=true` is the default. The script moves KV cache tensors to
+CPU and releases model weights before SVD so the SVD workers can use GPU memory.
+Set it to `false` only if you intentionally want to keep cache tensors on their
+original devices.
+
 For a full 1M run, use a text file with at least 1M tokens after tokenization.
 Set `REQUIRE_MAX_LENGTH=false` if you want the script to continue with whatever
 lengths are available.

@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -79,6 +80,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--percentiles", default=DEFAULT_PERCENTILES)
     parser.add_argument("--svd_device", choices=["cpu", "cuda", "auto"], default="auto")
+    parser.add_argument(
+        "--svd_devices",
+        default="",
+        help=(
+            "Comma-separated devices for parallel SVD, e.g. cuda:0,cuda:1,...,cuda:7. "
+            "When set, this overrides --svd_device for SVD work."
+        ),
+    )
     parser.add_argument("--svd_dtype", choices=["float32", "float64"], default="float32")
     parser.add_argument(
         "--max_svd_rank",
@@ -88,6 +97,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--svd_full_matrices", type=str2bool, default=False)
     parser.add_argument("--save_svd_tensors", type=str2bool, default=False)
+    parser.add_argument(
+        "--offload_cache_to_cpu",
+        type=str2bool,
+        default=True,
+        help="Move KV cache tensors to CPU and release the model before SVD.",
+    )
     parser.add_argument("--make_plots", type=str2bool, default=True)
     parser.add_argument("--plot_dpi", type=int, default=160)
     parser.add_argument("--sample_seed", type=int, default=1234)
@@ -193,6 +208,21 @@ def resolve_svd_device(name: str) -> torch.device:
     if name == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("--svd_device cuda requested, but CUDA is not available.")
     return torch.device(name)
+
+
+def resolve_svd_devices(args: argparse.Namespace) -> list[torch.device]:
+    if args.svd_devices.strip():
+        devices = [
+            torch.device(item.strip())
+            for item in args.svd_devices.split(",")
+            if item.strip()
+        ]
+        if not devices:
+            raise ValueError("--svd_devices was set but no devices were parsed.")
+        if any(device.type == "cuda" for device in devices) and not torch.cuda.is_available():
+            raise RuntimeError("--svd_devices includes CUDA devices, but CUDA is not available.")
+        return devices
+    return [resolve_svd_device(args.svd_device)]
 
 
 def read_text_prefix(path: Path, max_chars: int) -> str:
@@ -340,6 +370,18 @@ def extract_layer_cache_tensors(past_key_values: Any) -> list[tuple[torch.Tensor
             return pairs
 
     raise TypeError(f"Unsupported past_key_values type: {type(past_key_values)!r}")
+
+
+def offload_layer_cache_pairs_to_cpu(
+    layer_cache_pairs: list[tuple[torch.Tensor, torch.Tensor]],
+) -> list[tuple[torch.Tensor, torch.Tensor]]:
+    offloaded: list[tuple[torch.Tensor, torch.Tensor]] = []
+    for layer_idx, (key_tensor, value_tensor) in enumerate(layer_cache_pairs):
+        print(f"offloading KV cache layer {layer_idx} to CPU", flush=True)
+        offloaded.append((key_tensor.detach().cpu(), value_tensor.detach().cpu()))
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    return offloaded
 
 
 def cache_tensor_to_head_token_dim(
@@ -696,19 +738,22 @@ def fieldnames_for_norms(percentiles: list[float]) -> list[str]:
 
 def analyze_caches(
     layer_cache_pairs: list[tuple[torch.Tensor, torch.Tensor]],
-    model: torch.nn.Module,
+    expected_heads: int | None,
     output_dir: Path,
     cache_lengths: list[int],
     cache_kinds: list[str],
     percentiles: list[float],
     args: argparse.Namespace,
 ) -> dict[str, Any]:
-    expected_heads = getattr(model.config, "num_key_value_heads", None)
     layer_indices = parse_index_spec(args.layers, len(layer_cache_pairs), "layers")
-    svd_device = resolve_svd_device(args.svd_device)
+    svd_devices = resolve_svd_devices(args)
     svd_dtype = torch.float64 if args.svd_dtype == "float64" else torch.float32
-    if svd_device.type == "cuda" and svd_dtype == torch.float64:
+    if any(device.type == "cuda" for device in svd_devices) and svd_dtype == torch.float64:
         print("warning: float64 SVD on CUDA can be slow; continuing as requested.", flush=True)
+    print(
+        "SVD devices: " + ", ".join(str(device) for device in svd_devices),
+        flush=True,
+    )
 
     dim_rows: list[dict[str, Any]] = []
     norm_rows: list[dict[str, Any]] = []
@@ -747,45 +792,60 @@ def analyze_caches(
                 flush=True,
             )
 
-            for head_idx in head_indices:
-                svd_by_length: dict[int, dict[str, torch.Tensor | float]] = {}
-                for cache_length in cache_lengths:
-                    if cache_length > total_tokens:
-                        continue
-                    matrix = by_head[head_idx, :cache_length, :].contiguous()
-                    norm_rows.append(
-                        head_norm_row(
-                            matrix,
-                            layer_idx,
-                            head_idx,
-                            cache_kind,
-                            cache_length,
-                            percentiles,
+            svd_by_head: dict[int, dict[int, dict[str, torch.Tensor | float]]] = {
+                head_idx: {} for head_idx in head_indices
+            }
+            futures: dict[Any, tuple[int, int, torch.device]] = {}
+            task_idx = 0
+            max_workers = max(1, len(svd_devices))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                for head_idx in head_indices:
+                    for cache_length in cache_lengths:
+                        if cache_length > total_tokens:
+                            continue
+                        matrix = by_head[head_idx, :cache_length, :]
+                        norm_rows.append(
+                            head_norm_row(
+                                matrix,
+                                layer_idx,
+                                head_idx,
+                                cache_kind,
+                                cache_length,
+                                percentiles,
+                            )
                         )
-                    )
-                    dim_rows.extend(
-                        dim_stat_rows(
-                            matrix,
-                            layer_idx,
-                            head_idx,
-                            cache_kind,
-                            cache_length,
-                            percentiles,
+                        dim_rows.extend(
+                            dim_stat_rows(
+                                matrix,
+                                layer_idx,
+                                head_idx,
+                                cache_kind,
+                                cache_length,
+                                percentiles,
+                            )
                         )
-                    )
 
-                    print(
-                        f"SVD {cache_kind} layer {layer_idx} head {head_idx} length {cache_length}",
-                        flush=True,
-                    )
-                    svd_payload = run_svd(
-                        matrix,
-                        svd_device,
-                        svd_dtype,
-                        args.svd_full_matrices,
-                        args.max_svd_rank,
-                    )
-                    svd_by_length[cache_length] = svd_payload
+                        svd_device = svd_devices[task_idx % len(svd_devices)]
+                        task_idx += 1
+                        print(
+                            f"SVD {cache_kind} layer {layer_idx} head {head_idx} "
+                            f"length {cache_length} on {svd_device}",
+                            flush=True,
+                        )
+                        future = executor.submit(
+                            run_svd,
+                            matrix,
+                            svd_device,
+                            svd_dtype,
+                            args.svd_full_matrices,
+                            args.max_svd_rank,
+                        )
+                        futures[future] = (head_idx, cache_length, svd_device)
+
+                for future in as_completed(futures):
+                    head_idx, cache_length, svd_device = futures[future]
+                    svd_payload = future.result()
+                    svd_by_head[head_idx][cache_length] = svd_payload
                     singular_rows.extend(
                         svd_value_rows(
                             svd_payload["s"],
@@ -810,6 +870,7 @@ def analyze_caches(
                                     "head": head_idx,
                                     "cache_length": cache_length,
                                     "head_dim": int(head_dim),
+                                    "svd_device": str(svd_device),
                                 },
                                 "u": svd_payload["u"].to(torch.float16),
                                 "singular_values": svd_payload["s"],
@@ -817,10 +878,10 @@ def analyze_caches(
                             },
                             tensor_path,
                         )
-                    del matrix
 
+            for head_idx, svd_by_length in svd_by_head.items():
                 cosine_rows.extend(comparison_rows(svd_by_length, layer_idx, head_idx, cache_kind))
-                del svd_by_length
+            del svd_by_head
 
             del by_head
 
@@ -946,10 +1007,18 @@ def main() -> None:
         ["chunk", "start_token", "end_token_exclusive", "token_count", "seconds"],
     )
 
+    expected_heads = getattr(model.config, "num_key_value_heads", None)
     layer_cache_pairs = extract_layer_cache_tensors(past_key_values)
+    if args.offload_cache_to_cpu:
+        layer_cache_pairs = offload_layer_cache_pairs_to_cpu(layer_cache_pairs)
+        del past_key_values
+    del model
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     analysis = analyze_caches(
         layer_cache_pairs,
-        model,
+        expected_heads,
         output_dir,
         usable_lengths,
         cache_kinds,
