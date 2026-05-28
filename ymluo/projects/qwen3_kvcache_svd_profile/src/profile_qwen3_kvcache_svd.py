@@ -103,6 +103,8 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Move KV cache tensors to CPU and release the model before SVD.",
     )
+    parser.add_argument("--write_dimension_stats", type=str2bool, default=True)
+    parser.add_argument("--write_token_norm_stats", type=str2bool, default=True)
     parser.add_argument("--make_plots", type=str2bool, default=True)
     parser.add_argument("--plot_dpi", type=int, default=160)
     parser.add_argument("--sample_seed", type=int, default=1234)
@@ -222,6 +224,8 @@ def resolve_svd_devices(args: argparse.Namespace) -> list[torch.device]:
         if any(device.type == "cuda" for device in devices) and not torch.cuda.is_available():
             raise RuntimeError("--svd_devices includes CUDA devices, but CUDA is not available.")
         return devices
+    if args.svd_device == "auto" and torch.cuda.is_available():
+        return [torch.device(f"cuda:{idx}") for idx in range(torch.cuda.device_count())]
     return [resolve_svd_device(args.svd_device)]
 
 
@@ -268,6 +272,15 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> 
     with path.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def append_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+    if not rows:
+        return
+    with path.open("a", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
         for row in rows:
             writer.writerow(row)
 
@@ -613,6 +626,11 @@ def comparison_rows(
     return rows
 
 
+def format_float_list(values: torch.Tensor, limit: int = 5) -> str:
+    shown = values[:limit].detach().float().tolist()
+    return "[" + ", ".join(f"{value:.6g}" for value in shown) + "]"
+
+
 def save_singular_value_plot(rows: list[dict[str, Any]], output_dir: Path, args: argparse.Namespace) -> str | None:
     if not rows:
         return None
@@ -736,6 +754,35 @@ def fieldnames_for_norms(percentiles: list[float]) -> list[str]:
     ] + [percentile_field(p) for p in percentiles]
 
 
+def singular_value_fieldnames() -> list[str]:
+    return [
+        "cache_kind",
+        "cache_length",
+        "layer",
+        "head",
+        "rank",
+        "singular_value",
+        "energy",
+        "energy_fraction",
+        "cumulative_energy_fraction",
+        "svd_seconds",
+    ]
+
+
+def cosine_fieldnames() -> list[str]:
+    return [
+        "cache_kind",
+        "layer",
+        "head",
+        "left_length",
+        "right_length",
+        "rank",
+        "u_prefix_tokens",
+        "u_cosine",
+        "right_singular_vector_cosine",
+    ]
+
+
 def analyze_caches(
     layer_cache_pairs: list[tuple[torch.Tensor, torch.Tensor]],
     expected_heads: int | None,
@@ -755,14 +802,25 @@ def analyze_caches(
         flush=True,
     )
 
-    dim_rows: list[dict[str, Any]] = []
-    norm_rows: list[dict[str, Any]] = []
     singular_rows: list[dict[str, Any]] = []
     cosine_rows: list[dict[str, Any]] = []
     cache_shapes: list[dict[str, Any]] = []
     svd_tensors_dir = output_dir / "svd_tensors"
     if args.save_svd_tensors:
         svd_tensors_dir.mkdir(parents=True, exist_ok=True)
+
+    dimension_stats_path = output_dir / "dimension_stats.csv"
+    token_norm_stats_path = output_dir / "token_norm_stats.csv"
+    singular_values_path = output_dir / "singular_values.csv"
+    cosine_path = output_dir / "svd_vector_cosines.csv"
+    dim_fields = fieldnames_for_stats(percentiles)
+    norm_fields = fieldnames_for_norms(percentiles)
+    singular_fields = singular_value_fieldnames()
+    cosine_fields = cosine_fieldnames()
+    write_csv(dimension_stats_path, [], dim_fields)
+    write_csv(token_norm_stats_path, [], norm_fields)
+    write_csv(singular_values_path, [], singular_fields)
+    write_csv(cosine_path, [], cosine_fields)
 
     for layer_idx in layer_indices:
         key_tensor, value_tensor = layer_cache_pairs[layer_idx]
@@ -796,6 +854,7 @@ def analyze_caches(
                 head_idx: {} for head_idx in head_indices
             }
             futures: dict[Any, tuple[int, int, torch.device]] = {}
+            stat_tasks: list[tuple[int, int, torch.Tensor]] = []
             task_idx = 0
             max_workers = max(1, len(svd_devices))
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -804,27 +863,7 @@ def analyze_caches(
                         if cache_length > total_tokens:
                             continue
                         matrix = by_head[head_idx, :cache_length, :]
-                        norm_rows.append(
-                            head_norm_row(
-                                matrix,
-                                layer_idx,
-                                head_idx,
-                                cache_kind,
-                                cache_length,
-                                percentiles,
-                            )
-                        )
-                        dim_rows.extend(
-                            dim_stat_rows(
-                                matrix,
-                                layer_idx,
-                                head_idx,
-                                cache_kind,
-                                cache_length,
-                                percentiles,
-                            )
-                        )
-
+                        stat_tasks.append((head_idx, cache_length, matrix))
                         svd_device = svd_devices[task_idx % len(svd_devices)]
                         task_idx += 1
                         print(
@@ -846,16 +885,28 @@ def analyze_caches(
                     head_idx, cache_length, svd_device = futures[future]
                     svd_payload = future.result()
                     svd_by_head[head_idx][cache_length] = svd_payload
-                    singular_rows.extend(
-                        svd_value_rows(
-                            svd_payload["s"],
-                            layer_idx,
-                            head_idx,
-                            cache_kind,
-                            cache_length,
-                            float(svd_payload["seconds"]),
-                        )
+                    singular_values = svd_payload["s"]
+                    if not isinstance(singular_values, torch.Tensor):
+                        raise TypeError("SVD payload is missing singular values.")
+                    print(
+                        f"completed SVD {cache_kind} layer {layer_idx} head {head_idx} "
+                        f"length {cache_length} on {svd_device}: "
+                        f"seconds={float(svd_payload['seconds']):.3f} "
+                        f"top_singular_values={format_float_list(singular_values)}",
+                        flush=True,
                     )
+                    svd_rows = svd_value_rows(
+                        singular_values,
+                        layer_idx,
+                        head_idx,
+                        cache_kind,
+                        cache_length,
+                        float(svd_payload["seconds"]),
+                    )
+                    singular_rows.extend(svd_rows)
+                    append_csv(singular_values_path, svd_rows, singular_fields)
+                    if args.make_plots:
+                        save_singular_value_plot(svd_rows, output_dir, args)
 
                     if args.save_svd_tensors:
                         tensor_path = svd_tensors_dir / (
@@ -880,49 +931,49 @@ def analyze_caches(
                         )
 
             for head_idx, svd_by_length in svd_by_head.items():
-                cosine_rows.extend(comparison_rows(svd_by_length, layer_idx, head_idx, cache_kind))
+                head_cosine_rows = comparison_rows(svd_by_length, layer_idx, head_idx, cache_kind)
+                cosine_rows.extend(head_cosine_rows)
+                append_csv(cosine_path, head_cosine_rows, cosine_fields)
+                if args.make_plots:
+                    save_cosine_plot(head_cosine_rows, output_dir, args)
+                completed_lengths = sorted(svd_by_length)
+                if completed_lengths:
+                    print(
+                        f"completed {cache_kind} layer {layer_idx} head {head_idx}: "
+                        f"lengths={completed_lengths} cosine_rows={len(head_cosine_rows)}",
+                        flush=True,
+                    )
             del svd_by_head
+
+            for head_idx, cache_length, matrix in stat_tasks:
+                if args.write_token_norm_stats:
+                    norm_row = head_norm_row(
+                        matrix,
+                        layer_idx,
+                        head_idx,
+                        cache_kind,
+                        cache_length,
+                        percentiles,
+                    )
+                    append_csv(token_norm_stats_path, [norm_row], norm_fields)
+                if args.write_dimension_stats:
+                    dim_batch = dim_stat_rows(
+                        matrix,
+                        layer_idx,
+                        head_idx,
+                        cache_kind,
+                        cache_length,
+                        percentiles,
+                    )
+                    append_csv(dimension_stats_path, dim_batch, dim_fields)
+            del stat_tasks
 
             del by_head
 
-    write_csv(output_dir / "dimension_stats.csv", dim_rows, fieldnames_for_stats(percentiles))
-    write_csv(output_dir / "token_norm_stats.csv", norm_rows, fieldnames_for_norms(percentiles))
-    write_csv(
-        output_dir / "singular_values.csv",
-        singular_rows,
-        [
-            "cache_kind",
-            "cache_length",
-            "layer",
-            "head",
-            "rank",
-            "singular_value",
-            "energy",
-            "energy_fraction",
-            "cumulative_energy_fraction",
-            "svd_seconds",
-        ],
-    )
-    write_csv(
-        output_dir / "svd_vector_cosines.csv",
-        cosine_rows,
-        [
-            "cache_kind",
-            "layer",
-            "head",
-            "left_length",
-            "right_length",
-            "rank",
-            "u_prefix_tokens",
-            "u_cosine",
-            "right_singular_vector_cosine",
-        ],
-    )
-
     plot_paths: dict[str, str | None] = {}
     if args.make_plots:
-        plot_paths["plots_dir"] = save_singular_value_plot(singular_rows, output_dir, args)
-        plot_paths["cosine_plots_dir"] = save_cosine_plot(cosine_rows, output_dir, args)
+        plot_paths["plots_dir"] = str(output_dir / "plots")
+        plot_paths["cosine_plots_dir"] = str(output_dir / "plots")
 
     return {
         "cache_shapes": cache_shapes,

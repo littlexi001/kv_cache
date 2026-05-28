@@ -59,6 +59,16 @@ CPU and releases model weights before SVD so the SVD workers can use GPU memory.
 Set it to `false` only if you intentionally want to keep cache tensors on their
 original devices.
 
+If CPU-side statistics become the bottleneck, skip them during a first SVD-only
+run:
+
+```bash
+WRITE_DIMENSION_STATS=false \
+WRITE_TOKEN_NORM_STATS=false \
+SVD_DEVICES=cuda:0,cuda:1,cuda:2,cuda:3,cuda:4,cuda:5,cuda:6,cuda:7 \
+bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/run_profile.sh
+```
+
 For a full 1M run, use a text file with at least 1M tokens after tokenization.
 Set `REQUIRE_MAX_LENGTH=false` if you want the script to continue with whatever
 lengths are available.
@@ -85,6 +95,10 @@ Main files:
   `right_singular_vector_cosine` compares right singular vectors directly.
 - `plots/`: singular-value distribution curves and SVD-vector cosine curves.
 - `summary.json`: metadata and output path index.
+
+`singular_values.csv`, `svd_vector_cosines.csv`, and per-series PNGs are written
+incrementally as each SVD/head comparison finishes, so a long run still leaves
+usable partial results if it is stopped.
 
 By default, cosine values are sign-invariant: `abs(cos)` is used because SVD
 vector signs are arbitrary.

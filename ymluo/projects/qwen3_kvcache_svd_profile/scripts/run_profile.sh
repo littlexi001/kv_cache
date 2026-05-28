@@ -12,6 +12,8 @@ OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/kvcache_svd_profile}"
 
 echo "MODEL_PATH=${MODEL_PATH}"
 echo "CACHE_LENGTHS=${CACHE_LENGTHS:-1k,10k,100k}"
+echo "SVD_DEVICE=${SVD_DEVICE:-auto}"
+echo "SVD_DEVICES=${SVD_DEVICES:-auto-visible-cuda-devices}"
 echo "OUTPUT_DIR=${OUTPUT_DIR}"
 
 python "${PROJECT_DIR}/src/profile_qwen3_kvcache_svd.py" \
@@ -39,6 +41,8 @@ python "${PROJECT_DIR}/src/profile_qwen3_kvcache_svd.py" \
   --svd_full_matrices "${SVD_FULL_MATRICES:-false}" \
   --save_svd_tensors "${SAVE_SVD_TENSORS:-false}" \
   --offload_cache_to_cpu "${OFFLOAD_CACHE_TO_CPU:-true}" \
+  --write_dimension_stats "${WRITE_DIMENSION_STATS:-true}" \
+  --write_token_norm_stats "${WRITE_TOKEN_NORM_STATS:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
   --plot_dpi "${PLOT_DPI:-160}" \
   --sample_seed "${SAMPLE_SEED:-1234}"
