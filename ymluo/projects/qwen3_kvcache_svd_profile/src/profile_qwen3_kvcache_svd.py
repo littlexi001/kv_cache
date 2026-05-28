@@ -19,11 +19,11 @@ except ImportError:
     from transformers import AutoTokenizer
 
 
-DEFAULT_MODEL_PATH = "/mnt/workspace/Qwen3-0.6B"
+DEFAULT_MODEL_PATH = "/mnt/workspace/Qwen3-8B"
 DEFAULT_TEXT_PATH = (
     "/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt"
 )
-DEFAULT_LENGTHS = "1000,10000,100000,1000000"
+DEFAULT_LENGTHS = "1k,10k,100k"
 DEFAULT_PERCENTILES = "1,5,25,50,75,95,99"
 
 

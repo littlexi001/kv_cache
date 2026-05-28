@@ -32,7 +32,7 @@ bash ymluo/projects/qwen3_kvcache_svd_profile/scripts/run_profile.sh
 Useful overrides:
 
 ```bash
-MODEL_PATH=/mnt/workspace/Qwen3-0.6B \
+MODEL_PATH=/mnt/workspace/Qwen3-8B \
 TEXT_PATH=/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt \
 CACHE_LENGTHS=1k,10k,100k,1M \
 LAYERS=0-3,10,20 \

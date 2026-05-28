@@ -6,15 +6,19 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 export TOKENIZERS_PARALLELISM=false
 
-MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-0.6B}"
+MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-8B}"
 TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
 OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/kvcache_svd_profile}"
+
+echo "MODEL_PATH=${MODEL_PATH}"
+echo "CACHE_LENGTHS=${CACHE_LENGTHS:-1k,10k,100k}"
+echo "OUTPUT_DIR=${OUTPUT_DIR}"
 
 python "${PROJECT_DIR}/src/profile_qwen3_kvcache_svd.py" \
   --model_name_or_path "${MODEL_PATH}" \
   --text_path "${TEXT_PATH}" \
   --output_dir "${OUTPUT_DIR}" \
-  --cache_lengths "${CACHE_LENGTHS:-1k,10k,100k,1M}" \
+  --cache_lengths "${CACHE_LENGTHS:-1k,10k,100k}" \
   --chunk_size "${CHUNK_SIZE:-512}" \
   --max_chars "${MAX_CHARS:-0}" \
   --add_special_tokens "${ADD_SPECIAL_TOKENS:-false}" \
