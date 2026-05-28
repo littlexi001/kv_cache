@@ -40,4 +40,4 @@ fdong/figures/
 fdong/logs/
 fdong/scripts/draw_loss.py
 fdong/scripts/clean_checkpoints.py
-
+*.safetensors

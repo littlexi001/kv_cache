@@ -2,11 +2,63 @@
 
 Date: 2026-05-27
 
-## 1. 当前问题意识
+## 1. 当前问题意识：从 memory retrieval 到 KV 几何结构
 
 我们现在讨论的不是一个已经收敛的具体结构，而是一个更高层次的问题框架：
 
 > 如果 attention 本质上可以被看成 memory retrieval，那么 KV cache 压缩就不只是“把历史 token 变小”，而是“如何把历史记忆组织成可索引、可选择、可扩展的检索系统”。
+
+这个问题意识现在又往前推进了一步：在设计具体 compressor / indexer 之前，我们需要先理解真实 LLM 的 KV cache 随着 `seq_len` 增长到底呈现什么数学结构。也就是说，不能一开始就假设“平均池化”“低秩压缩”“top-k block selection”一定合理，而应先把 K/V cache 当成随 prefix 增长的高维点云，观察它是否低有效维、是否各向异性、是否局部平滑、是否形成 block、主子空间是否稳定、新 token 是否带来 residual 信息。
+
+我们对 Qwen3-0.6B 做了一轮 prefix-growth KV geometry 诊断：固定一条长文本，观察 prefix 从 `512` 增长到 `12000` token 时，每层每头 K/V cache 的高维点云结构如何变化。阶段性结论记录在：
+
+```text
+fdong_seq_compress/qwen3_kv_cache_geometry_findings.md
+```
+
+这轮实验把 KV cache compression 的方向进一步收窄为：
+
+> K-cache 更像可压缩、可索引的 address space；V-cache 更像需要高保真保留的 content space。合理路线不是平均压缩 K/V，而是 K 侧索引化，V 侧高保真读取。
+
+| 性质 | K-cache | V-cache |
+| --- | --- | --- |
+| 有效维度 | 随 sequence length sublinear 增长，远慢于 token 数增长 | 也随 sequence length sublinear 增长，但有效维度整体比 K 更高 |
+| 各向异性 | 强，存在明显 common direction / cone effect | 相比 K 弱得多，整体更分散 |
+| 去均值后的相似性 | centering 后 token-token 平均相似性显著下降，说明 raw similarity 受公共方向影响很大 | centering 后平均相似性也接近 0，但 raw similarity 本来就不高 |
+| 局部平滑性 | 强，相邻 token 的 K 向量高度相似，更像一条平滑高维轨迹 | 弱，相邻 token 的 V 向量差异明显更大 |
+| 小 block 结构 | 支持小尺度连续 block，尤其是 4/8/16 token block | 不支持简单连续 block average，即使很小 block 内部也较分散 |
+| 主子空间稳定性 | 主子空间随 prefix 增长逐渐稳定，但弱方向仍会旋转 | 主子空间更稳定，长 prefix 下 dominant subspace 几乎不再明显变化 |
+| 新 token novelty | 新 token 对已有 top subspace 仍有明显 residual，不能被很小固定 basis 完全解释 | 也有明显 residual，且内容侧 residual 不应被忽略 |
+| 层间差异 | 浅层 K 尤其各向异性强，后层 K 的公共方向相对减弱 | 后层 V 的有效维度更高，内容性更强 |
+| 适合承担的角色 | 更像 address / index / routing space | 更像 content / evidence / information payload |
+| 对压缩的直接启发 | 适合研究去 common direction 后的小 block index、delta、change point、routing summary | 更适合保留 exact residual、multi-slot content，或在 K index 命中后按需 gather，不适合直接平均压缩 |
+
+这与 DeepSeek MCA / CSA 和经典搜索系统的 index-content 分离非常接近：
+
+```text
+search engine:
+  compressed index / inverted index / vector index
+  -> candidate documents
+  -> read high-fidelity document content
+
+KV cache:
+  compressed K-index / block summary
+  -> candidate token blocks
+  -> read high-fidelity V content
+```
+
+因此，当前最值得推进的方向可以命名为：
+
+```text
+K-indexed, V-faithful KV cache compression
+```
+
+也就是：
+
+```text
+centered / whitened K block summary -> candidate block selection
+selected blocks -> exact V / residual V / multi-slot content read
+```
 
 DeepSeek CSA 给出的重要启发在于，它没有把压缩理解成固定 pooling 或推理后处理，而是把 compression 和 selection 都做成模型结构的一部分：
 
@@ -134,6 +186,63 @@ sum_i softmax(q · k_i) v_i
 - attention mass recall；
 - selected KV 对最终 logits 的贡献；
 - 精确复制、代码引用、数字一致性。
+
+### 3.5 Qwen3 KV 几何诊断带来的更新
+
+在 `fdong_seq_compress` 中，我们对 Qwen3-0.6B 做了一轮 prefix-growth KV geometry 诊断：固定一条长文本，观察 prefix 从 `512` 增长到 `12000` token 时，每层每头 K/V cache 的高维点云结构如何变化。阶段性结论记录在：
+
+```text
+fdong_seq_compress/qwen3_kv_cache_geometry_findings.md
+```
+
+本轮最重要的观察是：K-cache 和 V-cache 的数学结构并不对称。
+
+| 性质 | K-cache | V-cache |
+| --- | --- | --- |
+| 有效维度 | 随 sequence length sublinear 增长，远慢于 token 数增长 | 也随 sequence length sublinear 增长，但有效维度整体比 K 更高 |
+| 各向异性 | 强，存在明显 common direction / cone effect | 相比 K 弱得多，整体更分散 |
+| 去均值后的相似性 | centering 后 token-token 平均相似性显著下降，说明 raw similarity 受公共方向影响很大 | centering 后平均相似性也接近 0，但 raw similarity 本来就不高 |
+| 局部平滑性 | 强，相邻 token 的 K 向量高度相似，更像一条平滑高维轨迹 | 弱，相邻 token 的 V 向量差异明显更大 |
+| 小 block 结构 | 支持小尺度连续 block，尤其是 4/8/16 token block | 不支持简单连续 block average，即使很小 block 内部也较分散 |
+| 主子空间稳定性 | 主子空间随 prefix 增长逐渐稳定，但弱方向仍会旋转 | 主子空间更稳定，长 prefix 下 dominant subspace 几乎不再明显变化 |
+| 新 token novelty | 新 token 对已有 top subspace 仍有明显 residual，不能被很小固定 basis 完全解释 | 也有明显 residual，且内容侧 residual 不应被忽略 |
+| 层间差异 | 浅层 K 尤其各向异性强，后层 K 的公共方向相对减弱 | 后层 V 的有效维度更高，内容性更强 |
+| 适合承担的角色 | 更像 address / index / routing space | 更像 content / evidence / information payload |
+| 对压缩的直接启发 | 适合研究去 common direction 后的小 block index、delta、change point、routing summary | 更适合保留 exact residual、multi-slot content，或在 K index 命中后按需 gather，不适合直接平均压缩 |
+
+这些性质对压缩 `seq_len` 维度的启发是：
+
+第一，压缩重点应当从“每个 token 的 K/V 向量怎么一起变小”转向“如何少访问历史 token / block”。KV 的有效维度随 sequence length 增长很慢，说明长序列不是在不断线性创造新几何方向；但 new-token residual 仍然明显，说明简单把 head dimension 压到很小 rank 不足以保留全部信息。因此，主收益更可能来自减少被访问的 sequence positions，而不是只压缩每个 position 的 head_dim。
+
+第二，`seq_len` 压缩应当优先在 K 侧建立 index，而不是同时平均 K 和 V。K 的局部平滑性、小 block 结构和 address-like 几何更适合形成 block summary；V 的小 block 结构弱，说明直接把连续 V 平均成 compressed content 风险很大。更合理的第一版结构是：
+
+```text
+centered / whitened K block summary -> select candidate blocks
+selected blocks -> gather original V or residual V content
+```
+
+第三，block 粒度应当偏小，并且 layer/head-aware。Qwen3 结果支持 4/8/16 token 的 K 小块结构，但不支持越大 block 越好。浅层 K 的 common direction 更强，后层 V 的内容维度更高，所以固定一个全层共享的 block size / rank / compression ratio 很可能不合理。
+
+第四，raw K similarity 不能直接作为 index score。K 的 common direction 很强，raw dot product 或 cosine 可能主要反映公共方向，而不是可区分的检索信号。因此，真正的 K-index 实验应当比较：
+
+```text
+raw K
+centered K
+remove top-PC K
+whitened K
+```
+
+第五，`seq_len` 压缩不能只有 semantic summary，还需要 exact residual path。数字、变量名、代码符号、引用位置这类信息可能不在 compressed summary 中稳定保留。当前几何结果也显示 V 侧 residual 不应被忽略。因此，理想结构更像：
+
+```text
+small K index -> sparse block selection -> exact / residual V read
+```
+
+而不是：
+
+```text
+large block average K/V -> replace original KV
+```
 
 ## 4. 经典搜索工具如何映射到 KV Cache
 
