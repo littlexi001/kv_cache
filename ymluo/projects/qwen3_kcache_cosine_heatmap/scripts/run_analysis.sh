@@ -43,4 +43,13 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kcache_cosine_heatmap.py" \
   --write_token_csv "${WRITE_TOKEN_CSV:-true}" \
   --histogram_bins "${HISTOGRAM_BINS:-200}" \
   --histogram_min "${HISTOGRAM_MIN:--1.0}" \
-  --histogram_max "${HISTOGRAM_MAX:-1.0}"
+  --histogram_max "${HISTOGRAM_MAX:-1.0}" \
+  --compute_pairwise_distances "${COMPUTE_PAIRWISE_DISTANCES:-true}" \
+  --distance_cache_types "${DISTANCE_CACHE_TYPES:-k,v}" \
+  --distance_bins "${DISTANCE_BINS:-200}" \
+  --distance_min "${DISTANCE_MIN:-0.0}" \
+  --distance_max "${DISTANCE_MAX:-0.0}" \
+  --compute_top_p_previous_distances "${COMPUTE_TOP_P_PREVIOUS_DISTANCES:-true}" \
+  --top_p_previous_cache_types "${TOP_P_PREVIOUS_CACHE_TYPES:-k}" \
+  --top_p_previous_count "${TOP_P_PREVIOUS_COUNT:-5}" \
+  --save_top_p_previous_token_rows "${SAVE_TOP_P_PREVIOUS_TOKEN_ROWS:-true}"

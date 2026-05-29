@@ -112,6 +112,38 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--histogram_min", type=float, default=-1.0)
     parser.add_argument("--histogram_max", type=float, default=1.0)
+    parser.add_argument("--compute_pairwise_distances", type=str2bool, default=True)
+    parser.add_argument(
+        "--distance_cache_types",
+        default="k,v",
+        help='Cache types for pairwise L2 distance analysis, e.g. "k", "v", or "k,v".',
+    )
+    parser.add_argument(
+        "--distance_bins",
+        type=int,
+        default=200,
+        help="Number of bins for pairwise L2 distance distribution CSVs. Use 0 to skip distance histograms.",
+    )
+    parser.add_argument("--distance_min", type=float, default=0.0)
+    parser.add_argument(
+        "--distance_max",
+        type=float,
+        default=0.0,
+        help="Right edge for distance histograms. Use 0 to infer the max from selected K/V heads.",
+    )
+    parser.add_argument("--compute_top_p_previous_distances", type=str2bool, default=True)
+    parser.add_argument(
+        "--top_p_previous_cache_types",
+        default="k",
+        help='Cache types for previous-token top-p sequence distance analysis, e.g. "k", "v", or "k,v".',
+    )
+    parser.add_argument(
+        "--top_p_previous_count",
+        type=int,
+        default=5,
+        help="For each token i, select this many most-similar previous vectors. If fewer exist, select all.",
+    )
+    parser.add_argument("--save_top_p_previous_token_rows", type=str2bool, default=True)
     return parser.parse_args()
 
 
@@ -157,6 +189,16 @@ def parse_index_spec(spec: str, max_count: int, name: str) -> list[int]:
     if invalid:
         raise ValueError(f"{name} out of range 0..{max_count - 1}: {invalid}")
     return sorted(selected)
+
+
+def parse_cache_types(value: str) -> list[str]:
+    cache_types = [item.strip().lower() for item in value.split(",") if item.strip()]
+    if not cache_types:
+        raise ValueError("At least one cache type is required.")
+    invalid = [item for item in cache_types if item not in {"k", "v"}]
+    if invalid:
+        raise ValueError(f'Unsupported cache types: {invalid}. Expected "k" and/or "v".')
+    return list(dict.fromkeys(cache_types))
 
 
 def resolve_dtype(dtype_name: str, device: torch.device) -> torch.dtype | str:
@@ -237,6 +279,31 @@ def extract_key_tensors(past_key_values: Any) -> list[torch.Tensor]:
                     break
         if key_tensors:
             return key_tensors
+
+    raise TypeError(f"Unsupported past_key_values type: {type(past_key_values)!r}")
+
+
+def extract_value_tensors(past_key_values: Any) -> list[torch.Tensor]:
+    if hasattr(past_key_values, "value_cache"):
+        return list(past_key_values.value_cache)
+
+    if hasattr(past_key_values, "to_legacy_cache"):
+        legacy_cache = past_key_values.to_legacy_cache()
+        return [layer_cache[1] for layer_cache in legacy_cache]
+
+    if isinstance(past_key_values, (list, tuple)):
+        if past_key_values and isinstance(past_key_values[0], (list, tuple)):
+            return [layer_cache[1] for layer_cache in past_key_values]
+
+    if hasattr(past_key_values, "layers"):
+        value_tensors: list[torch.Tensor] = []
+        for layer_cache in past_key_values.layers:
+            for attr_name in ("values", "value_cache", "value_states"):
+                if hasattr(layer_cache, attr_name):
+                    value_tensors.append(getattr(layer_cache, attr_name))
+                    break
+        if value_tensors:
+            return value_tensors
 
     raise TypeError(f"Unsupported past_key_values type: {type(past_key_values)!r}")
 
@@ -539,6 +606,171 @@ def histogram_rows(
     return rows
 
 
+def distance_summary_fieldnames(percentiles: list[float]) -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "tokens",
+        "head_dim",
+        "distance_device",
+        "distance_dtype",
+        "seconds",
+    ] + stat_fieldnames("all", percentiles) + stat_fieldnames("offdiag", percentiles)
+
+
+def distance_histogram_fieldnames() -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "scope",
+        "bin_index",
+        "bin_left",
+        "bin_right",
+        "bin_center",
+        "count",
+        "total",
+        "probability",
+    ]
+
+
+def distance_histogram_rows(
+    counts: torch.Tensor,
+    total: int,
+    bins: int,
+    min_value: float,
+    max_value: float,
+    cache_type: str,
+    layer: int | str,
+    head: int | str,
+    scope: str,
+) -> list[dict[str, Any]]:
+    rows = histogram_rows(counts, total, bins, min_value, max_value, layer, head, scope)
+    for row in rows:
+        row["cache_type"] = cache_type
+    return rows
+
+
+def summarize_pairwise_distance_matrix(
+    matrix: torch.Tensor,
+    percentiles: list[float],
+    sample_size: int,
+    generator: torch.Generator,
+) -> dict[str, Any]:
+    row = stats_for_values("all", matrix, percentiles, sample_size, generator)
+    offdiag = matrix.clone()
+    offdiag.fill_diagonal_(float("nan"))
+    row.update(stats_for_values("offdiag", offdiag, percentiles, sample_size, generator))
+    return row
+
+
+def top_p_previous_summary_fieldnames(percentiles: list[float]) -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "tokens",
+        "head_dim",
+        "top_p",
+        "token_count_with_previous",
+    ] + stat_fieldnames("mean_index_distance", percentiles)
+
+
+def top_p_previous_token_fieldnames() -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "token_index",
+        "available_previous",
+        "selected_count",
+        "mean_index_distance",
+        "min_index_distance",
+        "max_index_distance",
+        "selected_indices",
+        "selected_similarities",
+    ]
+
+
+def top_p_previous_distance_rows(
+    matrix: torch.Tensor,
+    cache_type: str,
+    layer: int,
+    head: int,
+    tokens: int,
+    head_dim: int,
+    top_p: int,
+    percentiles: list[float],
+    sample_size: int,
+    generator: torch.Generator,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    token_rows: list[dict[str, Any]] = []
+    mean_distances: list[float] = []
+
+    for token_index in range(tokens):
+        available_previous = token_index
+        if available_previous == 0:
+            token_rows.append(
+                {
+                    "cache_type": cache_type,
+                    "layer": layer,
+                    "head": head,
+                    "token_index": token_index,
+                    "available_previous": 0,
+                    "selected_count": 0,
+                    "mean_index_distance": "",
+                    "min_index_distance": "",
+                    "max_index_distance": "",
+                    "selected_indices": "",
+                    "selected_similarities": "",
+                }
+            )
+            continue
+
+        selected_count = min(top_p, available_previous)
+        similarities, indices = torch.topk(matrix[token_index, :token_index], k=selected_count)
+        index_distances = token_index - indices
+        mean_distance = float(index_distances.float().mean())
+        mean_distances.append(mean_distance)
+        token_rows.append(
+            {
+                "cache_type": cache_type,
+                "layer": layer,
+                "head": head,
+                "token_index": token_index,
+                "available_previous": available_previous,
+                "selected_count": selected_count,
+                "mean_index_distance": mean_distance,
+                "min_index_distance": int(index_distances.min()),
+                "max_index_distance": int(index_distances.max()),
+                "selected_indices": ";".join(str(int(item)) for item in indices.tolist()),
+                "selected_similarities": ";".join(f"{float(item):.8g}" for item in similarities.tolist()),
+            }
+        )
+
+    values = torch.tensor(mean_distances, dtype=torch.float32)
+    summary: dict[str, Any] = {
+        "cache_type": cache_type,
+        "layer": layer,
+        "head": head,
+        "tokens": tokens,
+        "head_dim": head_dim,
+        "top_p": top_p,
+        "token_count_with_previous": int(values.numel()),
+    }
+    summary.update(
+        stats_for_values(
+            "mean_index_distance",
+            values,
+            percentiles,
+            sample_size,
+            generator,
+        )
+    )
+    return summary, token_rows
+
+
 @torch.inference_mode()
 def compute_cosine_matrix(
     vectors: torch.Tensor,
@@ -553,6 +785,22 @@ def compute_cosine_matrix(
     matrix = normalized @ normalized.transpose(0, 1)
     matrix = matrix.clamp(min=-1.0, max=1.0).float().cpu()
     del working, normalized
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    return matrix
+
+
+@torch.inference_mode()
+def compute_pairwise_l2_distance_matrix(
+    vectors: torch.Tensor,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    if device.type == "cpu" and dtype != torch.float32:
+        dtype = torch.float32
+    working = vectors.to(device=device, dtype=dtype)
+    matrix = torch.cdist(working, working, p=2).clamp_min(0.0).float().cpu()
+    del working
     if device.type == "cuda":
         torch.cuda.empty_cache()
     return matrix
@@ -659,6 +907,191 @@ def save_similarity_tensor(
     )
 
 
+def analyze_pairwise_distances(
+    cache_tensors_by_type: dict[str, list[torch.Tensor]],
+    layer_indices: list[int],
+    expected_heads: int | None,
+    distance_device: torch.device,
+    distance_dtype: torch.dtype,
+    percentiles: list[float],
+    args: argparse.Namespace,
+    output_dir: Path,
+    generator: torch.Generator,
+) -> dict[str, str | None]:
+    summary_rows: list[dict[str, Any]] = []
+    max_distance = float(args.distance_max)
+
+    for cache_type, cache_tensors in cache_tensors_by_type.items():
+        for layer_idx in layer_indices:
+            cache_by_head = key_tensor_to_head_token_dim(cache_tensors[layer_idx], expected_heads)
+            kv_heads, tokens, head_dim = cache_by_head.shape
+            head_indices = parse_index_spec(args.heads, int(kv_heads), "heads")
+            for head_idx in head_indices:
+                print(f"computing {cache_type.upper()} pairwise L2 distances for layer {layer_idx}, head {head_idx}", flush=True)
+                started = time.perf_counter()
+                matrix = compute_pairwise_l2_distance_matrix(
+                    cache_by_head[head_idx],
+                    distance_device,
+                    distance_dtype,
+                )
+                seconds = time.perf_counter() - started
+                stats = summarize_pairwise_distance_matrix(
+                    matrix,
+                    percentiles,
+                    args.summary_sample_size,
+                    generator,
+                )
+                if args.distance_max <= 0.0:
+                    max_distance = max(max_distance, float(stats["all_max"]))
+                row: dict[str, Any] = {
+                    "cache_type": cache_type,
+                    "layer": layer_idx,
+                    "head": head_idx,
+                    "tokens": int(tokens),
+                    "head_dim": int(head_dim),
+                    "distance_device": str(distance_device),
+                    "distance_dtype": str(distance_dtype),
+                    "seconds": seconds,
+                }
+                row.update(stats)
+                summary_rows.append(row)
+                del matrix
+                if distance_device.type == "cuda":
+                    torch.cuda.empty_cache()
+            del cache_by_head
+
+    summary_path = output_dir / "distance_summary_by_head.csv"
+    write_csv(summary_path, summary_rows, distance_summary_fieldnames(percentiles))
+
+    by_head_path: Path | None = None
+    global_path: Path | None = None
+    if args.distance_bins > 0 and summary_rows:
+        if max_distance <= args.distance_min:
+            max_distance = args.distance_min + 1.0
+        by_head_rows: list[dict[str, Any]] = []
+        global_histograms: dict[str, dict[str, Any]] = {}
+        for cache_type in cache_tensors_by_type:
+            for scope in ("all", "offdiag"):
+                global_histograms[f"{cache_type}:{scope}"] = {
+                    "cache_type": cache_type,
+                    "scope": scope,
+                    "counts": torch.zeros(args.distance_bins, dtype=torch.long),
+                    "total": 0,
+                }
+
+        for cache_type, cache_tensors in cache_tensors_by_type.items():
+            for layer_idx in layer_indices:
+                cache_by_head = key_tensor_to_head_token_dim(cache_tensors[layer_idx], expected_heads)
+                kv_heads = int(cache_by_head.shape[0])
+                head_indices = parse_index_spec(args.heads, kv_heads, "heads")
+                for head_idx in head_indices:
+                    matrix = compute_pairwise_l2_distance_matrix(
+                        cache_by_head[head_idx],
+                        distance_device,
+                        distance_dtype,
+                    )
+                    for scope in ("all", "offdiag"):
+                        scope_values = matrix_values_for_scope(matrix, scope)
+                        counts, total = histogram_counts(
+                            scope_values,
+                            args.distance_bins,
+                            args.distance_min,
+                            max_distance,
+                        )
+                        by_head_rows.extend(
+                            distance_histogram_rows(
+                                counts,
+                                total,
+                                args.distance_bins,
+                                args.distance_min,
+                                max_distance,
+                                cache_type,
+                                layer_idx,
+                                head_idx,
+                                scope,
+                            )
+                        )
+                        global_key = f"{cache_type}:{scope}"
+                        global_histograms[global_key]["counts"] += counts
+                        global_histograms[global_key]["total"] += total
+                    del matrix
+                    if distance_device.type == "cuda":
+                        torch.cuda.empty_cache()
+                del cache_by_head
+
+        by_head_path = output_dir / "distance_histogram_by_head.csv"
+        global_path = output_dir / "distance_histogram_global.csv"
+        write_csv(by_head_path, by_head_rows, distance_histogram_fieldnames())
+
+        global_rows: list[dict[str, Any]] = []
+        for payload in global_histograms.values():
+            global_rows.extend(
+                distance_histogram_rows(
+                    payload["counts"],
+                    int(payload["total"]),
+                    args.distance_bins,
+                    args.distance_min,
+                    max_distance,
+                    str(payload["cache_type"]),
+                    "all",
+                    "all",
+                    str(payload["scope"]),
+                )
+            )
+        write_csv(global_path, global_rows, distance_histogram_fieldnames())
+
+    return {
+        "distance_summary_by_head": str(summary_path),
+        "distance_histogram_by_head": str(by_head_path) if by_head_path is not None else None,
+        "distance_histogram_global": str(global_path) if global_path is not None else None,
+    }
+
+
+def analyze_top_p_previous_for_cache_type(
+    cache_type: str,
+    cache_tensors: list[torch.Tensor],
+    layer_indices: list[int],
+    expected_heads: int | None,
+    similarity_device: torch.device,
+    similarity_dtype: torch.dtype,
+    percentiles: list[float],
+    args: argparse.Namespace,
+    generator: torch.Generator,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    summary_rows: list[dict[str, Any]] = []
+    token_rows: list[dict[str, Any]] = []
+    for layer_idx in layer_indices:
+        cache_by_head = key_tensor_to_head_token_dim(cache_tensors[layer_idx], expected_heads)
+        kv_heads, tokens, head_dim = cache_by_head.shape
+        head_indices = parse_index_spec(args.heads, int(kv_heads), "heads")
+        for head_idx in head_indices:
+            print(
+                f"computing {cache_type.upper()} top-{args.top_p_previous_count} previous-neighbor distances "
+                f"for layer {layer_idx}, head {head_idx}",
+                flush=True,
+            )
+            matrix = compute_cosine_matrix(cache_by_head[head_idx], similarity_device, similarity_dtype)
+            summary, rows = top_p_previous_distance_rows(
+                matrix,
+                cache_type,
+                layer_idx,
+                head_idx,
+                int(tokens),
+                int(head_dim),
+                args.top_p_previous_count,
+                percentiles,
+                args.summary_sample_size,
+                generator,
+            )
+            summary_rows.append(summary)
+            token_rows.extend(rows)
+            del matrix
+            if similarity_device.type == "cuda":
+                torch.cuda.empty_cache()
+        del cache_by_head
+    return summary_rows, token_rows
+
+
 def main() -> None:
     args = parse_args()
     percentiles = parse_percentiles(args.summary_percentiles)
@@ -678,6 +1111,14 @@ def main() -> None:
         raise ValueError("--histogram_bins must be non-negative.")
     if args.histogram_bins > 0 and args.histogram_max <= args.histogram_min:
         raise ValueError("--histogram_max must be greater than --histogram_min.")
+    if args.distance_bins < 0:
+        raise ValueError("--distance_bins must be non-negative.")
+    if args.distance_min < 0.0:
+        raise ValueError("--distance_min must be non-negative for L2 distances.")
+    if args.distance_max > 0.0 and args.distance_max <= args.distance_min:
+        raise ValueError("--distance_max must be greater than --distance_min when set.")
+    if args.top_p_previous_count <= 0:
+        raise ValueError("--top_p_previous_count must be positive.")
 
     print(f"reading text: {text_path}", flush=True)
     text = read_text_prefix(text_path, args.max_chars)
@@ -727,6 +1168,17 @@ def main() -> None:
     key_tensors = extract_key_tensors(past_key_values)
     if not key_tensors:
         raise RuntimeError("No key tensors were extracted from past_key_values.")
+    distance_cache_types = parse_cache_types(args.distance_cache_types)
+    top_p_previous_cache_types = parse_cache_types(args.top_p_previous_cache_types)
+    value_tensors: list[torch.Tensor] | None = None
+    needs_value_tensors = (
+        (args.compute_pairwise_distances and "v" in distance_cache_types)
+        or (args.compute_top_p_previous_distances and "v" in top_p_previous_cache_types)
+    )
+    if needs_value_tensors:
+        value_tensors = extract_value_tensors(past_key_values)
+        if len(key_tensors) != len(value_tensors):
+            raise RuntimeError(f"K/V layer count mismatch: {len(key_tensors)} keys vs {len(value_tensors)} values")
 
     expected_heads = getattr(model.config, "num_key_value_heads", None)
     layer_indices = parse_index_spec(args.layers, len(key_tensors), "layers")
@@ -745,6 +1197,8 @@ def main() -> None:
 
     summary_rows: list[dict[str, Any]] = []
     histogram_by_head_rows: list[dict[str, Any]] = []
+    top_p_previous_summary_rows: list[dict[str, Any]] = []
+    top_p_previous_token_rows: list[dict[str, Any]] = []
     cache_shapes: list[dict[str, Any]] = []
     generator = torch.Generator(device="cpu")
     generator.manual_seed(args.sample_seed)
@@ -832,6 +1286,23 @@ def main() -> None:
                     global_histograms[scope]["counts"] += counts
                     global_histograms[scope]["total"] += total
 
+            if args.compute_top_p_previous_distances and "k" in top_p_previous_cache_types:
+                top_p_summary, top_p_rows = top_p_previous_distance_rows(
+                    matrix,
+                    "k",
+                    layer_idx,
+                    head_idx,
+                    int(tokens),
+                    int(head_dim),
+                    args.top_p_previous_count,
+                    percentiles,
+                    args.summary_sample_size,
+                    generator,
+                )
+                top_p_previous_summary_rows.append(top_p_summary)
+                if args.save_top_p_previous_token_rows:
+                    top_p_previous_token_rows.extend(top_p_rows)
+
             if args.make_plots:
                 plot_path = plots_dir / f"layer_{layer_idx:02d}_head_{head_idx:02d}_cosine.png"
                 row.update(save_similarity_heatmap(matrix, plot_path, layer_idx, head_idx, args))
@@ -867,6 +1338,41 @@ def main() -> None:
             )
         write_csv(output_dir / "histogram_global.csv", histogram_global_rows, histogram_fieldnames())
 
+    top_p_previous_summary_path: Path | None = None
+    top_p_previous_token_path: Path | None = None
+    if args.compute_top_p_previous_distances:
+        if "v" in top_p_previous_cache_types:
+            if value_tensors is None:
+                value_tensors = extract_value_tensors(past_key_values)
+            v_summary_rows, v_token_rows = analyze_top_p_previous_for_cache_type(
+                "v",
+                value_tensors,
+                layer_indices,
+                expected_heads,
+                similarity_device,
+                similarity_dtype,
+                percentiles,
+                args,
+                generator,
+            )
+            top_p_previous_summary_rows.extend(v_summary_rows)
+            if args.save_top_p_previous_token_rows:
+                top_p_previous_token_rows.extend(v_token_rows)
+
+        top_p_previous_summary_path = output_dir / "top_p_previous_distance_summary_by_head.csv"
+        write_csv(
+            top_p_previous_summary_path,
+            top_p_previous_summary_rows,
+            top_p_previous_summary_fieldnames(percentiles),
+        )
+        if args.save_top_p_previous_token_rows:
+            top_p_previous_token_path = output_dir / "top_p_previous_distance_by_token.csv"
+            write_csv(
+                top_p_previous_token_path,
+                top_p_previous_token_rows,
+                top_p_previous_token_fieldnames(),
+            )
+
     aggregate_plot_paths: dict[str, str | None] = {}
     if args.make_plots:
         aggregate_plot_paths["layer_head_offdiag_mean_heatmap"] = save_layer_head_metric_heatmap(
@@ -882,6 +1388,27 @@ def main() -> None:
             "offdiag_std",
             "Off-diagonal K-cache cosine std by layer/head",
             args.cmap,
+        )
+
+    distance_paths: dict[str, str | None] = {}
+    if args.compute_pairwise_distances:
+        cache_tensors_by_type: dict[str, list[torch.Tensor]] = {}
+        if "k" in distance_cache_types:
+            cache_tensors_by_type["k"] = key_tensors
+        if "v" in distance_cache_types:
+            if value_tensors is None:
+                value_tensors = extract_value_tensors(past_key_values)
+            cache_tensors_by_type["v"] = value_tensors
+        distance_paths = analyze_pairwise_distances(
+            cache_tensors_by_type,
+            layer_indices,
+            expected_heads,
+            similarity_device,
+            similarity_dtype,
+            percentiles,
+            args,
+            output_dir,
+            generator,
         )
 
     payload = {
@@ -902,6 +1429,13 @@ def main() -> None:
             "summary_by_head": str(output_dir / "summary_by_head.csv"),
             "histogram_by_head": str(output_dir / "histogram_by_head.csv") if args.histogram_bins > 0 else None,
             "histogram_global": str(output_dir / "histogram_global.csv") if args.histogram_bins > 0 else None,
+            "top_p_previous_distance_summary_by_head": (
+                str(top_p_previous_summary_path) if top_p_previous_summary_path is not None else None
+            ),
+            "top_p_previous_distance_by_token": (
+                str(top_p_previous_token_path) if top_p_previous_token_path is not None else None
+            ),
+            **distance_paths,
             "plots_dir": str(plots_dir) if args.make_plots else None,
             "similarity_tensors_dir": str(tensors_dir) if args.save_similarity_tensors else None,
             "aggregate_plots": aggregate_plot_paths,
