@@ -104,6 +104,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save_similarity_tensors", type=str2bool, default=False)
     parser.add_argument("--saved_matrix_dtype", choices=["float32", "float16", "bfloat16"], default="float16")
     parser.add_argument("--write_token_csv", type=str2bool, default=True)
+    parser.add_argument(
+        "--histogram_bins",
+        type=int,
+        default=200,
+        help="Number of bins for cosine value distribution CSVs. Use 0 to skip histograms.",
+    )
+    parser.add_argument("--histogram_min", type=float, default=-1.0)
+    parser.add_argument("--histogram_max", type=float, default=1.0)
     return parser.parse_args()
 
 
@@ -459,6 +467,78 @@ def build_summary_fieldnames(percentiles: list[float]) -> list[str]:
     ] + stat_fieldnames("all", percentiles) + stat_fieldnames("offdiag", percentiles)
 
 
+def histogram_fieldnames() -> list[str]:
+    return [
+        "layer",
+        "head",
+        "scope",
+        "bin_index",
+        "bin_left",
+        "bin_right",
+        "bin_center",
+        "count",
+        "total",
+        "probability",
+    ]
+
+
+def finite_values(values: torch.Tensor) -> torch.Tensor:
+    flat = values.detach().float().reshape(-1)
+    return flat[torch.isfinite(flat)]
+
+
+def matrix_values_for_scope(matrix: torch.Tensor, scope: str) -> torch.Tensor:
+    if scope == "all":
+        return finite_values(matrix)
+    if scope == "offdiag":
+        values = matrix.clone()
+        values.fill_diagonal_(float("nan"))
+        return finite_values(values)
+    raise ValueError(f"Unsupported histogram scope: {scope}")
+
+
+def histogram_counts(values: torch.Tensor, bins: int, min_value: float, max_value: float) -> tuple[torch.Tensor, int]:
+    finite = finite_values(values)
+    total = int(finite.numel())
+    if total == 0:
+        return torch.zeros(bins, dtype=torch.long), 0
+    counts = torch.histc(finite, bins=bins, min=min_value, max=max_value).to(torch.long)
+    return counts.cpu(), total
+
+
+def histogram_rows(
+    counts: torch.Tensor,
+    total: int,
+    bins: int,
+    min_value: float,
+    max_value: float,
+    layer: int | str,
+    head: int | str,
+    scope: str,
+) -> list[dict[str, Any]]:
+    width = (max_value - min_value) / bins
+    rows: list[dict[str, Any]] = []
+    for bin_index, count_tensor in enumerate(counts.tolist()):
+        left = min_value + width * bin_index
+        right = min_value + width * (bin_index + 1)
+        count = int(count_tensor)
+        rows.append(
+            {
+                "layer": layer,
+                "head": head,
+                "scope": scope,
+                "bin_index": bin_index,
+                "bin_left": left,
+                "bin_right": right,
+                "bin_center": (left + right) / 2.0,
+                "count": count,
+                "total": total,
+                "probability": (count / total) if total else 0.0,
+            }
+        )
+    return rows
+
+
 @torch.inference_mode()
 def compute_cosine_matrix(
     vectors: torch.Tensor,
@@ -594,6 +674,10 @@ def main() -> None:
         raise ValueError("--chunk_size must be positive.")
     if args.plot_dpi <= 0:
         raise ValueError("--plot_dpi must be positive.")
+    if args.histogram_bins < 0:
+        raise ValueError("--histogram_bins must be non-negative.")
+    if args.histogram_bins > 0 and args.histogram_max <= args.histogram_min:
+        raise ValueError("--histogram_max must be greater than --histogram_min.")
 
     print(f"reading text: {text_path}", flush=True)
     text = read_text_prefix(text_path, args.max_chars)
@@ -660,9 +744,17 @@ def main() -> None:
         tensors_dir.mkdir(parents=True, exist_ok=True)
 
     summary_rows: list[dict[str, Any]] = []
+    histogram_by_head_rows: list[dict[str, Any]] = []
     cache_shapes: list[dict[str, Any]] = []
     generator = torch.Generator(device="cpu")
     generator.manual_seed(args.sample_seed)
+    global_histograms: dict[str, dict[str, Any]] = {}
+    if args.histogram_bins > 0:
+        for scope in ("all", "offdiag"):
+            global_histograms[scope] = {
+                "counts": torch.zeros(args.histogram_bins, dtype=torch.long),
+                "total": 0,
+            }
 
     for layer_idx in layer_indices:
         key_by_head = key_tensor_to_head_token_dim(key_tensors[layer_idx], expected_heads)
@@ -716,6 +808,30 @@ def main() -> None:
                 )
             )
 
+            if args.histogram_bins > 0:
+                for scope in ("all", "offdiag"):
+                    scope_values = matrix_values_for_scope(matrix, scope)
+                    counts, total = histogram_counts(
+                        scope_values,
+                        args.histogram_bins,
+                        args.histogram_min,
+                        args.histogram_max,
+                    )
+                    histogram_by_head_rows.extend(
+                        histogram_rows(
+                            counts,
+                            total,
+                            args.histogram_bins,
+                            args.histogram_min,
+                            args.histogram_max,
+                            layer_idx,
+                            head_idx,
+                            scope,
+                        )
+                    )
+                    global_histograms[scope]["counts"] += counts
+                    global_histograms[scope]["total"] += total
+
             if args.make_plots:
                 plot_path = plots_dir / f"layer_{layer_idx:02d}_head_{head_idx:02d}_cosine.png"
                 row.update(save_similarity_heatmap(matrix, plot_path, layer_idx, head_idx, args))
@@ -733,6 +849,23 @@ def main() -> None:
         del key_by_head
 
     write_csv(output_dir / "summary_by_head.csv", summary_rows, build_summary_fieldnames(percentiles))
+    if args.histogram_bins > 0:
+        write_csv(output_dir / "histogram_by_head.csv", histogram_by_head_rows, histogram_fieldnames())
+        histogram_global_rows: list[dict[str, Any]] = []
+        for scope, payload in global_histograms.items():
+            histogram_global_rows.extend(
+                histogram_rows(
+                    payload["counts"],
+                    int(payload["total"]),
+                    args.histogram_bins,
+                    args.histogram_min,
+                    args.histogram_max,
+                    "all",
+                    "all",
+                    scope,
+                )
+            )
+        write_csv(output_dir / "histogram_global.csv", histogram_global_rows, histogram_fieldnames())
 
     aggregate_plot_paths: dict[str, str | None] = {}
     if args.make_plots:
@@ -767,6 +900,8 @@ def main() -> None:
             "tokens": str(output_dir / "tokens.csv") if args.write_token_csv else None,
             "profile_timings": str(output_dir / "profile_timings.csv"),
             "summary_by_head": str(output_dir / "summary_by_head.csv"),
+            "histogram_by_head": str(output_dir / "histogram_by_head.csv") if args.histogram_bins > 0 else None,
+            "histogram_global": str(output_dir / "histogram_global.csv") if args.histogram_bins > 0 else None,
             "plots_dir": str(plots_dir) if args.make_plots else None,
             "similarity_tensors_dir": str(tensors_dir) if args.save_similarity_tensors else None,
             "aggregate_plots": aggregate_plot_paths,

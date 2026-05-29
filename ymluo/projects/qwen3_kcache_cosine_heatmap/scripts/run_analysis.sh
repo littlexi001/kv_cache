@@ -40,4 +40,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kcache_cosine_heatmap.py" \
   --vmax "${VMAX:-1.0}" \
   --save_similarity_tensors "${SAVE_SIMILARITY_TENSORS:-false}" \
   --saved_matrix_dtype "${SAVED_MATRIX_DTYPE:-float16}" \
-  --write_token_csv "${WRITE_TOKEN_CSV:-true}"
+  --write_token_csv "${WRITE_TOKEN_CSV:-true}" \
+  --histogram_bins "${HISTOGRAM_BINS:-200}" \
+  --histogram_min "${HISTOGRAM_MIN:--1.0}" \
+  --histogram_max "${HISTOGRAM_MAX:-1.0}"
