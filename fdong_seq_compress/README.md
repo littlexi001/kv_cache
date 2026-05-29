@@ -22,7 +22,10 @@ src/model_loader.py          Load tokenizer and Qwen3 model.
 src/text_loader.py           Read one text file and tokenize one sequence.
 src/geometry_metrics.py      SVD, anisotropy, novelty, temporal, and block metrics.
 src/run_prefix_geometry.py   Main prefix-sweep experiment entry.
+src/run_k_similarity_graph_probe.py
+                            Causal top-k K-cache similarity distribution probe.
 scripts/run_prefix_geometry.sh
+scripts/run_k_similarity_graph_probe.sh
 data/synthetic_texts/long_english_article_01.txt
 ```
 
@@ -74,3 +77,59 @@ summary.json
 - Top-r subspace overlap against the previous prefix.
 - Multi-scale block within/between variance ratio.
 
+## K Similarity Graph Probe
+
+This is the first sanity check for a K-cache graph-index idea. For each selected
+layer, the default mode concatenates all KV heads into one token-level K vector:
+
+```text
+k_i(layer) = concat_h k_i(layer, h)
+```
+
+It then computes causal nearest neighbors:
+
+```text
+top-k similarity(k_i, k_j), j < i
+```
+
+so self-similarity and future tokens are excluded.
+
+Default first experiment:
+
+```bash
+bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+```
+
+Default settings:
+
+```text
+MAX_TOKENS=1000
+TOP_K=5
+SIMILARITY=cos
+CENTER_TOKENS=1
+ANALYSIS_LEVEL=token
+```
+
+Main output files:
+
+```text
+summary_by_layer.csv     Per-layer top-k distribution statistics.
+histograms.csv           Per-layer histogram buckets.
+histogram_global.csv     Histogram buckets aggregated across selected layers.
+histogram_global.svg     Dependency-free SVG plot of the global distribution.
+distance_histogram_global.svg
+                         Global top-k edge token-distance distribution.
+indegree_histogram_global.svg
+                         Global top-k graph in-degree distribution.
+plots/*.svg              Per-layer or per-head histogram plots.
+tokens.csv               Token index/id/text audit.
+summary.json             Run configuration and global summary.
+```
+
+Useful variants:
+
+```bash
+CENTER_TOKENS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+SIMILARITY=dot bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+ANALYSIS_LEVEL=head SAVE_NEIGHBORS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+```

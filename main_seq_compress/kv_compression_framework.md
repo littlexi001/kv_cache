@@ -6,19 +6,19 @@ Date: 2026-05-27
 
 我们现在讨论的不是一个已经收敛的具体结构，而是一个更高层次的问题框架：
 
-> 如果 attention 本质上可以被看成 memory retrieval，那么 KV cache 压缩就不只是“把历史 token 变小”，而是“如何把历史记忆组织成可索引、可选择、可扩展的检索系统”。
+
 
 这个问题意识现在又往前推进了一步：在设计具体 compressor / indexer 之前，我们需要先理解真实 LLM 的 KV cache 随着 `seq_len` 增长到底呈现什么数学结构。也就是说，不能一开始就假设“平均池化”“低秩压缩”“top-k block selection”一定合理，而应先把 K/V cache 当成随 prefix 增长的高维点云，观察它是否低有效维、是否各向异性、是否局部平滑、是否形成 block、主子空间是否稳定、新 token 是否带来 residual 信息。
 
 我们对 Qwen3-0.6B 做了一轮 prefix-growth KV geometry 诊断：固定一条长文本，观察 prefix 从 `512` 增长到 `12000` token 时，每层每头 K/V cache 的高维点云结构如何变化。阶段性结论记录在：
 
-```text
-fdong_seq_compress/qwen3_kv_cache_geometry_findings.md
-```
-
 这轮实验把 KV cache compression 的方向进一步收窄为：
 
-> K-cache 更像可压缩、可索引的 address space；V-cache 更像需要高保真保留的 content space。合理路线不是平均压缩 K/V，而是 K 侧索引化，V 侧高保真读取。
+> Attention 可以被看成 memory retrieval，那么 KV cache 压缩的挑战是“如何把历史记忆组织成可索引、可选择检索系统”。
+> K/V 向量的不同性质：
+> 1. K-cache 更像可压缩、可索引的 address space；
+> 2. V-cache 更像需要高保真的 content space。
+> 3. 合理路线不是平均压缩 K/V，而是 K 侧索引化，V 侧高保真读取。
 
 | 性质 | K-cache | V-cache |
 | --- | --- | --- |
@@ -26,7 +26,6 @@ fdong_seq_compress/qwen3_kv_cache_geometry_findings.md
 | 各向异性 | 强，存在明显 common direction / cone effect | 相比 K 弱得多，整体更分散 |
 | 去均值后的相似性 | centering 后 token-token 平均相似性显著下降，说明 raw similarity 受公共方向影响很大 | centering 后平均相似性也接近 0，但 raw similarity 本来就不高 |
 | 局部平滑性 | 强，相邻 token 的 K 向量高度相似，更像一条平滑高维轨迹 | 弱，相邻 token 的 V 向量差异明显更大 |
-| 小 block 结构 | 支持小尺度连续 block，尤其是 4/8/16 token block | 不支持简单连续 block average，即使很小 block 内部也较分散 |
 | 主子空间稳定性 | 主子空间随 prefix 增长逐渐稳定，但弱方向仍会旋转 | 主子空间更稳定，长 prefix 下 dominant subspace 几乎不再明显变化 |
 | 新 token novelty | 新 token 对已有 top subspace 仍有明显 residual，不能被很小固定 basis 完全解释 | 也有明显 residual，且内容侧 residual 不应被忽略 |
 | 层间差异 | 浅层 K 尤其各向异性强，后层 K 的公共方向相对减弱 | 后层 V 的有效维度更高，内容性更强 |
