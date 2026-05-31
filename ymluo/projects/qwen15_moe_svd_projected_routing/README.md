@@ -52,6 +52,10 @@ router weights. Normal attention still runs for every token.
 Because top-k MoE can leave different experts unused on different DDP ranks for
 one step, the runner defaults `DDP_FIND_UNUSED_PARAMETERS=true`.
 
+The runner also defaults `GRADIENT_CHECKPOINTING=false`. Reentrant activation
+checkpointing can conflict with sparse MoE plus DDP unused-parameter detection
+and produce "marked as ready twice" errors.
+
 ## Data And Metrics
 
 The default run uses a lightweight structured synthetic next-token dataset and

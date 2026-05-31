@@ -15,6 +15,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token_bins", type=int, default=100)
     parser.add_argument("--metric", default="mean_index_distance_mean")
     parser.add_argument("--selected_heads", default="")
+    parser.add_argument("--plot_token_points", action="store_true")
+    parser.add_argument("--token_point_alpha", type=float, default=0.35)
     return parser.parse_args()
 
 
@@ -212,6 +214,52 @@ def plot_binned_token_trends(binned_rows: list[dict[str, Any]], output_dir: Path
     return paths
 
 
+def plot_token_points(
+    token_rows: list[dict[str, Any]],
+    selected_heads: set[tuple[str, int, int]],
+    output_dir: Path,
+    alpha: float,
+) -> list[str]:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    paths: list[str] = []
+    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    for row in token_rows:
+        if row.get("mean_index_distance", "") == "":
+            continue
+        key = (row["cache_type"], int(row["layer"]), int(row["head"]))
+        if key in selected_heads:
+            grouped[key].append(row)
+
+    for cache_type, layer, head in sorted(grouped):
+        rows = sorted(grouped[(cache_type, layer, head)], key=lambda row: int(row["token_index"]))
+        token_indices = [int(row["token_index"]) for row in rows]
+        metrics = [
+            ("mean_index_distance", "Mean index distance"),
+            ("mean_index_distance_percent_of_history", "Mean distance (% of available history)"),
+            ("mean_index_distance_percent_of_context", "Mean distance (% of full context)"),
+        ]
+        for metric, ylabel in metrics:
+            if not rows or metric not in rows[0]:
+                continue
+            values = [as_float(row, metric) for row in rows]
+            fig, ax = plt.subplots(figsize=(12, 4), dpi=180)
+            ax.scatter(token_indices, values, s=2, alpha=alpha, linewidths=0)
+            ax.set_title(f"{cache_type.upper()} L{layer} H{head}: {ylabel}")
+            ax.set_xlabel("Token index")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.2)
+            fig.tight_layout()
+            path = output_dir / f"{cache_type}_layer_{layer:02d}_head_{head:02d}_{metric}_tokens.png"
+            fig.savefig(path)
+            plt.close(fig)
+            paths.append(str(path))
+    return paths
+
+
 def main() -> None:
     args = parse_args()
     summary_csv = Path(args.summary_csv)
@@ -250,6 +298,8 @@ def main() -> None:
             )
             paths.append(str(binned_path))
             paths.extend(plot_binned_token_trends(binned_rows, output_dir))
+            if args.plot_token_points:
+                paths.extend(plot_token_points(read_rows(token_csv), selected_heads, output_dir, args.token_point_alpha))
 
     for path in paths:
         print(path)

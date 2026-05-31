@@ -44,7 +44,7 @@ torchrun --nproc_per_node "${NPROC_PER_NODE}" \
   --save_steps "${SAVE_STEPS:-500}" \
   --save_total_limit "${SAVE_TOTAL_LIMIT:-3}" \
   --bf16 "${BF16:-true}" \
-  --gradient_checkpointing "${GRADIENT_CHECKPOINTING:-true}" \
+  --gradient_checkpointing "${GRADIENT_CHECKPOINTING:-false}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --ddp_find_unused_parameters "${DDP_FIND_UNUSED_PARAMETERS:-true}" \
   --dataloader_num_workers "${DATALOADER_NUM_WORKERS:-2}" \

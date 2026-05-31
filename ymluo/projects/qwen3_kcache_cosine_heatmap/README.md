@@ -225,6 +225,21 @@ CSV exists, it also bins token positions and plots only representative short-
 and long-range heads. This is usually more readable than plotting all 5000
 tokens for every head.
 
+To draw separate per-token scatter plots for selected heads, add
+`--plot_token_points`. For example:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_top_p_previous_distance.py \
+  --summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_summary_by_head.csv \
+  --token_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_by_token.csv \
+  --selected_heads k:6:3,k:14:4 \
+  --plot_token_points
+```
+
+This writes one plot per selected `(cache_type, layer, head)` and metric. The
+most useful plots are `mean_index_distance_tokens.png` and
+`mean_index_distance_percent_of_history_tokens.png`.
+
 K/V clustering:
 
 ```bash
@@ -237,6 +252,26 @@ head)` matrix. `cluster_summary_by_head.csv` reports inertia, mean squared
 distance to centroids, cluster-size imbalance, largest-cluster fraction, entropy,
 and centroid norms. Enable `SAVE_CLUSTER_ASSIGNMENTS=true` only when token-level
 cluster labels are needed, because it can write many rows.
+
+Cluster plots:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_cluster_summary.py \
+  --cluster_summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/cluster_summary_by_head.csv
+```
+
+If cluster assignments were saved:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_cluster_summary.py \
+  --cluster_summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/cluster_summary_by_head.csv \
+  --cluster_assignments_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/cluster_assignments_by_token.csv \
+  --selected_heads k:6:3,v:6:3
+```
+
+The cluster plot script writes layer/head heatmaps, layer-average curves, cluster
+size bar charts for representative heads, and token-index cluster assignment
+scatter plots when assignment rows are available.
 
 ## Current Top-p Previous Distance Result
 
