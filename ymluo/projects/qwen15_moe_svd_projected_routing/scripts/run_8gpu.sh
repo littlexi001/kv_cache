@@ -22,7 +22,7 @@ torchrun --nproc_per_node "${NPROC_PER_NODE}" \
   --model_size_preset "${MODEL_SIZE_PRESET:-moe_0_6b}" \
   --model_config_overrides "${MODEL_CONFIG_OVERRIDES:-}" \
   --projection_source "${PROJECTION_SOURCE:-q}" \
-  --svd_refresh_interval "${SVD_REFRESH_INTERVAL:-100}" \
+  --svd_refresh_interval "${SVD_REFRESH_INTERVAL:-0}" \
   --group1_experts "${GROUP1_EXPERTS:-16}" \
   --group2_experts "${GROUP2_EXPERTS:-24}" \
   --group3_experts "${GROUP3_EXPERTS:-8}" \

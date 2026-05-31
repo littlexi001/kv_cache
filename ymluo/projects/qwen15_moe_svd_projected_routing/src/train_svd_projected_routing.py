@@ -65,7 +65,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--synthetic_noise_rate", type=float, default=0.15)
 
     parser.add_argument("--projection_source", choices=["q", "k", "v", "o"], default="q")
-    parser.add_argument("--svd_refresh_interval", type=int, default=100)
+    parser.add_argument(
+        "--svd_refresh_interval",
+        type=int,
+        default=0,
+        help="Refresh cached singular bases every N layer forwards. Use 0 to compute once at startup.",
+    )
     parser.add_argument("--group1_experts", type=int, default=16)
     parser.add_argument("--group2_experts", type=int, default=24)
     parser.add_argument("--group3_experts", type=int, default=8)

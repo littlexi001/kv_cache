@@ -124,6 +124,7 @@ def bin_token_rows(
     token_rows: list[dict[str, Any]],
     selected_heads: set[tuple[str, int, int]],
     token_bins: int,
+    tokens_by_head: dict[tuple[str, int, int], int],
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, int, int, int], dict[str, float]] = {}
     for row in token_rows:
@@ -132,7 +133,7 @@ def bin_token_rows(
         key_head = (row["cache_type"], int(row["layer"]), int(row["head"]))
         if key_head not in selected_heads:
             continue
-        tokens = max(1, int(row.get("available_previous", "0")) + 1)
+        tokens = max(1, tokens_by_head.get(key_head, int(row.get("available_previous", "0")) + 1))
         token_index = int(row["token_index"])
         bin_index = min(token_bins - 1, int(token_index * token_bins / tokens))
         key = (*key_head, bin_index)
@@ -178,6 +179,13 @@ def bin_token_rows(
             }
         )
     return binned_rows
+
+
+def tokens_by_head_from_summary(rows: list[dict[str, Any]]) -> dict[tuple[str, int, int], int]:
+    result: dict[tuple[str, int, int], int] = {}
+    for row in rows:
+        result[(row["cache_type"], int(row["layer"]), int(row["head"]))] = int(float(row["tokens"]))
+    return result
 
 
 def plot_binned_token_trends(binned_rows: list[dict[str, Any]], output_dir: Path) -> list[str]:
@@ -280,7 +288,13 @@ def main() -> None:
                 summary_rows,
                 args.metric,
             )
-            binned_rows = bin_token_rows(read_rows(token_csv), selected_heads, args.token_bins)
+            token_rows = read_rows(token_csv)
+            binned_rows = bin_token_rows(
+                token_rows,
+                selected_heads,
+                args.token_bins,
+                tokens_by_head_from_summary(summary_rows),
+            )
             binned_path = output_dir / "top_p_previous_distance_token_bins.csv"
             write_csv(
                 binned_path,
@@ -299,7 +313,7 @@ def main() -> None:
             paths.append(str(binned_path))
             paths.extend(plot_binned_token_trends(binned_rows, output_dir))
             if args.plot_token_points:
-                paths.extend(plot_token_points(read_rows(token_csv), selected_heads, output_dir, args.token_point_alpha))
+                paths.extend(plot_token_points(token_rows, selected_heads, output_dir, args.token_point_alpha))
 
     for path in paths:
         print(path)

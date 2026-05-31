@@ -13,7 +13,7 @@ import torch.nn.functional as F
 @dataclass
 class SvdProjectedRoutingConfig:
     projection_source: str = "q"
-    svd_refresh_interval: int = 100
+    svd_refresh_interval: int = 0
     force_refresh_first_forward: bool = True
     group1_experts: int = 16
     group2_experts: int = 24
@@ -265,8 +265,8 @@ class SvdProjectedRoutingPatch:
             hidden_states = _first_tensor_arg(args, kwargs)
             mlp._svd_projected_layer_input = hidden_states
             mlp._svd_projected_forward_calls += 1
-            interval = max(1, int(self.cfg.svd_refresh_interval))
-            if mlp._svd_projected_forward_calls % interval == 1:
+            interval = int(self.cfg.svd_refresh_interval)
+            if interval > 0 and mlp._svd_projected_forward_calls % interval == 0:
                 self._refresh_basis(mlp, force=False)
             return args, kwargs
 

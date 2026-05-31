@@ -48,6 +48,9 @@ The selected expert outputs all have hidden-size output and are combined by the
 router weights. Normal attention still runs for every token.
 
 `--projection_source` can be `q`, `k`, `v`, or `o`; the default is `q`.
+The singular-vector bases are cached on each MoE layer. By default
+`SVD_REFRESH_INTERVAL=0`, so each layer computes its basis once at startup. Set
+`SVD_REFRESH_INTERVAL=N` to refresh every `N` layer forwards.
 
 Because top-k MoE can leave different experts unused on different DDP ranks for
 one step, the runner defaults `DDP_FIND_UNUSED_PARAMETERS=true`.
@@ -80,7 +83,7 @@ Useful overrides:
 
 ```bash
 PROJECTION_SOURCE=o \
-SVD_REFRESH_INTERVAL=500 \
+SVD_REFRESH_INTERVAL=0 \
 DATA_MODE=synthetic \
 MAX_STEPS=1000 \
 bash ymluo/projects/qwen15_moe_svd_projected_routing/scripts/nohup_train.sh
