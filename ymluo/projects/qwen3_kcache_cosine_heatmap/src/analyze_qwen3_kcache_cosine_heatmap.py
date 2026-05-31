@@ -144,6 +144,17 @@ def parse_args() -> argparse.Namespace:
         help="For each token i, select this many most-similar previous vectors. If fewer exist, select all.",
     )
     parser.add_argument("--save_top_p_previous_token_rows", type=str2bool, default=True)
+    parser.add_argument("--compute_cache_clusters", type=str2bool, default=False)
+    parser.add_argument(
+        "--cluster_cache_types",
+        default="k,v",
+        help='Cache types for K-means clustering, e.g. "k", "v", or "k,v".',
+    )
+    parser.add_argument("--cluster_count", type=int, default=32)
+    parser.add_argument("--cluster_iterations", type=int, default=30)
+    parser.add_argument("--cluster_seed", type=int, default=1234)
+    parser.add_argument("--cluster_normalize", type=str2bool, default=False)
+    parser.add_argument("--save_cluster_assignments", type=str2bool, default=False)
     return parser.parse_args()
 
 
@@ -666,7 +677,7 @@ def summarize_pairwise_distance_matrix(
 
 
 def top_p_previous_summary_fieldnames(percentiles: list[float]) -> list[str]:
-    return [
+    fields = [
         "cache_type",
         "layer",
         "head",
@@ -674,7 +685,11 @@ def top_p_previous_summary_fieldnames(percentiles: list[float]) -> list[str]:
         "head_dim",
         "top_p",
         "token_count_with_previous",
-    ] + stat_fieldnames("mean_index_distance", percentiles)
+    ]
+    fields += stat_fieldnames("mean_index_distance", percentiles)
+    fields += stat_fieldnames("mean_index_distance_fraction_of_history", percentiles)
+    fields += stat_fieldnames("mean_index_distance_fraction_of_context", percentiles)
+    return fields
 
 
 def top_p_previous_token_fieldnames() -> list[str]:
@@ -686,6 +701,10 @@ def top_p_previous_token_fieldnames() -> list[str]:
         "available_previous",
         "selected_count",
         "mean_index_distance",
+        "mean_index_distance_fraction_of_history",
+        "mean_index_distance_percent_of_history",
+        "mean_index_distance_fraction_of_context",
+        "mean_index_distance_percent_of_context",
         "min_index_distance",
         "max_index_distance",
         "selected_indices",
@@ -720,6 +739,10 @@ def top_p_previous_distance_rows(
                     "available_previous": 0,
                     "selected_count": 0,
                     "mean_index_distance": "",
+                    "mean_index_distance_fraction_of_history": "",
+                    "mean_index_distance_percent_of_history": "",
+                    "mean_index_distance_fraction_of_context": "",
+                    "mean_index_distance_percent_of_context": "",
                     "min_index_distance": "",
                     "max_index_distance": "",
                     "selected_indices": "",
@@ -732,6 +755,8 @@ def top_p_previous_distance_rows(
         similarities, indices = torch.topk(matrix[token_index, :token_index], k=selected_count)
         index_distances = token_index - indices
         mean_distance = float(index_distances.float().mean())
+        fraction_of_history = mean_distance / available_previous
+        fraction_of_context = mean_distance / tokens
         mean_distances.append(mean_distance)
         token_rows.append(
             {
@@ -742,6 +767,10 @@ def top_p_previous_distance_rows(
                 "available_previous": available_previous,
                 "selected_count": selected_count,
                 "mean_index_distance": mean_distance,
+                "mean_index_distance_fraction_of_history": fraction_of_history,
+                "mean_index_distance_percent_of_history": 100.0 * fraction_of_history,
+                "mean_index_distance_fraction_of_context": fraction_of_context,
+                "mean_index_distance_percent_of_context": 100.0 * fraction_of_context,
                 "min_index_distance": int(index_distances.min()),
                 "max_index_distance": int(index_distances.max()),
                 "selected_indices": ";".join(str(int(item)) for item in indices.tolist()),
@@ -750,6 +779,22 @@ def top_p_previous_distance_rows(
         )
 
     values = torch.tensor(mean_distances, dtype=torch.float32)
+    fraction_of_history_values = torch.tensor(
+        [
+            float(row["mean_index_distance_fraction_of_history"])
+            for row in token_rows
+            if row["mean_index_distance_fraction_of_history"] != ""
+        ],
+        dtype=torch.float32,
+    )
+    fraction_of_context_values = torch.tensor(
+        [
+            float(row["mean_index_distance_fraction_of_context"])
+            for row in token_rows
+            if row["mean_index_distance_fraction_of_context"] != ""
+        ],
+        dtype=torch.float32,
+    )
     summary: dict[str, Any] = {
         "cache_type": cache_type,
         "layer": layer,
@@ -763,6 +808,24 @@ def top_p_previous_distance_rows(
         stats_for_values(
             "mean_index_distance",
             values,
+            percentiles,
+            sample_size,
+            generator,
+        )
+    )
+    summary.update(
+        stats_for_values(
+            "mean_index_distance_fraction_of_history",
+            fraction_of_history_values,
+            percentiles,
+            sample_size,
+            generator,
+        )
+    )
+    summary.update(
+        stats_for_values(
+            "mean_index_distance_fraction_of_context",
+            fraction_of_context_values,
             percentiles,
             sample_size,
             generator,
@@ -1092,6 +1155,182 @@ def analyze_top_p_previous_for_cache_type(
     return summary_rows, token_rows
 
 
+def cluster_summary_fieldnames() -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "tokens",
+        "head_dim",
+        "requested_cluster_count",
+        "effective_cluster_count",
+        "cluster_iterations",
+        "cluster_normalize",
+        "inertia",
+        "mean_squared_distance",
+        "cluster_size_min",
+        "cluster_size_max",
+        "cluster_size_mean",
+        "cluster_size_std",
+        "largest_cluster_fraction",
+        "cluster_entropy",
+        "centroid_norm_min",
+        "centroid_norm_max",
+        "centroid_norm_mean",
+        "cluster_sizes",
+    ]
+
+
+def cluster_assignment_fieldnames() -> list[str]:
+    return [
+        "cache_type",
+        "layer",
+        "head",
+        "token_index",
+        "cluster",
+        "squared_distance_to_centroid",
+    ]
+
+
+@torch.inference_mode()
+def run_kmeans(
+    vectors: torch.Tensor,
+    cluster_count: int,
+    iterations: int,
+    seed: int,
+    device: torch.device,
+    normalize: bool,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if cluster_count <= 0:
+        raise ValueError("--cluster_count must be positive.")
+    if iterations <= 0:
+        raise ValueError("--cluster_iterations must be positive.")
+    if device.type == "cpu":
+        working = vectors.float()
+    else:
+        working = vectors.to(device=device, dtype=torch.float32)
+    if normalize:
+        working = F.normalize(working, p=2, dim=-1, eps=1e-12)
+
+    tokens = int(working.shape[0])
+    k = min(cluster_count, tokens)
+    generator = torch.Generator(device=device)
+    generator.manual_seed(seed)
+    initial_indices = torch.randperm(tokens, generator=generator, device=device)[:k]
+    centroids = working[initial_indices].clone()
+    assignments = torch.zeros(tokens, dtype=torch.long, device=device)
+    distances = torch.zeros(tokens, dtype=torch.float32, device=device)
+
+    for _ in range(iterations):
+        distance_matrix = torch.cdist(working, centroids, p=2).square()
+        distances, assignments = distance_matrix.min(dim=1)
+        new_centroids = centroids.clone()
+        for cluster_idx in range(k):
+            mask = assignments == cluster_idx
+            if bool(mask.any()):
+                new_centroids[cluster_idx] = working[mask].mean(dim=0)
+            else:
+                replacement_idx = int(torch.randint(tokens, (1,), generator=generator, device=device))
+                new_centroids[cluster_idx] = working[replacement_idx]
+        if torch.allclose(new_centroids, centroids, atol=1e-5, rtol=1e-5):
+            centroids = new_centroids
+            break
+        centroids = new_centroids
+
+    distance_matrix = torch.cdist(working, centroids, p=2).square()
+    distances, assignments = distance_matrix.min(dim=1)
+    return assignments.cpu(), distances.cpu(), centroids.cpu()
+
+
+def analyze_cache_clusters(
+    cache_tensors_by_type: dict[str, list[torch.Tensor]],
+    layer_indices: list[int],
+    expected_heads: int | None,
+    cluster_device: torch.device,
+    args: argparse.Namespace,
+    output_dir: Path,
+) -> dict[str, str | None]:
+    summary_rows: list[dict[str, Any]] = []
+    assignment_rows: list[dict[str, Any]] = []
+
+    for cache_type, cache_tensors in cache_tensors_by_type.items():
+        for layer_idx in layer_indices:
+            cache_by_head = key_tensor_to_head_token_dim(cache_tensors[layer_idx], expected_heads)
+            kv_heads, tokens, head_dim = cache_by_head.shape
+            head_indices = parse_index_spec(args.heads, int(kv_heads), "heads")
+            for head_idx in head_indices:
+                print(
+                    f"clustering {cache_type.upper()} vectors for layer {layer_idx}, head {head_idx} "
+                    f"with k={args.cluster_count}",
+                    flush=True,
+                )
+                assignments, distances, centroids = run_kmeans(
+                    cache_by_head[head_idx],
+                    args.cluster_count,
+                    args.cluster_iterations,
+                    args.cluster_seed + layer_idx * 1000 + head_idx,
+                    cluster_device,
+                    args.cluster_normalize,
+                )
+                effective_cluster_count = int(min(args.cluster_count, tokens))
+                sizes = torch.bincount(assignments, minlength=effective_cluster_count).to(torch.float32)
+                nonzero_sizes = sizes[sizes > 0]
+                probabilities = nonzero_sizes / nonzero_sizes.sum().clamp_min(1.0)
+                entropy = float(-(probabilities * probabilities.log()).sum()) if probabilities.numel() else 0.0
+                centroid_norms = torch.linalg.vector_norm(centroids.float(), ord=2, dim=-1)
+                summary_rows.append(
+                    {
+                        "cache_type": cache_type,
+                        "layer": layer_idx,
+                        "head": head_idx,
+                        "tokens": int(tokens),
+                        "head_dim": int(head_dim),
+                        "requested_cluster_count": int(args.cluster_count),
+                        "effective_cluster_count": effective_cluster_count,
+                        "cluster_iterations": int(args.cluster_iterations),
+                        "cluster_normalize": bool(args.cluster_normalize),
+                        "inertia": float(distances.sum()),
+                        "mean_squared_distance": float(distances.mean()),
+                        "cluster_size_min": int(sizes.min()) if sizes.numel() else 0,
+                        "cluster_size_max": int(sizes.max()) if sizes.numel() else 0,
+                        "cluster_size_mean": float(sizes.mean()) if sizes.numel() else 0.0,
+                        "cluster_size_std": float(sizes.std(unbiased=False)) if sizes.numel() else 0.0,
+                        "largest_cluster_fraction": float(sizes.max() / sizes.sum()) if sizes.numel() else 0.0,
+                        "cluster_entropy": entropy,
+                        "centroid_norm_min": float(centroid_norms.min()) if centroid_norms.numel() else 0.0,
+                        "centroid_norm_max": float(centroid_norms.max()) if centroid_norms.numel() else 0.0,
+                        "centroid_norm_mean": float(centroid_norms.mean()) if centroid_norms.numel() else 0.0,
+                        "cluster_sizes": ";".join(str(int(item)) for item in sizes.tolist()),
+                    }
+                )
+                if args.save_cluster_assignments:
+                    for token_index, (cluster, distance) in enumerate(zip(assignments.tolist(), distances.tolist())):
+                        assignment_rows.append(
+                            {
+                                "cache_type": cache_type,
+                                "layer": layer_idx,
+                                "head": head_idx,
+                                "token_index": token_index,
+                                "cluster": int(cluster),
+                                "squared_distance_to_centroid": float(distance),
+                            }
+                        )
+                if cluster_device.type == "cuda":
+                    torch.cuda.empty_cache()
+            del cache_by_head
+
+    summary_path = output_dir / "cluster_summary_by_head.csv"
+    write_csv(summary_path, summary_rows, cluster_summary_fieldnames())
+    assignments_path: Path | None = None
+    if args.save_cluster_assignments:
+        assignments_path = output_dir / "cluster_assignments_by_token.csv"
+        write_csv(assignments_path, assignment_rows, cluster_assignment_fieldnames())
+    return {
+        "cluster_summary_by_head": str(summary_path),
+        "cluster_assignments_by_token": str(assignments_path) if assignments_path is not None else None,
+    }
+
+
 def main() -> None:
     args = parse_args()
     percentiles = parse_percentiles(args.summary_percentiles)
@@ -1119,6 +1358,10 @@ def main() -> None:
         raise ValueError("--distance_max must be greater than --distance_min when set.")
     if args.top_p_previous_count <= 0:
         raise ValueError("--top_p_previous_count must be positive.")
+    if args.cluster_count <= 0:
+        raise ValueError("--cluster_count must be positive.")
+    if args.cluster_iterations <= 0:
+        raise ValueError("--cluster_iterations must be positive.")
 
     print(f"reading text: {text_path}", flush=True)
     text = read_text_prefix(text_path, args.max_chars)
@@ -1170,10 +1413,12 @@ def main() -> None:
         raise RuntimeError("No key tensors were extracted from past_key_values.")
     distance_cache_types = parse_cache_types(args.distance_cache_types)
     top_p_previous_cache_types = parse_cache_types(args.top_p_previous_cache_types)
+    cluster_cache_types = parse_cache_types(args.cluster_cache_types)
     value_tensors: list[torch.Tensor] | None = None
     needs_value_tensors = (
         (args.compute_pairwise_distances and "v" in distance_cache_types)
         or (args.compute_top_p_previous_distances and "v" in top_p_previous_cache_types)
+        or (args.compute_cache_clusters and "v" in cluster_cache_types)
     )
     if needs_value_tensors:
         value_tensors = extract_value_tensors(past_key_values)
@@ -1411,6 +1656,24 @@ def main() -> None:
             generator,
         )
 
+    cluster_paths: dict[str, str | None] = {}
+    if args.compute_cache_clusters:
+        cluster_tensors_by_type: dict[str, list[torch.Tensor]] = {}
+        if "k" in cluster_cache_types:
+            cluster_tensors_by_type["k"] = key_tensors
+        if "v" in cluster_cache_types:
+            if value_tensors is None:
+                value_tensors = extract_value_tensors(past_key_values)
+            cluster_tensors_by_type["v"] = value_tensors
+        cluster_paths = analyze_cache_clusters(
+            cluster_tensors_by_type,
+            layer_indices,
+            expected_heads,
+            similarity_device,
+            args,
+            output_dir,
+        )
+
     payload = {
         "args": vars(args),
         "resolved": {
@@ -1436,6 +1699,7 @@ def main() -> None:
                 str(top_p_previous_token_path) if top_p_previous_token_path is not None else None
             ),
             **distance_paths,
+            **cluster_paths,
             "plots_dir": str(plots_dir) if args.make_plots else None,
             "similarity_tensors_dir": str(tensors_dir) if args.save_similarity_tensors else None,
             "aggregate_plots": aggregate_plot_paths,

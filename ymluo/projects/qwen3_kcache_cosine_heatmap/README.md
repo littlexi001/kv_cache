@@ -108,6 +108,22 @@ Main files:
   off-diagonal cosine standard deviation.
 - `summary_by_head.csv`: per `(layer, head)` summary statistics for the full
   cosine matrix and the off-diagonal entries.
+- `histogram_by_head.csv` and `histogram_global.csv`: binned cosine
+  distributions with `count` and `probability`. Use `scope=offdiag` to ignore
+  diagonal self-similarity.
+- `distance_summary_by_head.csv`: per `(cache_type, layer, head)` summary of
+  pairwise L2 distances between K/V token vectors.
+- `distance_histogram_by_head.csv` and `distance_histogram_global.csv`: binned
+  pairwise L2 distance distributions for K/V vectors.
+- `top_p_previous_distance_summary_by_head.csv`: for each `(cache_type, layer,
+  head)`, summarizes how far back in sequence the most similar previous K/V
+  vectors are.
+- `top_p_previous_distance_by_token.csv`: one row per token with the selected
+  previous token indices, cosine similarities, and average index distance.
+- `cluster_summary_by_head.csv`: optional K-means clustering summary for K/V
+  token vectors, one row per `(cache_type, layer, head)`.
+- `cluster_assignments_by_token.csv`: optional per-token cluster assignment
+  output when `SAVE_CLUSTER_ASSIGNMENTS=true`.
 - `profile_timings.csv`: elapsed time for each forward chunk used to build the
   K cache.
 - `tokens.csv`: token index, token id, tokenizer piece, and decoded text.
@@ -163,6 +179,101 @@ bash ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/run_analysis.sh
 The cosine matrix is still computed on all tokens; only the rendered heatmap is
 strided if the token count exceeds `PLOT_MAX_TOKENS`. Set
 `PLOT_MAX_TOKENS=0` to force plotting every token.
+
+Top-p previous-neighbor distance:
+
+```bash
+TOP_P_PREVIOUS_COUNT=5 TOP_P_PREVIOUS_CACHE_TYPES=k \
+bash ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/run_analysis.sh
+```
+
+For each token position `i`, this metric looks only at previous positions
+`j < i`, selects the top `p` vectors by cosine similarity to the current vector,
+and computes:
+
+```text
+mean_index_distance(i) = mean(abs(i - selected_j))
+```
+
+If fewer than `p` previous vectors exist, all previous vectors are selected. The
+main aggregate column is
+`top_p_previous_distance_summary_by_head.csv::mean_index_distance_mean`. Per
+token values are in
+`top_p_previous_distance_by_token.csv::mean_index_distance`.
+
+The token-level file also reports two relative forms:
+
+```text
+mean_index_distance_percent_of_history = 100 * mean_index_distance / token_index
+mean_index_distance_percent_of_context = 100 * mean_index_distance / tokens
+```
+
+Use `percent_of_history` when asking how far back the selected neighbors are
+relative to the amount of available prefix for that token. Use
+`percent_of_context` when comparing all tokens against the fixed context length.
+
+To plot the result without drawing thousands of token points:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_top_p_previous_distance.py \
+  --summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_summary_by_head.csv \
+  --token_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_by_token.csv
+```
+
+This writes layer/head heatmaps for mean, median, and p95 distance. If the token
+CSV exists, it also bins token positions and plots only representative short-
+and long-range heads. This is usually more readable than plotting all 5000
+tokens for every head.
+
+K/V clustering:
+
+```bash
+COMPUTE_CACHE_CLUSTERS=true CLUSTER_CACHE_TYPES=k,v CLUSTER_COUNT=32 \
+bash ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/run_analysis.sh
+```
+
+The clustering uses K-means independently for each selected `(cache_type, layer,
+head)` matrix. `cluster_summary_by_head.csv` reports inertia, mean squared
+distance to centroids, cluster-size imbalance, largest-cluster fraction, entropy,
+and centroid norms. Enable `SAVE_CLUSTER_ASSIGNMENTS=true` only when token-level
+cluster labels are needed, because it can write many rows.
+
+## Current Top-p Previous Distance Result
+
+The run saved in `top_p_previous_distance_summary_by_head.csv` used:
+
+```text
+cache_type: k
+tokens: 5000
+head_dim: 128
+top_p: 5
+layers: 0-27
+KV heads: 0-7
+```
+
+Key observations:
+
+- Across all 224 `(layer, head)` rows, the average of
+  `mean_index_distance_mean` is `147.25` tokens; the median head is `87.21`
+  tokens.
+- Most heads are local: `55.4%` of heads have
+  `mean_index_distance_mean <= 100`, `76.3%` are `<= 200`, and `95.1%` are
+  `<= 500`.
+- The shortest-range heads are very local. Examples:
+  layer 14 head 4 has mean distance `7.26`, layer 4 head 0 has `8.05`, and
+  layer 7 head 1 has `9.29`.
+- A small number of heads retrieve much farther back. The largest mean distance
+  is layer 6 head 3 at `1044.84`; other large heads include layer 2 head 6
+  (`866.95`) and layer 3 head 5 (`852.65`).
+- By layer average, the strongest long-range layers are layer 2 (`476.57`),
+  layer 0 (`346.91`), and layer 6 (`279.05`). The most local layers are layer 7
+  (`28.58`), layer 17 (`36.92`), layer 19 (`42.28`), and layer 10 (`43.84`).
+
+Interpretation: for this 5k-token prefix and `p=5`, most K heads choose their
+nearest cosine neighbors from relatively nearby sequence positions, but a few
+heads consistently point hundreds to about one thousand tokens back. Those
+high-distance heads are the most direct candidates for long-range retrieval or
+repetition-sensitive behavior.
 
 ## Notes
 
