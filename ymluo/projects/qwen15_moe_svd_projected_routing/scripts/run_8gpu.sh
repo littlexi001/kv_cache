@@ -46,7 +46,7 @@ torchrun --nproc_per_node "${NPROC_PER_NODE}" \
   --bf16 "${BF16:-true}" \
   --gradient_checkpointing "${GRADIENT_CHECKPOINTING:-true}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
-  --ddp_find_unused_parameters "${DDP_FIND_UNUSED_PARAMETERS:-false}" \
+  --ddp_find_unused_parameters "${DDP_FIND_UNUSED_PARAMETERS:-true}" \
   --dataloader_num_workers "${DATALOADER_NUM_WORKERS:-2}" \
   --load_balance_loss_weight "${LOAD_BALANCE_LOSS_WEIGHT:-0.01}" \
   --deepspeed_config "${DEEPSPEED_CONFIG:-}" \

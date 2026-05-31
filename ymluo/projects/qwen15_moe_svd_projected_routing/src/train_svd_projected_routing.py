@@ -87,7 +87,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bf16", type=str2bool, default=True)
     parser.add_argument("--gradient_checkpointing", type=str2bool, default=True)
     parser.add_argument("--attn_implementation", choices=["eager", "sdpa"], default="eager")
-    parser.add_argument("--ddp_find_unused_parameters", type=str2bool, default=False)
+    parser.add_argument("--ddp_find_unused_parameters", type=str2bool, default=True)
     parser.add_argument("--dataloader_num_workers", type=int, default=2)
     parser.add_argument("--deepspeed_config", default="")
     parser.add_argument("--report_to", default="tensorboard")

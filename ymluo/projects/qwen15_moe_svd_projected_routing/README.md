@@ -49,6 +49,9 @@ router weights. Normal attention still runs for every token.
 
 `--projection_source` can be `q`, `k`, `v`, or `o`; the default is `q`.
 
+Because top-k MoE can leave different experts unused on different DDP ranks for
+one step, the runner defaults `DDP_FIND_UNUSED_PARAMETERS=true`.
+
 ## Data And Metrics
 
 The default run uses a lightweight structured synthetic next-token dataset and
