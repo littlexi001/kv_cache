@@ -15,7 +15,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--token_bins", type=int, default=100)
     parser.add_argument("--metric", default="mean_index_distance_mean")
     parser.add_argument("--selected_heads", default="")
+    parser.add_argument("--plot_all_heads", action="store_true")
     parser.add_argument("--plot_token_points", action="store_true")
+    parser.add_argument("--plot_token_rank_points", action="store_true")
     parser.add_argument("--token_point_alpha", type=float, default=0.35)
     return parser.parse_args()
 
@@ -118,6 +120,32 @@ def choose_representative_heads(rows: list[dict[str, Any]], metric: str) -> set[
         for row in subset[:3] + subset[-3:]:
             selected.add((cache_type, int(row["layer"]), int(row["head"])))
     return selected
+
+
+def all_heads(rows: list[dict[str, Any]]) -> set[tuple[str, int, int]]:
+    return {(row["cache_type"], int(row["layer"]), int(row["head"])) for row in rows}
+
+
+def head_output_dir(output_dir: Path, cache_type: str, layer: int, head: int) -> Path:
+    path = output_dir / cache_type / f"layer_{layer:02d}" / f"head_{head:02d}"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def write_head_plot_index(output_dir: Path, selected_heads: set[tuple[str, int, int]]) -> str:
+    rows = []
+    for cache_type, layer, head in sorted(selected_heads):
+        rows.append(
+            {
+                "cache_type": cache_type,
+                "layer": layer,
+                "head": head,
+                "plot_dir": str(head_output_dir(output_dir, cache_type, layer, head)),
+            }
+        )
+    path = output_dir / "head_plot_index.csv"
+    write_csv(path, rows, ["cache_type", "layer", "head", "plot_dir"])
+    return str(path)
 
 
 def bin_token_rows(
@@ -244,6 +272,7 @@ def plot_token_points(
 
     for cache_type, layer, head in sorted(grouped):
         rows = sorted(grouped[(cache_type, layer, head)], key=lambda row: int(row["token_index"]))
+        plot_dir = head_output_dir(output_dir, cache_type, layer, head)
         token_indices = [int(row["token_index"]) for row in rows]
         metrics = [
             ("mean_index_distance", "Mean index distance"),
@@ -261,7 +290,82 @@ def plot_token_points(
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.2)
             fig.tight_layout()
-            path = output_dir / f"{cache_type}_layer_{layer:02d}_head_{head:02d}_{metric}_tokens.png"
+            path = plot_dir / f"{metric}_tokens.png"
+            fig.savefig(path)
+            plt.close(fig)
+            paths.append(str(path))
+    return paths
+
+
+def selected_index_distances(row: dict[str, Any]) -> list[int]:
+    token_index = int(row["token_index"])
+    indices = [item for item in row.get("selected_indices", "").split(";") if item.strip()]
+    return [token_index - int(item) for item in indices]
+
+
+def plot_token_rank_points(
+    token_rows: list[dict[str, Any]],
+    selected_heads: set[tuple[str, int, int]],
+    tokens_by_head: dict[tuple[str, int, int], int],
+    output_dir: Path,
+    alpha: float,
+) -> list[str]:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    paths: list[str] = []
+    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    for row in token_rows:
+        if row.get("selected_indices", "") == "":
+            continue
+        key = (row["cache_type"], int(row["layer"]), int(row["head"]))
+        if key in selected_heads:
+            grouped[key].append(row)
+
+    for cache_type, layer, head in sorted(grouped):
+        rows = sorted(grouped[(cache_type, layer, head)], key=lambda row: int(row["token_index"]))
+        plot_dir = head_output_dir(output_dir, cache_type, layer, head)
+        max_rank = max((len(selected_index_distances(row)) for row in rows), default=0)
+        if max_rank == 0:
+            continue
+
+        metrics = [
+            ("index_distance", "Index distance", lambda distance, row: float(distance)),
+            (
+                "index_distance_percent_of_history",
+                "Index distance (% of available history)",
+                lambda distance, row: 100.0 * float(distance) / max(1, int(row["token_index"])),
+            ),
+            (
+                "index_distance_percent_of_context",
+                "Index distance (% of full context)",
+                lambda distance, row: 100.0
+                * float(distance)
+                / max(1, tokens_by_head[(row["cache_type"], int(row["layer"]), int(row["head"]))]),
+            ),
+        ]
+
+        for metric, ylabel, transform in metrics:
+            fig, ax = plt.subplots(figsize=(12, 4), dpi=180)
+            for rank in range(max_rank):
+                xs: list[int] = []
+                ys: list[float] = []
+                for row in rows:
+                    distances = selected_index_distances(row)
+                    if rank >= len(distances):
+                        continue
+                    xs.append(int(row["token_index"]))
+                    ys.append(transform(distances[rank], row))
+                ax.scatter(xs, ys, s=2, alpha=alpha, linewidths=0, label=f"top{rank + 1}")
+            ax.set_title(f"{cache_type.upper()} L{layer} H{head}: top-rank {ylabel}")
+            ax.set_xlabel("Token index")
+            ax.set_ylabel(ylabel)
+            ax.grid(True, alpha=0.2)
+            ax.legend(markerscale=4, fontsize=8, ncol=min(max_rank, 5))
+            fig.tight_layout()
+            path = plot_dir / f"{metric}_by_rank_tokens.png"
             fig.savefig(path)
             plt.close(fig)
             paths.append(str(path))
@@ -284,10 +388,13 @@ def main() -> None:
     if args.token_csv:
         token_csv = Path(args.token_csv)
         if token_csv.exists():
-            selected_heads = parse_selected_heads(args.selected_heads) if args.selected_heads else choose_representative_heads(
-                summary_rows,
-                args.metric,
-            )
+            if args.plot_all_heads:
+                selected_heads = all_heads(summary_rows)
+            elif args.selected_heads:
+                selected_heads = parse_selected_heads(args.selected_heads)
+            else:
+                selected_heads = choose_representative_heads(summary_rows, args.metric)
+            paths.append(write_head_plot_index(output_dir, selected_heads))
             token_rows = read_rows(token_csv)
             binned_rows = bin_token_rows(
                 token_rows,
@@ -314,6 +421,16 @@ def main() -> None:
             paths.extend(plot_binned_token_trends(binned_rows, output_dir))
             if args.plot_token_points:
                 paths.extend(plot_token_points(token_rows, selected_heads, output_dir, args.token_point_alpha))
+            if args.plot_token_rank_points:
+                paths.extend(
+                    plot_token_rank_points(
+                        token_rows,
+                        selected_heads,
+                        tokens_by_head_from_summary(summary_rows),
+                        output_dir,
+                        args.token_point_alpha,
+                    )
+                )
 
     for path in paths:
         print(path)

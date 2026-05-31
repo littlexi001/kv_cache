@@ -240,6 +240,47 @@ This writes one plot per selected `(cache_type, layer, head)` and metric. The
 most useful plots are `mean_index_distance_tokens.png` and
 `mean_index_distance_percent_of_history_tokens.png`.
 
+To plot the selected top-p neighbors separately by rank instead of averaging
+them first:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_top_p_previous_distance.py \
+  --summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_summary_by_head.csv \
+  --token_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_by_token.csv \
+  --selected_heads k:6:3,k:14:4 \
+  --plot_token_rank_points
+```
+
+This draws one color per similarity rank: `top1` is the most similar previous
+token, `top2` is the second most similar, and so on. The distance is still the
+absolute sequence-index gap from the current token.
+
+To draw every layer/head, use `--plot_all_heads`. Per-head plots are written
+under separate folders:
+
+```text
+top_p_previous_plots/
+  k/
+    layer_00/
+      head_00/
+      head_01/
+      ...
+```
+
+Example:
+
+```bash
+python ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/plot_top_p_previous_distance.py \
+  --summary_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_summary_by_head.csv \
+  --token_csv ymluo/projects/qwen3_kcache_cosine_heatmap/outputs/kcache_cosine_heatmap/top_p_previous_distance_by_token.csv \
+  --plot_all_heads \
+  --plot_token_rank_points \
+  --plot_token_points
+```
+
+The script also writes `head_plot_index.csv`, which maps each `(cache_type,
+layer, head)` to its output folder.
+
 K/V clustering:
 
 ```bash
