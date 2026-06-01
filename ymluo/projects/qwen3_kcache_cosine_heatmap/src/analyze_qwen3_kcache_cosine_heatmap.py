@@ -143,6 +143,11 @@ def parse_args() -> argparse.Namespace:
         default=5,
         help="For each token i, select this many most-similar previous vectors. If fewer exist, select all.",
     )
+    parser.add_argument(
+        "--top_p_previous_variants",
+        default="raw",
+        help='Vector variants for top-p previous analysis, e.g. "raw", "centered", or "raw,centered".',
+    )
     parser.add_argument("--save_top_p_previous_token_rows", type=str2bool, default=True)
     parser.add_argument("--compute_cache_clusters", type=str2bool, default=False)
     parser.add_argument(
@@ -210,6 +215,16 @@ def parse_cache_types(value: str) -> list[str]:
     if invalid:
         raise ValueError(f'Unsupported cache types: {invalid}. Expected "k" and/or "v".')
     return list(dict.fromkeys(cache_types))
+
+
+def parse_top_p_variants(value: str) -> list[str]:
+    variants = [item.strip().lower() for item in value.split(",") if item.strip()]
+    if not variants:
+        raise ValueError("At least one top-p previous variant is required.")
+    invalid = [item for item in variants if item not in {"raw", "centered"}]
+    if invalid:
+        raise ValueError(f'Unsupported top-p variants: {invalid}. Expected "raw" and/or "centered".')
+    return list(dict.fromkeys(variants))
 
 
 def resolve_dtype(dtype_name: str, device: torch.device) -> torch.dtype | str:
@@ -679,6 +694,7 @@ def summarize_pairwise_distance_matrix(
 def top_p_previous_summary_fieldnames(percentiles: list[float]) -> list[str]:
     fields = [
         "cache_type",
+        "variant",
         "layer",
         "head",
         "tokens",
@@ -695,6 +711,7 @@ def top_p_previous_summary_fieldnames(percentiles: list[float]) -> list[str]:
 def top_p_previous_token_fieldnames() -> list[str]:
     return [
         "cache_type",
+        "variant",
         "layer",
         "head",
         "token_index",
@@ -715,6 +732,7 @@ def top_p_previous_token_fieldnames() -> list[str]:
 def top_p_previous_distance_rows(
     matrix: torch.Tensor,
     cache_type: str,
+    variant: str,
     layer: int,
     head: int,
     tokens: int,
@@ -733,6 +751,7 @@ def top_p_previous_distance_rows(
             token_rows.append(
                 {
                     "cache_type": cache_type,
+                    "variant": variant,
                     "layer": layer,
                     "head": head,
                     "token_index": token_index,
@@ -761,6 +780,7 @@ def top_p_previous_distance_rows(
         token_rows.append(
             {
                 "cache_type": cache_type,
+                "variant": variant,
                 "layer": layer,
                 "head": head,
                 "token_index": token_index,
@@ -797,6 +817,7 @@ def top_p_previous_distance_rows(
     )
     summary: dict[str, Any] = {
         "cache_type": cache_type,
+        "variant": variant,
         "layer": layer,
         "head": head,
         "tokens": tokens,
@@ -867,6 +888,14 @@ def compute_pairwise_l2_distance_matrix(
     if device.type == "cuda":
         torch.cuda.empty_cache()
     return matrix
+
+
+def vectors_for_variant(vectors: torch.Tensor, variant: str) -> torch.Tensor:
+    if variant == "raw":
+        return vectors
+    if variant == "centered":
+        return vectors - vectors.mean(dim=0, keepdim=True)
+    raise ValueError(f"Unsupported vector variant: {variant}")
 
 
 def save_similarity_heatmap(
@@ -1113,6 +1142,7 @@ def analyze_pairwise_distances(
 def analyze_top_p_previous_for_cache_type(
     cache_type: str,
     cache_tensors: list[torch.Tensor],
+    variants: list[str],
     layer_indices: list[int],
     expected_heads: int | None,
     similarity_device: torch.device,
@@ -1128,29 +1158,32 @@ def analyze_top_p_previous_for_cache_type(
         kv_heads, tokens, head_dim = cache_by_head.shape
         head_indices = parse_index_spec(args.heads, int(kv_heads), "heads")
         for head_idx in head_indices:
-            print(
-                f"computing {cache_type.upper()} top-{args.top_p_previous_count} previous-neighbor distances "
-                f"for layer {layer_idx}, head {head_idx}",
-                flush=True,
-            )
-            matrix = compute_cosine_matrix(cache_by_head[head_idx], similarity_device, similarity_dtype)
-            summary, rows = top_p_previous_distance_rows(
-                matrix,
-                cache_type,
-                layer_idx,
-                head_idx,
-                int(tokens),
-                int(head_dim),
-                args.top_p_previous_count,
-                percentiles,
-                args.summary_sample_size,
-                generator,
-            )
-            summary_rows.append(summary)
-            token_rows.extend(rows)
-            del matrix
-            if similarity_device.type == "cuda":
-                torch.cuda.empty_cache()
+            for variant in variants:
+                print(
+                    f"computing {cache_type.upper()} {variant} top-{args.top_p_previous_count} "
+                    f"previous-neighbor distances for layer {layer_idx}, head {head_idx}",
+                    flush=True,
+                )
+                source_vectors = vectors_for_variant(cache_by_head[head_idx], variant)
+                matrix = compute_cosine_matrix(source_vectors, similarity_device, similarity_dtype)
+                summary, rows = top_p_previous_distance_rows(
+                    matrix,
+                    cache_type,
+                    variant,
+                    layer_idx,
+                    head_idx,
+                    int(tokens),
+                    int(head_dim),
+                    args.top_p_previous_count,
+                    percentiles,
+                    args.summary_sample_size,
+                    generator,
+                )
+                summary_rows.append(summary)
+                token_rows.extend(rows)
+                del matrix
+                if similarity_device.type == "cuda":
+                    torch.cuda.empty_cache()
         del cache_by_head
     return summary_rows, token_rows
 
@@ -1413,6 +1446,7 @@ def main() -> None:
         raise RuntimeError("No key tensors were extracted from past_key_values.")
     distance_cache_types = parse_cache_types(args.distance_cache_types)
     top_p_previous_cache_types = parse_cache_types(args.top_p_previous_cache_types)
+    top_p_previous_variants = parse_top_p_variants(args.top_p_previous_variants)
     cluster_cache_types = parse_cache_types(args.cluster_cache_types)
     value_tensors: list[torch.Tensor] | None = None
     needs_value_tensors = (
@@ -1532,21 +1566,35 @@ def main() -> None:
                     global_histograms[scope]["total"] += total
 
             if args.compute_top_p_previous_distances and "k" in top_p_previous_cache_types:
-                top_p_summary, top_p_rows = top_p_previous_distance_rows(
-                    matrix,
-                    "k",
-                    layer_idx,
-                    head_idx,
-                    int(tokens),
-                    int(head_dim),
-                    args.top_p_previous_count,
-                    percentiles,
-                    args.summary_sample_size,
-                    generator,
-                )
-                top_p_previous_summary_rows.append(top_p_summary)
-                if args.save_top_p_previous_token_rows:
-                    top_p_previous_token_rows.extend(top_p_rows)
+                for variant in top_p_previous_variants:
+                    if variant == "raw":
+                        top_p_matrix = matrix
+                    else:
+                        top_p_matrix = compute_cosine_matrix(
+                            vectors_for_variant(key_by_head[head_idx], variant),
+                            similarity_device,
+                            similarity_dtype,
+                        )
+                    top_p_summary, top_p_rows = top_p_previous_distance_rows(
+                        top_p_matrix,
+                        "k",
+                        variant,
+                        layer_idx,
+                        head_idx,
+                        int(tokens),
+                        int(head_dim),
+                        args.top_p_previous_count,
+                        percentiles,
+                        args.summary_sample_size,
+                        generator,
+                    )
+                    top_p_previous_summary_rows.append(top_p_summary)
+                    if args.save_top_p_previous_token_rows:
+                        top_p_previous_token_rows.extend(top_p_rows)
+                    if variant != "raw":
+                        del top_p_matrix
+                        if similarity_device.type == "cuda":
+                            torch.cuda.empty_cache()
 
             if args.make_plots:
                 plot_path = plots_dir / f"layer_{layer_idx:02d}_head_{head_idx:02d}_cosine.png"
@@ -1592,6 +1640,7 @@ def main() -> None:
             v_summary_rows, v_token_rows = analyze_top_p_previous_for_cache_type(
                 "v",
                 value_tensors,
+                top_p_previous_variants,
                 layer_indices,
                 expected_heads,
                 similarity_device,

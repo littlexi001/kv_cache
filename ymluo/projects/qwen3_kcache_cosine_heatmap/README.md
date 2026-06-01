@@ -201,6 +201,17 @@ main aggregate column is
 token values are in
 `top_p_previous_distance_by_token.csv::mean_index_distance`.
 
+By default this uses raw vectors. To compare raw and mean-centered vectors:
+
+```bash
+TOP_P_PREVIOUS_VARIANTS=raw,centered \
+bash ymluo/projects/qwen3_kcache_cosine_heatmap/scripts/run_analysis.sh
+```
+
+The output CSVs include a `variant` column. `centered` means the mean vector of
+the current `(cache_type, layer, head)` matrix is subtracted before computing
+cosine neighbors.
+
 The token-level file also reports two relative forms:
 
 ```text
@@ -261,10 +272,15 @@ under separate folders:
 ```text
 top_p_previous_plots/
   k/
-    layer_00/
-      head_00/
-      head_01/
-      ...
+    raw/
+      layer_00/
+        head_00/
+        head_01/
+        ...
+    centered/
+      layer_00/
+        head_00/
+        ...
 ```
 
 Example:

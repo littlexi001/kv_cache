@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import types
+import weakref
 from dataclasses import dataclass
 from typing import Any
 
@@ -237,7 +238,7 @@ class SvdProjectedRoutingPatch:
                 "Set config.num_experts to 49 before model initialization."
             )
         mlp._svd_projected_cfg = self.cfg
-        mlp._svd_projected_source_attn = layer.self_attn
+        object.__setattr__(mlp, "_svd_projected_source_attn_ref", weakref.ref(layer.self_attn))
         mlp._svd_projected_forward_calls = 0
         original_gate = getattr(mlp, "gate", None)
         if original_gate is not None:
@@ -283,7 +284,11 @@ class SvdProjectedRoutingPatch:
 
     def _refresh_basis(self, mlp: nn.Module, force: bool) -> None:
         with torch.no_grad():
-            weight = _linear_weight(mlp._svd_projected_source_attn, self.cfg.projection_source)
+            attn_ref = getattr(mlp, "_svd_projected_source_attn_ref", None)
+            attn = attn_ref() if attn_ref is not None else None
+            if attn is None:
+                raise RuntimeError("SVD projected routing source attention module is no longer available.")
+            weight = _linear_weight(attn, self.cfg.projection_source)
             basis = _input_singular_basis(weight.detach()).to(weight.device)
             mlp._svd_projected_basis = basis
 

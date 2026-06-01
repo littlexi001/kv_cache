@@ -32,6 +32,10 @@ def as_float(row: dict[str, Any], key: str) -> float:
     return float(value) if value != "" else float("nan")
 
 
+def row_variant(row: dict[str, Any]) -> str:
+    return row.get("variant") or "raw"
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
@@ -100,65 +104,76 @@ def plot_layer_average(rows: list[dict[str, Any]], metric: str, output_dir: Path
 
 
 def parse_selected_heads(value: str) -> set[tuple[str, int, int]]:
-    selected: set[tuple[str, int, int]] = set()
+    selected: set[tuple[str, str, int, int]] = set()
     for item in value.split(","):
         item = item.strip()
         if not item:
             continue
-        cache_type, layer, head = item.split(":")
-        selected.add((cache_type.lower(), int(layer), int(head)))
+        parts = item.split(":")
+        if len(parts) == 3:
+            cache_type, layer, head = parts
+            variant = "raw"
+        elif len(parts) == 4:
+            cache_type, variant, layer, head = parts
+        else:
+            raise ValueError(
+                f"Invalid selected head {item!r}. Expected cache:layer:head or cache:variant:layer:head."
+            )
+        selected.add((cache_type.lower(), variant.lower(), int(layer), int(head)))
     return selected
 
 
-def choose_representative_heads(rows: list[dict[str, Any]], metric: str) -> set[tuple[str, int, int]]:
-    selected: set[tuple[str, int, int]] = set()
-    for cache_type in sorted({row["cache_type"] for row in rows}):
+def choose_representative_heads(rows: list[dict[str, Any]], metric: str) -> set[tuple[str, str, int, int]]:
+    selected: set[tuple[str, str, int, int]] = set()
+    groups = sorted({(row["cache_type"], row_variant(row)) for row in rows})
+    for cache_type, variant in groups:
         subset = sorted(
-            [row for row in rows if row["cache_type"] == cache_type],
+            [row for row in rows if row["cache_type"] == cache_type and row_variant(row) == variant],
             key=lambda row: as_float(row, metric),
         )
         for row in subset[:3] + subset[-3:]:
-            selected.add((cache_type, int(row["layer"]), int(row["head"])))
+            selected.add((cache_type, variant, int(row["layer"]), int(row["head"])))
     return selected
 
 
-def all_heads(rows: list[dict[str, Any]]) -> set[tuple[str, int, int]]:
-    return {(row["cache_type"], int(row["layer"]), int(row["head"])) for row in rows}
+def all_heads(rows: list[dict[str, Any]]) -> set[tuple[str, str, int, int]]:
+    return {(row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"])) for row in rows}
 
 
-def head_output_dir(output_dir: Path, cache_type: str, layer: int, head: int) -> Path:
-    path = output_dir / cache_type / f"layer_{layer:02d}" / f"head_{head:02d}"
+def head_output_dir(output_dir: Path, cache_type: str, variant: str, layer: int, head: int) -> Path:
+    path = output_dir / cache_type / variant / f"layer_{layer:02d}" / f"head_{head:02d}"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
-def write_head_plot_index(output_dir: Path, selected_heads: set[tuple[str, int, int]]) -> str:
+def write_head_plot_index(output_dir: Path, selected_heads: set[tuple[str, str, int, int]]) -> str:
     rows = []
-    for cache_type, layer, head in sorted(selected_heads):
+    for cache_type, variant, layer, head in sorted(selected_heads):
         rows.append(
             {
                 "cache_type": cache_type,
+                "variant": variant,
                 "layer": layer,
                 "head": head,
-                "plot_dir": str(head_output_dir(output_dir, cache_type, layer, head)),
+                "plot_dir": str(head_output_dir(output_dir, cache_type, variant, layer, head)),
             }
         )
     path = output_dir / "head_plot_index.csv"
-    write_csv(path, rows, ["cache_type", "layer", "head", "plot_dir"])
+    write_csv(path, rows, ["cache_type", "variant", "layer", "head", "plot_dir"])
     return str(path)
 
 
 def bin_token_rows(
     token_rows: list[dict[str, Any]],
-    selected_heads: set[tuple[str, int, int]],
+    selected_heads: set[tuple[str, str, int, int]],
     token_bins: int,
-    tokens_by_head: dict[tuple[str, int, int], int],
+    tokens_by_head: dict[tuple[str, str, int, int], int],
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, int, int, int], dict[str, float]] = {}
     for row in token_rows:
         if row.get("mean_index_distance", "") == "":
             continue
-        key_head = (row["cache_type"], int(row["layer"]), int(row["head"]))
+        key_head = (row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))
         if key_head not in selected_heads:
             continue
         tokens = max(1, tokens_by_head.get(key_head, int(row.get("available_previous", "0")) + 1))
@@ -186,11 +201,12 @@ def bin_token_rows(
         )
 
     binned_rows: list[dict[str, Any]] = []
-    for (cache_type, layer, head, bin_index), payload in sorted(grouped.items()):
+    for (cache_type, variant, layer, head, bin_index), payload in sorted(grouped.items()):
         count = payload["count"]
         binned_rows.append(
             {
                 "cache_type": cache_type,
+                "variant": variant,
                 "layer": layer,
                 "head": head,
                 "bin_index": bin_index,
@@ -209,10 +225,10 @@ def bin_token_rows(
     return binned_rows
 
 
-def tokens_by_head_from_summary(rows: list[dict[str, Any]]) -> dict[tuple[str, int, int], int]:
-    result: dict[tuple[str, int, int], int] = {}
+def tokens_by_head_from_summary(rows: list[dict[str, Any]]) -> dict[tuple[str, str, int, int], int]:
+    result: dict[tuple[str, str, int, int], int] = {}
     for row in rows:
-        result[(row["cache_type"], int(row["layer"]), int(row["head"]))] = int(float(row["tokens"]))
+        result[(row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))] = int(float(row["tokens"]))
     return result
 
 
@@ -223,19 +239,19 @@ def plot_binned_token_trends(binned_rows: list[dict[str, Any]], output_dir: Path
     import matplotlib.pyplot as plt
 
     paths: list[str] = []
-    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, int, int], list[dict[str, Any]]] = defaultdict(list)
     for row in binned_rows:
-        grouped[(row["cache_type"], int(row["layer"]), int(row["head"]))].append(row)
+        grouped[(row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))].append(row)
 
     for metric in ("mean_index_distance", "mean_index_distance_percent_of_history"):
         fig, ax = plt.subplots(figsize=(11, 5), dpi=180)
-        for (cache_type, layer, head), rows in sorted(grouped.items()):
+        for (cache_type, variant, layer, head), rows in sorted(grouped.items()):
             rows = sorted(rows, key=lambda row: int(row["bin_index"]))
             ax.plot(
                 [int(row["bin_index"]) for row in rows],
                 [float(row[metric]) for row in rows],
                 linewidth=1.2,
-                label=f"{cache_type} L{layer} H{head}",
+                label=f"{cache_type} {variant} L{layer} H{head}",
             )
         ax.set_title(f"Representative heads by token-position bins: {metric}")
         ax.set_xlabel("Token-position bin")
@@ -252,7 +268,7 @@ def plot_binned_token_trends(binned_rows: list[dict[str, Any]], output_dir: Path
 
 def plot_token_points(
     token_rows: list[dict[str, Any]],
-    selected_heads: set[tuple[str, int, int]],
+    selected_heads: set[tuple[str, str, int, int]],
     output_dir: Path,
     alpha: float,
 ) -> list[str]:
@@ -262,17 +278,17 @@ def plot_token_points(
     import matplotlib.pyplot as plt
 
     paths: list[str] = []
-    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, int, int], list[dict[str, Any]]] = defaultdict(list)
     for row in token_rows:
         if row.get("mean_index_distance", "") == "":
             continue
-        key = (row["cache_type"], int(row["layer"]), int(row["head"]))
+        key = (row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))
         if key in selected_heads:
             grouped[key].append(row)
 
-    for cache_type, layer, head in sorted(grouped):
-        rows = sorted(grouped[(cache_type, layer, head)], key=lambda row: int(row["token_index"]))
-        plot_dir = head_output_dir(output_dir, cache_type, layer, head)
+    for cache_type, variant, layer, head in sorted(grouped):
+        rows = sorted(grouped[(cache_type, variant, layer, head)], key=lambda row: int(row["token_index"]))
+        plot_dir = head_output_dir(output_dir, cache_type, variant, layer, head)
         token_indices = [int(row["token_index"]) for row in rows]
         metrics = [
             ("mean_index_distance", "Mean index distance"),
@@ -285,7 +301,7 @@ def plot_token_points(
             values = [as_float(row, metric) for row in rows]
             fig, ax = plt.subplots(figsize=(12, 4), dpi=180)
             ax.scatter(token_indices, values, s=2, alpha=alpha, linewidths=0)
-            ax.set_title(f"{cache_type.upper()} L{layer} H{head}: {ylabel}")
+            ax.set_title(f"{cache_type.upper()} {variant} L{layer} H{head}: {ylabel}")
             ax.set_xlabel("Token index")
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.2)
@@ -305,8 +321,8 @@ def selected_index_distances(row: dict[str, Any]) -> list[int]:
 
 def plot_token_rank_points(
     token_rows: list[dict[str, Any]],
-    selected_heads: set[tuple[str, int, int]],
-    tokens_by_head: dict[tuple[str, int, int], int],
+    selected_heads: set[tuple[str, str, int, int]],
+    tokens_by_head: dict[tuple[str, str, int, int], int],
     output_dir: Path,
     alpha: float,
 ) -> list[str]:
@@ -316,17 +332,17 @@ def plot_token_rank_points(
     import matplotlib.pyplot as plt
 
     paths: list[str] = []
-    grouped: dict[tuple[str, int, int], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, int, int], list[dict[str, Any]]] = defaultdict(list)
     for row in token_rows:
         if row.get("selected_indices", "") == "":
             continue
-        key = (row["cache_type"], int(row["layer"]), int(row["head"]))
+        key = (row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))
         if key in selected_heads:
             grouped[key].append(row)
 
-    for cache_type, layer, head in sorted(grouped):
-        rows = sorted(grouped[(cache_type, layer, head)], key=lambda row: int(row["token_index"]))
-        plot_dir = head_output_dir(output_dir, cache_type, layer, head)
+    for cache_type, variant, layer, head in sorted(grouped):
+        rows = sorted(grouped[(cache_type, variant, layer, head)], key=lambda row: int(row["token_index"]))
+        plot_dir = head_output_dir(output_dir, cache_type, variant, layer, head)
         max_rank = max((len(selected_index_distances(row)) for row in rows), default=0)
         if max_rank == 0:
             continue
@@ -343,7 +359,7 @@ def plot_token_rank_points(
                 "Index distance (% of full context)",
                 lambda distance, row: 100.0
                 * float(distance)
-                / max(1, tokens_by_head[(row["cache_type"], int(row["layer"]), int(row["head"]))]),
+                / max(1, tokens_by_head[(row["cache_type"], row_variant(row), int(row["layer"]), int(row["head"]))]),
             ),
         ]
 
@@ -359,7 +375,7 @@ def plot_token_rank_points(
                     xs.append(int(row["token_index"]))
                     ys.append(transform(distances[rank], row))
                 ax.scatter(xs, ys, s=2, alpha=alpha, linewidths=0, label=f"top{rank + 1}")
-            ax.set_title(f"{cache_type.upper()} L{layer} H{head}: top-rank {ylabel}")
+            ax.set_title(f"{cache_type.upper()} {variant} L{layer} H{head}: top-rank {ylabel}")
             ax.set_xlabel("Token index")
             ax.set_ylabel(ylabel)
             ax.grid(True, alpha=0.2)
@@ -408,6 +424,7 @@ def main() -> None:
                 binned_rows,
                 [
                     "cache_type",
+                    "variant",
                     "layer",
                     "head",
                     "bin_index",

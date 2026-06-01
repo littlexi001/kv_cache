@@ -52,6 +52,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kcache_cosine_heatmap.py" \
   --compute_top_p_previous_distances "${COMPUTE_TOP_P_PREVIOUS_DISTANCES:-true}" \
   --top_p_previous_cache_types "${TOP_P_PREVIOUS_CACHE_TYPES:-k}" \
   --top_p_previous_count "${TOP_P_PREVIOUS_COUNT:-5}" \
+  --top_p_previous_variants "${TOP_P_PREVIOUS_VARIANTS:-raw}" \
   --save_top_p_previous_token_rows "${SAVE_TOP_P_PREVIOUS_TOKEN_ROWS:-true}" \
   --compute_cache_clusters "${COMPUTE_CACHE_CLUSTERS:-false}" \
   --cluster_cache_types "${CLUSTER_CACHE_TYPES:-k,v}" \
