@@ -12,6 +12,7 @@ Q_HEADS="${Q_HEADS:-all}"
 QUERY_STRIDE="${QUERY_STRIDE:-8}"
 MIN_QUERY_INDEX="${MIN_QUERY_INDEX:-2}"
 TOP_K="${TOP_K:-10}"
+ALLOW_LONGER_THAN_MODEL_MAX="${ALLOW_LONGER_THAN_MODEL_MAX:-0}"
 
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x ".venv-transformers451/bin/python" ]]; then
@@ -37,6 +38,10 @@ args=(
 
 if [[ -n "$OUTPUT_DIR" ]]; then
   args+=(--output-dir "$OUTPUT_DIR")
+fi
+
+if [[ "$ALLOW_LONGER_THAN_MODEL_MAX" == "1" ]]; then
+  args+=(--allow-longer-than-model-max)
 fi
 
 "$PYTHON" "${args[@]}"

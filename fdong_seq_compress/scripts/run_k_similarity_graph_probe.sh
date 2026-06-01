@@ -12,9 +12,10 @@ HEADS="${HEADS:-all}"
 ANALYSIS_LEVEL="${ANALYSIS_LEVEL:-token}"
 TOP_K="${TOP_K:-5}"
 SIMILARITY="${SIMILARITY:-cos}"
-HIST_BINS="${HIST_BINS:--1.0:1.0:0.05}"
+HIST_BINS="${HIST_BINS:-auto}"
 SAVE_NEIGHBORS="${SAVE_NEIGHBORS:-0}"
 CENTER_TOKENS="${CENTER_TOKENS:-1}"
+ALLOW_LONGER_THAN_MODEL_MAX="${ALLOW_LONGER_THAN_MODEL_MAX:-0}"
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x ".venv-transformers451/bin/python" ]]; then
     PYTHON=".venv-transformers451/bin/python"
@@ -48,6 +49,10 @@ fi
 
 if [[ "$CENTER_TOKENS" == "1" ]]; then
   args+=(--center-tokens)
+fi
+
+if [[ "$ALLOW_LONGER_THAN_MODEL_MAX" == "1" ]]; then
+  args+=(--allow-longer-than-model-max)
 fi
 
 "$PYTHON" "${args[@]}"

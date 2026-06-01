@@ -110,6 +110,27 @@ CENTER_TOKENS=1
 ANALYSIS_LEVEL=token
 ```
 
+Supported K-neighbor metrics:
+
+```text
+SIMILARITY=cos   Higher is closer; uses cosine on centered/normalized K.
+SIMILARITY=dot   Higher is closer; diagnostic only because K norm can create hubs.
+SIMILARITY=l2    Lower is closer; directly bounds qK score differences.
+```
+
+For `l2`, the `summary_by_layer.csv` columns still use the historical
+`similarity` field name, but the values are L2 distances, so smaller values are
+better/closer. The script also records:
+
+```text
+model_max_position_embeddings
+seq_len_within_model_max_position_embeddings
+```
+
+and fails by default if the tokenized sequence is longer than the model's
+configured position range, because position/RoPE handling could otherwise
+dominate the geometry.
+
 Main output files:
 
 ```text
@@ -131,5 +152,6 @@ Useful variants:
 ```bash
 CENTER_TOKENS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
 SIMILARITY=dot bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+SIMILARITY=l2 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
 ANALYSIS_LEVEL=head SAVE_NEIGHBORS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
 ```

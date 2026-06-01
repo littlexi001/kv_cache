@@ -269,6 +269,7 @@ def main() -> None:
     parser.add_argument("--query-stride", type=int, default=8)
     parser.add_argument("--min-query-index", type=int, default=2)
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--allow-longer-than-model-max", action="store_true")
     args = parser.parse_args()
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -283,6 +284,17 @@ def main() -> None:
     )
     _, input_ids = load_tokenized_text(tokenizer, args.text_path, args.max_tokens)
     seq_len = int(input_ids.numel())
+    model_max_position_embeddings = getattr(model.config, "max_position_embeddings", None)
+    if model_max_position_embeddings is not None and seq_len > int(model_max_position_embeddings):
+        message = (
+            f"Tokenized sequence length ({seq_len}) exceeds model.config.max_position_embeddings "
+            f"({model_max_position_embeddings}). This can make Q/K geometry unreliable due to "
+            "position/RoPE handling. Use a shorter sequence or pass --allow-longer-than-model-max "
+            "only if you intentionally want to test extrapolation."
+        )
+        if not args.allow_longer_than_model_max:
+            raise ValueError(message)
+        print(f"WARNING: {message}", flush=True)
     write_csv(output_dir / "tokens.csv", decode_tokens(tokenizer, input_ids))
 
     outputs = run_forward(model, input_ids, device)
@@ -323,6 +335,10 @@ def main() -> None:
         "device": str(device),
         "dtype": args.dtype,
         "seq_len": seq_len,
+        "model_max_position_embeddings": model_max_position_embeddings,
+        "seq_len_within_model_max_position_embeddings": (
+            None if model_max_position_embeddings is None else seq_len <= int(model_max_position_embeddings)
+        ),
         "layers": layer_indices,
         "q_heads": q_head_indices,
         "num_q_heads": num_q_heads,

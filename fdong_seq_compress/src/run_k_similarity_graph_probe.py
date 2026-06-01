@@ -52,6 +52,31 @@ def parse_bins(value: str) -> List[float]:
     return bins
 
 
+def auto_bins(values: torch.Tensor, similarity: str, num_bins: int = 40) -> List[float]:
+    if values.numel() == 0:
+        return [0.0, 1.0]
+    if similarity == "cos":
+        return parse_bins("-1.0:1.0:0.05")
+
+    values = values.detach().to(dtype=torch.float64)
+    left = float(torch.quantile(values, 0.01).item())
+    right = float(torch.quantile(values, 0.99).item())
+    if not math.isfinite(left) or not math.isfinite(right) or abs(right - left) <= EPS:
+        center = float(values.mean().item()) if values.numel() else 0.0
+        width = max(abs(center) * 0.1, 1.0)
+        left, right = center - width, center + width
+    if similarity == "l2":
+        left = max(0.0, left)
+    step = (right - left) / num_bins
+    return [left + step * idx for idx in range(num_bins + 1)]
+
+
+def bins_for_values(values: torch.Tensor, similarity: str, hist_bins: str) -> List[float]:
+    if hist_bins == "auto":
+        return auto_bins(values, similarity)
+    return parse_bins(hist_bins)
+
+
 def run_forward(model, input_ids: torch.Tensor, device: torch.device):
     with torch.no_grad():
         return model(
@@ -91,18 +116,30 @@ def causal_topk_similarity(
 
     if similarity == "cos":
         x_score = torch.nn.functional.normalize(x, p=2, dim=1, eps=EPS)
+        scores = x_score @ x_score.T
+        larger_is_better = True
     elif similarity == "dot":
         x_score = x
+        scores = x_score @ x_score.T
+        larger_is_better = True
+    elif similarity == "l2":
+        x_score = x.to(dtype=torch.float32)
+        sq_norm = x_score.square().sum(dim=1, keepdim=True)
+        scores = (sq_norm + sq_norm.T - 2.0 * (x_score @ x_score.T)).clamp_min(0.0).sqrt()
+        larger_is_better = False
     else:
         raise ValueError(f"Unsupported similarity: {similarity}")
 
-    sim = x_score @ x_score.T
     indices = torch.arange(n)
     invalid = indices[None, :] >= indices[:, None]
-    sim = sim.masked_fill(invalid, -float("inf"))
+    scores = scores.masked_fill(invalid, -float("inf") if larger_is_better else float("inf"))
 
     actual_k = min(top_k, n - 1)
-    values, neighbor_indices = torch.topk(sim, k=actual_k, dim=1)
+    if larger_is_better:
+        values, neighbor_indices = torch.topk(scores, k=actual_k, dim=1)
+    else:
+        neg_values, neighbor_indices = torch.topk(-scores, k=actual_k, dim=1)
+        values = -neg_values
     rows: List[Dict] = []
     kept_values = []
     for token_idx in range(n):
@@ -133,6 +170,7 @@ def summarize_values(values: torch.Tensor, prefix: str) -> Dict[str, float]:
             f"{prefix}_p05": float("nan"),
             f"{prefix}_p50": float("nan"),
             f"{prefix}_p95": float("nan"),
+            f"{prefix}_min": float("nan"),
             f"{prefix}_max": float("nan"),
         }
     q = torch.quantile(values, torch.tensor([0.05, 0.50, 0.95], dtype=values.dtype))
@@ -143,6 +181,7 @@ def summarize_values(values: torch.Tensor, prefix: str) -> Dict[str, float]:
         f"{prefix}_p05": float(q[0].item()),
         f"{prefix}_p50": float(q[1].item()),
         f"{prefix}_p95": float(q[2].item()),
+        f"{prefix}_min": float(values.min().item()),
         f"{prefix}_max": float(values.max().item()),
     }
 
@@ -292,7 +331,14 @@ def svg_escape(text: str) -> str:
     )
 
 
-def write_histogram_svg(path: Path, rows: List[Dict], title: str, width: int = 1000, height: int = 560) -> None:
+def write_histogram_svg(
+    path: Path,
+    rows: List[Dict],
+    title: str,
+    width: int = 1000,
+    height: int = 560,
+    x_label: str = "metric bucket",
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
         path.write_text("<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>\n", encoding="utf-8")
@@ -339,7 +385,7 @@ def write_histogram_svg(path: Path, rows: List[Dict], title: str, width: int = 1
 
     parts.extend(
         [
-            f'<text x="{width / 2}" y="{height - 24}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#333">similarity bucket</text>',
+            f'<text x="{width / 2}" y="{height - 24}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#333">{svg_escape(x_label)}</text>',
             f'<text x="18" y="{height / 2}" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" fill="#333" transform="rotate(-90 18 {height / 2})">count</text>',
             "</svg>",
         ]
@@ -425,10 +471,11 @@ def main() -> None:
     parser.add_argument("--heads", default="all")
     parser.add_argument("--analysis-level", choices=["token", "head", "both"], default="token")
     parser.add_argument("--top-k", type=int, default=5)
-    parser.add_argument("--similarity", choices=["cos", "dot"], default="cos")
+    parser.add_argument("--similarity", choices=["cos", "dot", "l2"], default="cos")
     parser.add_argument("--center-tokens", action="store_true")
-    parser.add_argument("--hist-bins", default="-1.0:1.0:0.05")
+    parser.add_argument("--hist-bins", default="auto")
     parser.add_argument("--save-neighbors", action="store_true")
+    parser.add_argument("--allow-longer-than-model-max", action="store_true")
     args = parser.parse_args()
 
     if args.top_k < 1:
@@ -448,13 +495,23 @@ def main() -> None:
     seq_len = int(input_ids.numel())
     if seq_len < 2:
         raise ValueError("Need at least two tokens for causal top-k analysis.")
+    model_max_position_embeddings = getattr(model.config, "max_position_embeddings", None)
+    if model_max_position_embeddings is not None and seq_len > int(model_max_position_embeddings):
+        message = (
+            f"Tokenized sequence length ({seq_len}) exceeds model.config.max_position_embeddings "
+            f"({model_max_position_embeddings}). This can make K-cache geometry unreliable due to "
+            "position/RoPE handling. Use a shorter sequence or pass --allow-longer-than-model-max "
+            "only if you intentionally want to test extrapolation."
+        )
+        if not args.allow_longer_than_model_max:
+            raise ValueError(message)
+        print(f"WARNING: {message}", flush=True)
 
     write_csv(output_dir / "tokens.csv", decode_tokens(tokenizer, input_ids))
     outputs = run_forward(model, input_ids, device)
 
     num_layers = int(getattr(model.config, "num_hidden_layers"))
     layer_indices = select_indices(num_layers, args.layers)
-    bins = parse_bins(args.hist_bins)
 
     all_neighbor_rows: List[Dict] = []
     summary_rows: List[Dict] = []
@@ -498,7 +555,8 @@ def main() -> None:
                 rank_values = values.new_tensor([row["similarity"] for row in neighbor_rows if row["rank"] == rank])
                 summary.update(summarize_values(rank_values, f"rank{rank}"))
             summary_rows.append(summary)
-            target_hist_rows = histogram_rows(values, bins, base)
+            target_bins = bins_for_values(values, args.similarity, args.hist_bins)
+            target_hist_rows = histogram_rows(values, target_bins, base)
             hist_rows.extend(target_hist_rows)
 
             plot_name = (
@@ -514,6 +572,7 @@ def main() -> None:
                     f"causal top-{args.top_k} {args.similarity} "
                     f"(centered={args.center_tokens})"
                 ),
+                x_label=f"{args.similarity} bucket",
             )
 
             if args.save_neighbors:
@@ -585,12 +644,14 @@ def main() -> None:
         "seq_len": seq_len,
         "feature_dim": "mixed",
     }
+    bins = bins_for_values(values, args.similarity, args.hist_bins)
     global_hist = histogram_rows(values, bins, global_base)
     write_csv(output_dir / "histogram_global.csv", global_hist)
     write_histogram_svg(
         output_dir / "histogram_global.svg",
         global_hist,
-        f"K-cache causal top-{args.top_k} {args.similarity} similarity ({args.analysis_level}, centered={args.center_tokens})",
+        f"K-cache causal top-{args.top_k} {args.similarity} ({args.analysis_level}, centered={args.center_tokens})",
+        x_label=f"{args.similarity} bucket",
     )
     global_distance_base = {
         "layer": "all",
@@ -635,6 +696,10 @@ def main() -> None:
         "device": str(device),
         "dtype": args.dtype,
         "seq_len": seq_len,
+        "model_max_position_embeddings": model_max_position_embeddings,
+        "seq_len_within_model_max_position_embeddings": (
+            None if model_max_position_embeddings is None else seq_len <= int(model_max_position_embeddings)
+        ),
         "layers": layer_indices,
         "heads": args.heads,
         "analysis_level": args.analysis_level,
@@ -642,6 +707,7 @@ def main() -> None:
         "similarity": args.similarity,
         "center_tokens": bool(args.center_tokens),
         "hist_bins": bins,
+        "hist_bins_arg": args.hist_bins,
         "num_summary_rows": len(summary_rows),
         "global": summarize_values(values, "topk"),
         "global_distance": summarize_distances(global_distances, "distance", thresholds=[8, 32, 128, 256]),
