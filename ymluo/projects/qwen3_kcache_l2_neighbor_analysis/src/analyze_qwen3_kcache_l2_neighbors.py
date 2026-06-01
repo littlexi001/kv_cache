@@ -344,6 +344,8 @@ def rows_from_neighbors(
         for rank in range(int(indices.shape[1])):
             neighbor_index = int(indices[token_index, rank])
             l2_distance = float(distances[token_index, rank])
+            if not math.isfinite(l2_distance):
+                continue
             rows.append(
                 {
                     "cache_type": cache_type,
@@ -373,9 +375,9 @@ def summary_from_neighbors(
     indices: torch.Tensor,
 ) -> dict[str, Any]:
     token_indices = torch.arange(tokens, dtype=torch.long).view(-1, 1)
-    index_distances = (token_indices - indices.long()).abs().float()
-    finite_distances = distances.float()[torch.isfinite(distances)]
-    flat_index = index_distances.reshape(-1)
+    finite_mask = torch.isfinite(distances)
+    index_distances = (token_indices - indices.long()).abs().float()[finite_mask]
+    finite_distances = distances.float()[finite_mask]
     return {
         "cache_type": cache_type,
         "variant": variant,
@@ -386,10 +388,10 @@ def summary_from_neighbors(
         "neighbor_count": neighbor_count,
         "neighbor_scope": neighbor_scope,
         "mean_l2_distance": float(finite_distances.mean()) if finite_distances.numel() else 0.0,
-        "mean_index_distance": float(flat_index.mean()) if flat_index.numel() else 0.0,
-        "median_index_distance": float(flat_index.median()) if flat_index.numel() else 0.0,
-        "p95_index_distance": float(torch.quantile(flat_index, 0.95)) if flat_index.numel() else 0.0,
-        "max_index_distance": float(flat_index.max()) if flat_index.numel() else 0.0,
+        "mean_index_distance": float(index_distances.mean()) if index_distances.numel() else 0.0,
+        "median_index_distance": float(index_distances.median()) if index_distances.numel() else 0.0,
+        "p95_index_distance": float(torch.quantile(index_distances, 0.95)) if index_distances.numel() else 0.0,
+        "max_index_distance": float(index_distances.max()) if index_distances.numel() else 0.0,
     }
 
 
@@ -412,6 +414,7 @@ def plot_neighbor_scatter(
     plot_dir = output_dir / "plots" / cache_type / variant / f"layer_{layer:02d}" / f"head_{head:02d}"
     plot_dir.mkdir(parents=True, exist_ok=True)
     token_indices = torch.arange(int(indices.shape[0]))
+    finite_mask = torch.isfinite(distances)
     index_distances = (token_indices.view(-1, 1) - indices.long()).abs()
     paths: list[str] = []
     specs = [
@@ -421,9 +424,12 @@ def plot_neighbor_scatter(
     for filename, values, ylabel in specs:
         fig, ax = plt.subplots(figsize=(12, 4), dpi=dpi)
         for rank in range(int(indices.shape[1])):
+            rank_mask = finite_mask[:, rank]
+            if not bool(rank_mask.any()):
+                continue
             ax.scatter(
-                token_indices.tolist(),
-                values[:, rank].tolist(),
+                token_indices[rank_mask].tolist(),
+                values[:, rank][rank_mask].tolist(),
                 s=2,
                 alpha=alpha,
                 linewidths=0,
