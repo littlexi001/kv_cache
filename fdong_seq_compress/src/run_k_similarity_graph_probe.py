@@ -99,10 +99,34 @@ def head_level_matrices(cache: torch.Tensor, seq_len: int, heads: Iterable[int])
     return [(head_idx, cache[head_idx, :seq_len, :].contiguous()) for head_idx in heads]
 
 
-def transform_keys(x: torch.Tensor, center_tokens: bool) -> torch.Tensor:
-    if center_tokens:
-        return x - x.mean(dim=0, keepdim=True)
-    return x
+def transform_keys(x: torch.Tensor, key_transform: str, pc_remove_count: int) -> torch.Tensor:
+    if key_transform == "raw":
+        return x
+
+    centered = x - x.mean(dim=0, keepdim=True)
+    if key_transform == "center":
+        return centered
+
+    if key_transform == "remove_pc":
+        if pc_remove_count <= 0:
+            return centered
+        _, _, vh = torch.linalg.svd(centered.to(dtype=torch.float32), full_matrices=False)
+        rank = min(pc_remove_count, vh.shape[0])
+        basis = vh[:rank]
+        return centered - (centered @ basis.T) @ basis
+
+    if key_transform == "whiten":
+        _, singular, vh = torch.linalg.svd(centered.to(dtype=torch.float32), full_matrices=False)
+        keep = singular > EPS
+        if not bool(keep.any()):
+            return centered
+        basis = vh[keep]
+        scale = singular[keep].clamp_min(EPS)
+        # Return whitened coordinates in PCA space. The sqrt factor keeps the
+        # average squared coordinate comparable across sequence lengths.
+        return (centered @ basis.T) * (math.sqrt(max(1, x.shape[0] - 1)) / scale)
+
+    raise ValueError(f"Unsupported key transform: {key_transform}")
 
 
 def causal_topk_similarity(
@@ -154,6 +178,68 @@ def causal_topk_similarity(
                     "neighbor_index": int(neighbor_indices[token_idx, rank_idx].item()),
                     "similarity": value,
                     "token_distance": token_idx - int(neighbor_indices[token_idx, rank_idx].item()),
+                }
+            )
+            kept_values.append(value)
+
+    return rows, torch.tensor(kept_values, dtype=torch.float32)
+
+
+def causal_radius_similarity(
+    x: torch.Tensor,
+    similarity: str,
+    radius_threshold: float,
+    max_radius_neighbors: int,
+) -> Tuple[List[Dict], torch.Tensor]:
+    n = x.shape[0]
+    if n < 2:
+        return [], torch.empty(0, dtype=torch.float32)
+
+    if similarity == "cos":
+        x_score = torch.nn.functional.normalize(x, p=2, dim=1, eps=EPS)
+        scores = x_score @ x_score.T
+        larger_is_better = True
+    elif similarity == "dot":
+        x_score = x
+        scores = x_score @ x_score.T
+        larger_is_better = True
+    elif similarity == "l2":
+        x_score = x.to(dtype=torch.float32)
+        sq_norm = x_score.square().sum(dim=1, keepdim=True)
+        scores = (sq_norm + sq_norm.T - 2.0 * (x_score @ x_score.T)).clamp_min(0.0).sqrt()
+        larger_is_better = False
+    else:
+        raise ValueError(f"Unsupported similarity: {similarity}")
+
+    indices = torch.arange(n)
+    invalid = indices[None, :] >= indices[:, None]
+    if larger_is_better:
+        keep = (scores >= radius_threshold) & ~invalid
+    else:
+        keep = (scores <= radius_threshold) & ~invalid
+
+    rows: List[Dict] = []
+    kept_values = []
+    for token_idx in range(n):
+        neighbor_indices = torch.nonzero(keep[token_idx], as_tuple=False).flatten()
+        if neighbor_indices.numel() == 0:
+            continue
+        values = scores[token_idx, neighbor_indices]
+        order = torch.argsort(values, descending=larger_is_better)
+        if max_radius_neighbors > 0:
+            order = order[:max_radius_neighbors]
+        for rank_idx, order_idx in enumerate(order.tolist()):
+            neighbor_idx = int(neighbor_indices[order_idx].item())
+            value = float(values[order_idx].item())
+            if not math.isfinite(value):
+                continue
+            rows.append(
+                {
+                    "token_index": token_idx,
+                    "rank": rank_idx + 1,
+                    "neighbor_index": neighbor_idx,
+                    "similarity": value,
+                    "token_distance": token_idx - neighbor_idx,
                 }
             )
             kept_values.append(value)
@@ -240,7 +326,13 @@ def binned_count_rows(values: List[int], bins: List[Tuple[int, int, str]], base:
     return rows
 
 
-def summarize_distances(distances: List[int], prefix: str, thresholds: Iterable[int]) -> Dict[str, float]:
+def summarize_distances(
+    distances: List[int],
+    prefix: str,
+    thresholds: Iterable[int],
+    artifact_periods: Iterable[int] = (1024, 2048, 4096),
+    artifact_near_width: int = 2,
+) -> Dict[str, float]:
     if not distances:
         result = {
             f"{prefix}_count": 0,
@@ -253,9 +345,14 @@ def summarize_distances(distances: List[int], prefix: str, thresholds: Iterable[
         for threshold in thresholds:
             result[f"{prefix}_frac_le_{threshold}"] = float("nan")
             result[f"{prefix}_frac_ge_{threshold}"] = float("nan")
+        for period in artifact_periods:
+            result[f"{prefix}_frac_eq_{period}"] = float("nan")
+            result[f"{prefix}_frac_near_{period}_pm{artifact_near_width}"] = float("nan")
+            result[f"{prefix}_frac_near_multiple_{period}_pm{artifact_near_width}"] = float("nan")
         return result
 
     values = torch.tensor(distances, dtype=torch.float32)
+    int_values = torch.tensor(distances, dtype=torch.int64)
     result = {
         f"{prefix}_count": int(values.numel()),
         f"{prefix}_mean": float(values.mean().item()),
@@ -267,6 +364,20 @@ def summarize_distances(distances: List[int], prefix: str, thresholds: Iterable[
     for threshold in thresholds:
         result[f"{prefix}_frac_le_{threshold}"] = float((values <= threshold).to(torch.float32).mean().item())
         result[f"{prefix}_frac_ge_{threshold}"] = float((values >= threshold).to(torch.float32).mean().item())
+    for period in artifact_periods:
+        if period <= 0:
+            continue
+        exact = int_values == period
+        near = (int_values - period).abs() <= artifact_near_width
+        remainder = int_values.remainder(period)
+        near_multiple = (int_values >= period) & (
+            (remainder <= artifact_near_width) | (remainder >= period - artifact_near_width)
+        )
+        result[f"{prefix}_frac_eq_{period}"] = float(exact.to(torch.float32).mean().item())
+        result[f"{prefix}_frac_near_{period}_pm{artifact_near_width}"] = float(near.to(torch.float32).mean().item())
+        result[f"{prefix}_frac_near_multiple_{period}_pm{artifact_near_width}"] = float(
+            near_multiple.to(torch.float32).mean().item()
+        )
     return result
 
 
@@ -307,6 +418,76 @@ def summarize_indegrees(values: List[int], prefix: str) -> Dict[str, float]:
         f"{prefix}_zero_frac": float((x == 0).to(torch.float32).mean().item()),
         f"{prefix}_top1pct_edge_frac": float((sorted_x[:top1_count].sum() / total_edges).item()),
         f"{prefix}_top5pct_edge_frac": float((sorted_x[:top5_count].sum() / total_edges).item()),
+    }
+
+
+def summarize_graph_structure(neighbor_rows: List[Dict], seq_len: int, prefix: str) -> Dict[str, float]:
+    if seq_len <= 0:
+        return {
+            f"{prefix}_nodes": 0,
+            f"{prefix}_edges": 0,
+            f"{prefix}_avg_outdegree": float("nan"),
+            f"{prefix}_largest_component_frac": float("nan"),
+            f"{prefix}_component_count": 0,
+            f"{prefix}_isolated_frac": float("nan"),
+            f"{prefix}_local_le_8_edge_frac": float("nan"),
+            f"{prefix}_long_ge_128_edge_frac": float("nan"),
+            f"{prefix}_long_ge_256_edge_frac": float("nan"),
+        }
+
+    parent = list(range(seq_len))
+    size = [1 for _ in range(seq_len)]
+
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            return
+        if size[ra] < size[rb]:
+            ra, rb = rb, ra
+        parent[rb] = ra
+        size[ra] += size[rb]
+
+    distances = []
+    outdegree = [0 for _ in range(seq_len)]
+    for row in neighbor_rows:
+        src = int(row["token_index"])
+        dst = int(row["neighbor_index"])
+        if 0 <= src < seq_len and 0 <= dst < seq_len:
+            union(src, dst)
+            outdegree[src] += 1
+            distances.append(int(row["token_distance"]))
+
+    component_sizes: Dict[int, int] = {}
+    for idx in range(seq_len):
+        root = find(idx)
+        component_sizes[root] = component_sizes.get(root, 0) + 1
+
+    edge_count = len(neighbor_rows)
+    if edge_count:
+        distance_tensor = torch.tensor(distances, dtype=torch.float32)
+        local_le_8 = float((distance_tensor <= 8).to(torch.float32).mean().item())
+        long_ge_128 = float((distance_tensor >= 128).to(torch.float32).mean().item())
+        long_ge_256 = float((distance_tensor >= 256).to(torch.float32).mean().item())
+    else:
+        local_le_8 = long_ge_128 = long_ge_256 = float("nan")
+
+    largest_component = max(component_sizes.values()) if component_sizes else 0
+    return {
+        f"{prefix}_nodes": seq_len,
+        f"{prefix}_edges": edge_count,
+        f"{prefix}_avg_outdegree": float(sum(outdegree) / max(1, seq_len)),
+        f"{prefix}_largest_component_frac": float(largest_component / max(1, seq_len)),
+        f"{prefix}_component_count": len(component_sizes),
+        f"{prefix}_isolated_frac": float(sum(1 for value in outdegree if value == 0) / max(1, seq_len)),
+        f"{prefix}_local_le_8_edge_frac": local_le_8,
+        f"{prefix}_long_ge_128_edge_frac": long_ge_128,
+        f"{prefix}_long_ge_256_edge_frac": long_ge_256,
     }
 
 
@@ -470,9 +651,14 @@ def main() -> None:
     parser.add_argument("--layers", default="all")
     parser.add_argument("--heads", default="all")
     parser.add_argument("--analysis-level", choices=["token", "head", "both"], default="token")
+    parser.add_argument("--graph-mode", choices=["topk", "radius"], default="topk")
     parser.add_argument("--top-k", type=int, default=5)
+    parser.add_argument("--radius-threshold", type=float, default=float("nan"))
+    parser.add_argument("--max-radius-neighbors", type=int, default=200)
     parser.add_argument("--similarity", choices=["cos", "dot", "l2"], default="cos")
     parser.add_argument("--center-tokens", action="store_true")
+    parser.add_argument("--key-transform", choices=["raw", "center", "remove_pc", "whiten"], default="")
+    parser.add_argument("--pc-remove-count", type=int, default=0)
     parser.add_argument("--hist-bins", default="auto")
     parser.add_argument("--save-neighbors", action="store_true")
     parser.add_argument("--allow-longer-than-model-max", action="store_true")
@@ -480,6 +666,8 @@ def main() -> None:
 
     if args.top_k < 1:
         raise ValueError("--top-k must be >= 1.")
+    if args.graph_mode == "radius" and not math.isfinite(args.radius_threshold):
+        raise ValueError("--radius-threshold must be set when --graph-mode=radius.")
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output_dir or f"fdong_seq_compress/outputs/k_similarity_probe_{timestamp}")
@@ -520,9 +708,13 @@ def main() -> None:
     distance_hist_rows: List[Dict] = []
     indegree_summary_rows: List[Dict] = []
     indegree_hist_rows: List[Dict] = []
+    graph_summary_rows: List[Dict] = []
     global_values: List[torch.Tensor] = []
     global_distances: List[int] = []
     global_indegrees: List[int] = []
+    global_neighbor_rows: List[Dict] = []
+
+    key_transform = args.key_transform or ("center" if args.center_tokens else "raw")
 
     for layer_idx in layer_indices:
         cache = extract_cache_tensor(outputs.past_key_values, layer_idx, "K")
@@ -535,15 +727,28 @@ def main() -> None:
             targets.extend(("head", head_idx, x) for head_idx, x in head_level_matrices(cache, seq_len, head_indices))
 
         for level, head_idx, x in targets:
-            x = transform_keys(x, args.center_tokens)
-            neighbor_rows, values = causal_topk_similarity(x, args.top_k, args.similarity)
+            x = transform_keys(x, key_transform, args.pc_remove_count)
+            if args.graph_mode == "topk":
+                neighbor_rows, values = causal_topk_similarity(x, args.top_k, args.similarity)
+            else:
+                neighbor_rows, values = causal_radius_similarity(
+                    x,
+                    args.similarity,
+                    args.radius_threshold,
+                    args.max_radius_neighbors,
+                )
             base = {
                 "layer": layer_idx,
                 "analysis_level": level,
                 "head": "all" if head_idx < 0 else head_idx,
+                "graph_mode": args.graph_mode,
                 "similarity": args.similarity,
                 "center_tokens": bool(args.center_tokens),
+                "key_transform": key_transform,
+                "pc_remove_count": args.pc_remove_count,
                 "top_k": args.top_k,
+                "radius_threshold": args.radius_threshold if math.isfinite(args.radius_threshold) else "",
+                "max_radius_neighbors": args.max_radius_neighbors,
                 "seq_len": seq_len,
                 "feature_dim": int(x.shape[1]),
             }
@@ -551,7 +756,8 @@ def main() -> None:
 
             summary = dict(base)
             summary.update(summarize_values(values, "topk"))
-            for rank in range(1, args.top_k + 1):
+            max_rank = args.top_k if args.graph_mode == "topk" else min(args.max_radius_neighbors, 20)
+            for rank in range(1, max_rank + 1):
                 rank_values = values.new_tensor([row["similarity"] for row in neighbor_rows if row["rank"] == rank])
                 summary.update(summarize_values(rank_values, f"rank{rank}"))
             summary_rows.append(summary)
@@ -569,8 +775,8 @@ def main() -> None:
                 target_hist_rows,
                 (
                     f"Layer {layer_idx} {level} head={base['head']} "
-                    f"causal top-{args.top_k} {args.similarity} "
-                    f"(centered={args.center_tokens})"
+                    f"causal {args.graph_mode} {args.similarity} "
+                    f"(transform={key_transform})"
                 ),
                 x_label=f"{args.similarity} bucket",
             )
@@ -578,6 +784,7 @@ def main() -> None:
             if args.save_neighbors:
                 for row in neighbor_rows:
                     all_neighbor_rows.append({**base, **row})
+            global_neighbor_rows.extend(neighbor_rows)
 
             distances = [int(row["token_distance"]) for row in neighbor_rows]
             global_distances.extend(distances)
@@ -592,7 +799,7 @@ def main() -> None:
                 "distance_bin",
                 (
                     f"Layer {layer_idx} {level} head={base['head']} "
-                    f"top-{args.top_k} neighbor token distance"
+                    f"{args.graph_mode} neighbor token distance"
                 ),
                 "token distance bucket",
             )
@@ -610,10 +817,14 @@ def main() -> None:
                 "indegree_bin",
                 (
                     f"Layer {layer_idx} {level} head={base['head']} "
-                    f"top-{args.top_k} in-degree"
+                    f"{args.graph_mode} in-degree"
                 ),
                 "in-degree bucket",
             )
+
+            graph_summary = dict(base)
+            graph_summary.update(summarize_graph_structure(neighbor_rows, seq_len, "graph"))
+            graph_summary_rows.append(graph_summary)
 
             print(
                 f"layer={layer_idx} level={level} head={base['head']} "
@@ -627,6 +838,7 @@ def main() -> None:
     write_csv(output_dir / "distance_histograms.csv", distance_hist_rows)
     write_csv(output_dir / "indegree_summary_by_layer.csv", indegree_summary_rows)
     write_csv(output_dir / "indegree_histograms.csv", indegree_hist_rows)
+    write_csv(output_dir / "graph_structure_summary_by_layer.csv", graph_summary_rows)
     if args.save_neighbors:
         write_csv(output_dir / "topk_neighbors.csv", all_neighbor_rows)
 
@@ -638,9 +850,14 @@ def main() -> None:
         "layer": "all",
         "analysis_level": args.analysis_level,
         "head": "all",
+        "graph_mode": args.graph_mode,
         "similarity": args.similarity,
         "center_tokens": bool(args.center_tokens),
+        "key_transform": key_transform,
+        "pc_remove_count": args.pc_remove_count,
         "top_k": args.top_k,
+        "radius_threshold": args.radius_threshold if math.isfinite(args.radius_threshold) else "",
+        "max_radius_neighbors": args.max_radius_neighbors,
         "seq_len": seq_len,
         "feature_dim": "mixed",
     }
@@ -650,16 +867,21 @@ def main() -> None:
     write_histogram_svg(
         output_dir / "histogram_global.svg",
         global_hist,
-        f"K-cache causal top-{args.top_k} {args.similarity} ({args.analysis_level}, centered={args.center_tokens})",
+        f"K-cache causal {args.graph_mode} {args.similarity} ({args.analysis_level}, transform={key_transform})",
         x_label=f"{args.similarity} bucket",
     )
     global_distance_base = {
         "layer": "all",
         "analysis_level": args.analysis_level,
         "head": "all",
+        "graph_mode": args.graph_mode,
         "similarity": args.similarity,
         "center_tokens": bool(args.center_tokens),
+        "key_transform": key_transform,
+        "pc_remove_count": args.pc_remove_count,
         "top_k": args.top_k,
+        "radius_threshold": args.radius_threshold if math.isfinite(args.radius_threshold) else "",
+        "max_radius_neighbors": args.max_radius_neighbors,
         "seq_len": seq_len,
         "feature_dim": "mixed",
     }
@@ -669,7 +891,7 @@ def main() -> None:
         output_dir / "distance_histogram_global.svg",
         global_distance_hist,
         "distance_bin",
-        f"K-cache causal top-{args.top_k} neighbor distance ({args.analysis_level}, centered={args.center_tokens})",
+        f"K-cache causal {args.graph_mode} neighbor distance ({args.analysis_level}, transform={key_transform})",
         "token distance bucket",
     )
 
@@ -685,7 +907,7 @@ def main() -> None:
         output_dir / "indegree_histogram_global.svg",
         global_indegree_hist,
         "indegree_bin",
-        f"K-cache causal top-{args.top_k} in-degree ({args.analysis_level}, centered={args.center_tokens})",
+        f"K-cache causal {args.graph_mode} in-degree ({args.analysis_level}, transform={key_transform})",
         "in-degree bucket",
     )
 
@@ -703,15 +925,21 @@ def main() -> None:
         "layers": layer_indices,
         "heads": args.heads,
         "analysis_level": args.analysis_level,
+        "graph_mode": args.graph_mode,
         "top_k": args.top_k,
+        "radius_threshold": args.radius_threshold if math.isfinite(args.radius_threshold) else None,
+        "max_radius_neighbors": args.max_radius_neighbors,
         "similarity": args.similarity,
         "center_tokens": bool(args.center_tokens),
+        "key_transform": key_transform,
+        "pc_remove_count": args.pc_remove_count,
         "hist_bins": bins,
         "hist_bins_arg": args.hist_bins,
         "num_summary_rows": len(summary_rows),
         "global": summarize_values(values, "topk"),
         "global_distance": summarize_distances(global_distances, "distance", thresholds=[8, 32, 128, 256]),
         "global_indegree": summarize_indegrees(global_indegrees, "indegree"),
+        "global_graph": summarize_graph_structure(global_neighbor_rows, seq_len, "graph"),
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(f"Wrote outputs to {output_dir}", flush=True)

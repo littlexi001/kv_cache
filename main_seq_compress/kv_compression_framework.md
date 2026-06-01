@@ -191,7 +191,7 @@ sum_i softmax(q · k_i) v_i
 在 `fdong_seq_compress` 中，我们对 Qwen3-0.6B 做了一轮 prefix-growth KV geometry 诊断：固定一条长文本，观察 prefix 从 `512` 增长到 `12000` token 时，每层每头 K/V cache 的高维点云结构如何变化。阶段性结论记录在：
 
 ```text
-fdong_seq_compress/qwen3_kv_cache_geometry_findings.md
+fdong_seq_compress/k_cache_graph_round1_findings.md
 ```
 
 本轮最重要的观察是：K-cache 和 V-cache 的数学结构并不对称。

@@ -1,172 +1,601 @@
-# Hierarchical Language Modeling: 逻辑闭环
+# KV Cache 压缩课题 Current-State Framework
 
-## 背景
+Date: 2026-06-01
 
-现代大模型推理的核心瓶颈之一是 KV cache。它的规模近似为：
+## 0. 文档定位
 
-$$
-O(L \cdot N \cdot d)
-$$
+这是 KV cache compression 课题的 current-state document。
 
-其中 $L$ 是层数，$N$ 是上下文长度，$d$ 是 hidden dimension。长上下文场景下，主要压力来自 sequence length $N$。
-
-KV cache 瓶颈最初 motivate 我们重新思考模型结构，但它不应当是这个工作的唯一目的。更根本的问题是：语言数据本身是否具有层次化、组合式的结构；如果有，语言模型是否也应当从设计上形成层次化的信息组织方式，而不是在所有层、所有位置都保存完整 token-level 表征。
-
-我们的直觉是：人处理长文本时，并不是平铺地记住所有 token，而是建立目录、索引、摘要和可检索的层次化记忆。KV cache 变小应当是这种模型结构的 byproduct，而不是唯一目标。
-
-## 第 1 轮：语言模型能否形成可压缩的层次化记忆
-
-- **假设**：语言模型不必在所有层保留完整 token-level memory；中间层可以形成更稀疏、更抽象的 anchor memory。
-
-- **验证状态**：支持。
-
-- **当前结论**：KV sequence 维度存在可压缩性，说明完整 token-level memory 不是所有层的必要条件。
-
-## 第 2 轮：这种记忆结构是否稳定
-
-- **假设 1：可压缩性只来自温和 setting。**  
-  **结论**：不成立。更激进压缩仍然可训练，并呈现清晰的压缩-能力 trade-off。
-
-- **假设 2：训练时的稀疏访问不一定对应真实推理记忆。**  
-  **结论**：不成立。anchor-only KV decode 与 full-KV decode 基本一致，说明模型确实适配了可丢弃的 memory layout。
-
-- **假设 3：普通任务不足以证明层次化记忆真的有效。**  
-  **结论**：成立。普通 benchmark 能力可以保持，但仍不能证明长程检索、精确复制和代码引用能力。
-
-## 第 3 轮：层次化记忆是否真的承载语言结构
-
-- **假设 1：anchor memory 真的融合了局部 token 信息。**  
-  **验证状态**：待验证。
-
-- **假设 2：这种结构在长程检索、精确复制、代码引用中仍然有效。**  
-  **验证状态**：待验证。
-
-- **假设 3：相比普通 sparse attention / sliding window，这种层次化 memory layout 有独立价值。**  
-  **验证状态**：待验证。
-
-## 第 4 轮：K-cache 是否适合组织成图索引
-
-现在的问题进一步具体化为：
-
-> 能否把 flat K-cache 组织成 centered K-space 上的稀疏图，让 query 先访问 anchor / cluster center，再展开少量候选 K/V，从而降低 full qK score 的计算成本？
-
-本轮离线实验对 Qwen3-0.6B 的 K-cache 做了三个观察。
-
-### 4.1 K 相似性有可稀疏化结构
-
-Raw K-K similarity 很高，但主要受 common direction 影响；因此真正用于建图的对象应当是 centered / residual K。
-
-在 centered token-level cosine 下，top-k neighbor 仍有明显区分度：
+它不是实验流水账，而是当前最干净的研究状态：
 
 ```text
-top-10: mean 0.5397, p50 0.5239, p95 0.7981
-top-20: mean 0.4707, p50 0.4481, p95 0.7552
-top-50: mean 0.3724, p50 0.3434, p95 0.6817
+conjecture
+physical priors
+mathematical models
+implementation contracts
+evidence boundary
+next falsification tests
 ```
 
-这说明 K-space 不是所有 token 都同等相关；强边和弱边之间有差异，支持从 complete weighted graph 中删掉低相似边，保留 sparse high-similarity graph。
-
-### 4.2 高相似 K 边不只是局部边
-
-如果 K similarity 只连接相邻 token，那么它更像局部平滑或 block compression，而不是知识图谱式 memory graph。实验显示 centered K 的高相似边有稳定比例跨越较远距离：
+历史实验记录保留在 round-level iteration ledger：
 
 ```text
-token cos top-10:
-  distance >=128: 24.9%
-  distance >=256: 8.7%
-  p95 distance: 397
-
-token cos top-20:
-  distance >=128: 30.7%
-  distance >=256: 12.0%
-  p95 distance: 462
-
-token cos top-50:
-  distance >=128: 40.2%
-  distance >=256: 17.8%
-  p95 distance: 561
+fdong_seq_compress/k_cache_graph_round1_findings.md
+fdong_seq_compress/k_cache_graph_round2_handoff.md
 ```
 
-Head-level 中一些 head 的非局部性更强：
+## 1. 目标和当前结论
+
+下游目标是：
+
+> 在长上下文推理中，避免每个 query 都和全部历史 K 做 full qK score，同时尽量保留 next-token prediction 所需的 V-side 信息。
+
+当前研究结论是：
+
+> Qwen3-0.6B 的 K-cache 已经表现出足够稳定的 residual graph geometry，值得继续研究 K-side graph indexing；但我们还没有证明 K-K graph candidates 能召回 full qK attention 真正使用的 token。
+
+所以当前状态是：
 
 ```text
-L06H3 top-10:
-  distance >=128: 60.2%
-  distance >=256: 34.8%
+已经支持：
+  K-cache 有 graph-friendly geometry。
 
-L15H1 top-10:
-  distance >=128: 57.6%
-  distance >=256: 35.6%
+尚未证明：
+  K-cache graph candidates 可以替代或近似 full qK retrieval。
 
-L02H6 top-10:
-  distance >=128: 56.9%
-  distance >=256: 32.0%
+下一道 gate：
+  query-attention recall。
 ```
 
-这支持继续研究 head-wise K graph，而不是只做局部 window / block 结构。
+这个课题当前应被理解为：
 
-### 4.3 K 的 common direction 不决定 qK attention 选择性
+```text
+K-indexed, V-faithful KV cache compression
+```
 
-实验还解释了一个关键现象：K 中存在巨大 common direction，导致 raw K-K similarity 很高，但 qK attention score 仍然有选择性。
+而不是 generic KV averaging。
 
-令：
+## 2. 可证伪 Conjecture
+
+当前 conjecture：
+
+> LLM K-cache 不是无结构的 flat memory。去掉 common direction 后，它形成了稀疏、多尺度的 address space。如果这个 address-space graph 能召回 full qK attention 的重要 token，那么长上下文 attention 可以被拆成 cheap K-side candidate retrieval 和 high-fidelity V-side reading。
+
+这个 conjecture 可以被以下结果证伪或削弱：
+
+```text
+1. K-K graph structure 存在，但不能 recall qK attention。
+2. K-K graph 只优于 random，但不能优于 local-window baseline。
+3. K-K graph recall 需要太大的 candidate set，无法节省计算。
+4. graph-friendly structure 只存在于少数 synthetic text。
+5. inference-time graph retrieval 失败，因为 pretrained K-space 没有被训练成 sparse retrieval index。
+```
+
+注意：一个 operationalization 失败，不等于整个方向失败。例如 inference-time K graph recall 失败后，仍可能有一个更新后的 conjecture：
+
+```text
+K-space 需要 training-time graph-aware constraint。
+```
+
+## 3. Physical Priors
+
+### 3.1 Attention 是 Memory Retrieval
+
+Physical prior：
+
+> Attention 本质上是 memory retrieval：query vector 搜索历史 key vectors，并读取对应 value vectors。
+
+数学模型：
+
+```text
+score_i = q_t · k_i
+attn_i = softmax(score_i)
+output_t = sum_i attn_i v_i
+```
+
+实现启发：
+
+```text
+不要只研究如何压小每个向量。
+更关键的是如何减少需要访问的历史 positions / blocks。
+```
+
+当前证据：
+
+```text
+Round1 和 Round2 都把 K-cache 当成可能支持 retrieval 的 address space 来研究。
+```
+
+边界：
+
+```text
+retrieval 视角只提供 indexing 动机；
+它本身不证明 K-K graph neighbors 对 qK retrieval 有用。
+```
+
+### 3.2 K 是 Index，V 是 Payload
+
+Physical prior：
+
+> K-cache 更像 address / routing / index；V-cache 更像 content / evidence / payload。
+
+数学模型：
+
+```text
+K side:
+  build summaries, anchors, graph edges, or block candidates
+
+V side:
+  preserve exact or residual value content and gather it after K-side selection
+```
+
+Round1 证据：
+
+| 性质 | K-cache | V-cache |
+|---|---|---|
+| 有效维度 | 随 sequence length sublinear 增长 | 也 sublinear，但整体高于 K |
+| 各向异性 | strong common direction | common direction 弱得多 |
+| 局部平滑性 | 强 | 弱 |
+| 小 block 结构 | 4/8/16 token 下明显 | 不适合直接平均 |
+| 角色 | address / index / routing | content / evidence / payload |
+
+实现启发：
+
+```text
+优先尝试：
+  K index -> candidate positions / blocks -> exact or residual V read
+
+不作为第一版方案：
+  把 K 和 V 一起平均成 coarse memory vector
+```
+
+边界：
+
+```text
+这个 prior 支持 K-side compression 多于 V-side compression；
+但还没有决定哪一种 K index 最好。
+```
+
+### 3.3 K 有 Residual Graph Geometry
+
+Physical prior：
+
+> 去掉 common direction 后，K vectors 形成有意义的 residual address space，其中同时存在 local continuity、long-range shortcuts 和 head-specific graph structure。
+
+数学模型：
+
+```text
+centered K:
+  r_i = k_i - mean_j(k_j)
+
+cosine graph:
+  edge i -> j if cos(r_i, r_j) is in causal top-k, j < i
+
+L2 graph:
+  edge i -> j if ||k_i - k_j||_2 is in causal top-k, j < i
+```
+
+为什么 L2 重要：
+
+```text
+|q · k1 - q · k2| <= ||q|| ||k1 - k2||
+```
+
+所以 K-K L2 distance 小，对 qK score stability 有直接解释。
+
+Round2 证据：
+
+```text
+centered cosine 和 L2 都显示：
+  local edges
+  long-range edges
+  neighbor-distance 随 seq_len sublinear 增长
+  strong layer/head heterogeneity
+  moderate hub / anchor structure
+```
+
+边界：
+
+```text
+这证明 K-cache 有 graph-friendly geometry；
+但还没有证明 graph candidates 能 recall full qK attention。
+```
+
+### 3.4 可能需要 Training-Time Alignment
+
+Physical prior：
+
+> pretrained model 可能自然存在 graph-like K geometry，但并没有被训练成用这个 graph 做 sparse retrieval。
+
+两条可能路线：
+
+```text
+Route A:
+  pretrained K-space 已经足够好
+  -> inference-time graph index 可以工作
+
+Route B:
+  pretrained K-space 只提供启发
+  -> 需要 train-time graph-aware / index-aware constraint
+```
+
+边界：
+
+```text
+不要在 inference-time recall 被具体证伪之前，过早跳到新的 trainable architecture。
+```
+
+## 4. 当前数学对象
+
+### 4.1 Cache Tensors
+
+对 layer `l`、head `h`、token position `i`：
+
+```text
+k_{l,h,i} in R^{d_h}
+v_{l,h,i} in R^{d_h}
+```
+
+token-level concatenated K：
+
+```text
+k_{l,i} = concat_h k_{l,h,i}
+```
+
+### 4.2 K Transform
+
+默认 graph space：
+
+```text
+r_i = k_i - mean_j(k_j)
+```
+
+原因：
 
 ```text
 k_i = c + r_i
-```
-
-则：
-
-```text
 q · k_i = q · c + q · r_i
 ```
 
-其中 `q · c` 对同一个 query 的所有历史 token 都是同一个常数，因此在 softmax 中抵消：
+对同一个 query，`q · c` 对所有历史 token 是同一个 additive constant，会被 softmax 抵消。真正产生 token 间选择性的部分是 `q · r_i`。
+
+### 4.3 Graph Construction
+
+Causal top-k K graph：
 
 ```text
-softmax(q · c + q · r_i) = softmax(q · r_i)
+G = (nodes, edges)
+nodes = token positions
+edge i -> j if j < i and k_j is among i's top-k nearest previous K nodes
 ```
 
-实验验证：
+支持的 metric：
 
 ```text
-mean cos(K, mean K) = 0.791
-p50  cos(K, mean K) = 0.810
-p95  cos(K, mean K) = 0.986
-
-mean cos(q, mean K)     = 0.108
-p50  cos(q, mean K)     = 0.062
-mean abs cos(q, mean K) = 0.122
-
-raw score std      = centered score std
-std ratio          = 1.0000
-score correlation  = 1.0000
-top-10 overlap     = 1.0000
-attention JS       ~= 0
+centered cosine
+L2 distance
+dot product only as diagnostic
 ```
 
-因此，K graph 应当建立在 centered / residual K geometry 上，而不是 raw K geometry 上。Raw common direction 会让图看起来虚假地稠密，但它对 attention 的 token 间选择性几乎没有贡献。
+### 4.4 Query-Attention Recall
 
-本轮结论是：
+这是下一阶段必须建立的对象。
 
-> 当前模型的 K-cache 具备建图的初步好性质：centered K 空间中强弱边有区分度，高相似边包含非局部长距离连接，部分 head 出现 hub / anchor 候选；并且 centered K 是 attention-relevant 的 address geometry。
-
-但还没有证明：
-
-> 这些 graph anchors / neighborhoods 能否召回真实 qK attention mass。
-
-下一步关键实验应当是：
+Full attention oracle：
 
 ```text
-centered K graph candidates
--> compare against full qK attention
--> measure attention mass recall / top-token recall / candidate budget
+a_t = softmax(q_t K_{<t}^T)
 ```
 
-## 当前定位
+graph candidate set：
 
-这个工作不应被理解为“为了省 KV cache 而设计 sparse attention”。更准确的定位是：
+```text
+C_t = local_window(t) union graph_expand(seed_nodes, hops)
+```
 
-> 从语言数据的层次化、组合式结构出发，训练语言模型形成层次化、可检索、可丢弃的推理记忆；KV cache 压缩是这种结构自然带来的系统收益。
+Recall metrics：
 
-详细实验记录见 [`fdong/unet_transformer.md`](fdong/unet_transformer.md)。
+```text
+attention_mass_recall = sum_{i in C_t} a_{t,i}
+top_token_recall@r = |top_r(a_t) intersect C_t| / r
+candidate_ratio = |C_t| / t
+CE_delta = CE(masked_candidates_only) - CE(full_attention)
+```
+
+## 5. Implementation Contracts
+
+### 5.1 已完成：K/V Geometry Diagnosis
+
+问题：
+
+```text
+K 和 V 是否具有不同的 compressibility 和 geometry？
+```
+
+输入：
+
+```text
+Qwen3-0.6B
+long English text
+prefix lengths from short to long
+K/V cache tensors by layer/head
+```
+
+输出：
+
+```text
+effective rank
+stable rank
+anisotropy
+local smoothness
+block structure
+subspace stability
+new-token residual novelty
+```
+
+结果：
+
+```text
+K 更像 index。
+V 更像 payload。
+```
+
+ledger：
+
+```text
+fdong_seq_compress/k_cache_graph_round1_findings.md
+```
+
+### 5.2 已完成：K Graph Geometry Sweep
+
+问题：
+
+```text
+在不同 metric、sequence length、layer/head、text domain 下，K-cache 是否都有 graph-friendly structure？
+```
+
+输入：
+
+```text
+Qwen3-0.6B
+5 synthetic long text domains
+seq_len = 1000, 2000, 4000, 8000
+similarity = centered cosine, L2
+top_k = 10, 20, 50
+all layers / all KV heads for layer-head sweep
+```
+
+输出：
+
+```text
+neighbor distance distribution
+local edge fraction
+long-range edge fraction
+in-degree / hubness
+layer/head heterogeneity
+domain robustness
+```
+
+结果：
+
+```text
+K graph geometry 已经足够稳定，值得进入 query-attention recall tests。
+```
+
+ledger：
+
+```text
+fdong_seq_compress/k_cache_graph_round2_handoff.md
+```
+
+### 5.3 下一步：Query-Attention Recall
+
+问题：
+
+```text
+K graph candidates 能否覆盖 full qK attention？
+```
+
+Algorithm：
+
+```text
+1. Select one text, one layer/head, and one prefix length.
+2. Compute full qK attention for query positions.
+3. Build causal K-K graph from historical K.
+4. Generate candidates with local window, 1-hop graph, and 2-hop graph.
+5. Compare candidates against full qK attention.
+6. Save aggregate metrics and representative pass/fail examples.
+```
+
+Pass condition：
+
+```text
+Graph candidates 在同等 candidate budget 下明显优于 local-only 和 random same-size baseline。
+```
+
+Fail conditions：
+
+```text
+Graph candidates 不优于 local-only。
+Graph candidates 需要太多 tokens 才有效。
+Graph candidates 只在少数 head 上有效，且没有清晰模式。
+Graph candidates recall top tokens 但漏掉 attention mass。
+Graph candidates recall attention mass 但 CE delta 很大。
+```
+
+Debug artifacts：
+
+```text
+per-query candidate list
+full attention top tokens
+candidate overlap table
+attention mass recall table
+edge-path visualization for selected examples
+good / bad / confusing examples
+```
+
+## 6. 当前证据
+
+### 6.1 Round1 Evidence
+
+Round1 建立了：
+
+```text
+K 和 V 的几何结构不同。
+raw K similarity 会被 common direction 误导。
+centered / residual K 更接近 attention-relevant geometry。
+K residual space 有初步 nearest-neighbor 和 nonlocal edge structure。
+```
+
+Round1 最重要结论：
+
+```text
+K-indexed, V-faithful compression 比 joint KV averaging 更合理。
+```
+
+### 6.2 Round2 Evidence
+
+Round2 建立了：
+
+```text
+K graph structure 在 L2 下也成立，不只是 centered cosine artifact。
+K graph structure 随 seq_len 增长到 8000 时没有崩坏。
+K graph 同时有 local edges 和 long-range shortcuts。
+layer/head 差异很大，应该利用而不是平均掉。
+主要现象在 5 类文本 domain 上都存在。
+```
+
+Round2 最重要结论：
+
+```text
+K-cache 在几何上适合继续探索 graph index；
+但 attention-level usefulness 仍未验证。
+```
+
+## 7. 当前 Claim Boundary
+
+现在可以说：
+
+```text
+Qwen3-0.6B K-cache has graph-friendly residual geometry.
+K 和 V 应当被区别对待。
+K-side indexing with V-side high-fidelity reading 是有实验证据支持的方向。
+```
+
+现在还不能说：
+
+```text
+K graph index 可以无损降低 attention compute。
+K-K nearest neighbors 等价于 qK attention neighbors。
+inference-time graph index 已经足够。
+一定需要新的 trainable architecture。
+```
+
+## 8. 下一轮 Research Loop
+
+下一轮按以下顺序做。
+
+### 8.1 先做 Micro-Test
+
+先跑一个小的 query-attention recall test，而不是直接大 sweep。
+
+建议设置：
+
+```text
+text: long_textbook_distributed_systems or long_codebase_query_engine
+model: Qwen3-0.6B
+seq_len: 1000 or 2000
+layers/heads:
+  local head: L27/H0
+  long-range head: L6/H3 or L15/H1
+  mixed head: one median-distance head
+candidate methods:
+  local-only
+  random same-size
+  K graph 1-hop
+  K graph 2-hop
+  local + graph
+metrics:
+  attention mass recall
+  top-token recall
+  candidate ratio
+```
+
+### 8.2 必须有 Visual Evidence
+
+每个 representative head 至少保存：
+
+```text
+token-position arc graph
+node size by in-degree
+edge color by distance or metric
+selected query examples with full attention top tokens
+candidate paths from graph expansion
+```
+
+Aggregate metrics 不够。我们需要看到 good / bad / confusing cases。
+
+### 8.3 失败后先分解，不要马上改方案
+
+如果 recall 失败，先 decomposes：
+
+```text
+big failure:
+  graph candidates miss full qK attention
+
+candidate causes:
+  seed selection is wrong
+  K-K edges are not query-relevant
+  chosen layer/head is wrong
+  metric is wrong
+  local baseline is already enough
+  attention target is diffuse and not top-token-like
+  pretrained K-space is not trained for sparse graph retrieval
+```
+
+每个原因都要有 stage-local test，再决定是否改算法或上训练约束。
+
+### 8.4 Recall 后的决策
+
+如果 graph recall 通过：
+
+```text
+build minimal inference-time graph candidate attention
+measure CE delta and runtime/candidate budget
+```
+
+如果 graph recall 失败，并且失败原因指向 train/inference mismatch：
+
+```text
+design training-time graph-aware K-space objective
+for example:
+  graph-aware attention mask
+  query-to-anchor auxiliary loss
+  learned CSA-like lightweight indexer
+  K-side index with V-side faithful payload
+```
+
+## 9. Research Hygiene
+
+后续每个实验都要记录：
+
+```text
+conjecture
+physical prior
+mathematical model
+algorithm specification
+input and hyperparameters
+pass/fail criteria
+stage-level artifacts
+result
+failure interpretation
+updated conjecture
+```
+
+不要把 plausible mechanism 当成科研进展。进展只来自：
+
+```text
+conjecture survived a concrete falsification test
+or
+conjecture failed in a way that localized the wrong assumption
+```
