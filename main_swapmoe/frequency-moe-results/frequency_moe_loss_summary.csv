@@ -1,0 +1,6 @@
+model,label,n_points,max_tokens_B,final_loss,loss_at_0p5B,loss_at_common_end
+old_baseline_4e_top1,baseline (4e top1, longer run),3364,4.409,3.3625,4.3133,4.3912
+old_rawroute_fullinput_4e_top1,raw route + full input,852,1.117,3.9169,4.3982,4.4694
+new_svroute_fullinput_4e_top1,SV route + full input,410,0.537,4.3000,4.3597,4.4210
+new_rawroute_rawcomponent_4e_top1,raw route + component input,387,0.507,4.5958,4.5380,4.5958
+new_svroute_rawcomponent_4e_top1,SV route + component input,402,0.527,4.5088,4.5394,4.5979

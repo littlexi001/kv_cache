@@ -1,0 +1,3 @@
+model,label,n_points_clipped,common_tokens_B,final_loss_in_clip,loss_at_0p5B
+old_baseline_4e_top1,baseline (4e top1),410,0.537,4.2645,4.3133
+new_svroute_fullinput_4e_top1,F-MoE: SV route + full input,410,0.537,4.3000,4.3597

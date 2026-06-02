@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="460" viewBox="0 0 980 460" role="img" aria-labelledby="title desc">
+  <title id="title">Implicit 3 by 3 Hierarchical Common-Unique MoE</title>
+  <desc id="desc">The same post-attention residual hidden state is sent in parallel to the global common expert, the group router, and the selected group path. Routers use the whole token representation rather than explicitly separated feature frequency bands.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#344054"/>
+    </marker>
+    <style>
+      .label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #182230; font-size: 18px; font-weight: 600; }
+      .small { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; font-size: 14px; }
+      .tiny { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: #475467; font-size: 12px; }
+      .box { stroke: #344054; stroke-width: 1.5; rx: 8; }
+      .input { fill: #F2F4F7; }
+      .common { fill: #E0F2FE; }
+      .group { fill: #ECFDF3; }
+      .leaf { fill: #FFF7ED; }
+      .router { fill: #F9F5FF; }
+      .route { stroke: #344054; stroke-width: 1.7; fill: none; marker-end: url(#arrow); }
+      .dash { stroke: #98A2B3; stroke-width: 1.4; fill: none; stroke-dasharray: 6 5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect x="20" y="20" width="940" height="420" rx="14" fill="#FCFCFD" stroke="#D0D5DD"/>
+  <text x="40" y="58" class="label">上一版：Implicit Hierarchical Common-Unique MoE (3 x 3)</text>
+  <text x="40" y="84" class="small">所有 router 和 expert 都接收同一个 post-attention residual 表征 h；结构期待模型自己学出频率分层。</text>
+
+  <rect x="60" y="195" width="150" height="70" class="box input"/>
+  <text x="85" y="224" class="label">同一个 h</text>
+  <text x="79" y="248" class="small">post-attn residual</text>
+
+  <rect x="310" y="70" width="170" height="72" class="box common"/>
+  <text x="340" y="100" class="label">Global Common</text>
+  <text x="351" y="124" class="small">所有 token 经过</text>
+
+  <rect x="310" y="194" width="170" height="72" class="box router"/>
+  <text x="355" y="224" class="label">Group Router</text>
+  <text x="343" y="248" class="small">用完整 h 分发</text>
+
+  <rect x="590" y="62" width="160" height="64" class="box group"/>
+  <text x="626" y="89" class="label">Group 1</text>
+  <text x="606" y="111" class="small">Common, folded</text>
+
+  <rect x="590" y="194" width="160" height="72" class="box group"/>
+  <text x="626" y="224" class="label">Group 2</text>
+  <text x="603" y="248" class="small">Common Expert</text>
+
+  <rect x="590" y="334" width="160" height="64" class="box group"/>
+  <text x="626" y="361" class="label">Group 3</text>
+  <text x="606" y="383" class="small">Common, folded</text>
+
+  <rect x="800" y="194" width="120" height="72" class="box router"/>
+  <text x="817" y="224" class="label">Leaf Router</text>
+  <text x="815" y="248" class="small">仍用完整 h</text>
+
+  <rect x="760" y="318" width="88" height="52" class="box leaf"/>
+  <text x="782" y="340" class="small">Leaf</text>
+  <text x="779" y="358" class="tiny">2.1</text>
+  <rect x="856" y="318" width="88" height="52" class="box leaf"/>
+  <text x="878" y="340" class="small">Leaf</text>
+  <text x="875" y="358" class="tiny">2.2</text>
+  <rect x="760" y="382" width="184" height="36" class="box leaf"/>
+  <text x="816" y="405" class="small">Leaf 2.3</text>
+
+  <path d="M210 230 C250 115, 270 106, 310 106" class="route"/>
+  <path d="M210 230 L310 230" class="route"/>
+  <path d="M480 230 L590 230" class="route"/>
+  <path d="M480 230 C525 90, 545 94, 590 94" class="dash"/>
+  <path d="M480 230 C525 365, 545 366, 590 366" class="dash"/>
+  <path d="M210 230 C520 155, 735 160, 800 216" class="dash"/>
+  <path d="M750 230 L800 230" class="route"/>
+  <path d="M860 266 L804 318" class="route"/>
+  <path d="M860 266 L900 318" class="route"/>
+  <path d="M860 266 L852 382" class="route"/>
+
+  <text x="72" y="412" class="tiny">注意：这里没有显式 feature frequency band；分层结构由 router 从完整 h 中隐式学习。</text>
+</svg>
