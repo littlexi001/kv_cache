@@ -57,6 +57,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--save_token_rows", type=str2bool, default=True)
     parser.add_argument("--make_plots", type=str2bool, default=True)
+    parser.add_argument("--make_heatmaps", type=str2bool, default=True)
+    parser.add_argument(
+        "--heatmap_max_tokens",
+        type=int,
+        default=1500,
+        help="Downsample attention heatmaps above this token count. Use 0 to plot all tokens.",
+    )
     parser.add_argument("--plot_dpi", type=int, default=180)
     parser.add_argument("--point_alpha", type=float, default=0.35)
     return parser.parse_args()
@@ -290,6 +297,49 @@ def plot_head_rows(
     return paths
 
 
+def plot_attention_heatmap(
+    matrix: torch.Tensor,
+    output_dir: Path,
+    layer: int,
+    head: int,
+    total_tokens: int,
+    stride: int,
+    dpi: int,
+) -> str:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    plot_dir = output_dir / "plots" / f"layer_{layer:02d}" / f"head_{head:02d}"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7.5, 7.5), dpi=dpi)
+    image = ax.imshow(
+        matrix.numpy(),
+        origin="lower",
+        aspect="equal",
+        interpolation="nearest",
+        cmap="magma",
+    )
+    ax.set_title(f"Attention L{layer} H{head}: attention weight")
+    ax.set_xlabel("Key token index")
+    ax.set_ylabel("Query token index")
+    if matrix.shape[0] > 1:
+        tick_count = min(6, int(matrix.shape[0]))
+        ticks = torch.linspace(0, int(matrix.shape[0]) - 1, tick_count).round().long().tolist()
+        labels = [str(min(total_tokens - 1, tick * stride)) for tick in ticks]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels(labels)
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="attention weight")
+    fig.tight_layout()
+    path = plot_dir / "attention_weight_heatmap.png"
+    fig.savefig(path)
+    plt.close(fig)
+    return str(path)
+
+
 def main() -> None:
     args = parse_args()
     if args.max_tokens <= 1:
@@ -342,6 +392,17 @@ def main() -> None:
     plot_rows_by_head: dict[tuple[int, int], list[dict[str, Any]]] = {
         (layer, head): [] for layer in layer_indices for head in head_indices
     }
+    heatmap_stride = 1
+    if args.heatmap_max_tokens > 0 and total_tokens > args.heatmap_max_tokens:
+        heatmap_stride = math.ceil(total_tokens / args.heatmap_max_tokens)
+    heatmap_tokens = math.ceil(total_tokens / heatmap_stride)
+    heatmap_matrices: dict[tuple[int, int], torch.Tensor] = {}
+    if args.make_heatmaps:
+        heatmap_matrices = {
+            (layer, head): torch.zeros((heatmap_tokens, heatmap_tokens), dtype=torch.float32)
+            for layer in layer_indices
+            for head in head_indices
+        }
     timing_rows: list[dict[str, Any]] = []
 
     for chunk_idx, start in enumerate(range(0, total_tokens, args.chunk_size), start=1):
@@ -391,6 +452,16 @@ def main() -> None:
             if args.make_plots:
                 for row in rows:
                     plot_rows_by_head[(int(row["layer"]), int(row["head"]))].append(row)
+            if args.make_heatmaps:
+                attention_cpu = attention.float().cpu()
+                for local_query in range(attention_cpu.shape[1]):
+                    query_token = start + local_query
+                    if query_token % heatmap_stride != 0:
+                        continue
+                    query_bin = query_token // heatmap_stride
+                    key_values = attention_cpu[:, local_query, ::heatmap_stride]
+                    for head in head_indices:
+                        heatmap_matrices[(layer, head)][query_bin, : key_values.shape[1]] = key_values[head]
 
         if args.save_token_rows and chunk_rows:
             append_rows(token_csv_path, chunk_rows, token_row_fields(), append=wrote_token_rows)
@@ -414,6 +485,19 @@ def main() -> None:
     plot_paths: list[str] = []
     if args.make_plots:
         plot_paths = plot_head_rows(plot_rows_by_head, output_dir, args.plot_dpi, args.point_alpha)
+    if args.make_heatmaps:
+        for (layer, head), matrix in sorted(heatmap_matrices.items()):
+            plot_paths.append(
+                plot_attention_heatmap(
+                    matrix,
+                    output_dir,
+                    layer,
+                    head,
+                    total_tokens,
+                    heatmap_stride,
+                    args.plot_dpi,
+                )
+            )
 
     (output_dir / "summary.json").write_text(
         json.dumps(

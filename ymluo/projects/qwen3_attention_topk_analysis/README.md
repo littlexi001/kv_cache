@@ -63,6 +63,7 @@ plots/
     head_00/
       index_distance_by_rank_tokens.png
       attention_weight_by_rank_tokens.png
+      attention_weight_heatmap.png
 ```
 
 `index_distance_by_rank_tokens.png`:
@@ -76,6 +77,20 @@ plots/
 - x-axis: query token index `i`
 - y-axis: post-softmax attention weight
 - color: attention rank
+
+`attention_weight_heatmap.png`:
+
+- x-axis: key token index `j`
+- y-axis: query token index `i`
+- color: post-softmax attention weight
+- use `HEATMAP_MAX_TOKENS` to control downsampling for 5000-token contexts
+
+Example:
+
+```bash
+HEATMAP_MAX_TOKENS=1500 \
+bash ymluo/projects/qwen3_attention_topk_analysis/scripts/run_analysis.sh
+```
 
 ## Notes
 

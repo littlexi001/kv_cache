@@ -33,5 +33,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kcache_l2_neighbors.py" \
   --distance_device "${DISTANCE_DEVICE:-auto}" \
   --save_neighbor_csv "${SAVE_NEIGHBOR_CSV:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
+  --make_heatmaps "${MAKE_HEATMAPS:-true}" \
+  --heatmap_max_tokens "${HEATMAP_MAX_TOKENS:-1500}" \
   --plot_dpi "${PLOT_DPI:-180}" \
   --point_alpha "${POINT_ALPHA:-0.35}"

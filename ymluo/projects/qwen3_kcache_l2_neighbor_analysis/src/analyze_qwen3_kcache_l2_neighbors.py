@@ -69,6 +69,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distance_device", choices=["auto", "cpu", "cuda"], default="auto")
     parser.add_argument("--save_neighbor_csv", type=str2bool, default=True)
     parser.add_argument("--make_plots", type=str2bool, default=True)
+    parser.add_argument("--make_heatmaps", type=str2bool, default=True)
+    parser.add_argument(
+        "--heatmap_max_tokens",
+        type=int,
+        default=1500,
+        help="Downsample heatmap matrices above this token count. Use 0 to plot all tokens.",
+    )
     parser.add_argument("--plot_dpi", type=int, default=180)
     parser.add_argument("--point_alpha", type=float, default=0.35)
     return parser.parse_args()
@@ -448,6 +455,54 @@ def plot_neighbor_scatter(
     return paths
 
 
+def plot_l2_heatmap(
+    vectors: torch.Tensor,
+    output_dir: Path,
+    cache_type: str,
+    variant: str,
+    layer: int,
+    head: int,
+    device: torch.device,
+    max_tokens: int,
+    dpi: int,
+) -> str:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    tokens = int(vectors.shape[0])
+    stride = 1
+    if max_tokens > 0 and tokens > max_tokens:
+        stride = math.ceil(tokens / max_tokens)
+    sampled = vectors[::stride].to(device=device, dtype=torch.float32)
+    matrix = torch.cdist(sampled, sampled, p=2).float().cpu()
+    plot_dir = output_dir / "plots" / cache_type / variant / f"layer_{layer:02d}" / f"head_{head:02d}"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(7.5, 7.5), dpi=dpi)
+    image = ax.imshow(matrix.numpy(), origin="lower", aspect="equal", interpolation="nearest", cmap="viridis")
+    ax.set_title(f"{cache_type.upper()} {variant} L{layer} H{head}: pairwise L2 distance")
+    ax.set_xlabel("Token index")
+    ax.set_ylabel("Token index")
+    if matrix.shape[0] > 1:
+        tick_count = min(6, int(matrix.shape[0]))
+        ticks = torch.linspace(0, int(matrix.shape[0]) - 1, tick_count).round().long().tolist()
+        labels = [str(min(tokens - 1, tick * stride)) for tick in ticks]
+        ax.set_xticks(ticks)
+        ax.set_xticklabels(labels)
+        ax.set_yticks(ticks)
+        ax.set_yticklabels(labels)
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04, label="L2 distance")
+    fig.tight_layout()
+    path = plot_dir / "pairwise_l2_distance_heatmap.png"
+    fig.savefig(path)
+    plt.close(fig)
+    del sampled, matrix
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    return str(path)
+
+
 def load_config_with_rope_limit(model_path: str, rope_max_position_embeddings: int) -> Any:
     config = AutoConfig.from_pretrained(model_path, trust_remote_code=True)
     original = getattr(config, "max_position_embeddings", None)
@@ -555,6 +610,20 @@ def main() -> None:
                             head_idx,
                             args.plot_dpi,
                             args.point_alpha,
+                        )
+                    )
+                if args.make_heatmaps:
+                    plot_paths.append(
+                        plot_l2_heatmap(
+                            vectors,
+                            output_dir,
+                            "k",
+                            variant,
+                            layer_idx,
+                            head_idx,
+                            distance_device,
+                            args.heatmap_max_tokens,
+                            args.plot_dpi,
                         )
                     )
                 del distances, indices

@@ -30,5 +30,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_attention_topk.py" \
   --include_self "${INCLUDE_SELF:-true}" \
   --save_token_rows "${SAVE_TOKEN_ROWS:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
+  --make_heatmaps "${MAKE_HEATMAPS:-true}" \
+  --heatmap_max_tokens "${HEATMAP_MAX_TOKENS:-1500}" \
   --plot_dpi "${PLOT_DPI:-180}" \
   --point_alpha "${POINT_ALPHA:-0.35}"

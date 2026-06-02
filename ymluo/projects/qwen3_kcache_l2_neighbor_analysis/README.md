@@ -87,6 +87,7 @@ plots/
         head_00/
           index_distance_by_rank_tokens.png
           l2_distance_by_rank_tokens.png
+          pairwise_l2_distance_heatmap.png
 ```
 
 `index_distance_by_rank_tokens.png`:
@@ -101,6 +102,20 @@ plots/
 - x-axis: current token index `i`
 - y-axis: `||k_i - k_j||_2`
 - colors: nearest-neighbor rank by L2 distance
+
+`pairwise_l2_distance_heatmap.png`:
+
+- x-axis: token index `j`
+- y-axis: token index `i`
+- color: pairwise L2 distance `||k_i - k_j||_2`
+- use `HEATMAP_MAX_TOKENS` to control downsampling for large contexts
+
+Example:
+
+```bash
+HEATMAP_MAX_TOKENS=1500 \
+bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_analysis.sh
+```
 
 ## Notes
 
