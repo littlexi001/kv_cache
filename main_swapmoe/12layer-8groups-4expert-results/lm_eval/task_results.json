@@ -1,0 +1,259 @@
+{
+  "results": {
+    "arc_easy": {
+      "alias": "arc_easy",
+      "acc,none": 0.36658249158249157,
+      "acc_stderr,none": 0.009887786585323962,
+      "acc_norm,none": 0.3560606060606061,
+      "acc_norm_stderr,none": 0.009825454608416311
+    },
+    "hellaswag": {
+      "alias": "hellaswag",
+      "acc,none": 0.2681736705835491,
+      "acc_stderr,none": 0.004421031403685238,
+      "acc_norm,none": 0.2681736705835491,
+      "acc_norm_stderr,none": 0.004421031403685237
+    },
+    "lambada_openai": {
+      "alias": "lambada_openai",
+      "perplexity,none": 213.0247091168918,
+      "perplexity_stderr,none": 12.655831570920181,
+      "acc,none": 0.23636716475839317,
+      "acc_stderr,none": 0.005918994587750963
+    }
+  },
+  "group_subtasks": {
+    "arc_easy": [],
+    "hellaswag": [],
+    "lambada_openai": []
+  },
+  "configs": {
+    "arc_easy": {
+      "task": "arc_easy",
+      "tag": [
+        "ai2_arc"
+      ],
+      "dataset_path": "/mnt/workspace/lm-bash/hf_benchmarks/arc_e",
+      "training_split": "train",
+      "validation_split": "validation",
+      "test_split": "test",
+      "doc_to_text": "Question: {{question}}\nAnswer:",
+      "doc_to_target": "{{choices.label.index(answerKey)}}",
+      "unsafe_code": false,
+      "doc_to_choice": "{{choices.text}}",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        },
+        {
+          "metric": "acc_norm",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "multiple_choice",
+      "repeats": 1,
+      "should_decontaminate": true,
+      "doc_to_decontamination_query": "Question: {{question}}\nAnswer:",
+      "metadata": {
+        "version": 1.0,
+        "pretrained": "/mnt/workspace/Qwen3-0.6B",
+        "ckpt_path": "/mnt/workspace/let-moe_predictor/oldscripts/hier_moe_raw_dclm_outputs_ddp/hier_moe_last.pth",
+        "model_type": "hier",
+        "arch": "hier12",
+        "dtype": "bfloat16",
+        "max_length": 1024,
+        "trust_remote_code": true,
+        "softmax_dtype": "float32"
+      }
+    },
+    "hellaswag": {
+      "task": "hellaswag",
+      "tag": [
+        "multiple_choice"
+      ],
+      "dataset_path": "/mnt/workspace/lm-bash/hf_benchmarks/hellaswag",
+      "dataset_kwargs": {
+        "trust_remote_code": true
+      },
+      "training_split": "train",
+      "validation_split": "validation",
+      "process_docs": "def process_docs(dataset: datasets.Dataset) -> datasets.Dataset:\n    def _process_doc(doc):\n        ctx = doc[\"ctx_a\"] + \" \" + doc[\"ctx_b\"].capitalize()\n        out_doc = {\n            \"query\": preprocess(doc[\"activity_label\"] + \": \" + ctx),\n            \"choices\": [preprocess(ending) for ending in doc[\"endings\"]],\n            \"gold\": int(doc[\"label\"]),\n        }\n        return out_doc\n\n    return dataset.map(_process_doc)\n",
+      "doc_to_text": "{{query}}",
+      "doc_to_target": "{{label}}",
+      "unsafe_code": false,
+      "doc_to_choice": "choices",
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        },
+        {
+          "metric": "acc_norm",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "multiple_choice",
+      "repeats": 1,
+      "should_decontaminate": false,
+      "metadata": {
+        "version": 1.0,
+        "pretrained": "/mnt/workspace/Qwen3-0.6B",
+        "ckpt_path": "/mnt/workspace/let-moe_predictor/oldscripts/hier_moe_raw_dclm_outputs_ddp/hier_moe_last.pth",
+        "model_type": "hier",
+        "arch": "hier12",
+        "dtype": "bfloat16",
+        "max_length": 1024,
+        "trust_remote_code": true,
+        "softmax_dtype": "float32"
+      }
+    },
+    "lambada_openai": {
+      "task": "lambada_openai",
+      "tag": [
+        "lambada"
+      ],
+      "dataset_path": "/mnt/workspace/lm-bash/hf_benchmarks/lambada_openai",
+      "dataset_name": "default",
+      "dataset_kwargs": {
+        "trust_remote_code": true
+      },
+      "test_split": "test",
+      "doc_to_text": "{{text.split(' ')[:-1]|join(' ')}}",
+      "doc_to_target": "{{' '+text.split(' ')[-1]}}",
+      "unsafe_code": false,
+      "description": "",
+      "target_delimiter": " ",
+      "fewshot_delimiter": "\n\n",
+      "num_fewshot": 0,
+      "metric_list": [
+        {
+          "metric": "perplexity",
+          "aggregation": "perplexity",
+          "higher_is_better": false
+        },
+        {
+          "metric": "acc",
+          "aggregation": "mean",
+          "higher_is_better": true
+        }
+      ],
+      "output_type": "loglikelihood",
+      "repeats": 1,
+      "should_decontaminate": true,
+      "doc_to_decontamination_query": "{{text}}",
+      "metadata": {
+        "version": 1.0,
+        "pretrained": "/mnt/workspace/Qwen3-0.6B",
+        "ckpt_path": "/mnt/workspace/let-moe_predictor/oldscripts/hier_moe_raw_dclm_outputs_ddp/hier_moe_last.pth",
+        "model_type": "hier",
+        "arch": "hier12",
+        "dtype": "bfloat16",
+        "max_length": 1024,
+        "trust_remote_code": true,
+        "softmax_dtype": "float32"
+      }
+    }
+  },
+  "versions": {
+    "arc_easy": 1.0,
+    "hellaswag": 1.0,
+    "lambada_openai": 1.0
+  },
+  "n-shot": {
+    "arc_easy": 0,
+    "hellaswag": 0,
+    "lambada_openai": 0
+  },
+  "higher_is_better": {
+    "arc_easy": {
+      "acc": true,
+      "acc_norm": true
+    },
+    "hellaswag": {
+      "acc": true,
+      "acc_norm": true
+    },
+    "lambada_openai": {
+      "perplexity": false,
+      "acc": true
+    }
+  },
+  "n-samples": {
+    "lambada_openai": {
+      "original": 5153,
+      "effective": 5153
+    },
+    "hellaswag": {
+      "original": 10042,
+      "effective": 10042
+    },
+    "arc_easy": {
+      "original": 2376,
+      "effective": 2376
+    }
+  },
+  "config": {
+    "model": "hf",
+    "model_args": "pretrained=/mnt/workspace/Qwen3-0.6B,ckpt_path=/mnt/workspace/let-moe_predictor/oldscripts/hier_moe_raw_dclm_outputs_ddp/hier_moe_last.pth,model_type=hier,arch=hier12,dtype=bfloat16,max_length=1024,trust_remote_code=True,softmax_dtype=float32",
+    "model_num_parameters": 392133600,
+    "model_dtype": "",
+    "model_revision": "main",
+    "model_sha": "",
+    "batch_size": "1",
+    "batch_sizes": [],
+    "device": "cuda:0",
+    "use_cache": null,
+    "limit": null,
+    "bootstrap_iters": 100000,
+    "gen_kwargs": null,
+    "random_seed": 0,
+    "numpy_seed": 1234,
+    "torch_seed": 1234,
+    "fewshot_seed": 1234
+  },
+  "git_hash": null,
+  "date": 1780354183.124081,
+  "pretty_env_info": "PyTorch version: 2.4.0\nIs debug build: False\nCUDA used to build PyTorch: 12.3\nROCM used to build PyTorch: N/A\n\nOS: Ubuntu 22.04.5 LTS (x86_64)\nGCC version: (Ubuntu 11.4.0-1ubuntu1~22.04.2) 11.4.0\nClang version: 13.0.1 (1.6.1-14620b)\nCMake version: version 3.26.0\nLibc version: glibc-2.35\n\nPython version: 3.10.13 (main, Aug  1 2025, 10:04:26) [GCC 11.4.0] (64-bit runtime)\nPython platform: Linux-5.10.134-008.18.kangaroo.al8.x86_64-x86_64-with-glibc2.35\nIs CUDA available: True\nCUDA runtime version: 12.3.0\nCUDA_MODULE_LOADING set to: LAZY\nGPU models and configuration: \nGPU 0: PPU-ZW810\nGPU 1: PPU-ZW810\nGPU 2: PPU-ZW810\nGPU 3: PPU-ZW810\nGPU 4: PPU-ZW810\nGPU 5: PPU-ZW810\nGPU 6: PPU-ZW810\nGPU 7: PPU-ZW810\n\nNvidia driver version: 1.3.2-d7f5a2\ncuDNN version: Probably one of the following:\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_adv_infer.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_adv_train.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_cnn_infer.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_cnn_train.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_ops_infer.so.8.9.5\n/usr/local/PPU_SDK/CUDA_SDK/targets/x86_64-linux/lib/libcudnn_ops_train.so.8.9.5\nHIP runtime version: N/A\nMIOpen runtime version: N/A\nIs XNNPACK available: True\n\nCPU:\nArchitecture:                    x86_64\nCPU op-mode(s):                  32-bit, 64-bit\nAddress sizes:                   52 bits physical, 57 bits virtual\nByte Order:                      Little Endian\nCPU(s):                          128\nOn-line CPU(s) list:             0-127\nVendor ID:                       GenuineIntel\nModel name:                      Intel(R) Xeon(R) Processor\nCPU family:                      6\nModel:                           143\nThread(s) per core:              1\nCore(s) per socket:              64\nSocket(s):                       2\nStepping:                        8\nBogoMIPS:                        5200.00\nFlags:                           fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch cpuid_fault invpcid_single ssbd ibrs ibpb stibp ibrs_enhanced fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid avx512f avx512dq rdseed adx smap avx512ifma clflushopt clwb avx512cd sha_ni avx512bw avx512vl xsaveopt xsavec xgetbv1 xsaves avx_vnni avx512_bf16 wbnoinvd avx512vbmi umip pku waitpkg avx512_vbmi2 gfni vaes vpclmulqdq avx512_vnni avx512_bitalg avx512_vpopcntdq rdpid cldemote movdiri movdir64b fsrm md_clear serialize tsxldtrk amx_bf16 avx512_fp16 amx_tile amx_int8 arch_capabilities\nHypervisor vendor:               KVM\nVirtualization type:             full\nL1d cache:                       3 MiB (64 instances)\nL1i cache:                       2 MiB (64 instances)\nL2 cache:                        128 MiB (64 instances)\nL3 cache:                        195 MiB (2 instances)\nNUMA node(s):                    2\nNUMA node0 CPU(s):               0-63\nNUMA node1 CPU(s):               64-127\nVulnerability Itlb multihit:     Not affected\nVulnerability L1tf:              Not affected\nVulnerability Mds:               Not affected\nVulnerability Meltdown:          Not affected\nVulnerability Mmio stale data:   Not affected\nVulnerability Retbleed:          Not affected\nVulnerability Spec store bypass: Vulnerable\nVulnerability Spectre v1:        Vulnerable: __user pointer sanitization and usercopy barriers only; no swapgs barriers\nVulnerability Spectre v2:        Vulnerable, IBPB: disabled, STIBP: disabled, PBRSB-eIBRS: Vulnerable\nVulnerability Srbds:             Not affected\nVulnerability Tsx async abort:   Not affected\n\nVersions of relevant libraries:\n[pip3] flake8==7.3.0\n[pip3] mypy-extensions==1.0.0\n[pip3] numpy==1.23.5\n[pip3] torch==2.4.0\n[pip3] torch_scatter==2.1.2\n[pip3] torchaudio==2.4.0a0+b829e93\n[pip3] torchdata==0.8.0+265d317\n[pip3] torchtext==0.18.0a0+9bed85d\n[pip3] torchvision==0.19.0a0+48b1edf\n[pip3] triton==3.0.0\n[conda] Could not collect",
+  "transformers_version": "4.45.2",
+  "lm_eval_version": "0.4.9",
+  "upper_git_hash": null,
+  "tokenizer_pad_token": [
+    "<|endoftext|>",
+    "151643"
+  ],
+  "tokenizer_eos_token": [
+    "<|im_end|>",
+    "151645"
+  ],
+  "tokenizer_bos_token": [
+    null,
+    "None"
+  ],
+  "eot_token_id": 151645,
+  "max_length": 1024,
+  "task_hashes": {},
+  "model_source": "hf",
+  "model_name": "/mnt/workspace/Qwen3-0.6B",
+  "model_name_sanitized": "__mnt__workspace__Qwen3-0.6B",
+  "system_instruction": null,
+  "system_instruction_sha": null,
+  "fewshot_as_multiturn": false,
+  "chat_template": null,
+  "chat_template_sha": null,
+  "start_time": 17773971.274806876,
+  "end_time": 17777900.550150502,
+  "total_evaluation_time_seconds": "3929.2753436267376"
+}

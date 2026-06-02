@@ -133,6 +133,7 @@ def main() -> None:
     parser.add_argument("--energy-thresholds", default="0.90,0.95,0.99")
     parser.add_argument("--block-sizes", default="4,8,16,32,64")
     parser.add_argument("--subspace-rank", type=int, default=16)
+    parser.add_argument("--allow-longer-than-model-max", action="store_true")
     args = parser.parse_args()
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
@@ -147,6 +148,15 @@ def main() -> None:
     )
     _, input_ids = load_tokenized_text(tokenizer, args.text_path, args.max_tokens)
     max_available = int(input_ids.numel())
+    model_max_position_embeddings = getattr(model.config, "max_position_embeddings", None)
+    if model_max_position_embeddings is not None and max_available > int(model_max_position_embeddings):
+        message = (
+            f"Tokenized sequence length ({max_available}) exceeds model.config.max_position_embeddings "
+            f"({model_max_position_embeddings}). This can make KV geometry unreliable due to position/RoPE handling."
+        )
+        if not args.allow_longer_than_model_max:
+            raise ValueError(message + " Use a shorter --max-tokens or pass --allow-longer-than-model-max intentionally.")
+        print(f"WARNING: {message}", flush=True)
     prefix_lengths = [p for p in parse_int_list(args.prefix_lengths) if p <= max_available]
     if not prefix_lengths:
         raise ValueError(f"No prefix lengths <= available token count ({max_available}).")
@@ -209,6 +219,10 @@ def main() -> None:
         "device": str(device),
         "dtype": args.dtype,
         "max_available_tokens": max_available,
+        "model_max_position_embeddings": model_max_position_embeddings,
+        "seq_len_within_model_max_position_embeddings": (
+            None if model_max_position_embeddings is None else max_available <= int(model_max_position_embeddings)
+        ),
         "prefix_lengths": prefix_lengths,
         "layers": layer_indices,
         "heads": args.heads,
@@ -224,4 +238,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

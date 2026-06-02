@@ -15,19 +15,94 @@ V_t = [v_1, ..., v_t]
 and measures whether this point cloud expands, stabilizes, drifts, clusters, or
 stays low-dimensional as `t` increases.
 
-## Files
+## Document Structure
+
+The clean current-state framework lives outside this experiment folder:
 
 ```text
-src/model_loader.py          Load tokenizer and Qwen3 model.
-src/text_loader.py           Read one text file and tokenize one sequence.
-src/geometry_metrics.py      SVD, anisotropy, novelty, temporal, and block metrics.
-src/run_prefix_geometry.py   Main prefix-sweep experiment entry.
-src/run_k_similarity_graph_probe.py
-                            Causal top-k K-cache similarity distribution probe.
-scripts/run_prefix_geometry.sh
-scripts/run_k_similarity_graph_probe.sh
-data/synthetic_texts/long_english_article_01.txt
+main_seq_compress/project_overview.md
+  Current-state research framework: conjecture, priors, math models,
+  implementation contracts, evidence boundary, and next falsification tests.
 ```
+
+This folder keeps the iteration ledgers and runnable experiment code.
+
+The root documents are intentionally reduced to round-level research notes:
+
+```text
+k_cache_graph_round1_findings.md
+  Consolidated Round1 understanding: KV geometry, K/V role split, centered K
+  graph evidence, common-direction analysis, and remaining gaps.
+
+k_cache_graph_round2_handoff.md
+  Round2 findings: L2 metric sweep, seq-len scaling, layer/head selection,
+  domain robustness, and the next query-attention recall gate.
+```
+
+Code and runtime folders:
+
+```text
+src/
+  model_loader.py                    Load tokenizer and Qwen3 model.
+  text_loader.py                     Read one text file and tokenize one sequence.
+  geometry_metrics.py                SVD, anisotropy, novelty, temporal, and block metrics.
+  run_prefix_geometry.py             Prefix-growth KV geometry entrypoint.
+  run_k_similarity_graph_probe.py    K-cache graph metric probe.
+  run_qk_common_direction_probe.py   QK common-direction sanity check.
+
+scripts/
+  run_prefix_geometry.sh
+  run_mps_geometry_long.sh
+  nohup_run_mps_geometry_long.sh
+  run_k_similarity_graph_probe.sh
+  run_k_graph_metric_sweep.sh
+  nohup_run_k_graph_metric_sweep.sh
+  run_k_seq_len_scaling_sweep.sh
+  run_k_transform_sweep.sh
+  run_k_graph_construction_sweep.sh
+  run_qk_common_direction_probe.sh
+  generate_long_synthetic_text.py
+
+data/
+  synthetic_texts/                   Local long English synthetic texts.
+
+outputs/
+  Local experiment outputs; ignored by git except .gitignore/.gitkeep.
+
+logs/
+  Local nohup logs; ignored by git except .gitignore/.gitkeep.
+```
+
+Older Round1 notes were consolidated into `k_cache_graph_round1_findings.md` to
+avoid having several partially overlapping conclusion files.
+
+## Available Synthetic Texts
+
+These files are generated locally and are meant for geometry diagnostics, not
+for benchmark claims.
+
+```text
+long_english_12000_words.txt
+  battery / microgrid technical report; about 43.9k Qwen tokens.
+
+long_textbook_distributed_systems.txt
+  textbook-style distributed systems chapter; about 19.7k Qwen tokens.
+
+long_codebase_query_engine.txt
+  codebase / API / bug-report style document; about 21.8k Qwen tokens.
+
+long_news_supply_chain_dossier.txt
+  multi-article news dossier; about 16.5k Qwen tokens.
+
+long_dialogue_tool_transcript.txt
+  agent conversation plus tool outputs; about 18.4k Qwen tokens.
+
+long_english_article_01.txt
+  short smoke-test article; about 788 Qwen tokens.
+```
+
+Use the long files for `MAX_TOKENS=1000,2000,4000,8000,12000` sweeps. Use the
+short file only for quick smoke tests.
 
 ## Quick Smoke Test
 
@@ -110,6 +185,48 @@ CENTER_TOKENS=1
 ANALYSIS_LEVEL=token
 ```
 
+Supported K-neighbor metrics:
+
+```text
+SIMILARITY=cos   Higher is closer; uses cosine on centered/normalized K.
+SIMILARITY=dot   Higher is closer; diagnostic only because K norm can create hubs.
+SIMILARITY=l2    Lower is closer; directly bounds qK score differences.
+```
+
+Supported K transforms:
+
+```text
+KEY_TRANSFORM=raw
+KEY_TRANSFORM=center
+KEY_TRANSFORM=remove_pc PC_REMOVE_COUNT=1
+KEY_TRANSFORM=remove_pc PC_REMOVE_COUNT=4
+KEY_TRANSFORM=whiten
+```
+
+Supported graph construction modes:
+
+```text
+GRAPH_MODE=topk
+GRAPH_MODE=radius RADIUS_THRESHOLD=0.5
+```
+
+Every run writes `graph_structure_summary_by_layer.csv`, which summarizes edge
+count, average out-degree, weak component structure, local edge fraction, and
+long-range edge fraction.
+
+For `l2`, the `summary_by_layer.csv` columns still use the historical
+`similarity` field name, but the values are L2 distances, so smaller values are
+better/closer. The script also records:
+
+```text
+model_max_position_embeddings
+seq_len_within_model_max_position_embeddings
+```
+
+and fails by default if the tokenized sequence is longer than the model's
+configured position range, because position/RoPE handling could otherwise
+dominate the geometry.
+
 Main output files:
 
 ```text
@@ -131,5 +248,16 @@ Useful variants:
 ```bash
 CENTER_TOKENS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
 SIMILARITY=dot bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+SIMILARITY=l2 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
 ANALYSIS_LEVEL=head SAVE_NEIGHBORS=1 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+KEY_TRANSFORM=remove_pc PC_REMOVE_COUNT=4 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+GRAPH_MODE=radius RADIUS_THRESHOLD=0.6 bash fdong_seq_compress/scripts/run_k_similarity_graph_probe.sh
+```
+
+Round2 sweep helpers:
+
+```bash
+bash fdong_seq_compress/scripts/run_k_seq_len_scaling_sweep.sh
+bash fdong_seq_compress/scripts/run_k_transform_sweep.sh
+bash fdong_seq_compress/scripts/run_k_graph_construction_sweep.sh
 ```

@@ -10,11 +10,17 @@ MAX_TOKENS="${MAX_TOKENS:-1000}"
 LAYERS="${LAYERS:-all}"
 HEADS="${HEADS:-all}"
 ANALYSIS_LEVEL="${ANALYSIS_LEVEL:-token}"
+GRAPH_MODE="${GRAPH_MODE:-topk}"
 TOP_K="${TOP_K:-5}"
+RADIUS_THRESHOLD="${RADIUS_THRESHOLD:-}"
+MAX_RADIUS_NEIGHBORS="${MAX_RADIUS_NEIGHBORS:-200}"
 SIMILARITY="${SIMILARITY:-cos}"
-HIST_BINS="${HIST_BINS:--1.0:1.0:0.05}"
+HIST_BINS="${HIST_BINS:-auto}"
 SAVE_NEIGHBORS="${SAVE_NEIGHBORS:-0}"
 CENTER_TOKENS="${CENTER_TOKENS:-1}"
+KEY_TRANSFORM="${KEY_TRANSFORM:-}"
+PC_REMOVE_COUNT="${PC_REMOVE_COUNT:-0}"
+ALLOW_LONGER_THAN_MODEL_MAX="${ALLOW_LONGER_THAN_MODEL_MAX:-0}"
 if [[ -z "${PYTHON:-}" ]]; then
   if [[ -x ".venv-transformers451/bin/python" ]]; then
     PYTHON=".venv-transformers451/bin/python"
@@ -33,8 +39,11 @@ args=(
   --layers "$LAYERS"
   --heads "$HEADS"
   --analysis-level "$ANALYSIS_LEVEL"
+  --graph-mode "$GRAPH_MODE"
   --top-k "$TOP_K"
+  --max-radius-neighbors "$MAX_RADIUS_NEIGHBORS"
   --similarity "$SIMILARITY"
+  --pc-remove-count "$PC_REMOVE_COUNT"
   "--hist-bins=$HIST_BINS"
 )
 
@@ -46,8 +55,20 @@ if [[ "$SAVE_NEIGHBORS" == "1" ]]; then
   args+=(--save-neighbors)
 fi
 
+if [[ -n "$RADIUS_THRESHOLD" ]]; then
+  args+=(--radius-threshold "$RADIUS_THRESHOLD")
+fi
+
+if [[ -n "$KEY_TRANSFORM" ]]; then
+  args+=(--key-transform "$KEY_TRANSFORM")
+fi
+
 if [[ "$CENTER_TOKENS" == "1" ]]; then
   args+=(--center-tokens)
+fi
+
+if [[ "$ALLOW_LONGER_THAN_MODEL_MAX" == "1" ]]; then
+  args+=(--allow-longer-than-model-max)
 fi
 
 "$PYTHON" "${args[@]}"
