@@ -55,6 +55,20 @@ K-indexed, V-faithful KV cache compression
 
 而不是 generic KV averaging。
 
+当前可以对外复述的四条主结论是：
+
+1. **K-K similarity 有明显近邻结构，可作为稀疏图候选 index。**  
+   去掉 raw K common direction 后，K-cache 不是无结构的 flat memory。Centered cosine 和 L2 distance 都显示 K vectors 之间存在稳定近邻结构，因此 K-side sparse graph / routing index 是值得继续验证的方向。
+
+2. **高相似 K 不是纯局部窗口，存在远距离高相似 K。**  
+   Round2 中，K graph 同时包含 local continuity 和 long-range shortcuts。也就是说，K graph 不是 sliding window 的同义词；它可能提供比 fixed local window 更有用的候选召回结构。
+
+3. **对 L2-distance 建图，是否去除 common direction 不影响 pairwise distance；但对 cosine 和 learning-based compression 仍然重要。**  
+   对任意公共向量 `c`，有 `||(k_i - c) - (k_j - c)||_2 = ||k_i - k_j||_2`，所以普通 L2 建图不受 centering 影响。但 cosine similarity 会被 raw K common direction 强烈影响；同时，如果采用 DeepSeek-style learning-based latent compression / token merging / representation learning，common direction 可能影响压缩表示是否保留 attention-relevant residual information。
+
+4. **上述现象在不同 layer、head、data 上定性成立，但 layer/head 异质性很强。**  
+   Round2 在不同文本域、layer/head、metric 下都看到类似的 graph-friendly geometry；同时不同 head 的局部性和长程性差异很大，因此后续 graph index 应当是 layer/head-aware 的。结合 ymluo 的超长上下文观察，100k 级别数据中 top-20 similar token 主要落在约 10k 范围内，这进一步支持 K 近邻距离随上下文长度增长并非线性爆炸。
+
 ## 2. 可证伪 Conjecture
 
 当前 conjecture：
