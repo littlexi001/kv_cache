@@ -445,8 +445,9 @@ def compute_query_states(
     q_weight = getattr(attn.q_proj, "weight", None)
     q_device = q_weight.device if q_weight is not None else hidden_states.device
     q_dtype = q_weight.dtype if q_weight is not None and q_weight.is_floating_point() else hidden_states.dtype
-    hidden = hidden_states[:, local_query : local_query + 1, :].to(device=q_device, dtype=q_dtype)
-    projected = attn.q_proj(hidden)
+    hidden = hidden_states[:, local_query : local_query + 1, :].to(device=q_device, dtype=q_dtype).clone().detach()
+    with torch.no_grad():
+        projected = attn.q_proj(hidden)
     head_dim = int(getattr(attn, "head_dim", projected.shape[-1] // num_attention_heads))
     query_states = projected.view(projected.shape[0], projected.shape[1], num_attention_heads, head_dim)
     query_states = query_states.transpose(1, 2)
