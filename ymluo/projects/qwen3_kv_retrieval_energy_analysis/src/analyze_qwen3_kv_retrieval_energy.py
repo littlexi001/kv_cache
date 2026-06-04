@@ -347,6 +347,18 @@ def energy_for_indices(attention: torch.Tensor, indices: set[int]) -> float:
     return float(attention[index_tensor].sum())
 
 
+def index_tensor_for_indices(indices: set[int]) -> torch.Tensor | None:
+    if not indices:
+        return None
+    return torch.tensor(sorted(indices), dtype=torch.long)
+
+
+def energy_for_index_tensor(attention: torch.Tensor, index_tensor: torch.Tensor | None) -> float:
+    if index_tensor is None:
+        return 0.0
+    return float(attention[index_tensor].sum())
+
+
 def oracle_energy(attention: torch.Tensor, candidate_count: int, visible: int) -> float:
     if candidate_count <= 0:
         return 0.0
@@ -573,13 +585,17 @@ def main() -> None:
         if outputs.attentions is None:
             raise RuntimeError("Model did not return attentions. Use ATTN_IMPLEMENTATION=eager.")
         past_key_values = outputs.past_key_values
+        attention_layers = {
+            layer: outputs.attentions[layer][0].detach().float().cpu()
+            for layer in layer_indices
+        }
 
         chunk_rows: list[dict[str, Any]] = []
         for local_query in range(end - start):
             query_token = start + local_query
             visible = query_token + 1
             for layer in layer_indices:
-                attention_layer = outputs.attentions[layer][0].detach().float().cpu()
+                attention_layer = attention_layers[layer]
                 for kv_head in kv_head_indices:
                     shared_heads = attention_heads_by_kv[kv_head]
                     candidates, prefix, recent, seeds, expanded = candidate_set_for_kv_head(
@@ -593,11 +609,13 @@ def main() -> None:
                         args.seed_fraction,
                     )
                     prefix_recent = prefix | recent
+                    candidate_index_tensor = index_tensor_for_indices(candidates)
+                    prefix_recent_index_tensor = index_tensor_for_indices(prefix_recent)
                     for attention_head in shared_heads:
                         attention = attention_layer[attention_head, local_query, :visible]
-                        method = energy_for_indices(attention, candidates)
+                        method = energy_for_index_tensor(attention, candidate_index_tensor)
                         oracle = oracle_energy(attention, len(candidates), visible) if args.compute_oracle_baseline else ""
-                        pr_energy = energy_for_indices(attention, prefix_recent)
+                        pr_energy = energy_for_index_tensor(attention, prefix_recent_index_tensor)
                         row = {
                             "layer": layer,
                             "kv_head": kv_head,
@@ -627,7 +645,7 @@ def main() -> None:
         if args.save_token_rows and chunk_rows:
             append_rows(token_csv_path, chunk_rows, token_row_fields(), append=wrote_token_rows)
             wrote_token_rows = True
-        del outputs, chunk
+        del outputs, chunk, attention_layers
         if input_device.type == "cuda":
             torch.cuda.empty_cache()
 

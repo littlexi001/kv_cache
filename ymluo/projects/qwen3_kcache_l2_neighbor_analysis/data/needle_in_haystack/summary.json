@@ -1,0 +1,26 @@
+{
+  "jsonl_path": "ymluo\\projects\\qwen3_kcache_l2_neighbor_analysis\\data\\needle_in_haystack\\needle_in_haystack.jsonl",
+  "manifest_path": "ymluo\\projects\\qwen3_kcache_l2_neighbor_analysis\\data\\needle_in_haystack\\manifest.csv",
+  "prompt_dir": "ymluo\\projects\\qwen3_kcache_l2_neighbor_analysis\\data\\needle_in_haystack\\prompts",
+  "sample_count": 35,
+  "context_lengths": [
+    1000,
+    2000,
+    4000,
+    8000,
+    16000
+  ],
+  "depth_percents": [
+    0.0,
+    10.0,
+    25.0,
+    50.0,
+    75.0,
+    90.0,
+    100.0
+  ],
+  "needle_text": "The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.",
+  "expected_answer": "eat a sandwich and sit in Dolores Park",
+  "question": "What is the best thing to do in San Francisco?",
+  "length_unit": "approximate whitespace-delimited words before insertion"
+}
