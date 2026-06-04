@@ -34,8 +34,9 @@ Definitions:
 - `recent_1%`: most recent 1% visible tokens.
 - `middle`: visible tokens excluding prefix and recent.
 - seeds: for each attention head sharing the KV head, use the previous query
-  token `t-1` attention distribution and select the highest-attention 1% tokens
-  from `middle`.
+  token `t-1` attention distribution and select the highest-attention
+  `SEED_FRACTION * visible` tokens from the previous query's candidate set,
+  intersected with the current `middle` region.
 - expanded seeds: each seed plus its previous-only top-20 K-L2 neighbors from
   the same `(layer, KV head)`.
 

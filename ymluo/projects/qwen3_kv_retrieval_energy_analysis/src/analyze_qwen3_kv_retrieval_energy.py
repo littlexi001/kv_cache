@@ -258,7 +258,7 @@ def build_neighbor_graphs(
     return graphs
 
 
-def visible_regions(token: int, boundary_fraction: float) -> tuple[set[int], set[int], list[int]]:
+def visible_regions(token: int, boundary_fraction: float) -> tuple[set[int], set[int], tuple[int, int]]:
     visible = token + 1
     boundary_count = max(1, math.ceil(boundary_fraction * visible))
     prefix = set(range(0, min(boundary_count, visible)))
@@ -266,18 +266,30 @@ def visible_regions(token: int, boundary_fraction: float) -> tuple[set[int], set
     recent = set(range(recent_start, visible))
     middle_start = min(boundary_count, visible)
     middle_end = max(middle_start, recent_start)
-    middle = list(range(middle_start, middle_end))
-    return prefix, recent, middle
+    return prefix, recent, (middle_start, middle_end)
 
 
-def top_middle_seeds(prev_attention: torch.Tensor | None, middle: list[int], visible: int, seed_fraction: float) -> list[int]:
-    if prev_attention is None or not middle:
+def top_candidate_seeds(
+    prev_attention: torch.Tensor | None,
+    prev_candidates: set[int] | None,
+    middle_range: tuple[int, int],
+    visible: int,
+    seed_fraction: float,
+) -> list[int]:
+    if prev_attention is None or not prev_candidates or middle_range[1] <= middle_range[0]:
         return []
-    seed_count = min(len(middle), max(1, math.ceil(seed_fraction * visible)))
-    middle_tensor = torch.tensor(middle, dtype=torch.long)
-    weights = prev_attention[middle_tensor]
+    pool = sorted(
+        idx
+        for idx in prev_candidates
+        if middle_range[0] <= idx < middle_range[1] and idx < prev_attention.numel()
+    )
+    if not pool:
+        return []
+    seed_count = min(len(pool), max(1, math.ceil(seed_fraction * visible)))
+    pool_tensor = torch.tensor(pool, dtype=torch.long)
+    weights = prev_attention[pool_tensor]
     _, top_positions = torch.topk(weights, k=seed_count, largest=True)
-    return [middle[int(pos)] for pos in top_positions.tolist()]
+    return [pool[int(pos)] for pos in top_positions.tolist()]
 
 
 def candidate_set_for_kv_head(
@@ -286,15 +298,24 @@ def candidate_set_for_kv_head(
     kv_head: int,
     attention_heads: list[int],
     prev_attention_by_head: dict[tuple[int, int], torch.Tensor],
+    prev_candidates_by_head: dict[tuple[int, int], set[int]],
     neighbor_graphs: dict[tuple[int, int], list[list[int]]],
     boundary_fraction: float,
     seed_fraction: float,
 ) -> tuple[set[int], set[int], set[int], set[int], set[int]]:
     visible = token + 1
-    prefix, recent, middle = visible_regions(token, boundary_fraction)
+    prefix, recent, middle_range = visible_regions(token, boundary_fraction)
     seeds: set[int] = set()
     for attention_head in attention_heads:
-        seeds.update(top_middle_seeds(prev_attention_by_head.get((layer, attention_head)), middle, visible, seed_fraction))
+        seeds.update(
+            top_candidate_seeds(
+                prev_attention_by_head.get((layer, attention_head)),
+                prev_candidates_by_head.get((layer, attention_head)),
+                middle_range,
+                visible,
+                seed_fraction,
+            )
+        )
     expanded: set[int] = set(seeds)
     graph = neighbor_graphs[(layer, kv_head)]
     for seed in seeds:
@@ -559,6 +580,7 @@ def main() -> None:
     total_tokens = int(input_ids.shape[1])
     total_chunks = math.ceil(total_tokens / args.chunk_size)
     prev_attention_by_head: dict[tuple[int, int], torch.Tensor] = {}
+    prev_candidates_by_head: dict[tuple[int, int], set[int]] = {}
     rows_all: list[dict[str, Any]] = []
     rows_by_head: dict[tuple[int, int, int], list[dict[str, Any]]] = defaultdict(list)
     token_csv_path = output_dir / "retrieval_energy_by_token.csv"
@@ -604,6 +626,7 @@ def main() -> None:
                         kv_head,
                         shared_heads,
                         prev_attention_by_head,
+                        prev_candidates_by_head,
                         neighbor_graphs,
                         args.boundary_fraction,
                         args.seed_fraction,
@@ -637,6 +660,7 @@ def main() -> None:
                         rows_all.append(row)
                         if args.make_plots:
                             rows_by_head[(layer, kv_head, attention_head)].append(row)
+                        prev_candidates_by_head[(layer, attention_head)] = set(candidates)
                 for attention_head in selected_attention_heads:
                     prev_attention_by_head[(layer, attention_head)] = attention_layer[
                         attention_head, local_query, :visible
