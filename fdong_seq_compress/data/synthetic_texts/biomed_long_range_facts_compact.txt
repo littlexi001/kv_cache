@@ -1,0 +1,159 @@
+Specialized Biomedical Trial Registry
+
+This document is a controlled long-range retrieval benchmark. The early ledger contains arbitrary identifiers and attribute values. The later audit asks for those values after a long distractor region.
+
+EARLY FACT LEDGER
+Ledger item 000: In the immunology record, TRI-UE-000-8024 has primary endpoint = PASI-41 / batch amber-59.
+Ledger item 001: In the cardiology record, TRI-ML-001-3568 has assay platform = NanoString-74 / batch silver-94.
+Ledger item 002: In the oncology record, TRI-SF-002-4618 has adverse-event watchword = delayed neutropenia / batch cobalt-60.
+Ledger item 003: In the nephrology record, TRI-BS-003-4207 has enzyme panel = NAT2 / batch violet-47.
+Ledger item 004: In the oncology record, TRI-VH-004-3559 has enzyme panel = SLC22A8 / batch violet-47.
+Ledger item 005: In the nephrology record, TRI-TU-005-3154 has primary endpoint = DOR-17 / batch amber-42.
+Ledger item 006: In the immunology record, TRI-NU-006-8366 has primary endpoint = DOR-17 / batch silver-59.
+Ledger item 007: In the immunology record, TRI-UA-007-8423 has primary endpoint = DOR-17 / batch amber-30.
+Ledger item 008: In the nephrology record, TRI-NP-008-7010 has assay platform = ELISA-Delta / batch violet-51.
+Ledger item 009: In the nephrology record, TRI-LT-009-3411 has enzyme panel = CYP2C9 / batch violet-31.
+Ledger item 010: In the immunology record, TRI-CG-010-2708 has adverse-event watchword = quiet tachycardia / batch violet-53.
+Ledger item 011: In the cardiology record, TRI-ZF-011-5139 has primary endpoint = DOR-17 / batch amber-55.
+Ledger item 012: In the nephrology record, TRI-NM-012-8348 has adverse-event watchword = delayed neutropenia / batch amber-29.
+Ledger item 013: In the immunology record, TRI-FR-013-6499 has primary endpoint = DOR-17 / batch cobalt-46.
+Ledger item 014: In the immunology record, TRI-HX-014-1127 has enzyme panel = UGT1A6 / batch amber-15.
+Ledger item 015: In the cardiology record, TRI-CY-015-8430 has enzyme panel = SLC22A8 / batch cobalt-42.
+Ledger item 016: In the nephrology record, TRI-VH-016-1424 has primary endpoint = MFS-29 / batch cobalt-34.
+Ledger item 017: In the nephrology record, TRI-FK-017-7231 has primary endpoint = CRP-08 / batch violet-66.
+Ledger item 018: In the oncology record, TRI-ZZ-018-2332 has adverse-event watchword = marginal edema / batch silver-21.
+Ledger item 019: In the cardiology record, TRI-UE-019-5810 has primary endpoint = CRP-08 / batch silver-44.
+Ledger item 020: In the oncology record, TRI-XV-020-9576 has enzyme panel = ABCB1 / batch silver-17.
+Ledger item 021: In the immunology record, TRI-YZ-021-3582 has assay platform = NanoString-74 / batch cobalt-43.
+Ledger item 022: In the immunology record, TRI-VU-022-6052 has assay platform = LCMS-Orion / batch amber-79.
+Ledger item 023: In the nephrology record, TRI-KH-023-4168 has assay platform = NanoString-74 / batch silver-78.
+
+DISTRACTOR TECHNICAL REPORT
+Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The review paragraph number 00 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The review paragraph number 01 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The review paragraph number 02 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The review paragraph number 03 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The review paragraph number 04 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The review paragraph number 05 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The review paragraph number 06 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The review paragraph number 07 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The review paragraph number 08 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The review paragraph number 09 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The review paragraph number 10 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The statistical appendix emphasized covariate balance, blinded endpoint adjudication, and a narrow definition of rescue therapy. Interim safety narratives were written in a deliberately conservative style because the registry mixed pragmatic and mechanistic cohorts. The monitoring board required every site to preserve the original randomization packet and to report protocol deviations before database lock. The review paragraph number 11 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+
+LONG-RANGE RETRIEVAL AUDIT
+Audit query 00-000: For TRI-KH-023-4168, what is the recorded assay platform? Answer: NanoString-74 / batch silver-78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-001: For TRI-NM-012-8348, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch amber-29.
+Audit query 00-002: For TRI-CG-010-2708, what is the recorded adverse-event watchword? Answer: quiet tachycardia / batch violet-53.
+Audit query 00-003: For TRI-NP-008-7010, what is the recorded assay platform? Answer: ELISA-Delta / batch violet-51.
+Audit query 00-004: For TRI-UA-007-8423, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-30.
+Audit query 00-005: For TRI-BS-003-4207, what is the recorded enzyme panel? Answer: NAT2 / batch violet-47.
+Audit query 00-006: For TRI-ML-001-3568, what is the recorded assay platform? Answer: NanoString-74 / batch silver-94.
+Audit query 00-007: For TRI-YZ-021-3582, what is the recorded assay platform? Answer: NanoString-74 / batch cobalt-43.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-008: For TRI-VH-004-3559, what is the recorded enzyme panel? Answer: SLC22A8 / batch violet-47.
+Audit query 00-009: For TRI-UE-019-5810, what is the recorded primary endpoint? Answer: CRP-08 / batch silver-44.
+Audit query 00-010: For TRI-FR-013-6499, what is the recorded primary endpoint? Answer: DOR-17 / batch cobalt-46.
+Audit query 00-011: For TRI-SF-002-4618, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch cobalt-60.
+Audit query 00-012: For TRI-HX-014-1127, what is the recorded enzyme panel? Answer: UGT1A6 / batch amber-15.
+Audit query 00-013: For TRI-VU-022-6052, what is the recorded assay platform? Answer: LCMS-Orion / batch amber-79.
+Audit query 00-014: For TRI-UE-000-8024, what is the recorded primary endpoint? Answer: PASI-41 / batch amber-59.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-015: For TRI-VH-016-1424, what is the recorded primary endpoint? Answer: MFS-29 / batch cobalt-34.
+Audit query 00-016: For TRI-CY-015-8430, what is the recorded enzyme panel? Answer: SLC22A8 / batch cobalt-42.
+Audit query 00-017: For TRI-XV-020-9576, what is the recorded enzyme panel? Answer: ABCB1 / batch silver-17.
+Audit query 00-018: For TRI-ZF-011-5139, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-55.
+Audit query 00-019: For TRI-NU-006-8366, what is the recorded primary endpoint? Answer: DOR-17 / batch silver-59.
+Audit query 00-020: For TRI-FK-017-7231, what is the recorded primary endpoint? Answer: CRP-08 / batch violet-66.
+Audit query 00-021: For TRI-TU-005-3154, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-42.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-022: For TRI-ZZ-018-2332, what is the recorded adverse-event watchword? Answer: marginal edema / batch silver-21.
+Audit query 00-023: For TRI-LT-009-3411, what is the recorded enzyme panel? Answer: CYP2C9 / batch violet-31.
+Audit query 01-000: For TRI-FR-013-6499, what is the recorded primary endpoint? Answer: DOR-17 / batch cobalt-46.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-001: For TRI-NM-012-8348, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch amber-29.
+Audit query 01-002: For TRI-ZF-011-5139, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-55.
+Audit query 01-003: For TRI-LT-009-3411, what is the recorded enzyme panel? Answer: CYP2C9 / batch violet-31.
+Audit query 01-004: For TRI-CY-015-8430, what is the recorded enzyme panel? Answer: SLC22A8 / batch cobalt-42.
+Audit query 01-005: For TRI-UA-007-8423, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-30.
+Audit query 01-006: For TRI-NP-008-7010, what is the recorded assay platform? Answer: ELISA-Delta / batch violet-51.
+Audit query 01-007: For TRI-KH-023-4168, what is the recorded assay platform? Answer: NanoString-74 / batch silver-78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-008: For TRI-YZ-021-3582, what is the recorded assay platform? Answer: NanoString-74 / batch cobalt-43.
+Audit query 01-009: For TRI-XV-020-9576, what is the recorded enzyme panel? Answer: ABCB1 / batch silver-17.
+Audit query 01-010: For TRI-ZZ-018-2332, what is the recorded adverse-event watchword? Answer: marginal edema / batch silver-21.
+Audit query 01-011: For TRI-UE-019-5810, what is the recorded primary endpoint? Answer: CRP-08 / batch silver-44.
+Audit query 01-012: For TRI-CG-010-2708, what is the recorded adverse-event watchword? Answer: quiet tachycardia / batch violet-53.
+Audit query 01-013: For TRI-TU-005-3154, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-42.
+Audit query 01-014: For TRI-VU-022-6052, what is the recorded assay platform? Answer: LCMS-Orion / batch amber-79.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-015: For TRI-VH-016-1424, what is the recorded primary endpoint? Answer: MFS-29 / batch cobalt-34.
+Audit query 01-016: For TRI-VH-004-3559, what is the recorded enzyme panel? Answer: SLC22A8 / batch violet-47.
+Audit query 01-017: For TRI-SF-002-4618, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch cobalt-60.
+Audit query 01-018: For TRI-FK-017-7231, what is the recorded primary endpoint? Answer: CRP-08 / batch violet-66.
+Audit query 01-019: For TRI-UE-000-8024, what is the recorded primary endpoint? Answer: PASI-41 / batch amber-59.
+Audit query 01-020: For TRI-BS-003-4207, what is the recorded enzyme panel? Answer: NAT2 / batch violet-47.
+Audit query 01-021: For TRI-HX-014-1127, what is the recorded enzyme panel? Answer: UGT1A6 / batch amber-15.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-022: For TRI-ML-001-3568, what is the recorded assay platform? Answer: NanoString-74 / batch silver-94.
+Audit query 01-023: For TRI-NU-006-8366, what is the recorded primary endpoint? Answer: DOR-17 / batch silver-59.
+Audit query 02-000: For TRI-KH-023-4168, what is the recorded assay platform? Answer: NanoString-74 / batch silver-78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-001: For TRI-TU-005-3154, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-42.
+Audit query 02-002: For TRI-FK-017-7231, what is the recorded primary endpoint? Answer: CRP-08 / batch violet-66.
+Audit query 02-003: For TRI-LT-009-3411, what is the recorded enzyme panel? Answer: CYP2C9 / batch violet-31.
+Audit query 02-004: For TRI-VU-022-6052, what is the recorded assay platform? Answer: LCMS-Orion / batch amber-79.
+Audit query 02-005: For TRI-NP-008-7010, what is the recorded assay platform? Answer: ELISA-Delta / batch violet-51.
+Audit query 02-006: For TRI-NU-006-8366, what is the recorded primary endpoint? Answer: DOR-17 / batch silver-59.
+Audit query 02-007: For TRI-VH-016-1424, what is the recorded primary endpoint? Answer: MFS-29 / batch cobalt-34.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-008: For TRI-CY-015-8430, what is the recorded enzyme panel? Answer: SLC22A8 / batch cobalt-42.
+Audit query 02-009: For TRI-FR-013-6499, what is the recorded primary endpoint? Answer: DOR-17 / batch cobalt-46.
+Audit query 02-010: For TRI-ZZ-018-2332, what is the recorded adverse-event watchword? Answer: marginal edema / batch silver-21.
+Audit query 02-011: For TRI-VH-004-3559, what is the recorded enzyme panel? Answer: SLC22A8 / batch violet-47.
+Audit query 02-012: For TRI-SF-002-4618, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch cobalt-60.
+Audit query 02-013: For TRI-XV-020-9576, what is the recorded enzyme panel? Answer: ABCB1 / batch silver-17.
+Audit query 02-014: For TRI-CG-010-2708, what is the recorded adverse-event watchword? Answer: quiet tachycardia / batch violet-53.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-015: For TRI-ZF-011-5139, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-55.
+Audit query 02-016: For TRI-BS-003-4207, what is the recorded enzyme panel? Answer: NAT2 / batch violet-47.
+Audit query 02-017: For TRI-UE-000-8024, what is the recorded primary endpoint? Answer: PASI-41 / batch amber-59.
+Audit query 02-018: For TRI-NM-012-8348, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch amber-29.
+Audit query 02-019: For TRI-YZ-021-3582, what is the recorded assay platform? Answer: NanoString-74 / batch cobalt-43.
+Audit query 02-020: For TRI-UE-019-5810, what is the recorded primary endpoint? Answer: CRP-08 / batch silver-44.
+Audit query 02-021: For TRI-UA-007-8423, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-30.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-022: For TRI-ML-001-3568, what is the recorded assay platform? Answer: NanoString-74 / batch silver-94.
+Audit query 02-023: For TRI-HX-014-1127, what is the recorded enzyme panel? Answer: UGT1A6 / batch amber-15.
+Audit query 03-000: For TRI-TU-005-3154, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-42.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-001: For TRI-NM-012-8348, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch amber-29.
+Audit query 03-002: For TRI-KH-023-4168, what is the recorded assay platform? Answer: NanoString-74 / batch silver-78.
+Audit query 03-003: For TRI-ZZ-018-2332, what is the recorded adverse-event watchword? Answer: marginal edema / batch silver-21.
+Audit query 03-004: For TRI-VU-022-6052, what is the recorded assay platform? Answer: LCMS-Orion / batch amber-79.
+Audit query 03-005: For TRI-ML-001-3568, what is the recorded assay platform? Answer: NanoString-74 / batch silver-94.
+Audit query 03-006: For TRI-NP-008-7010, what is the recorded assay platform? Answer: ELISA-Delta / batch violet-51.
+Audit query 03-007: For TRI-XV-020-9576, what is the recorded enzyme panel? Answer: ABCB1 / batch silver-17.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-008: For TRI-FK-017-7231, what is the recorded primary endpoint? Answer: CRP-08 / batch violet-66.
+Audit query 03-009: For TRI-FR-013-6499, what is the recorded primary endpoint? Answer: DOR-17 / batch cobalt-46.
+Audit query 03-010: For TRI-UA-007-8423, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-30.
+Audit query 03-011: For TRI-BS-003-4207, what is the recorded enzyme panel? Answer: NAT2 / batch violet-47.
+Audit query 03-012: For TRI-LT-009-3411, what is the recorded enzyme panel? Answer: CYP2C9 / batch violet-31.
+Audit query 03-013: For TRI-NU-006-8366, what is the recorded primary endpoint? Answer: DOR-17 / batch silver-59.
+Audit query 03-014: For TRI-VH-004-3559, what is the recorded enzyme panel? Answer: SLC22A8 / batch violet-47.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-015: For TRI-SF-002-4618, what is the recorded adverse-event watchword? Answer: delayed neutropenia / batch cobalt-60.
+Audit query 03-016: For TRI-CY-015-8430, what is the recorded enzyme panel? Answer: SLC22A8 / batch cobalt-42.
+Audit query 03-017: For TRI-HX-014-1127, what is the recorded enzyme panel? Answer: UGT1A6 / batch amber-15.
+Audit query 03-018: For TRI-UE-019-5810, what is the recorded primary endpoint? Answer: CRP-08 / batch silver-44.
+Audit query 03-019: For TRI-ZF-011-5139, what is the recorded primary endpoint? Answer: DOR-17 / batch amber-55.
+Audit query 03-020: For TRI-VH-016-1424, what is the recorded primary endpoint? Answer: MFS-29 / batch cobalt-34.
+Audit query 03-021: For TRI-UE-000-8024, what is the recorded primary endpoint? Answer: PASI-41 / batch amber-59.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-022: For TRI-CG-010-2708, what is the recorded adverse-event watchword? Answer: quiet tachycardia / batch violet-53.
+Audit query 03-023: For TRI-YZ-021-3582, what is the recorded assay platform? Answer: NanoString-74 / batch cobalt-43.
+
+END OF CONTROLLED LONG-RANGE FACT DOCUMENT

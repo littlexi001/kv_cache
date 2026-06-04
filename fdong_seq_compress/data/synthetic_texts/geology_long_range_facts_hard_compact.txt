@@ -1,0 +1,164 @@
+Planetary Geology Core Sample Dossier
+
+This document is a controlled long-range retrieval benchmark. The early ledger contains arbitrary identifiers and attribute values. The later audit asks for those values after a long distractor region.
+
+EARLY FACT LEDGER
+Ledger item 000: In the cryovolcanic deposits record, SAM-MJ-000-7810 has private calibration key = VYW-86772-azurite-000-X69.
+Ledger item 001: In the cryovolcanic deposits record, SAM-JP-001-8481 has private calibration key = FLY-31916-umbra-001-H78.
+Ledger item 002: In the cryovolcanic deposits record, SAM-ZD-002-2904 has private calibration key = LAJ-64604-solstice-002-G15.
+Ledger item 003: In the impact glass record, SAM-FT-003-7299 has masked audit token = YFG-73961-mistral-003-Q26.
+Ledger item 004: In the cryovolcanic deposits record, SAM-JE-004-3853 has nonstandard control label = XZR-17021-kepler-004-M57.
+Ledger item 005: In the impact glass record, SAM-WQ-005-8608 has masked audit token = CGK-37396-kepler-005-K98.
+Ledger item 006: In the magnetite veins record, SAM-HG-006-9229 has private calibration key = NRT-49390-mistral-006-R38.
+Ledger item 007: In the impact glass record, SAM-XS-007-7053 has nonstandard control label = ZAY-98279-quartz-007-L34.
+Ledger item 008: In the cryovolcanic deposits record, SAM-SG-008-4467 has nonstandard control label = QKL-90986-kepler-008-K93.
+Ledger item 009: In the cryovolcanic deposits record, SAM-XQ-009-2844 has nonstandard control label = MWP-16172-umbra-009-S38.
+Ledger item 010: In the impact glass record, SAM-FL-010-8523 has private calibration key = AXB-93050-vector-010-M41.
+Ledger item 011: In the basalt stratigraphy record, SAM-UH-011-9673 has nonstandard control label = WWA-98189-kepler-011-B41.
+Ledger item 012: In the magnetite veins record, SAM-RB-012-3815 has private calibration key = XQL-45430-vector-012-E96.
+Ledger item 013: In the cryovolcanic deposits record, SAM-RU-013-3678 has masked audit token = KYE-11022-solstice-013-G10.
+Ledger item 014: In the cryovolcanic deposits record, SAM-CT-014-5556 has masked audit token = UAW-38489-quartz-014-Q59.
+Ledger item 015: In the magnetite veins record, SAM-ZE-015-1083 has sealed retrieval code = TML-38049-kepler-015-M59.
+Ledger item 016: In the impact glass record, SAM-MR-016-1246 has masked audit token = LCJ-81485-vector-016-R43.
+Ledger item 017: In the magnetite veins record, SAM-NF-017-2266 has sealed retrieval code = XHH-45942-mistral-017-N81.
+Ledger item 018: In the impact glass record, SAM-NM-018-5075 has masked audit token = TPV-41898-vector-018-R91.
+Ledger item 019: In the cryovolcanic deposits record, SAM-QM-019-4628 has nonstandard control label = WBP-63231-quartz-019-X70.
+Ledger item 020: In the basalt stratigraphy record, SAM-EV-020-2008 has masked audit token = ZGE-53440-umbra-020-T74.
+Ledger item 021: In the impact glass record, SAM-JU-021-4748 has private calibration key = WYS-74645-solstice-021-F24.
+Ledger item 022: In the magnetite veins record, SAM-WW-022-9623 has masked audit token = VUS-26566-mistral-022-J26.
+Ledger item 023: In the impact glass record, SAM-AW-023-8690 has private calibration key = MVF-22448-solstice-023-F21.
+Ledger item 024: In the magnetite veins record, SAM-KQ-024-2813 has sealed retrieval code = WCB-41124-solstice-024-D67.
+Ledger item 025: In the basalt stratigraphy record, SAM-ZB-025-6261 has nonstandard control label = YMB-21060-quartz-025-Y22.
+Ledger item 026: In the basalt stratigraphy record, SAM-VW-026-5286 has sealed retrieval code = YTH-75177-solstice-026-B32.
+Ledger item 027: In the basalt stratigraphy record, SAM-NG-027-9516 has private calibration key = XFC-92791-vector-027-J36.
+Ledger item 028: In the magnetite veins record, SAM-GW-028-2325 has sealed retrieval code = NTV-65141-kepler-028-S24.
+Ledger item 029: In the cryovolcanic deposits record, SAM-SG-029-7896 has masked audit token = XNF-71154-helix-029-J48.
+Ledger item 030: In the cryovolcanic deposits record, SAM-YG-030-1677 has masked audit token = XHN-18960-azurite-030-Y50.
+Ledger item 031: In the cryovolcanic deposits record, SAM-CX-031-9494 has private calibration key = QAU-92257-umbra-031-M71.
+
+DISTRACTOR TECHNICAL REPORT
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 00 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 01 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 02 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The review paragraph number 03 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 04 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 05 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 06 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 07 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 08 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The review paragraph number 09 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+
+LONG-RANGE RETRIEVAL AUDIT
+Audit query 00-000: The dossier asks for only one exact string. Look up SAM-JP-001-8481 and copy its private calibration key. Exact answer: FLY-31916-umbra-001-H78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-001: The dossier asks for only one exact string. Look up SAM-XS-007-7053 and copy its nonstandard control label. Exact answer: ZAY-98279-quartz-007-L34.
+Audit query 00-002: The dossier asks for only one exact string. Look up SAM-ZE-015-1083 and copy its sealed retrieval code. Exact answer: TML-38049-kepler-015-M59.
+Audit query 00-003: The dossier asks for only one exact string. Look up SAM-MR-016-1246 and copy its masked audit token. Exact answer: LCJ-81485-vector-016-R43.
+Audit query 00-004: The dossier asks for only one exact string. Look up SAM-KQ-024-2813 and copy its sealed retrieval code. Exact answer: WCB-41124-solstice-024-D67.
+Audit query 00-005: The dossier asks for only one exact string. Look up SAM-FL-010-8523 and copy its private calibration key. Exact answer: AXB-93050-vector-010-M41.
+Audit query 00-006: The dossier asks for only one exact string. Look up SAM-XQ-009-2844 and copy its nonstandard control label. Exact answer: MWP-16172-umbra-009-S38.
+Audit query 00-007: The dossier asks for only one exact string. Look up SAM-JE-004-3853 and copy its nonstandard control label. Exact answer: XZR-17021-kepler-004-M57.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-008: The dossier asks for only one exact string. Look up SAM-WQ-005-8608 and copy its masked audit token. Exact answer: CGK-37396-kepler-005-K98.
+Audit query 00-009: The dossier asks for only one exact string. Look up SAM-NM-018-5075 and copy its masked audit token. Exact answer: TPV-41898-vector-018-R91.
+Audit query 00-010: The dossier asks for only one exact string. Look up SAM-HG-006-9229 and copy its private calibration key. Exact answer: NRT-49390-mistral-006-R38.
+Audit query 00-011: The dossier asks for only one exact string. Look up SAM-GW-028-2325 and copy its sealed retrieval code. Exact answer: NTV-65141-kepler-028-S24.
+Audit query 00-012: The dossier asks for only one exact string. Look up SAM-NG-027-9516 and copy its private calibration key. Exact answer: XFC-92791-vector-027-J36.
+Audit query 00-013: The dossier asks for only one exact string. Look up SAM-QM-019-4628 and copy its nonstandard control label. Exact answer: WBP-63231-quartz-019-X70.
+Audit query 00-014: The dossier asks for only one exact string. Look up SAM-JU-021-4748 and copy its private calibration key. Exact answer: WYS-74645-solstice-021-F24.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-015: The dossier asks for only one exact string. Look up SAM-VW-026-5286 and copy its sealed retrieval code. Exact answer: YTH-75177-solstice-026-B32.
+Audit query 00-016: The dossier asks for only one exact string. Look up SAM-SG-029-7896 and copy its masked audit token. Exact answer: XNF-71154-helix-029-J48.
+Audit query 00-017: The dossier asks for only one exact string. Look up SAM-RB-012-3815 and copy its private calibration key. Exact answer: XQL-45430-vector-012-E96.
+Audit query 00-018: The dossier asks for only one exact string. Look up SAM-CT-014-5556 and copy its masked audit token. Exact answer: UAW-38489-quartz-014-Q59.
+Audit query 00-019: The dossier asks for only one exact string. Look up SAM-CX-031-9494 and copy its private calibration key. Exact answer: QAU-92257-umbra-031-M71.
+Audit query 00-020: The dossier asks for only one exact string. Look up SAM-FT-003-7299 and copy its masked audit token. Exact answer: YFG-73961-mistral-003-Q26.
+Audit query 00-021: The dossier asks for only one exact string. Look up SAM-YG-030-1677 and copy its masked audit token. Exact answer: XHN-18960-azurite-030-Y50.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-022: The dossier asks for only one exact string. Look up SAM-UH-011-9673 and copy its nonstandard control label. Exact answer: WWA-98189-kepler-011-B41.
+Audit query 00-023: The dossier asks for only one exact string. Look up SAM-RU-013-3678 and copy its masked audit token. Exact answer: KYE-11022-solstice-013-G10.
+Audit query 00-024: The dossier asks for only one exact string. Look up SAM-WW-022-9623 and copy its masked audit token. Exact answer: VUS-26566-mistral-022-J26.
+Audit query 00-025: The dossier asks for only one exact string. Look up SAM-NF-017-2266 and copy its sealed retrieval code. Exact answer: XHH-45942-mistral-017-N81.
+Audit query 00-026: The dossier asks for only one exact string. Look up SAM-AW-023-8690 and copy its private calibration key. Exact answer: MVF-22448-solstice-023-F21.
+Audit query 00-027: The dossier asks for only one exact string. Look up SAM-ZB-025-6261 and copy its nonstandard control label. Exact answer: YMB-21060-quartz-025-Y22.
+Audit query 00-028: The dossier asks for only one exact string. Look up SAM-EV-020-2008 and copy its masked audit token. Exact answer: ZGE-53440-umbra-020-T74.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-029: The dossier asks for only one exact string. Look up SAM-SG-008-4467 and copy its nonstandard control label. Exact answer: QKL-90986-kepler-008-K93.
+Audit query 00-030: The dossier asks for only one exact string. Look up SAM-MJ-000-7810 and copy its private calibration key. Exact answer: VYW-86772-azurite-000-X69.
+Audit query 00-031: The dossier asks for only one exact string. Look up SAM-ZD-002-2904 and copy its private calibration key. Exact answer: LAJ-64604-solstice-002-G15.
+Audit query 01-000: The dossier asks for only one exact string. Look up SAM-NM-018-5075 and copy its masked audit token. Exact answer: TPV-41898-vector-018-R91.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-001: The dossier asks for only one exact string. Look up SAM-CX-031-9494 and copy its private calibration key. Exact answer: QAU-92257-umbra-031-M71.
+Audit query 01-002: The dossier asks for only one exact string. Look up SAM-SG-008-4467 and copy its nonstandard control label. Exact answer: QKL-90986-kepler-008-K93.
+Audit query 01-003: The dossier asks for only one exact string. Look up SAM-NG-027-9516 and copy its private calibration key. Exact answer: XFC-92791-vector-027-J36.
+Audit query 01-004: The dossier asks for only one exact string. Look up SAM-KQ-024-2813 and copy its sealed retrieval code. Exact answer: WCB-41124-solstice-024-D67.
+Audit query 01-005: The dossier asks for only one exact string. Look up SAM-SG-029-7896 and copy its masked audit token. Exact answer: XNF-71154-helix-029-J48.
+Audit query 01-006: The dossier asks for only one exact string. Look up SAM-ZB-025-6261 and copy its nonstandard control label. Exact answer: YMB-21060-quartz-025-Y22.
+Audit query 01-007: The dossier asks for only one exact string. Look up SAM-VW-026-5286 and copy its sealed retrieval code. Exact answer: YTH-75177-solstice-026-B32.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-008: The dossier asks for only one exact string. Look up SAM-UH-011-9673 and copy its nonstandard control label. Exact answer: WWA-98189-kepler-011-B41.
+Audit query 01-009: The dossier asks for only one exact string. Look up SAM-ZD-002-2904 and copy its private calibration key. Exact answer: LAJ-64604-solstice-002-G15.
+Audit query 01-010: The dossier asks for only one exact string. Look up SAM-NF-017-2266 and copy its sealed retrieval code. Exact answer: XHH-45942-mistral-017-N81.
+Audit query 01-011: The dossier asks for only one exact string. Look up SAM-RB-012-3815 and copy its private calibration key. Exact answer: XQL-45430-vector-012-E96.
+Audit query 01-012: The dossier asks for only one exact string. Look up SAM-JP-001-8481 and copy its private calibration key. Exact answer: FLY-31916-umbra-001-H78.
+Audit query 01-013: The dossier asks for only one exact string. Look up SAM-YG-030-1677 and copy its masked audit token. Exact answer: XHN-18960-azurite-030-Y50.
+Audit query 01-014: The dossier asks for only one exact string. Look up SAM-CT-014-5556 and copy its masked audit token. Exact answer: UAW-38489-quartz-014-Q59.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-015: The dossier asks for only one exact string. Look up SAM-EV-020-2008 and copy its masked audit token. Exact answer: ZGE-53440-umbra-020-T74.
+Audit query 01-016: The dossier asks for only one exact string. Look up SAM-XS-007-7053 and copy its nonstandard control label. Exact answer: ZAY-98279-quartz-007-L34.
+Audit query 01-017: The dossier asks for only one exact string. Look up SAM-GW-028-2325 and copy its sealed retrieval code. Exact answer: NTV-65141-kepler-028-S24.
+Audit query 01-018: The dossier asks for only one exact string. Look up SAM-MR-016-1246 and copy its masked audit token. Exact answer: LCJ-81485-vector-016-R43.
+Audit query 01-019: The dossier asks for only one exact string. Look up SAM-HG-006-9229 and copy its private calibration key. Exact answer: NRT-49390-mistral-006-R38.
+Audit query 01-020: The dossier asks for only one exact string. Look up SAM-MJ-000-7810 and copy its private calibration key. Exact answer: VYW-86772-azurite-000-X69.
+Audit query 01-021: The dossier asks for only one exact string. Look up SAM-RU-013-3678 and copy its masked audit token. Exact answer: KYE-11022-solstice-013-G10.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-022: The dossier asks for only one exact string. Look up SAM-WQ-005-8608 and copy its masked audit token. Exact answer: CGK-37396-kepler-005-K98.
+Audit query 01-023: The dossier asks for only one exact string. Look up SAM-JU-021-4748 and copy its private calibration key. Exact answer: WYS-74645-solstice-021-F24.
+Audit query 01-024: The dossier asks for only one exact string. Look up SAM-FL-010-8523 and copy its private calibration key. Exact answer: AXB-93050-vector-010-M41.
+Audit query 01-025: The dossier asks for only one exact string. Look up SAM-JE-004-3853 and copy its nonstandard control label. Exact answer: XZR-17021-kepler-004-M57.
+Audit query 01-026: The dossier asks for only one exact string. Look up SAM-AW-023-8690 and copy its private calibration key. Exact answer: MVF-22448-solstice-023-F21.
+Audit query 01-027: The dossier asks for only one exact string. Look up SAM-WW-022-9623 and copy its masked audit token. Exact answer: VUS-26566-mistral-022-J26.
+Audit query 01-028: The dossier asks for only one exact string. Look up SAM-ZE-015-1083 and copy its sealed retrieval code. Exact answer: TML-38049-kepler-015-M59.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-029: The dossier asks for only one exact string. Look up SAM-FT-003-7299 and copy its masked audit token. Exact answer: YFG-73961-mistral-003-Q26.
+Audit query 01-030: The dossier asks for only one exact string. Look up SAM-XQ-009-2844 and copy its nonstandard control label. Exact answer: MWP-16172-umbra-009-S38.
+Audit query 01-031: The dossier asks for only one exact string. Look up SAM-QM-019-4628 and copy its nonstandard control label. Exact answer: WBP-63231-quartz-019-X70.
+Audit query 02-000: The dossier asks for only one exact string. Look up SAM-RU-013-3678 and copy its masked audit token. Exact answer: KYE-11022-solstice-013-G10.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-001: The dossier asks for only one exact string. Look up SAM-GW-028-2325 and copy its sealed retrieval code. Exact answer: NTV-65141-kepler-028-S24.
+Audit query 02-002: The dossier asks for only one exact string. Look up SAM-NF-017-2266 and copy its sealed retrieval code. Exact answer: XHH-45942-mistral-017-N81.
+Audit query 02-003: The dossier asks for only one exact string. Look up SAM-SG-029-7896 and copy its masked audit token. Exact answer: XNF-71154-helix-029-J48.
+Audit query 02-004: The dossier asks for only one exact string. Look up SAM-RB-012-3815 and copy its private calibration key. Exact answer: XQL-45430-vector-012-E96.
+Audit query 02-005: The dossier asks for only one exact string. Look up SAM-YG-030-1677 and copy its masked audit token. Exact answer: XHN-18960-azurite-030-Y50.
+Audit query 02-006: The dossier asks for only one exact string. Look up SAM-JP-001-8481 and copy its private calibration key. Exact answer: FLY-31916-umbra-001-H78.
+Audit query 02-007: The dossier asks for only one exact string. Look up SAM-NG-027-9516 and copy its private calibration key. Exact answer: XFC-92791-vector-027-J36.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-008: The dossier asks for only one exact string. Look up SAM-ZD-002-2904 and copy its private calibration key. Exact answer: LAJ-64604-solstice-002-G15.
+Audit query 02-009: The dossier asks for only one exact string. Look up SAM-MR-016-1246 and copy its masked audit token. Exact answer: LCJ-81485-vector-016-R43.
+Audit query 02-010: The dossier asks for only one exact string. Look up SAM-UH-011-9673 and copy its nonstandard control label. Exact answer: WWA-98189-kepler-011-B41.
+Audit query 02-011: The dossier asks for only one exact string. Look up SAM-CX-031-9494 and copy its private calibration key. Exact answer: QAU-92257-umbra-031-M71.
+Audit query 02-012: The dossier asks for only one exact string. Look up SAM-ZE-015-1083 and copy its sealed retrieval code. Exact answer: TML-38049-kepler-015-M59.
+Audit query 02-013: The dossier asks for only one exact string. Look up SAM-QM-019-4628 and copy its nonstandard control label. Exact answer: WBP-63231-quartz-019-X70.
+Audit query 02-014: The dossier asks for only one exact string. Look up SAM-NM-018-5075 and copy its masked audit token. Exact answer: TPV-41898-vector-018-R91.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-015: The dossier asks for only one exact string. Look up SAM-CT-014-5556 and copy its masked audit token. Exact answer: UAW-38489-quartz-014-Q59.
+Audit query 02-016: The dossier asks for only one exact string. Look up SAM-FL-010-8523 and copy its private calibration key. Exact answer: AXB-93050-vector-010-M41.
+Audit query 02-017: The dossier asks for only one exact string. Look up SAM-JU-021-4748 and copy its private calibration key. Exact answer: WYS-74645-solstice-021-F24.
+Audit query 02-018: The dossier asks for only one exact string. Look up SAM-VW-026-5286 and copy its sealed retrieval code. Exact answer: YTH-75177-solstice-026-B32.
+Audit query 02-019: The dossier asks for only one exact string. Look up SAM-WQ-005-8608 and copy its masked audit token. Exact answer: CGK-37396-kepler-005-K98.
+Audit query 02-020: The dossier asks for only one exact string. Look up SAM-FT-003-7299 and copy its masked audit token. Exact answer: YFG-73961-mistral-003-Q26.
+Audit query 02-021: The dossier asks for only one exact string. Look up SAM-XS-007-7053 and copy its nonstandard control label. Exact answer: ZAY-98279-quartz-007-L34.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-022: The dossier asks for only one exact string. Look up SAM-MJ-000-7810 and copy its private calibration key. Exact answer: VYW-86772-azurite-000-X69.
+Audit query 02-023: The dossier asks for only one exact string. Look up SAM-SG-008-4467 and copy its nonstandard control label. Exact answer: QKL-90986-kepler-008-K93.
+Audit query 02-024: The dossier asks for only one exact string. Look up SAM-HG-006-9229 and copy its private calibration key. Exact answer: NRT-49390-mistral-006-R38.
+Audit query 02-025: The dossier asks for only one exact string. Look up SAM-XQ-009-2844 and copy its nonstandard control label. Exact answer: MWP-16172-umbra-009-S38.
+Audit query 02-026: The dossier asks for only one exact string. Look up SAM-ZB-025-6261 and copy its nonstandard control label. Exact answer: YMB-21060-quartz-025-Y22.
+Audit query 02-027: The dossier asks for only one exact string. Look up SAM-JE-004-3853 and copy its nonstandard control label. Exact answer: XZR-17021-kepler-004-M57.
+Audit query 02-028: The dossier asks for only one exact string. Look up SAM-KQ-024-2813 and copy its sealed retrieval code. Exact answer: WCB-41124-solstice-024-D67.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-029: The dossier asks for only one exact string. Look up SAM-EV-020-2008 and copy its masked audit token. Exact answer: ZGE-53440-umbra-020-T74.
+Audit query 02-030: The dossier asks for only one exact string. Look up SAM-WW-022-9623 and copy its masked audit token. Exact answer: VUS-26566-mistral-022-J26.
+Audit query 02-031: The dossier asks for only one exact string. Look up SAM-AW-023-8690 and copy its private calibration key. Exact answer: MVF-22448-solstice-023-F21.
+
+END OF CONTROLLED LONG-RANGE FACT DOCUMENT

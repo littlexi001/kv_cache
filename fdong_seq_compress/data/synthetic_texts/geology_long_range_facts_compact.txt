@@ -1,0 +1,159 @@
+Planetary Geology Core Sample Dossier
+
+This document is a controlled long-range retrieval benchmark. The early ledger contains arbitrary identifiers and attribute values. The later audit asks for those values after a long distractor region.
+
+EARLY FACT LEDGER
+Ledger item 000: In the impact glass record, SAM-AP-000-3072 has isotope ratio code = Ar40-K39-118 / batch cobalt-28.
+Ledger item 001: In the basalt stratigraphy record, SAM-BZ-001-5908 has stratigraphic tag = unit basalt-nine / batch amber-39.
+Ledger item 002: In the impact glass record, SAM-FC-002-2397 has stratigraphic tag = unit basalt-nine / batch amber-73.
+Ledger item 003: In the magnetite veins record, SAM-UN-003-5631 has mineral inclusion = zircon rind / batch silver-89.
+Ledger item 004: In the basalt stratigraphy record, SAM-JL-004-6095 has instrument bay = Calyx-5 / batch violet-69.
+Ledger item 005: In the impact glass record, SAM-ZD-005-7353 has mineral inclusion = olivine needle / batch violet-61.
+Ledger item 006: In the magnetite veins record, SAM-EJ-006-7557 has isotope ratio code = O18-O16-077 / batch amber-74.
+Ledger item 007: In the cryovolcanic deposits record, SAM-VM-007-1934 has stratigraphic tag = unit basalt-nine / batch silver-89.
+Ledger item 008: In the basalt stratigraphy record, SAM-XJ-008-6467 has mineral inclusion = olivine needle / batch violet-14.
+Ledger item 009: In the magnetite veins record, SAM-XX-009-6998 has stratigraphic tag = unit basalt-nine / batch violet-78.
+Ledger item 010: In the cryovolcanic deposits record, SAM-VQ-010-4208 has isotope ratio code = Sr87-Sr86-204 / batch amber-19.
+Ledger item 011: In the impact glass record, SAM-MD-011-5463 has instrument bay = Dione-2 / batch silver-70.
+Ledger item 012: In the impact glass record, SAM-TN-012-6072 has stratigraphic tag = unit polar-ash / batch amber-80.
+Ledger item 013: In the basalt stratigraphy record, SAM-FK-013-2180 has instrument bay = Aster-3 / batch cobalt-81.
+Ledger item 014: In the magnetite veins record, SAM-JW-014-4840 has instrument bay = Dione-2 / batch silver-49.
+Ledger item 015: In the basalt stratigraphy record, SAM-NT-015-1072 has instrument bay = Borealis-9 / batch silver-54.
+Ledger item 016: In the impact glass record, SAM-QG-016-8123 has stratigraphic tag = unit polar-ash / batch amber-23.
+Ledger item 017: In the basalt stratigraphy record, SAM-YE-017-4891 has instrument bay = Aster-3 / batch silver-49.
+Ledger item 018: In the cryovolcanic deposits record, SAM-HF-018-3501 has mineral inclusion = zircon rind / batch amber-14.
+Ledger item 019: In the magnetite veins record, SAM-HD-019-4668 has stratigraphic tag = unit basalt-nine / batch violet-53.
+Ledger item 020: In the impact glass record, SAM-DN-020-9551 has isotope ratio code = Ar40-K39-118 / batch cobalt-91.
+Ledger item 021: In the basalt stratigraphy record, SAM-LR-021-7238 has stratigraphic tag = unit lambda / batch silver-74.
+Ledger item 022: In the impact glass record, SAM-EK-022-5719 has mineral inclusion = hematite seam / batch silver-67.
+Ledger item 023: In the cryovolcanic deposits record, SAM-PQ-023-4509 has mineral inclusion = olivine needle / batch amber-12.
+
+DISTRACTOR TECHNICAL REPORT
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 00 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The review paragraph number 01 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The review paragraph number 02 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The review paragraph number 03 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The review paragraph number 04 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The review paragraph number 05 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The review paragraph number 06 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 07 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 08 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The review paragraph number 09 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The review paragraph number 10 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Each laboratory note preserved the original chain-of-custody identifier so later analysts could audit contamination hypotheses. The field report distinguished transport texture from thermal alteration because the cores were collected across several depositional regimes. The mineral map was interpreted alongside crater chronology, magnetic anomalies, and volatile retention estimates. The review paragraph number 11 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+
+LONG-RANGE RETRIEVAL AUDIT
+Audit query 00-000: For SAM-VQ-010-4208, what is the recorded isotope ratio code? Answer: Sr87-Sr86-204 / batch amber-19.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-001: For SAM-ZD-005-7353, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-61.
+Audit query 00-002: For SAM-DN-020-9551, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-91.
+Audit query 00-003: For SAM-LR-021-7238, what is the recorded stratigraphic tag? Answer: unit lambda / batch silver-74.
+Audit query 00-004: For SAM-EJ-006-7557, what is the recorded isotope ratio code? Answer: O18-O16-077 / batch amber-74.
+Audit query 00-005: For SAM-AP-000-3072, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-28.
+Audit query 00-006: For SAM-QG-016-8123, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-23.
+Audit query 00-007: For SAM-FK-013-2180, what is the recorded instrument bay? Answer: Aster-3 / batch cobalt-81.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-008: For SAM-UN-003-5631, what is the recorded mineral inclusion? Answer: zircon rind / batch silver-89.
+Audit query 00-009: For SAM-MD-011-5463, what is the recorded instrument bay? Answer: Dione-2 / batch silver-70.
+Audit query 00-010: For SAM-TN-012-6072, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-80.
+Audit query 00-011: For SAM-PQ-023-4509, what is the recorded mineral inclusion? Answer: olivine needle / batch amber-12.
+Audit query 00-012: For SAM-YE-017-4891, what is the recorded instrument bay? Answer: Aster-3 / batch silver-49.
+Audit query 00-013: For SAM-NT-015-1072, what is the recorded instrument bay? Answer: Borealis-9 / batch silver-54.
+Audit query 00-014: For SAM-XX-009-6998, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-015: For SAM-JW-014-4840, what is the recorded instrument bay? Answer: Dione-2 / batch silver-49.
+Audit query 00-016: For SAM-HD-019-4668, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-53.
+Audit query 00-017: For SAM-XJ-008-6467, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-14.
+Audit query 00-018: For SAM-FC-002-2397, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-73.
+Audit query 00-019: For SAM-EK-022-5719, what is the recorded mineral inclusion? Answer: hematite seam / batch silver-67.
+Audit query 00-020: For SAM-VM-007-1934, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch silver-89.
+Audit query 00-021: For SAM-JL-004-6095, what is the recorded instrument bay? Answer: Calyx-5 / batch violet-69.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-022: For SAM-HF-018-3501, what is the recorded mineral inclusion? Answer: zircon rind / batch amber-14.
+Audit query 00-023: For SAM-BZ-001-5908, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-39.
+Audit query 01-000: For SAM-HD-019-4668, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-53.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-001: For SAM-TN-012-6072, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-80.
+Audit query 01-002: For SAM-FC-002-2397, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-73.
+Audit query 01-003: For SAM-HF-018-3501, what is the recorded mineral inclusion? Answer: zircon rind / batch amber-14.
+Audit query 01-004: For SAM-MD-011-5463, what is the recorded instrument bay? Answer: Dione-2 / batch silver-70.
+Audit query 01-005: For SAM-BZ-001-5908, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-39.
+Audit query 01-006: For SAM-EJ-006-7557, what is the recorded isotope ratio code? Answer: O18-O16-077 / batch amber-74.
+Audit query 01-007: For SAM-JL-004-6095, what is the recorded instrument bay? Answer: Calyx-5 / batch violet-69.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-008: For SAM-PQ-023-4509, what is the recorded mineral inclusion? Answer: olivine needle / batch amber-12.
+Audit query 01-009: For SAM-VQ-010-4208, what is the recorded isotope ratio code? Answer: Sr87-Sr86-204 / batch amber-19.
+Audit query 01-010: For SAM-DN-020-9551, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-91.
+Audit query 01-011: For SAM-EK-022-5719, what is the recorded mineral inclusion? Answer: hematite seam / batch silver-67.
+Audit query 01-012: For SAM-UN-003-5631, what is the recorded mineral inclusion? Answer: zircon rind / batch silver-89.
+Audit query 01-013: For SAM-XX-009-6998, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-78.
+Audit query 01-014: For SAM-LR-021-7238, what is the recorded stratigraphic tag? Answer: unit lambda / batch silver-74.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-015: For SAM-FK-013-2180, what is the recorded instrument bay? Answer: Aster-3 / batch cobalt-81.
+Audit query 01-016: For SAM-QG-016-8123, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-23.
+Audit query 01-017: For SAM-AP-000-3072, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-28.
+Audit query 01-018: For SAM-XJ-008-6467, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-14.
+Audit query 01-019: For SAM-ZD-005-7353, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-61.
+Audit query 01-020: For SAM-JW-014-4840, what is the recorded instrument bay? Answer: Dione-2 / batch silver-49.
+Audit query 01-021: For SAM-NT-015-1072, what is the recorded instrument bay? Answer: Borealis-9 / batch silver-54.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-022: For SAM-VM-007-1934, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch silver-89.
+Audit query 01-023: For SAM-YE-017-4891, what is the recorded instrument bay? Answer: Aster-3 / batch silver-49.
+Audit query 02-000: For SAM-XX-009-6998, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-78.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-001: For SAM-MD-011-5463, what is the recorded instrument bay? Answer: Dione-2 / batch silver-70.
+Audit query 02-002: For SAM-FK-013-2180, what is the recorded instrument bay? Answer: Aster-3 / batch cobalt-81.
+Audit query 02-003: For SAM-NT-015-1072, what is the recorded instrument bay? Answer: Borealis-9 / batch silver-54.
+Audit query 02-004: For SAM-BZ-001-5908, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-39.
+Audit query 02-005: For SAM-PQ-023-4509, what is the recorded mineral inclusion? Answer: olivine needle / batch amber-12.
+Audit query 02-006: For SAM-AP-000-3072, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-28.
+Audit query 02-007: For SAM-YE-017-4891, what is the recorded instrument bay? Answer: Aster-3 / batch silver-49.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-008: For SAM-HF-018-3501, what is the recorded mineral inclusion? Answer: zircon rind / batch amber-14.
+Audit query 02-009: For SAM-VM-007-1934, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch silver-89.
+Audit query 02-010: For SAM-XJ-008-6467, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-14.
+Audit query 02-011: For SAM-JW-014-4840, what is the recorded instrument bay? Answer: Dione-2 / batch silver-49.
+Audit query 02-012: For SAM-EK-022-5719, what is the recorded mineral inclusion? Answer: hematite seam / batch silver-67.
+Audit query 02-013: For SAM-FC-002-2397, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-73.
+Audit query 02-014: For SAM-LR-021-7238, what is the recorded stratigraphic tag? Answer: unit lambda / batch silver-74.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-015: For SAM-UN-003-5631, what is the recorded mineral inclusion? Answer: zircon rind / batch silver-89.
+Audit query 02-016: For SAM-DN-020-9551, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-91.
+Audit query 02-017: For SAM-ZD-005-7353, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-61.
+Audit query 02-018: For SAM-VQ-010-4208, what is the recorded isotope ratio code? Answer: Sr87-Sr86-204 / batch amber-19.
+Audit query 02-019: For SAM-EJ-006-7557, what is the recorded isotope ratio code? Answer: O18-O16-077 / batch amber-74.
+Audit query 02-020: For SAM-HD-019-4668, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-53.
+Audit query 02-021: For SAM-QG-016-8123, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-23.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-022: For SAM-JL-004-6095, what is the recorded instrument bay? Answer: Calyx-5 / batch violet-69.
+Audit query 02-023: For SAM-TN-012-6072, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-80.
+Audit query 03-000: For SAM-FC-002-2397, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-73.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-001: For SAM-EK-022-5719, what is the recorded mineral inclusion? Answer: hematite seam / batch silver-67.
+Audit query 03-002: For SAM-UN-003-5631, what is the recorded mineral inclusion? Answer: zircon rind / batch silver-89.
+Audit query 03-003: For SAM-HD-019-4668, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-53.
+Audit query 03-004: For SAM-HF-018-3501, what is the recorded mineral inclusion? Answer: zircon rind / batch amber-14.
+Audit query 03-005: For SAM-PQ-023-4509, what is the recorded mineral inclusion? Answer: olivine needle / batch amber-12.
+Audit query 03-006: For SAM-DN-020-9551, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-91.
+Audit query 03-007: For SAM-QG-016-8123, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-23.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-008: For SAM-FK-013-2180, what is the recorded instrument bay? Answer: Aster-3 / batch cobalt-81.
+Audit query 03-009: For SAM-XX-009-6998, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch violet-78.
+Audit query 03-010: For SAM-AP-000-3072, what is the recorded isotope ratio code? Answer: Ar40-K39-118 / batch cobalt-28.
+Audit query 03-011: For SAM-TN-012-6072, what is the recorded stratigraphic tag? Answer: unit polar-ash / batch amber-80.
+Audit query 03-012: For SAM-MD-011-5463, what is the recorded instrument bay? Answer: Dione-2 / batch silver-70.
+Audit query 03-013: For SAM-VM-007-1934, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch silver-89.
+Audit query 03-014: For SAM-LR-021-7238, what is the recorded stratigraphic tag? Answer: unit lambda / batch silver-74.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-015: For SAM-JW-014-4840, what is the recorded instrument bay? Answer: Dione-2 / batch silver-49.
+Audit query 03-016: For SAM-BZ-001-5908, what is the recorded stratigraphic tag? Answer: unit basalt-nine / batch amber-39.
+Audit query 03-017: For SAM-ZD-005-7353, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-61.
+Audit query 03-018: For SAM-XJ-008-6467, what is the recorded mineral inclusion? Answer: olivine needle / batch violet-14.
+Audit query 03-019: For SAM-VQ-010-4208, what is the recorded isotope ratio code? Answer: Sr87-Sr86-204 / batch amber-19.
+Audit query 03-020: For SAM-NT-015-1072, what is the recorded instrument bay? Answer: Borealis-9 / batch silver-54.
+Audit query 03-021: For SAM-YE-017-4891, what is the recorded instrument bay? Answer: Aster-3 / batch silver-49.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-022: For SAM-EJ-006-7557, what is the recorded isotope ratio code? Answer: O18-O16-077 / batch amber-74.
+Audit query 03-023: For SAM-JL-004-6095, what is the recorded instrument bay? Answer: Calyx-5 / batch violet-69.
+
+END OF CONTROLLED LONG-RANGE FACT DOCUMENT

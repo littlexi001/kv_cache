@@ -1,0 +1,65 @@
+[
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/biomed_long_range_facts.txt",
+    "title": "Specialized Biomedical Trial Registry",
+    "fact_count": 64,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Long version. Audit starts around 11k tokens for future large-context runs."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/biomed_long_range_facts_compact.txt",
+    "title": "Specialized Biomedical Trial Registry",
+    "fact_count": 24,
+    "query_repeats": 4,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Compact version. Audit starts around 2k tokens so 4k-token full-forward checks include retrieval answers."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/biomed_long_range_facts_hard_compact.txt",
+    "title": "Specialized Biomedical Trial Registry",
+    "fact_count": 32,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Hard compact version. Answers are unique random nonce strings, so late audit tokens require exact long-range copying."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/compiler_long_range_facts.txt",
+    "title": "Compiler Runtime Incident Notebook",
+    "fact_count": 64,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Long version. Audit starts around 11k tokens for future large-context runs."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/compiler_long_range_facts_compact.txt",
+    "title": "Compiler Runtime Incident Notebook",
+    "fact_count": 24,
+    "query_repeats": 4,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Compact version. Audit starts around 2k tokens so 4k-token full-forward checks include retrieval answers."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/compiler_long_range_facts_hard_compact.txt",
+    "title": "Compiler Runtime Incident Notebook",
+    "fact_count": 32,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Hard compact version. Answers are unique random nonce strings, so late audit tokens require exact long-range copying."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/geology_long_range_facts.txt",
+    "title": "Planetary Geology Core Sample Dossier",
+    "fact_count": 64,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Long version. Audit starts around 11k tokens for future large-context runs."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/geology_long_range_facts_compact.txt",
+    "title": "Planetary Geology Core Sample Dossier",
+    "fact_count": 24,
+    "query_repeats": 4,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Compact version. Audit starts around 2k tokens so 4k-token full-forward checks include retrieval answers."
+  },
+  {
+    "path": "fdong_seq_compress/data/synthetic_texts/geology_long_range_facts_hard_compact.txt",
+    "title": "Planetary Geology Core Sample Dossier",
+    "fact_count": 32,
+    "query_repeats": 3,
+    "design": "Early arbitrary professional-domain fact ledger, distractor report, late retrieval audit. Hard compact version. Answers are unique random nonce strings, so late audit tokens require exact long-range copying."
+  }
+]

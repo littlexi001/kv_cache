@@ -1,615 +1,280 @@
-# KV Cache 压缩课题 Current-State Framework
+# KV Cache Graph Compression Project Overview
 
-Date: 2026-06-01
+Date: 2026-06-04
 
-## 0. 文档定位
+## 0. One-Sentence Thesis
 
-这是 KV cache compression 课题的 current-state document。
+我们现在对 sequence compression / KV cache compression 的核心判断是：
 
-它不是实验流水账，而是当前最干净的研究状态：
+> **LLM 的 KV cache 不应被理解成一串只能顺序扫描的 token buffer，而应被理解成一种可索引的 memory system：K 更像 address / index，V 更像 payload / evidence。只要 K-space 具有可建图的几何结构，长上下文 attention 就可以被拆成 `K-side retrieval` 和 `V-side faithful reading`。**
 
-```text
-conjecture
-physical priors
-mathematical models
-implementation contracts
-evidence boundary
-next falsification tests
-```
-
-历史实验记录保留在 round-level iteration ledger：
-
-```text
-fdong_seq_compress/k_cache_graph_round1_findings.md
-fdong_seq_compress/k_cache_graph_round2_handoff.md
-```
-
-## 1. 目标和当前结论
-
-下游目标是：
-
-> 在长上下文推理中，避免每个 query 都和全部历史 K 做 full qK score，同时尽量保留 next-token prediction 所需的 V-side 信息。
-
-当前研究结论是：
-
-> Qwen3-0.6B 的 K-cache 已经表现出足够稳定的 residual graph geometry，值得继续研究 K-side graph indexing；但我们还没有证明 K-K graph candidates 能召回 full qK attention 真正使用的 token。
-
-所以当前状态是：
-
-```text
-已经支持：
-  K-cache 有 graph-friendly geometry。
-
-尚未证明：
-  K-cache graph candidates 可以替代或近似 full qK retrieval。
-
-下一道 gate：
-  query-attention recall。
-```
-
-这个课题当前应被理解为：
+当前最有希望的方向是：
 
 ```text
 K-indexed, V-faithful KV cache compression
 ```
 
-而不是 generic KV averaging。
-
-当前可以对外复述的四条主结论是：
-
-1. **K-K similarity 有明显近邻结构，可作为稀疏图候选 index。**  
-   去掉 raw K common direction 后，K-cache 不是无结构的 flat memory。Centered cosine 和 L2 distance 都显示 K vectors 之间存在稳定近邻结构，因此 K-side sparse graph / routing index 是值得继续验证的方向。
-
-2. **高相似 K 不是纯局部窗口，存在远距离高相似 K。**  
-   Round2 中，K graph 同时包含 local continuity 和 long-range shortcuts。也就是说，K graph 不是 sliding window 的同义词；它可能提供比 fixed local window 更有用的候选召回结构。
-
-3. **对 L2-distance 建图，是否去除 common direction 不影响 pairwise distance；但对 cosine 和 learning-based compression 仍然重要。**  
-   对任意公共向量 `c`，有 `||(k_i - c) - (k_j - c)||_2 = ||k_i - k_j||_2`，所以普通 L2 建图不受 centering 影响。但 cosine similarity 会被 raw K common direction 强烈影响；同时，如果采用 DeepSeek-style learning-based latent compression / token merging / representation learning，common direction 可能影响压缩表示是否保留 attention-relevant residual information。
-
-4. **上述现象在不同 layer、head、data 上定性成立，但 layer/head 异质性很强。**  
-   Round2 在不同文本域、layer/head、metric 下都看到类似的 graph-friendly geometry；同时不同 head 的局部性和长程性差异很大，因此后续 graph index 应当是 layer/head-aware 的。结合 ymluo 的超长上下文观察，100k 级别数据中 top-20 similar token 主要落在约 10k 范围内，这进一步支持 K 近邻距离随上下文长度增长并非线性爆炸。
-
-## 2. 可证伪 Conjecture
-
-当前 conjecture：
-
-> LLM K-cache 不是无结构的 flat memory。去掉 common direction 后，它形成了稀疏、多尺度的 address space。如果这个 address-space graph 能召回 full qK attention 的重要 token，那么长上下文 attention 可以被拆成 cheap K-side candidate retrieval 和 high-fidelity V-side reading。
-
-这个 conjecture 可以被以下结果证伪或削弱：
+也就是说，我们不是把 KV 一起粗暴平均，而是：
 
 ```text
-1. K-K graph structure 存在，但不能 recall qK attention。
-2. K-K graph 只优于 random，但不能优于 local-window baseline。
-3. K-K graph recall 需要太大的 candidate set，无法节省计算。
-4. graph-friendly structure 只存在于少数 synthetic text。
-5. inference-time graph retrieval 失败，因为 pretrained K-space 没有被训练成 sparse retrieval index。
+1. 用 K 建 index / graph / cluster，快速找出相关历史区域；
+2. 只在候选 token 上做 exact qK attention；
+3. 对选中的 V 保持高保真读取。
 ```
 
-注意：一个 operationalization 失败，不等于整个方向失败。例如 inference-time K graph recall 失败后，仍可能有一个更新后的 conjecture：
+## 1. 为什么这个问题值得做
 
-```text
-K-space 需要 training-time graph-aware constraint。
-```
+长上下文推理的主要瓶颈之一，是每个新 query 都要和全部历史 K 做 full qK score。上下文越长，模型能看到的信息越多，但 attention 访问成本也越高。
 
-## 3. Physical Priors
+直觉上，KV cache 其实是一种动态 memory。这个 memory 里现在放的是当前 sequence 的历史 token，但从系统角度看，它并不一定只能存当前 sequence：未来它也可能存网页、文档、工具结果、长期用户记忆、领域知识库，甚至是外部知识图谱压缩后的 memory entry。
 
-### 3.1 Attention 是 Memory Retrieval
+因此，真正重要的问题不是“如何把一个 sequence 平均压短”，而是：
 
-Physical prior：
+> **LLM 的 attention memory 能不能像搜索引擎或数据库一样被 index？**
 
-> Attention 本质上是 memory retrieval：query vector 搜索历史 key vectors，并读取对应 value vectors。
+如果可以，那么长上下文能力就不只是由 raw context length 决定，而是由更大的 memory pool 和更高效的 indexing 共同决定。
 
-数学模型：
+## 2. 我们已经观察到的 K/V 物理性质
 
-```text
-score_i = q_t · k_i
-attn_i = softmax(score_i)
-output_t = sum_i attn_i v_i
-```
+我们先没有直接设计复杂模型，而是先问一个更基础的问题：
 
-实现启发：
+> **现有 LLM 的 K-cache 随 sequence 变长时，是否天然具有适合建图/检索的数学结构？**
 
-```text
-不要只研究如何压小每个向量。
-更关键的是如何减少需要访问的历史 positions / blocks。
-```
+到目前为止，实验支持四个稳定观察：
 
-当前证据：
-
-```text
-Round1 和 Round2 都把 K-cache 当成可能支持 retrieval 的 address space 来研究。
-```
-
-边界：
-
-```text
-retrieval 视角只提供 indexing 动机；
-它本身不证明 K-K graph neighbors 对 qK retrieval 有用。
-```
-
-### 3.2 K 是 Index，V 是 Payload
-
-Physical prior：
-
-> K-cache 更像 address / routing / index；V-cache 更像 content / evidence / payload。
-
-数学模型：
-
-```text
-K side:
-  build summaries, anchors, graph edges, or block candidates
-
-V side:
-  preserve exact or residual value content and gather it after K-side selection
-```
-
-Round1 证据：
-
-| 性质 | K-cache | V-cache |
+| 观察 | 含义 | 对方法的启发 |
 |---|---|---|
-| 有效维度 | 随 sequence length sublinear 增长 | 也 sublinear，但整体高于 K |
-| 各向异性 | strong common direction | common direction 弱得多 |
-| 局部平滑性 | 强 | 弱 |
-| 小 block 结构 | 4/8/16 token 下明显 | 不适合直接平均 |
-| 角色 | address / index / routing | content / evidence / payload |
+| K 更像 index，V 更像 payload | K 更各向异性、更有局部平滑和 block/graph 结构；V 更 content-like | 应优先压缩/索引 K-side，V-side 尽量高保真读取 |
+| K-space 有 residual graph geometry | 去掉 common direction 后，K 不是无结构散点，而是存在近邻、anchor 和区域结构 | K 可以建 graph / cluster / tree，而不只是顺序缓存 |
+| K 图既有局部连续性，也有长程 shortcut | 高相似 K 不只是最近 token，还会跨越较长距离 | 单纯 sliding window 不够，需要 global index |
+| layer/head 异质性很强，中后层更适合建图 | 浅层更局部、更不稳定；中后层 attention responsibility 更集中在少数 K-space region | index 应该 layer/head-aware，不能所有层用同一套策略 |
 
-实现启发：
-
-```text
-优先尝试：
-  K index -> candidate positions / blocks -> exact or residual V read
-
-不作为第一版方案：
-  把 K 和 V 一起平均成 coarse memory vector
-```
-
-边界：
+这四点把我们的方案从“拍脑袋稀疏化 attention”变成了一个有物理依据的问题：
 
 ```text
-这个 prior 支持 K-side compression 多于 V-side compression；
-但还没有决定哪一种 K index 最好。
+如果 K-space 已经像 address space，
+那我们就应该用 address-space 的方法来组织它。
 ```
 
-### 3.3 K 有 Residual Graph Geometry
+## 3. 我们验证了什么
 
-Physical prior：
+在观察 K-space 几何之后，下一步问题是：
 
-> 去掉 common direction 后，K vectors 形成有意义的 residual address space，其中同时存在 local continuity、long-range shortcuts 和 head-specific graph structure。
+> **这种 K-space 图结构是否真的能帮助未来 query 找到 full attention 会使用的历史 token？**
 
-数学模型：
+我们做了两类验证。
+
+第一类是 geometry / responsibility 验证：看 K-space 距离、近邻和 cluster 是否能预测 future query 的 attention responsibility。结果显示，中后层的 K-space cluster 对 future attention mass 有明显预测能力，深层尤其强；浅层则弱得多。
+
+第二类是直接 sparse decode 验证：不只看 attention mass，而是把候选 token 真正用于 decode，比较 sparse attention 和 full attention 的 perplexity / loss。结果显示，`local + global cluster threshold` 可以在只访问约 20%-40% token 的情况下，达到接近 full attention 的效果。其中更经济的工作点大约访问 20% token，质量已经接近 full；更保守的工作点访问约 30%-40% token，几乎贴近 full。
+
+这说明：
+
+> **K-cache graph indexing 不是只在几何指标上好看，它已经在 decode-level 指标上表现出可用性。**
+
+## 4. 当前 Solution 是什么
+
+当前 prototype 可以概括为：
 
 ```text
-centered K:
-  r_i = k_i - mean_j(k_j)
-
-cosine graph:
-  edge i -> j if cos(r_i, r_j) is in causal top-k, j < i
-
-L2 graph:
-  edge i -> j if ||k_i - k_j||_2 is in causal top-k, j < i
+prefill K -> cluster / graph index
+decode query -> first query cluster centers
+high-similarity clusters -> expand to all tokens inside cluster
+local/sink tokens -> always keep
+candidate tokens -> exact qK attention + faithful V read
 ```
 
-为什么 L2 重要：
+更具体地说：
+
+1. 对 prefill 阶段的 K-cache，在每个 layer / head 上建立 cluster。
+2. 每个 cluster center 作为粗粒度 memory region 的 index entry。
+3. decode 时，新 query 先和 cluster centers 比较相似度。
+4. 只有相似度超过阈值的 cluster 会被展开。
+5. 被选中的 cluster 内部 token 不再压缩，直接参与 exact qK attention。
+6. local window / sink token 保留，避免丢掉局部语法、短程依赖和 attention sink。
+
+这套设计里，每条策略都对应前面的物理性质：
+
+| 策略 | 对应的物理性质 |
+|---|---|
+| 用 K 建 cluster | K 是 address-like memory，不是纯 content |
+| 先查 cluster center | K-space 有 region / anchor / graph 结构 |
+| 用 threshold 而不是固定 top-k | 每个 query 需要读取的 memory region 数量不应固定 |
+| cluster 内全读 | cluster 只是 coarse index，真正 attention 仍应高保真 |
+| 保留 local window | K 图有长程 shortcut，但模型仍需要局部连续性 |
+| V 不做粗压缩 | V 是 payload，错误压缩会直接损害生成内容 |
+
+所以这个方法不是“随便 cluster 一下试试”，而是从当前观察到的 K/V 结构自然推出的。
+
+## 5. 当前 Promising 在哪里
+
+这个方向最有价值的地方有三点。
+
+第一，它已经从物理观察走到了 decode-level prototype。我们不只证明了 K-space 有图结构，也初步证明了这种图结构可以用于实际 sparse attention。
+
+第二，它天然连接传统 search / database indexing。K-cache compression 不再只是神经网络里的矩阵近似问题，而是可以借鉴 inverted index、ANN、cluster routing、tree search、learned index、cache hierarchy 等系统思想。
+
+第三，它给出了清晰的下一代模型结构方向。如果 inference-time graph index 已经有效但还不够好，那么更强的方案很可能是在训练时让模型学会产生更适合 indexing 的 K-space，而不是在推理时事后补救。
+
+当前对外可以说的结论是：
+
+> **我们已经找到了一条从 attention memory 的物理结构出发，到可运行 sparse attention prototype 的路径。现阶段主要问题已经从“这个方向有没有道理”变成“如何把 indexing 做得更准、更快、更适合训练”。**
+
+## 6. 当前局限性
+
+现在的方法还不是最终系统，主要局限可以分成三类。
+
+### 6.1 Algorithmic Limitations
+
+当前 cluster 是一个相对粗糙的 inference-time index。它没有在训练时参与 loss，也没有保证 cluster center 一定对应模型真正需要的 attention region。
+
+因此它可能出现：
 
 ```text
-|q · k1 - q · k2| <= ||q|| ||k1 - k2||
+cluster 过粗 -> 漏掉重要 token
+cluster 过细 -> candidate 太多，压缩收益下降
+统一 threshold -> 不适合所有 layer/head/query
+pure cluster -> 丢掉局部上下文后质量崩坏
 ```
 
-所以 K-K L2 distance 小，对 qK score stability 有直接解释。
-
-Round2 证据：
+其中 `pure cluster` 已经被实验否定；当前有效形态必须是：
 
 ```text
-centered cosine 和 L2 都显示：
-  local edges
-  long-range edges
-  neighbor-distance 随 seq_len sublinear 增长
-  strong layer/head heterogeneity
-  moderate hub / anchor structure
+local + global cluster threshold
 ```
 
-边界：
+### 6.2 Training-Inference Mismatch
+
+当前模型训练时使用的是 full attention，并没有被要求形成一个特别适合 graph retrieval 的 K-space。我们在推理时强行建图，本质上是在利用 pretrained K-space 中自然出现的结构。
+
+这会限制上限：
 
 ```text
-这证明 K-cache 有 graph-friendly geometry；
-但还没有证明 graph candidates 能 recall full qK attention。
+模型没有被训练成“先查 index，再读 content”；
+K-space geometry 只是自然涌现，不一定为 sparse retrieval 最优；
+某些 head/layer 可能完全不适合 inference-time indexing。
 ```
 
-### 3.4 可能需要 Training-Time Alignment
-
-Physical prior：
-
-> pretrained model 可能自然存在 graph-like K geometry，但并没有被训练成用这个 graph 做 sparse retrieval。
-
-两条可能路线：
+所以更强的下一步可能是 train-time 方法：
 
 ```text
-Route A:
-  pretrained K-space 已经足够好
-  -> inference-time graph index 可以工作
-
-Route B:
-  pretrained K-space 只提供启发
-  -> 需要 train-time graph-aware / index-aware constraint
+index-aware attention
+cluster-aware KV cache
+learned K-side router
+DeepSeek CSA/MCA-style trainable compressor
+graph-regularized K-space
 ```
 
-边界：
+### 6.3 Engineering / Systems Limitations
+
+即使算法上能减少访问 token 数，工程上也不自动更快。
+
+主要风险是：
 
 ```text
-不要在 inference-time recall 被具体证伪之前，过早跳到新的 trainable architecture。
+建 cluster 本身可能很贵；
+query 和 cluster center 比较也有额外开销；
+candidate mask / gather 在 CPU 侧可能很慢；
+稀疏访问会破坏 GPU/MPS 对 dense matmul 的高效优化；
+不连续 memory gather 可能比直接 full attention 更难优化。
 ```
 
-## 4. 当前数学对象
+也就是说，当前方法证明的是 algorithmic compression potential，不等于已经证明 wall-clock speedup。
 
-### 4.1 Cache Tensors
-
-对 layer `l`、head `h`、token position `i`：
+系统优化要单独做，可能需要：
 
 ```text
-k_{l,h,i} in R^{d_h}
-v_{l,h,i} in R^{d_h}
+GPU-side clustering / routing
+static prefill index + incremental update
+block-level contiguous layout
+specialized sparse attention kernel
+layer/head-selective sparse execution
 ```
 
-token-level concatenated K：
+## 7. 下一步资源应该投在哪里
+
+下一步不应该继续无目的调参，而应该围绕三个问题推进。
+
+### 7.1 把 Inference-Time Prototype 做成更强的 Upper Bound
+
+目标是回答：
+
+> 在不训练模型的情况下，K-side indexing 最多能做到什么质量/压缩比？
+
+具体包括：
 
 ```text
-k_{l,i} = concat_h k_{l,h,i}
+layer/head-specific threshold
+query-adaptive threshold
+更好的 cluster / tree / anchor construction
+block-contiguous candidate layout
+longer、更难、真实长程依赖数据
 ```
 
-### 4.2 K Transform
+### 7.2 判断是否必须进入 Training-Time Method
 
-默认 graph space：
+如果 inference-time 方法继续受限，最可能的解释不是方向错了，而是：
+
+> 当前 pretrained model 没有被训练成 sparse-indexable memory。
+
+这时下一步就应该设计训练时结构或 loss，让模型从一开始就学会：
 
 ```text
-r_i = k_i - mean_j(k_j)
+K side produces searchable addresses
+cluster/root summarizes memory region
+query first routes to region
+V side keeps high-fidelity payload
 ```
 
-原因：
+### 7.3 判断系统瓶颈在哪里
+
+算法压缩比和真实推理速度是两件事。
+
+我们需要拆开测：
 
 ```text
-k_i = c + r_i
-q · k_i = q · c + q · r_i
+cluster build time
+cluster center query time
+candidate gather/mask time
+exact qK on candidates time
+V read time
+end-to-end decode latency
 ```
 
-对同一个 query，`q · c` 对所有历史 token 是同一个 additive constant，会被 softmax 抵消。真正产生 token 间选择性的部分是 `q · r_i`。
+如果瓶颈主要在 CPU-side routing 和 gather，那么它是工程问题，可以通过 kernel/layout/system design 改。如果瓶颈来自必须访问太多 token 才能保持质量，那就是算法问题，需要更好的 index 或训练时约束。
 
-### 4.3 Graph Construction
-
-Causal top-k K graph：
-
-```text
-G = (nodes, edges)
-nodes = token positions
-edge i -> j if j < i and k_j is among i's top-k nearest previous K nodes
-```
-
-支持的 metric：
-
-```text
-centered cosine
-L2 distance
-dot product only as diagnostic
-```
-
-### 4.4 Query-Attention Recall
-
-这是下一阶段必须建立的对象。
-
-Full attention oracle：
-
-```text
-a_t = softmax(q_t K_{<t}^T)
-```
-
-graph candidate set：
-
-```text
-C_t = local_window(t) union graph_expand(seed_nodes, hops)
-```
-
-Recall metrics：
-
-```text
-attention_mass_recall = sum_{i in C_t} a_{t,i}
-top_token_recall@r = |top_r(a_t) intersect C_t| / r
-candidate_ratio = |C_t| / t
-CE_delta = CE(masked_candidates_only) - CE(full_attention)
-```
-
-## 5. Implementation Contracts
-
-### 5.1 已完成：K/V Geometry Diagnosis
-
-问题：
-
-```text
-K 和 V 是否具有不同的 compressibility 和 geometry？
-```
-
-输入：
-
-```text
-Qwen3-0.6B
-long English text
-prefix lengths from short to long
-K/V cache tensors by layer/head
-```
-
-输出：
-
-```text
-effective rank
-stable rank
-anisotropy
-local smoothness
-block structure
-subspace stability
-new-token residual novelty
-```
-
-结果：
-
-```text
-K 更像 index。
-V 更像 payload。
-```
-
-ledger：
-
-```text
-fdong_seq_compress/k_cache_graph_round1_findings.md
-```
-
-### 5.2 已完成：K Graph Geometry Sweep
-
-问题：
-
-```text
-在不同 metric、sequence length、layer/head、text domain 下，K-cache 是否都有 graph-friendly structure？
-```
-
-输入：
-
-```text
-Qwen3-0.6B
-5 synthetic long text domains
-seq_len = 1000, 2000, 4000, 8000
-similarity = centered cosine, L2
-top_k = 10, 20, 50
-all layers / all KV heads for layer-head sweep
-```
-
-输出：
-
-```text
-neighbor distance distribution
-local edge fraction
-long-range edge fraction
-in-degree / hubness
-layer/head heterogeneity
-domain robustness
-```
-
-结果：
-
-```text
-K graph geometry 已经足够稳定，值得进入 query-attention recall tests。
-```
-
-ledger：
-
-```text
-fdong_seq_compress/k_cache_graph_round2_handoff.md
-```
-
-### 5.3 下一步：Query-Attention Recall
-
-问题：
-
-```text
-K graph candidates 能否覆盖 full qK attention？
-```
-
-Algorithm：
-
-```text
-1. Select one text, one layer/head, and one prefix length.
-2. Compute full qK attention for query positions.
-3. Build causal K-K graph from historical K.
-4. Generate candidates with local window, 1-hop graph, and 2-hop graph.
-5. Compare candidates against full qK attention.
-6. Save aggregate metrics and representative pass/fail examples.
-```
-
-Pass condition：
-
-```text
-Graph candidates 在同等 candidate budget 下明显优于 local-only 和 random same-size baseline。
-```
-
-Fail conditions：
-
-```text
-Graph candidates 不优于 local-only。
-Graph candidates 需要太多 tokens 才有效。
-Graph candidates 只在少数 head 上有效，且没有清晰模式。
-Graph candidates recall top tokens 但漏掉 attention mass。
-Graph candidates recall attention mass 但 CE delta 很大。
-```
-
-Debug artifacts：
-
-```text
-per-query candidate list
-full attention top tokens
-candidate overlap table
-attention mass recall table
-edge-path visualization for selected examples
-good / bad / confusing examples
-```
-
-## 6. 当前证据
-
-### 6.1 Round1 Evidence
-
-Round1 建立了：
-
-```text
-K 和 V 的几何结构不同。
-raw K similarity 会被 common direction 误导。
-centered / residual K 更接近 attention-relevant geometry。
-K residual space 有初步 nearest-neighbor 和 nonlocal edge structure。
-```
-
-Round1 最重要结论：
-
-```text
-K-indexed, V-faithful compression 比 joint KV averaging 更合理。
-```
-
-### 6.2 Round2 Evidence
-
-Round2 建立了：
-
-```text
-K graph structure 在 L2 下也成立，不只是 centered cosine artifact。
-K graph structure 随 seq_len 增长到 8000 时没有崩坏。
-K graph 同时有 local edges 和 long-range shortcuts。
-layer/head 差异很大，应该利用而不是平均掉。
-主要现象在 5 类文本 domain 上都存在。
-```
-
-Round2 最重要结论：
-
-```text
-K-cache 在几何上适合继续探索 graph index；
-但 attention-level usefulness 仍未验证。
-```
-
-## 7. 当前 Claim Boundary
+## 8. 当前 Claim Boundary
 
 现在可以说：
 
 ```text
-Qwen3-0.6B K-cache has graph-friendly residual geometry.
-K 和 V 应当被区别对待。
-K-side indexing with V-side high-fidelity reading 是有实验证据支持的方向。
+K-cache has graph-friendly address geometry.
+K 和 V 应该区别对待：K indexed, V faithful.
+K-side cluster/graph routing 已经在 decode-level 指标上显示可行性。
+local + global threshold routing 是当前最有效的 inference-time prototype。
 ```
 
 现在还不能说：
 
 ```text
-K graph index 可以无损降低 attention compute。
-K-K nearest neighbors 等价于 qK attention neighbors。
-inference-time graph index 已经足够。
-一定需要新的 trainable architecture。
+当前 naive implementation 已经比 full attention 更快。
+当前 cluster 方法就是最终方案。
+所有 layer/head 都适合相同 indexing 策略。
+不需要训练时改模型。
 ```
 
-## 8. 下一轮 Research Loop
+当前最准确的项目状态是：
 
-下一轮按以下顺序做。
+> **方向已经从 idea 进入 proof-of-principle：K-cache 确实可以被当作可建图的 memory address space。接下来真正有价值的工作，是把这个原理推进成更强的 trainable indexing architecture 或更高效的 sparse-attention system。**
 
-### 8.1 先做 Micro-Test
+## 9. Round Ledgers
 
-先跑一个小的 query-attention recall test，而不是直接大 sweep。
-
-建议设置：
+详细实验、失败案例、脚本和数值结果保留在 round-level 文档中：
 
 ```text
-text: long_textbook_distributed_systems or long_codebase_query_engine
-model: Qwen3-0.6B
-seq_len: 1000 or 2000
-layers/heads:
-  local head: L27/H0
-  long-range head: L6/H3 or L15/H1
-  mixed head: one median-distance head
-candidate methods:
-  local-only
-  random same-size
-  K graph 1-hop
-  K graph 2-hop
-  local + graph
-metrics:
-  attention mass recall
-  top-token recall
-  candidate ratio
+fdong_seq_compress/k_cache_graph_round1_findings.md
+fdong_seq_compress/k_cache_graph_round2_handoff.md
+fdong_seq_compress/k_cache_graph_round3_todo.md
+fdong_seq_compress/k_cache_graph_round4_threshold_cluster_findings.md
 ```
 
-### 8.2 必须有 Visual Evidence
-
-每个 representative head 至少保存：
-
-```text
-token-position arc graph
-node size by in-degree
-edge color by distance or metric
-selected query examples with full attention top tokens
-candidate paths from graph expansion
-```
-
-Aggregate metrics 不够。我们需要看到 good / bad / confusing cases。
-
-### 8.3 失败后先分解，不要马上改方案
-
-如果 recall 失败，先 decomposes：
-
-```text
-big failure:
-  graph candidates miss full qK attention
-
-candidate causes:
-  seed selection is wrong
-  K-K edges are not query-relevant
-  chosen layer/head is wrong
-  metric is wrong
-  local baseline is already enough
-  attention target is diffuse and not top-token-like
-  pretrained K-space is not trained for sparse graph retrieval
-```
-
-每个原因都要有 stage-local test，再决定是否改算法或上训练约束。
-
-### 8.4 Recall 后的决策
-
-如果 graph recall 通过：
-
-```text
-build minimal inference-time graph candidate attention
-measure CE delta and runtime/candidate budget
-```
-
-如果 graph recall 失败，并且失败原因指向 train/inference mismatch：
-
-```text
-design training-time graph-aware K-space objective
-for example:
-  graph-aware attention mask
-  query-to-anchor auxiliary loss
-  learned CSA-like lightweight indexer
-  K-side index with V-side faithful payload
-```
-
-## 9. Research Hygiene
-
-后续每个实验都要记录：
-
-```text
-conjecture
-physical prior
-mathematical model
-algorithm specification
-input and hyperparameters
-pass/fail criteria
-stage-level artifacts
-result
-failure interpretation
-updated conjecture
-```
-
-不要把 plausible mechanism 当成科研进展。进展只来自：
-
-```text
-conjecture survived a concrete falsification test
-or
-conjecture failed in a way that localized the wrong assumption
-```

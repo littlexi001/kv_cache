@@ -37,6 +37,10 @@ k_cache_graph_round1_findings.md
 k_cache_graph_round2_handoff.md
   Round2 findings: L2 metric sweep, seq-len scaling, layer/head selection,
   domain robustness, and the next query-attention recall gate.
+
+k_cache_graph_round3_todo.md
+  Round3 TODO: harder long-range data / stronger-model attention tests,
+  inference-time graph candidate methods, and anchor / cluster next steps.
 ```
 
 Code and runtime folders:

@@ -1,0 +1,159 @@
+Compiler Runtime Incident Notebook
+
+This document is a controlled long-range retrieval benchmark. The early ledger contains arbitrary identifiers and attribute values. The later audit asks for those values after a long distractor region.
+
+EARLY FACT LEDGER
+Ledger item 000: In the garbage collection record, MOD-UL-000-5606 has trace marker = copper-edge / batch amber-41.
+Ledger item 001: In the link-time optimization record, MOD-DF-001-9823 has mitigation flag = --pin-shadow-stack / batch amber-91.
+Ledger item 002: In the garbage collection record, MOD-SA-002-6145 has fault signature = LTO-Reloc-88 / batch violet-83.
+Ledger item 003: In the register allocation record, MOD-DP-003-6608 has fault signature = LTO-Reloc-88 / batch violet-75.
+Ledger item 004: In the link-time optimization record, MOD-LJ-004-1716 has owner queue = optimizer-nightly / batch amber-91.
+Ledger item 005: In the register allocation record, MOD-SV-005-2971 has trace marker = theta-frame / batch cobalt-50.
+Ledger item 006: In the garbage collection record, MOD-KF-006-4716 has fault signature = SPILL-Delta-72 / batch amber-57.
+Ledger item 007: In the vector lowering record, MOD-MH-007-9030 has trace marker = copper-edge / batch amber-69.
+Ledger item 008: In the garbage collection record, MOD-CY-008-6851 has fault signature = GC-Safepoint-19 / batch silver-29.
+Ledger item 009: In the link-time optimization record, MOD-BM-009-6528 has fault signature = SPILL-Delta-72 / batch cobalt-89.
+Ledger item 010: In the vector lowering record, MOD-WZ-010-2391 has fault signature = VEC-Lane-44 / batch amber-34.
+Ledger item 011: In the garbage collection record, MOD-NF-011-8431 has mitigation flag = --freeze-outline / batch cobalt-34.
+Ledger item 012: In the register allocation record, MOD-LQ-012-3761 has fault signature = IR-Null-31 / batch violet-21.
+Ledger item 013: In the link-time optimization record, MOD-QE-013-4136 has mitigation flag = --pin-shadow-stack / batch cobalt-95.
+Ledger item 014: In the vector lowering record, MOD-CR-014-2789 has fault signature = GC-Safepoint-19 / batch amber-70.
+Ledger item 015: In the garbage collection record, MOD-MM-015-2799 has fault signature = SPILL-Delta-72 / batch amber-72.
+Ledger item 016: In the link-time optimization record, MOD-NF-016-7928 has owner queue = toolchain-release / batch cobalt-62.
+Ledger item 017: In the register allocation record, MOD-MG-017-9357 has trace marker = copper-edge / batch amber-42.
+Ledger item 018: In the register allocation record, MOD-LC-018-2114 has owner queue = optimizer-nightly / batch cobalt-42.
+Ledger item 019: In the garbage collection record, MOD-CY-019-7805 has owner queue = backend-simd / batch violet-24.
+Ledger item 020: In the register allocation record, MOD-JE-020-3880 has trace marker = indigo-slot / batch amber-48.
+Ledger item 021: In the register allocation record, MOD-QJ-021-2647 has trace marker = copper-edge / batch silver-67.
+Ledger item 022: In the link-time optimization record, MOD-NU-022-1355 has trace marker = copper-edge / batch silver-11.
+Ledger item 023: In the vector lowering record, MOD-ZX-023-8430 has fault signature = SPILL-Delta-72 / batch amber-36.
+
+DISTRACTOR TECHNICAL REPORT
+Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The review paragraph number 00 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 01 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The review paragraph number 02 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 03 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 04 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The review paragraph number 05 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The review paragraph number 06 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 07 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The review paragraph number 08 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 09 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The review paragraph number 10 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+Engineers treated every counterexample as a constraint on the lowering pipeline rather than as an isolated crash report. The nightly dashboard separated front-end parse drift from back-end register pressure so that triage remained mechanically auditable. The compiler team reproduced each failure with deterministic scheduling and a pinned optimization seed before accepting the regression. The review paragraph number 11 deliberately avoids restating the registry answers, so the later audit section must rely on the earlier ledger rather than nearby lexical repetition.
+
+LONG-RANGE RETRIEVAL AUDIT
+Audit query 00-000: For MOD-MG-017-9357, what is the recorded trace marker? Answer: copper-edge / batch amber-42.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-001: For MOD-SV-005-2971, what is the recorded trace marker? Answer: theta-frame / batch cobalt-50.
+Audit query 00-002: For MOD-UL-000-5606, what is the recorded trace marker? Answer: copper-edge / batch amber-41.
+Audit query 00-003: For MOD-CY-019-7805, what is the recorded owner queue? Answer: backend-simd / batch violet-24.
+Audit query 00-004: For MOD-QJ-021-2647, what is the recorded trace marker? Answer: copper-edge / batch silver-67.
+Audit query 00-005: For MOD-WZ-010-2391, what is the recorded fault signature? Answer: VEC-Lane-44 / batch amber-34.
+Audit query 00-006: For MOD-NF-016-7928, what is the recorded owner queue? Answer: toolchain-release / batch cobalt-62.
+Audit query 00-007: For MOD-JE-020-3880, what is the recorded trace marker? Answer: indigo-slot / batch amber-48.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-008: For MOD-SA-002-6145, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-83.
+Audit query 00-009: For MOD-KF-006-4716, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-57.
+Audit query 00-010: For MOD-CR-014-2789, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch amber-70.
+Audit query 00-011: For MOD-CY-008-6851, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch silver-29.
+Audit query 00-012: For MOD-ZX-023-8430, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-36.
+Audit query 00-013: For MOD-BM-009-6528, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch cobalt-89.
+Audit query 00-014: For MOD-NF-011-8431, what is the recorded mitigation flag? Answer: --freeze-outline / batch cobalt-34.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-015: For MOD-MM-015-2799, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-72.
+Audit query 00-016: For MOD-LC-018-2114, what is the recorded owner queue? Answer: optimizer-nightly / batch cobalt-42.
+Audit query 00-017: For MOD-LJ-004-1716, what is the recorded owner queue? Answer: optimizer-nightly / batch amber-91.
+Audit query 00-018: For MOD-LQ-012-3761, what is the recorded fault signature? Answer: IR-Null-31 / batch violet-21.
+Audit query 00-019: For MOD-DP-003-6608, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-75.
+Audit query 00-020: For MOD-NU-022-1355, what is the recorded trace marker? Answer: copper-edge / batch silver-11.
+Audit query 00-021: For MOD-DF-001-9823, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch amber-91.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 00-022: For MOD-QE-013-4136, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch cobalt-95.
+Audit query 00-023: For MOD-MH-007-9030, what is the recorded trace marker? Answer: copper-edge / batch amber-69.
+Audit query 01-000: For MOD-BM-009-6528, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch cobalt-89.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-001: For MOD-NF-011-8431, what is the recorded mitigation flag? Answer: --freeze-outline / batch cobalt-34.
+Audit query 01-002: For MOD-CR-014-2789, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch amber-70.
+Audit query 01-003: For MOD-UL-000-5606, what is the recorded trace marker? Answer: copper-edge / batch amber-41.
+Audit query 01-004: For MOD-WZ-010-2391, what is the recorded fault signature? Answer: VEC-Lane-44 / batch amber-34.
+Audit query 01-005: For MOD-NU-022-1355, what is the recorded trace marker? Answer: copper-edge / batch silver-11.
+Audit query 01-006: For MOD-MH-007-9030, what is the recorded trace marker? Answer: copper-edge / batch amber-69.
+Audit query 01-007: For MOD-DF-001-9823, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch amber-91.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-008: For MOD-JE-020-3880, what is the recorded trace marker? Answer: indigo-slot / batch amber-48.
+Audit query 01-009: For MOD-QJ-021-2647, what is the recorded trace marker? Answer: copper-edge / batch silver-67.
+Audit query 01-010: For MOD-DP-003-6608, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-75.
+Audit query 01-011: For MOD-ZX-023-8430, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-36.
+Audit query 01-012: For MOD-LJ-004-1716, what is the recorded owner queue? Answer: optimizer-nightly / batch amber-91.
+Audit query 01-013: For MOD-NF-016-7928, what is the recorded owner queue? Answer: toolchain-release / batch cobalt-62.
+Audit query 01-014: For MOD-CY-008-6851, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch silver-29.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-015: For MOD-SV-005-2971, what is the recorded trace marker? Answer: theta-frame / batch cobalt-50.
+Audit query 01-016: For MOD-LQ-012-3761, what is the recorded fault signature? Answer: IR-Null-31 / batch violet-21.
+Audit query 01-017: For MOD-MM-015-2799, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-72.
+Audit query 01-018: For MOD-MG-017-9357, what is the recorded trace marker? Answer: copper-edge / batch amber-42.
+Audit query 01-019: For MOD-KF-006-4716, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-57.
+Audit query 01-020: For MOD-SA-002-6145, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-83.
+Audit query 01-021: For MOD-LC-018-2114, what is the recorded owner queue? Answer: optimizer-nightly / batch cobalt-42.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 01-022: For MOD-QE-013-4136, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch cobalt-95.
+Audit query 01-023: For MOD-CY-019-7805, what is the recorded owner queue? Answer: backend-simd / batch violet-24.
+Audit query 02-000: For MOD-WZ-010-2391, what is the recorded fault signature? Answer: VEC-Lane-44 / batch amber-34.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-001: For MOD-SA-002-6145, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-83.
+Audit query 02-002: For MOD-QE-013-4136, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch cobalt-95.
+Audit query 02-003: For MOD-NF-016-7928, what is the recorded owner queue? Answer: toolchain-release / batch cobalt-62.
+Audit query 02-004: For MOD-NF-011-8431, what is the recorded mitigation flag? Answer: --freeze-outline / batch cobalt-34.
+Audit query 02-005: For MOD-UL-000-5606, what is the recorded trace marker? Answer: copper-edge / batch amber-41.
+Audit query 02-006: For MOD-MG-017-9357, what is the recorded trace marker? Answer: copper-edge / batch amber-42.
+Audit query 02-007: For MOD-JE-020-3880, what is the recorded trace marker? Answer: indigo-slot / batch amber-48.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-008: For MOD-LJ-004-1716, what is the recorded owner queue? Answer: optimizer-nightly / batch amber-91.
+Audit query 02-009: For MOD-CY-008-6851, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch silver-29.
+Audit query 02-010: For MOD-MM-015-2799, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-72.
+Audit query 02-011: For MOD-CR-014-2789, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch amber-70.
+Audit query 02-012: For MOD-BM-009-6528, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch cobalt-89.
+Audit query 02-013: For MOD-LC-018-2114, what is the recorded owner queue? Answer: optimizer-nightly / batch cobalt-42.
+Audit query 02-014: For MOD-KF-006-4716, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-57.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-015: For MOD-NU-022-1355, what is the recorded trace marker? Answer: copper-edge / batch silver-11.
+Audit query 02-016: For MOD-QJ-021-2647, what is the recorded trace marker? Answer: copper-edge / batch silver-67.
+Audit query 02-017: For MOD-CY-019-7805, what is the recorded owner queue? Answer: backend-simd / batch violet-24.
+Audit query 02-018: For MOD-DF-001-9823, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch amber-91.
+Audit query 02-019: For MOD-ZX-023-8430, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-36.
+Audit query 02-020: For MOD-LQ-012-3761, what is the recorded fault signature? Answer: IR-Null-31 / batch violet-21.
+Audit query 02-021: For MOD-SV-005-2971, what is the recorded trace marker? Answer: theta-frame / batch cobalt-50.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 02-022: For MOD-MH-007-9030, what is the recorded trace marker? Answer: copper-edge / batch amber-69.
+Audit query 02-023: For MOD-DP-003-6608, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-75.
+Audit query 03-000: For MOD-CY-019-7805, what is the recorded owner queue? Answer: backend-simd / batch violet-24.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-001: For MOD-ZX-023-8430, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-36.
+Audit query 03-002: For MOD-LJ-004-1716, what is the recorded owner queue? Answer: optimizer-nightly / batch amber-91.
+Audit query 03-003: For MOD-LC-018-2114, what is the recorded owner queue? Answer: optimizer-nightly / batch cobalt-42.
+Audit query 03-004: For MOD-BM-009-6528, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch cobalt-89.
+Audit query 03-005: For MOD-QJ-021-2647, what is the recorded trace marker? Answer: copper-edge / batch silver-67.
+Audit query 03-006: For MOD-MH-007-9030, what is the recorded trace marker? Answer: copper-edge / batch amber-69.
+Audit query 03-007: For MOD-NF-016-7928, what is the recorded owner queue? Answer: toolchain-release / batch cobalt-62.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-008: For MOD-MM-015-2799, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-72.
+Audit query 03-009: For MOD-NF-011-8431, what is the recorded mitigation flag? Answer: --freeze-outline / batch cobalt-34.
+Audit query 03-010: For MOD-WZ-010-2391, what is the recorded fault signature? Answer: VEC-Lane-44 / batch amber-34.
+Audit query 03-011: For MOD-SV-005-2971, what is the recorded trace marker? Answer: theta-frame / batch cobalt-50.
+Audit query 03-012: For MOD-KF-006-4716, what is the recorded fault signature? Answer: SPILL-Delta-72 / batch amber-57.
+Audit query 03-013: For MOD-QE-013-4136, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch cobalt-95.
+Audit query 03-014: For MOD-SA-002-6145, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-83.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-015: For MOD-JE-020-3880, what is the recorded trace marker? Answer: indigo-slot / batch amber-48.
+Audit query 03-016: For MOD-UL-000-5606, what is the recorded trace marker? Answer: copper-edge / batch amber-41.
+Audit query 03-017: For MOD-DF-001-9823, what is the recorded mitigation flag? Answer: --pin-shadow-stack / batch amber-91.
+Audit query 03-018: For MOD-NU-022-1355, what is the recorded trace marker? Answer: copper-edge / batch silver-11.
+Audit query 03-019: For MOD-DP-003-6608, what is the recorded fault signature? Answer: LTO-Reloc-88 / batch violet-75.
+Audit query 03-020: For MOD-CY-008-6851, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch silver-29.
+Audit query 03-021: For MOD-LQ-012-3761, what is the recorded fault signature? Answer: IR-Null-31 / batch violet-21.
+The auditor marks this as a memory lookup rather than a local language modeling exercise.
+Audit query 03-022: For MOD-CR-014-2789, what is the recorded fault signature? Answer: GC-Safepoint-19 / batch amber-70.
+Audit query 03-023: For MOD-MG-017-9357, what is the recorded trace marker? Answer: copper-edge / batch amber-42.
+
+END OF CONTROLLED LONG-RANGE FACT DOCUMENT
