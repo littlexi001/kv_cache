@@ -43,6 +43,68 @@ VARIANTS=raw,centered \
 bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_analysis.sh
 ```
 
+## Needle Last-Token K-K / QK Plots
+
+For Needle-In-A-Haystack prompts, use:
+
+```bash
+bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_last10_k_l2_qk.sh
+```
+
+Default input:
+
+```text
+ymluo/projects/qwen3_kcache_l2_neighbor_analysis/data/needle_in_haystack/prompts/niah_len8000_depth50.txt
+```
+
+Override the sample with `TEXT_PATH`:
+
+```bash
+TEXT_PATH=ymluo/projects/qwen3_kcache_l2_neighbor_analysis/data/needle_in_haystack/prompts/niah_len16000_depth90.txt \
+MAX_TOKENS=8192 \
+bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_last10_k_l2_qk.sh
+```
+
+This script produces two plot families for each selected `(layer, KV head)`:
+
+- `k_l2`: each plot has 10 lines. Each line compares one of the final 10 token
+  K vectors against all previous K vectors in the same layer/KV head.
+- `qk_score`: each plot has 10 lines. Each line shows scaled `q · k / sqrt(d)`
+  scores from one of the final 10 tokens to all previous K vectors. Qwen3-0.6B
+  uses 16 query heads and 8 KV heads, so by default the two query heads sharing
+  a KV head are averaged with `QK_REDUCE=mean`.
+
+Expected full-model plot count for Qwen3-0.6B:
+
+```text
+28 layers * 8 KV heads * 2 plot types = 448 PNG files
+```
+
+Main output directory:
+
+```text
+ymluo/projects/qwen3_kcache_l2_neighbor_analysis/outputs/last10_k_l2_qk/
+```
+
+Plot layout:
+
+```text
+plots/
+  k_l2/
+    layer_00/
+      head_00.png
+  qk_score/
+    layer_00/
+      head_00.png
+```
+
+Useful focused run:
+
+```bash
+LAYERS=0 HEADS=0 SAVE_CSV=true \
+bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_last10_k_l2_qk.sh
+```
+
 ## RoPE Length
 
 The script loads the model config first and ensures:
