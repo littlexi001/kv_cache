@@ -53,9 +53,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed_fraction", type=float, default=0.01)
     parser.add_argument("--neighbor_count", type=int, default=20)
     parser.add_argument("--knn_device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument("--compute_oracle_baseline", type=str2bool, default=True)
     parser.add_argument("--save_token_rows", type=str2bool, default=True)
     parser.add_argument("--make_plots", type=str2bool, default=True)
     parser.add_argument("--token_bins", type=int, default=100)
+    parser.add_argument("--plot_smoothing_window", type=int, default=0)
     parser.add_argument("--plot_dpi", type=int, default=180)
     return parser.parse_args()
 
@@ -361,9 +363,11 @@ def summarize_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for (layer, kv_head, attention_head), group in sorted(grouped.items()):
         candidate_fraction = torch.tensor([float(row["candidate_fraction"]) for row in group], dtype=torch.float32)
         method_energy = torch.tensor([float(row["method_energy"]) for row in group], dtype=torch.float32)
-        oracle = torch.tensor([float(row["oracle_energy"]) for row in group], dtype=torch.float32)
         prefix_recent = torch.tensor([float(row["prefix_recent_energy"]) for row in group], dtype=torch.float32)
-        gap = torch.tensor([float(row["energy_gap_to_oracle"]) for row in group], dtype=torch.float32)
+        oracle_values = [float(row["oracle_energy"]) for row in group if row["oracle_energy"] != ""]
+        gap_values = [float(row["energy_gap_to_oracle"]) for row in group if row["energy_gap_to_oracle"] != ""]
+        oracle = torch.tensor(oracle_values, dtype=torch.float32) if oracle_values else None
+        gap = torch.tensor(gap_values, dtype=torch.float32) if gap_values else None
         summary.append(
             {
                 "layer": layer,
@@ -374,46 +378,110 @@ def summarize_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "candidate_fraction_p95": float(torch.quantile(candidate_fraction, 0.95)),
                 "method_energy_mean": float(method_energy.mean()),
                 "method_energy_p05": float(torch.quantile(method_energy, 0.05)),
-                "oracle_energy_mean": float(oracle.mean()),
+                "oracle_energy_mean": float(oracle.mean()) if oracle is not None else "",
                 "prefix_recent_energy_mean": float(prefix_recent.mean()),
-                "energy_gap_to_oracle_mean": float(gap.mean()),
+                "energy_gap_to_oracle_mean": float(gap.mean()) if gap is not None else "",
             }
         )
     return summary
 
 
-def plot_head_rows(rows_by_head: dict[tuple[int, int, int], list[dict[str, Any]]], output_dir: Path, dpi: int) -> list[str]:
+def moving_average(values: list[float], window: int) -> list[float]:
+    if window <= 1 or len(values) <= 1:
+        return values
+    half_left = (window - 1) // 2
+    half_right = window // 2
+    result: list[float] = []
+    for index in range(len(values)):
+        start = max(0, index - half_left)
+        end = min(len(values), index + half_right + 1)
+        subset = [value for value in values[start:end] if math.isfinite(value)]
+        result.append(sum(subset) / len(subset) if subset else float("nan"))
+    return result
+
+
+def save_energy_plot(
+    tokens: list[int],
+    method_energy: list[float],
+    oracle_energy_values: list[float] | None,
+    prefix_recent_energy: list[float],
+    candidate_fraction: list[float],
+    title: str,
+    path: Path,
+    dpi: int,
+) -> None:
+    import matplotlib.pyplot as plt
+
+    fig, ax1 = plt.subplots(figsize=(12, 4), dpi=dpi)
+    ax1.plot(tokens, method_energy, label="method energy", linewidth=1.0)
+    if oracle_energy_values is not None:
+        ax1.plot(tokens, oracle_energy_values, label="oracle top-s energy", linewidth=1.0)
+    ax1.plot(tokens, prefix_recent_energy, label="prefix+recent energy", linewidth=1.0)
+    ax1.set_xlabel("Query token index")
+    ax1.set_ylabel("Attention energy")
+    ax1.set_ylim(0.0, 1.05)
+    ax1.grid(True, alpha=0.2)
+    ax2 = ax1.twinx()
+    ax2.plot(tokens, [100.0 * value for value in candidate_fraction], color="black", alpha=0.35, linewidth=0.8, label="candidate %")
+    ax2.set_ylabel("Candidate set size (%)")
+    ax2.set_ylim(0.0, max(5.0, max(100.0 * value for value in candidate_fraction) * 1.1))
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="lower right", fontsize=8)
+    ax1.set_title(title)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def plot_head_rows(
+    rows_by_head: dict[tuple[int, int, int], list[dict[str, Any]]],
+    output_dir: Path,
+    dpi: int,
+    smoothing_window: int,
+) -> list[str]:
     import matplotlib
 
     matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     paths: list[str] = []
     for (layer, kv_head, attention_head), rows in sorted(rows_by_head.items()):
         plot_dir = output_dir / "plots" / f"layer_{layer:02d}" / f"kv_head_{kv_head:02d}" / f"attention_head_{attention_head:02d}"
         plot_dir.mkdir(parents=True, exist_ok=True)
         tokens = [int(row["query_token"]) for row in rows]
-        fig, ax1 = plt.subplots(figsize=(12, 4), dpi=dpi)
-        ax1.plot(tokens, [float(row["method_energy"]) for row in rows], label="method energy", linewidth=1.0)
-        ax1.plot(tokens, [float(row["oracle_energy"]) for row in rows], label="oracle top-s energy", linewidth=1.0)
-        ax1.plot(tokens, [float(row["prefix_recent_energy"]) for row in rows], label="prefix+recent energy", linewidth=1.0)
-        ax1.set_xlabel("Query token index")
-        ax1.set_ylabel("Attention energy")
-        ax1.set_ylim(0.0, 1.05)
-        ax1.grid(True, alpha=0.2)
-        ax2 = ax1.twinx()
-        ax2.plot(tokens, [100.0 * float(row["candidate_fraction"]) for row in rows], color="black", alpha=0.35, linewidth=0.8, label="candidate %")
-        ax2.set_ylabel("Candidate set size (%)")
-        ax2.set_ylim(0.0, max(5.0, max(100.0 * float(row["candidate_fraction"]) for row in rows) * 1.1))
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc="lower right", fontsize=8)
-        ax1.set_title(f"Retrieval energy L{layer} KV{kv_head} AttnH{attention_head}")
-        fig.tight_layout()
+        method_energy = [float(row["method_energy"]) for row in rows]
+        oracle_values = None
+        if any(row["oracle_energy"] != "" for row in rows):
+            oracle_values = [float(row["oracle_energy"]) if row["oracle_energy"] != "" else float("nan") for row in rows]
+        prefix_recent_energy = [float(row["prefix_recent_energy"]) for row in rows]
+        candidate_fraction = [float(row["candidate_fraction"]) for row in rows]
+
         path = plot_dir / "energy_and_candidate_fraction_by_token.png"
-        fig.savefig(path)
-        plt.close(fig)
+        save_energy_plot(
+            tokens,
+            method_energy,
+            oracle_values,
+            prefix_recent_energy,
+            candidate_fraction,
+            f"Retrieval energy L{layer} KV{kv_head} AttnH{attention_head}",
+            path,
+            dpi,
+        )
         paths.append(str(path))
+
+        if smoothing_window > 1:
+            smooth_path = plot_dir / f"energy_and_candidate_fraction_smoothed_w{smoothing_window}.png"
+            save_energy_plot(
+                tokens,
+                moving_average(method_energy, smoothing_window),
+                moving_average(oracle_values, smoothing_window) if oracle_values is not None else None,
+                moving_average(prefix_recent_energy, smoothing_window),
+                moving_average(candidate_fraction, smoothing_window),
+                f"Retrieval energy L{layer} KV{kv_head} AttnH{attention_head} smoothed w={smoothing_window}",
+                smooth_path,
+                dpi,
+            )
+            paths.append(str(smooth_path))
     return paths
 
 
@@ -528,7 +596,7 @@ def main() -> None:
                     for attention_head in shared_heads:
                         attention = attention_layer[attention_head, local_query, :visible]
                         method = energy_for_indices(attention, candidates)
-                        oracle = oracle_energy(attention, len(candidates), visible)
+                        oracle = oracle_energy(attention, len(candidates), visible) if args.compute_oracle_baseline else ""
                         pr_energy = energy_for_indices(attention, prefix_recent)
                         row = {
                             "layer": layer,
@@ -545,7 +613,7 @@ def main() -> None:
                             "method_energy": method,
                             "oracle_energy": oracle,
                             "prefix_recent_energy": pr_energy,
-                            "energy_gap_to_oracle": oracle - method,
+                            "energy_gap_to_oracle": (oracle - method) if args.compute_oracle_baseline else "",
                         }
                         chunk_rows.append(row)
                         rows_all.append(row)
@@ -565,7 +633,7 @@ def main() -> None:
 
     summary_rows = summarize_rows(rows_all)
     write_csv(output_dir / "summary_by_head.csv", summary_rows, summary_fields())
-    plot_paths = plot_head_rows(rows_by_head, output_dir, args.plot_dpi) if args.make_plots else []
+    plot_paths = plot_head_rows(rows_by_head, output_dir, args.plot_dpi, args.plot_smoothing_window) if args.make_plots else []
     (output_dir / "summary.json").write_text(
         json.dumps(
             {

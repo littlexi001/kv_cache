@@ -30,7 +30,9 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kv_retrieval_energy.py" \
   --seed_fraction "${SEED_FRACTION:-0.01}" \
   --neighbor_count "${NEIGHBOR_COUNT:-20}" \
   --knn_device "${KNN_DEVICE:-auto}" \
+  --compute_oracle_baseline "${COMPUTE_ORACLE_BASELINE:-true}" \
   --save_token_rows "${SAVE_TOKEN_ROWS:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
   --token_bins "${TOKEN_BINS:-100}" \
+  --plot_smoothing_window "${PLOT_SMOOTHING_WINDOW:-500}" \
   --plot_dpi "${PLOT_DPI:-180}"
