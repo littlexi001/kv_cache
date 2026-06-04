@@ -73,11 +73,31 @@ This script produces two plot families for each selected `(layer, KV head)`:
   scores from one of the final 10 tokens to all previous K vectors. Qwen3-0.6B
   uses 16 query heads and 8 KV heads, so by default the two query heads sharing
   a KV head are averaged with `QK_REDUCE=mean`.
+- `qk_attention`: the same QK scores after softmax over previous tokens. This is
+  the primary view for attention sink.
+- `*_first128`: zoomed views of the first `ZOOM_FIRST_TOKENS` previous tokens.
+- `per_query_head_*`: raw QK and softmax attention for each query head before
+  averaging shared-Q heads into one KV-head plot.
+- `sink_mass_heatmap_kv_head.png`: layer/KV-head heatmap of mean attention mass
+  assigned to the first `SINK_TOKEN_COUNT` tokens.
+- `sink_mass_heatmap_query_head.png`: layer/query-head heatmap of the same sink
+  mass before Q-head aggregation.
+- `sink_summary_by_target.csv`: per target-token sink mass and max-attention
+  index, both for reduced KV-head views and individual query heads.
 
 Expected full-model plot count for Qwen3-0.6B:
 
 ```text
-28 layers * 8 KV heads * 2 plot types = 448 PNG files
+base K-L2 + raw QK: 28 layers * 8 KV heads * 2 = 448 PNG files
+```
+
+With the default sink-diagnostic options enabled, the script also writes
+softmax attention plots, first-token zoom plots, per-query-head plots, and two
+sink heatmaps. Disable expensive per-query-head plots with:
+
+```bash
+MAKE_PER_QUERY_HEAD_PLOTS=false \
+bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_last10_k_l2_qk.sh
 ```
 
 Main output directory:
@@ -96,6 +116,12 @@ plots/
   qk_score/
     layer_00/
       head_00.png
+  qk_attention/
+    layer_00/
+      head_00.png
+  per_query_head_qk_attention/
+    layer_00/
+      qhead_00_kvhead_00.png
 ```
 
 Useful focused run:

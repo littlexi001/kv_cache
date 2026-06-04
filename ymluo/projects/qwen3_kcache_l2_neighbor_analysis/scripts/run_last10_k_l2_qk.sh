@@ -32,4 +32,10 @@ python "${PROJECT_DIR}/src/analyze_qwen3_last10_k_l2_qk.py" \
   --plot_dpi "${PLOT_DPI:-180}" \
   --line_alpha "${LINE_ALPHA:-0.85}" \
   --line_width "${LINE_WIDTH:-0.9}" \
+  --sink_token_count "${SINK_TOKEN_COUNT:-16}" \
+  --zoom_first_tokens "${ZOOM_FIRST_TOKENS:-128}" \
+  --make_attention_weight_plots "${MAKE_ATTENTION_WEIGHT_PLOTS:-true}" \
+  --make_zoom_plots "${MAKE_ZOOM_PLOTS:-true}" \
+  --make_per_query_head_plots "${MAKE_PER_QUERY_HEAD_PLOTS:-true}" \
+  --make_sink_heatmaps "${MAKE_SINK_HEATMAPS:-true}" \
   --save_csv "${SAVE_CSV:-false}"

@@ -68,11 +68,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--plot_dpi", type=int, default=180)
     parser.add_argument("--line_alpha", type=float, default=0.85)
     parser.add_argument("--line_width", type=float, default=0.9)
+    parser.add_argument("--sink_token_count", type=int, default=16)
+    parser.add_argument("--zoom_first_tokens", type=int, default=128)
+    parser.add_argument("--make_attention_weight_plots", type=str2bool, default=True)
+    parser.add_argument("--make_zoom_plots", type=str2bool, default=True)
+    parser.add_argument("--make_per_query_head_plots", type=str2bool, default=True)
+    parser.add_argument("--make_sink_heatmaps", type=str2bool, default=True)
     parser.add_argument(
         "--save_csv",
         type=str2bool,
         default=False,
-        help="Save dense per-index values. This can be large for long contexts.",
+        help="Save dense per-index values. This can be very large for long contexts.",
     )
     return parser.parse_args()
 
@@ -136,14 +142,14 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> 
         writer.writerows(rows)
 
 
-def reduce_qk_scores(scores: torch.Tensor, mode: str) -> torch.Tensor:
+def reduce_head_values(values: torch.Tensor, mode: str) -> torch.Tensor:
     if mode == "mean":
-        return scores.mean(dim=0)
+        return values.mean(dim=0)
     if mode == "max":
-        return scores.max(dim=0).values
+        return values.max(dim=0).values
     if mode == "first":
-        return scores[0]
-    raise ValueError(f"Unsupported qk_reduce: {mode}")
+        return values[0]
+    raise ValueError(f"Unsupported reduce mode: {mode}")
 
 
 def plot_lines(
@@ -183,6 +189,38 @@ def plot_lines(
     plt.close(fig)
 
 
+def plot_heatmap(
+    matrix: torch.Tensor,
+    output_path: Path,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    dpi: int,
+) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(12, 5), dpi=dpi)
+    image = ax.imshow(matrix.float().numpy(), aspect="auto", interpolation="nearest", cmap="magma")
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    fig.colorbar(image, ax=ax, fraction=0.025, pad=0.02, label="mean attention mass")
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def slice_values(
+    values_by_target: list[tuple[int, torch.Tensor]],
+    token_count: int,
+) -> list[tuple[int, torch.Tensor]]:
+    return [(target, values[:token_count]) for target, values in values_by_target]
+
+
 def load_inputs(args: argparse.Namespace) -> tuple[torch.Tensor, list[int]]:
     text = read_text_prefix(Path(args.text_path), args.max_chars)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
@@ -218,6 +256,10 @@ def main() -> None:
     args = parse_args()
     if args.last_token_count <= 0:
         raise ValueError("--last_token_count must be positive.")
+    if args.sink_token_count <= 0:
+        raise ValueError("--sink_token_count must be positive.")
+    if args.zoom_first_tokens <= 0:
+        raise ValueError("--zoom_first_tokens must be positive.")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -248,8 +290,12 @@ def main() -> None:
     query_heads_per_kv = max(1, num_attention_heads // num_kv_heads)
     layer_indices = parse_index_spec(args.layers, len(key_tensors), "layers")
 
+    attn_mods = attention_modules(model)
     csv_rows: list[dict[str, Any]] = []
+    sink_rows: list[dict[str, Any]] = []
     plot_paths: list[str] = []
+    query_sink_heatmap = torch.full((len(key_tensors), num_attention_heads), float("nan"))
+    kv_sink_heatmap = torch.full((len(key_tensors), num_kv_heads), float("nan"))
     for layer_idx in layer_indices:
         if layer_idx not in captured_queries:
             raise RuntimeError(f"No captured query states for layer {layer_idx}.")
@@ -260,7 +306,7 @@ def main() -> None:
             raise RuntimeError(f"Layer {layer_idx}: expected {total_tokens} K tokens, got {tokens}.")
         head_indices = parse_index_spec(args.heads, int(kv_heads), "heads")
         query_last = query_by_head_chunk[:, -last_count:, :]
-        scaling = float(getattr(attention_modules(model)[layer_idx], "scaling", 1.0 / math.sqrt(head_dim)))
+        scaling = float(getattr(attn_mods[layer_idx], "scaling", 1.0 / math.sqrt(head_dim)))
 
         for kv_head in head_indices:
             k_vectors = key_by_head[kv_head].float()
@@ -274,14 +320,67 @@ def main() -> None:
 
             kk_values: list[tuple[int, torch.Tensor]] = []
             qk_values: list[tuple[int, torch.Tensor]] = []
+            attn_values: list[tuple[int, torch.Tensor]] = []
+            per_query_qk_values: dict[int, list[tuple[int, torch.Tensor]]] = {
+                query_head: [] for query_head in range(q_start, q_end)
+            }
+            per_query_attn_values: dict[int, list[tuple[int, torch.Tensor]]] = {
+                query_head: [] for query_head in range(q_start, q_end)
+            }
+            kv_sink_masses: list[float] = []
+            query_sink_masses: dict[int, list[float]] = {
+                query_head: [] for query_head in range(q_start, q_end)
+            }
             for local_idx, target_index in enumerate(target_indices):
                 previous_k = k_vectors[:target_index]
                 target_k = k_vectors[target_index].view(1, -1)
                 kk_l2 = torch.linalg.vector_norm(previous_k - target_k, dim=-1)
                 q_scores_by_head = torch.matmul(q_vectors[:, local_idx, :], previous_k.T) * scaling
-                qk_scores = reduce_qk_scores(q_scores_by_head, args.qk_reduce)
+                attn_by_head = torch.softmax(q_scores_by_head.float(), dim=-1)
+                qk_scores = reduce_head_values(q_scores_by_head, args.qk_reduce)
+                attn_scores = reduce_head_values(attn_by_head, args.qk_reduce)
                 kk_values.append((target_index, kk_l2.cpu()))
                 qk_values.append((target_index, qk_scores.cpu()))
+                attn_values.append((target_index, attn_scores.cpu()))
+
+                sink_limit = min(args.sink_token_count, target_index)
+                kv_sink_mass = float(attn_scores[:sink_limit].sum()) if sink_limit > 0 else 0.0
+                kv_sink_masses.append(kv_sink_mass)
+                max_attn_value, max_attn_index = attn_scores.max(dim=0)
+                sink_rows.append(
+                    {
+                        "layer": layer_idx,
+                        "kv_head": kv_head,
+                        "query_head": "reduced",
+                        "target_token_index": target_index,
+                        "sink_token_count": sink_limit,
+                        "sink_mass": kv_sink_mass,
+                        "max_attention": float(max_attn_value),
+                        "max_attention_index": int(max_attn_index),
+                    }
+                )
+
+                for offset, query_head in enumerate(range(q_start, q_end)):
+                    q_head_scores = q_scores_by_head[offset].cpu()
+                    q_head_attn = attn_by_head[offset].cpu()
+                    per_query_qk_values[query_head].append((target_index, q_head_scores))
+                    per_query_attn_values[query_head].append((target_index, q_head_attn))
+                    q_sink_mass = float(q_head_attn[:sink_limit].sum()) if sink_limit > 0 else 0.0
+                    query_sink_masses[query_head].append(q_sink_mass)
+                    q_max_attn_value, q_max_attn_index = q_head_attn.max(dim=0)
+                    sink_rows.append(
+                        {
+                            "layer": layer_idx,
+                            "kv_head": kv_head,
+                            "query_head": query_head,
+                            "target_token_index": target_index,
+                            "sink_token_count": sink_limit,
+                            "sink_mass": q_sink_mass,
+                            "max_attention": float(q_max_attn_value),
+                            "max_attention_index": int(q_max_attn_index),
+                        }
+                    )
+
                 if args.save_csv:
                     for previous_index in range(target_index):
                         csv_rows.append(
@@ -292,11 +391,13 @@ def main() -> None:
                                 "previous_token_index": previous_index,
                                 "k_l2": float(kk_l2[previous_index]),
                                 "qk_score": float(qk_scores[previous_index]),
+                                "qk_attention": float(attn_scores[previous_index]),
                             }
                         )
 
             kk_path = output_dir / "plots" / "k_l2" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png"
             qk_path = output_dir / "plots" / "qk_score" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png"
+            attn_path = output_dir / "plots" / "qk_attention" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png"
             plot_lines(
                 kk_values,
                 kk_path,
@@ -310,20 +411,181 @@ def main() -> None:
                 qk_values,
                 qk_path,
                 f"Scaled QK score, layer {layer_idx}, KV head {kv_head} ({args.qk_reduce} over shared Q heads)",
-                "q · k / sqrt(d)",
+                "q dot k / sqrt(d)",
                 args.plot_dpi,
                 args.line_alpha,
                 args.line_width,
             )
             plot_paths.extend([str(kk_path), str(qk_path)])
+
+            if args.make_attention_weight_plots:
+                plot_lines(
+                    attn_values,
+                    attn_path,
+                    (
+                        f"QK attention weight, layer {layer_idx}, KV head {kv_head} "
+                        f"({args.qk_reduce} over shared Q heads)"
+                    ),
+                    "softmax(q dot k / sqrt(d))",
+                    args.plot_dpi,
+                    args.line_alpha,
+                    args.line_width,
+                )
+                plot_paths.append(str(attn_path))
+
+            if args.make_zoom_plots:
+                zoom = args.zoom_first_tokens
+                zoom_specs = [
+                    (
+                        kk_values,
+                        output_dir / "plots" / f"k_l2_first{zoom}" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png",
+                        f"K-K L2 first {zoom}, layer {layer_idx}, KV head {kv_head}",
+                        "L2 distance",
+                    ),
+                    (
+                        qk_values,
+                        output_dir / "plots" / f"qk_score_first{zoom}" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png",
+                        f"Scaled QK score first {zoom}, layer {layer_idx}, KV head {kv_head}",
+                        "q dot k / sqrt(d)",
+                    ),
+                    (
+                        attn_values,
+                        output_dir / "plots" / f"qk_attention_first{zoom}" / f"layer_{layer_idx:02d}" / f"head_{kv_head:02d}.png",
+                        f"QK attention weight first {zoom}, layer {layer_idx}, KV head {kv_head}",
+                        "softmax(q dot k / sqrt(d))",
+                    ),
+                ]
+                for values, path, title, ylabel in zoom_specs:
+                    plot_lines(
+                        slice_values(values, zoom),
+                        path,
+                        title,
+                        ylabel,
+                        args.plot_dpi,
+                        args.line_alpha,
+                        args.line_width,
+                    )
+                    plot_paths.append(str(path))
+
+            if args.make_per_query_head_plots:
+                for query_head in range(q_start, q_end):
+                    q_full_path = (
+                        output_dir
+                        / "plots"
+                        / "per_query_head_qk_score"
+                        / f"layer_{layer_idx:02d}"
+                        / f"qhead_{query_head:02d}_kvhead_{kv_head:02d}.png"
+                    )
+                    a_full_path = (
+                        output_dir
+                        / "plots"
+                        / "per_query_head_qk_attention"
+                        / f"layer_{layer_idx:02d}"
+                        / f"qhead_{query_head:02d}_kvhead_{kv_head:02d}.png"
+                    )
+                    plot_lines(
+                        per_query_qk_values[query_head],
+                        q_full_path,
+                        f"Scaled QK score, layer {layer_idx}, Q head {query_head}, KV head {kv_head}",
+                        "q dot k / sqrt(d)",
+                        args.plot_dpi,
+                        args.line_alpha,
+                        args.line_width,
+                    )
+                    plot_lines(
+                        per_query_attn_values[query_head],
+                        a_full_path,
+                        f"QK attention weight, layer {layer_idx}, Q head {query_head}, KV head {kv_head}",
+                        "softmax(q dot k / sqrt(d))",
+                        args.plot_dpi,
+                        args.line_alpha,
+                        args.line_width,
+                    )
+                    plot_paths.extend([str(q_full_path), str(a_full_path)])
+
+                    if args.make_zoom_plots:
+                        zoom = args.zoom_first_tokens
+                        q_zoom_path = (
+                            output_dir
+                            / "plots"
+                            / f"per_query_head_qk_score_first{zoom}"
+                            / f"layer_{layer_idx:02d}"
+                            / f"qhead_{query_head:02d}_kvhead_{kv_head:02d}.png"
+                        )
+                        a_zoom_path = (
+                            output_dir
+                            / "plots"
+                            / f"per_query_head_qk_attention_first{zoom}"
+                            / f"layer_{layer_idx:02d}"
+                            / f"qhead_{query_head:02d}_kvhead_{kv_head:02d}.png"
+                        )
+                        plot_lines(
+                            slice_values(per_query_qk_values[query_head], zoom),
+                            q_zoom_path,
+                            f"Scaled QK score first {zoom}, layer {layer_idx}, Q head {query_head}",
+                            "q dot k / sqrt(d)",
+                            args.plot_dpi,
+                            args.line_alpha,
+                            args.line_width,
+                        )
+                        plot_lines(
+                            slice_values(per_query_attn_values[query_head], zoom),
+                            a_zoom_path,
+                            f"QK attention first {zoom}, layer {layer_idx}, Q head {query_head}",
+                            "softmax(q dot k / sqrt(d))",
+                            args.plot_dpi,
+                            args.line_alpha,
+                            args.line_width,
+                        )
+                        plot_paths.extend([str(q_zoom_path), str(a_zoom_path)])
+
+            kv_sink_heatmap[layer_idx, kv_head] = float(torch.tensor(kv_sink_masses).mean())
+            for query_head, masses in query_sink_masses.items():
+                query_sink_heatmap[layer_idx, query_head] = float(torch.tensor(masses).mean())
         del key_by_head
 
     if args.save_csv:
         write_csv(
             output_dir / "last_tokens_k_l2_qk_by_index.csv",
             csv_rows,
-            ["layer", "kv_head", "target_token_index", "previous_token_index", "k_l2", "qk_score"],
+            ["layer", "kv_head", "target_token_index", "previous_token_index", "k_l2", "qk_score", "qk_attention"],
         )
+
+    write_csv(
+        output_dir / "sink_summary_by_target.csv",
+        sink_rows,
+        [
+            "layer",
+            "kv_head",
+            "query_head",
+            "target_token_index",
+            "sink_token_count",
+            "sink_mass",
+            "max_attention",
+            "max_attention_index",
+        ],
+    )
+
+    if args.make_sink_heatmaps:
+        kv_heatmap_path = output_dir / "plots" / "sink_mass_heatmap_kv_head.png"
+        query_heatmap_path = output_dir / "plots" / "sink_mass_heatmap_query_head.png"
+        plot_heatmap(
+            kv_sink_heatmap.nan_to_num(0.0),
+            kv_heatmap_path,
+            f"Mean attention mass on first {args.sink_token_count} tokens by KV head",
+            "KV head",
+            "Layer",
+            args.plot_dpi,
+        )
+        plot_heatmap(
+            query_sink_heatmap.nan_to_num(0.0),
+            query_heatmap_path,
+            f"Mean attention mass on first {args.sink_token_count} tokens by query head",
+            "Query head",
+            "Layer",
+            args.plot_dpi,
+        )
+        plot_paths.extend([str(kv_heatmap_path), str(query_heatmap_path)])
 
     summary = {
         "args": vars(args),
@@ -336,6 +598,8 @@ def main() -> None:
             "num_key_value_heads": num_kv_heads,
             "query_heads_per_kv": query_heads_per_kv,
             "qk_reduce": args.qk_reduce,
+            "sink_token_count": args.sink_token_count,
+            "zoom_first_tokens": args.zoom_first_tokens,
             "plot_count": len(plot_paths),
             "csv_saved": bool(args.save_csv),
         },
@@ -343,6 +607,8 @@ def main() -> None:
             "plots_dir": str(output_dir / "plots"),
             "k_l2_plots_dir": str(output_dir / "plots" / "k_l2"),
             "qk_score_plots_dir": str(output_dir / "plots" / "qk_score"),
+            "qk_attention_plots_dir": str(output_dir / "plots" / "qk_attention"),
+            "sink_summary": str(output_dir / "sink_summary_by_target.csv"),
             "profile_timings": str(output_dir / "profile_timings.csv"),
             "dense_csv": str(output_dir / "last_tokens_k_l2_qk_by_index.csv") if args.save_csv else None,
         },
