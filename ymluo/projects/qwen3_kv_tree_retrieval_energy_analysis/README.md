@@ -110,6 +110,17 @@ prefix_recent_energy = sum attention over prefix_1% union recent_1%
 The oracle baseline uses the same candidate count as the method, but it is not
 online because it sorts the current query's true attention.
 
+If this sort is too slow, disable it:
+
+```bash
+COMPUTE_ORACLE_BASELINE=false \
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_analysis.sh
+```
+
+When disabled, `oracle_energy` and `energy_gap_to_oracle` are left blank in the
+CSV files, and the plot only shows method energy, prefix/recent energy, and
+candidate percentage.
+
 ## Run
 
 ```bash
@@ -132,7 +143,13 @@ LEAF_SIZE=0                 # 0 means derive from LEAF_FRACTION * total tokens
 TREE_FANOUT=10
 TREE_BRANCH_COUNTS=5,5,5
 CANDIDATE_GRANULARITY=attention_head
+COMPUTE_ORACLE_BASELINE=true
+PLOT_SMOOTHING_WINDOW=500
 ```
+
+`PLOT_SMOOTHING_WINDOW` controls an extra centered rolling-mean plot. The raw
+plot is still saved. For 100k-token runs, `500` or `1000` is usually easier to
+read; for 5k-token runs, `50` to `200` is usually enough.
 
 Examples:
 
@@ -168,6 +185,7 @@ plots/
     kv_head_00/
       attention_head_00/
         energy_and_candidate_fraction_by_token.png
+        energy_and_candidate_fraction_smoothed_w500.png
 ```
 
 Plot axes:

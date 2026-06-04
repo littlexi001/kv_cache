@@ -32,6 +32,8 @@ python "${PROJECT_DIR}/src/analyze_qwen3_kv_tree_retrieval_energy.py" \
   --tree_fanout "${TREE_FANOUT:-10}" \
   --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,5,5}" \
   --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}" \
+  --compute_oracle_baseline "${COMPUTE_ORACLE_BASELINE:-true}" \
   --save_token_rows "${SAVE_TOKEN_ROWS:-true}" \
   --make_plots "${MAKE_PLOTS:-true}" \
+  --plot_smoothing_window "${PLOT_SMOOTHING_WINDOW:-500}" \
   --plot_dpi "${PLOT_DPI:-180}"
