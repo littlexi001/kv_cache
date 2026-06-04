@@ -15,6 +15,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_last10_k_l2_qk.py" \
   --text_path "${TEXT_PATH}" \
   --output_dir "${OUTPUT_DIR}" \
   --max_tokens "${MAX_TOKENS:-8192}" \
+  --truncate_side "${TRUNCATE_SIDE:-tail}" \
   --chunk_size "${CHUNK_SIZE:-512}" \
   --max_chars "${MAX_CHARS:-8000000}" \
   --add_special_tokens "${ADD_SPECIAL_TOKENS:-false}" \

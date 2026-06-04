@@ -46,6 +46,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text_path", default=DEFAULT_TEXT_PATH)
     parser.add_argument("--output_dir", default="outputs/last10_k_l2_qk")
     parser.add_argument("--max_tokens", type=int, default=8192)
+    parser.add_argument(
+        "--truncate_side",
+        choices=["head", "tail"],
+        default="head",
+        help=(
+            "head keeps the first max_tokens tokens. tail keeps the last "
+            "max_tokens tokens, so the target tokens are the file-ending tokens."
+        ),
+    )
     parser.add_argument("--chunk_size", type=int, default=512)
     parser.add_argument("--max_chars", type=int, default=8_000_000)
     parser.add_argument("--add_special_tokens", type=str2bool, default=False)
@@ -221,18 +230,64 @@ def slice_values(
     return [(target, values[:token_count]) for target, values in values_by_target]
 
 
-def load_inputs(args: argparse.Namespace) -> tuple[torch.Tensor, list[int]]:
+def load_inputs(args: argparse.Namespace) -> tuple[torch.Tensor, list[int], int, int, Any]:
     text = read_text_prefix(Path(args.text_path), args.max_chars)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
-    token_ids = tokenizer(text, add_special_tokens=args.add_special_tokens)["input_ids"]
+    full_token_ids = tokenizer(text, add_special_tokens=args.add_special_tokens)["input_ids"]
     if args.append_eos and tokenizer.eos_token_id is not None:
-        token_ids.append(tokenizer.eos_token_id)
-    if args.require_max_tokens and len(token_ids) < args.max_tokens:
-        raise ValueError(f"Tokenization produced {len(token_ids)} tokens, fewer than {args.max_tokens}.")
-    token_ids = token_ids[: args.max_tokens]
+        full_token_ids.append(tokenizer.eos_token_id)
+    if args.require_max_tokens and len(full_token_ids) < args.max_tokens:
+        raise ValueError(f"Tokenization produced {len(full_token_ids)} tokens, fewer than {args.max_tokens}.")
+    input_offset = 0
+    if args.max_tokens > 0 and len(full_token_ids) > args.max_tokens:
+        if args.truncate_side == "head":
+            token_ids = full_token_ids[: args.max_tokens]
+        else:
+            input_offset = len(full_token_ids) - args.max_tokens
+            token_ids = full_token_ids[input_offset:]
+    else:
+        token_ids = full_token_ids
     if len(token_ids) <= 1:
         raise ValueError("Need at least two tokens.")
-    return torch.tensor(token_ids, dtype=torch.long).view(1, -1), token_ids
+    return torch.tensor(token_ids, dtype=torch.long).view(1, -1), token_ids, len(full_token_ids), input_offset, tokenizer
+
+
+def write_target_tokens(
+    output_dir: Path,
+    tokenizer: Any,
+    token_ids: list[int],
+    target_indices: list[int],
+    input_offset: int,
+) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    for input_index in target_indices:
+        token_id = int(token_ids[input_index])
+        rows.append(
+            {
+                "input_token_index": input_index,
+                "file_token_index": input_offset + input_index,
+                "token_id": token_id,
+                "token_text": tokenizer.decode([token_id]),
+            }
+        )
+    write_csv(
+        output_dir / "target_tokens.csv",
+        rows,
+        ["input_token_index", "file_token_index", "token_id", "token_text"],
+    )
+    target_token_ids = [int(token_ids[index]) for index in target_indices]
+    metadata = {
+        "input_token_indices": target_indices,
+        "file_token_indices": [input_offset + index for index in target_indices],
+        "token_ids": target_token_ids,
+        "token_texts": [row["token_text"] for row in rows],
+        "decoded_text": tokenizer.decode(target_token_ids),
+    }
+    (output_dir / "target_tokens.json").write_text(
+        json.dumps(metadata, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    return metadata
 
 
 def load_model(args: argparse.Namespace) -> torch.nn.Module:
@@ -263,10 +318,17 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    input_ids, token_ids = load_inputs(args)
+    input_ids, token_ids, full_token_count, input_offset, tokenizer = load_inputs(args)
     total_tokens = int(input_ids.shape[1])
     last_count = min(args.last_token_count, total_tokens - 1)
     target_indices = list(range(total_tokens - last_count, total_tokens))
+    target_token_metadata = write_target_tokens(
+        output_dir,
+        tokenizer,
+        token_ids,
+        target_indices,
+        input_offset,
+    )
 
     model = load_model(args)
     captured_queries, handles = install_query_capture_hooks(model)
@@ -591,8 +653,13 @@ def main() -> None:
         "args": vars(args),
         "resolved": {
             "tokens": total_tokens,
+            "full_file_tokens": full_token_count,
+            "truncate_side": args.truncate_side,
+            "input_token_offset_in_file": input_offset,
             "last_token_count": last_count,
             "target_token_indices": target_indices,
+            "target_file_token_indices": target_token_metadata["file_token_indices"],
+            "target_decoded_text": target_token_metadata["decoded_text"],
             "layers": layer_indices,
             "num_attention_heads": num_attention_heads,
             "num_key_value_heads": num_kv_heads,
@@ -609,6 +676,8 @@ def main() -> None:
             "qk_score_plots_dir": str(output_dir / "plots" / "qk_score"),
             "qk_attention_plots_dir": str(output_dir / "plots" / "qk_attention"),
             "sink_summary": str(output_dir / "sink_summary_by_target.csv"),
+            "target_tokens_csv": str(output_dir / "target_tokens.csv"),
+            "target_tokens_json": str(output_dir / "target_tokens.json"),
             "profile_timings": str(output_dir / "profile_timings.csv"),
             "dense_csv": str(output_dir / "last_tokens_k_l2_qk_by_index.csv") if args.save_csv else None,
         },

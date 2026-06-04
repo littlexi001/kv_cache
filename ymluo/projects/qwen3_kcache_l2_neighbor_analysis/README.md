@@ -65,6 +65,25 @@ MAX_TOKENS=8192 \
 bash ymluo/projects/qwen3_kcache_l2_neighbor_analysis/scripts/run_last10_k_l2_qk.sh
 ```
 
+Important truncation behavior:
+
+- `TRUNCATE_SIDE=head` keeps the first `MAX_TOKENS` tokens. The final 10 target
+  tokens are then the last tokens of that prefix, not necessarily the file's
+  final sentence.
+- `TRUNCATE_SIDE=tail` keeps the last `MAX_TOKENS` tokens. The final 10 target
+  tokens are the file-ending tokens. The run script defaults to this mode for
+  Needle final-question analysis.
+
+The script always writes:
+
+```text
+target_tokens.csv
+target_tokens.json
+```
+
+These files show the exact 10 target tokens, their token ids, their input-token
+indices, their original file-token indices, and the decoded combined text.
+
 This script produces two plot families for each selected `(layer, KV head)`:
 
 - `k_l2`: each plot has 10 lines. Each line compares one of the final 10 token
