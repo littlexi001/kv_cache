@@ -81,8 +81,21 @@ target_tokens.csv
 target_tokens.json
 ```
 
-These files show the exact 10 target tokens, their token ids, their input-token
-indices, their original file-token indices, and the decoded combined text.
+`target_tokens.csv` contains every token in the retained model input. It marks
+the final 10 target tokens with `is_target=true` and `target_rank=1..10`, and
+includes token ids, input-token indices, original file-token indices, character
+offsets when the tokenizer provides them, and decoded token text.
+
+`target_tokens.json` is a compact summary of only the final 10 target tokens.
+
+The script also writes:
+
+```text
+plots/target_tokens.png
+```
+
+This is a separate visual check of the final 10 target tokens and their input
+positions.
 
 This script produces two plot families for each selected `(layer, KV head)`:
 
@@ -103,6 +116,10 @@ This script produces two plot families for each selected `(layer, KV head)`:
   mass before Q-head aggregation.
 - `sink_summary_by_target.csv`: per target-token sink mass and max-attention
   index, both for reduced KV-head views and individual query heads.
+- `plot_data_csv/layer_XX/kvhead_YY.csv`: raw values used to draw the plots for
+  that `(layer, KV head)`, including K-L2, reduced QK logits, reduced softmax
+  attention, and per-query-head QK/attention columns. Disable with
+  `SAVE_PLOT_DATA=false`.
 
 Expected full-model plot count for Qwen3-0.6B:
 

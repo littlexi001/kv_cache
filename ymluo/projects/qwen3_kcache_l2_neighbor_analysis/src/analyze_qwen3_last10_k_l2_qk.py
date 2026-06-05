@@ -69,6 +69,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heads", default="all")
     parser.add_argument("--last_token_count", type=int, default=10)
     parser.add_argument(
+        "--needle_text",
+        default=(
+            "The best thing to do in San Francisco is eat a sandwich "
+            "and sit in Dolores Park on a sunny day."
+        ),
+        help="Needle text to locate in the tokenized input. Use empty string to disable.",
+    )
+    parser.add_argument(
         "--qk_reduce",
         choices=["mean", "max", "first"],
         default="mean",
@@ -83,6 +91,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--make_zoom_plots", type=str2bool, default=True)
     parser.add_argument("--make_per_query_head_plots", type=str2bool, default=True)
     parser.add_argument("--make_sink_heatmaps", type=str2bool, default=True)
+    parser.add_argument(
+        "--save_plot_data",
+        type=str2bool,
+        default=True,
+        help="Save per-(layer, KV head) plotting data as CSV files under plot_data_csv/.",
+    )
     parser.add_argument(
         "--save_csv",
         type=str2bool,
@@ -230,57 +244,233 @@ def slice_values(
     return [(target, values[:token_count]) for target, values in values_by_target]
 
 
-def load_inputs(args: argparse.Namespace) -> tuple[torch.Tensor, list[int], int, int, Any]:
+def plot_target_tokens(
+    metadata: dict[str, Any],
+    output_path: Path,
+    dpi: int,
+) -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    x = metadata["input_token_indices"]
+    labels = metadata["token_texts"]
+    fig, ax = plt.subplots(figsize=(12, 3.6), dpi=dpi)
+    ax.scatter(x, [0] * len(x), s=32)
+    for xpos, label in zip(x, labels):
+        safe_label = label.replace("\n", "\\n")
+        ax.annotate(
+            safe_label,
+            (xpos, 0),
+            xytext=(0, 14),
+            textcoords="offset points",
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            rotation=35,
+        )
+    ax.set_yticks([])
+    ax.set_xlabel("Input token index")
+    ax.set_title(f"Target tokens: {metadata['decoded_text']!r}")
+    ax.grid(True, axis="x", alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(output_path)
+    plt.close(fig)
+
+
+def padded_stack(values_by_target: list[tuple[int, torch.Tensor]], fill_value: float = float("nan")) -> torch.Tensor:
+    max_len = max((values.numel() for _, values in values_by_target), default=0)
+    result = torch.full((len(values_by_target), max_len), fill_value, dtype=torch.float32)
+    for row_idx, (_, values) in enumerate(values_by_target):
+        result[row_idx, : values.numel()] = values.float().cpu()
+    return result
+
+
+def save_head_plot_data(
+    output_dir: Path,
+    layer_idx: int,
+    kv_head: int,
+    target_metadata: dict[str, Any],
+    input_offset: int,
+    kk_values: list[tuple[int, torch.Tensor]],
+    qk_values: list[tuple[int, torch.Tensor]],
+    attn_values: list[tuple[int, torch.Tensor]],
+    per_query_qk_values: dict[int, list[tuple[int, torch.Tensor]]],
+    per_query_attn_values: dict[int, list[tuple[int, torch.Tensor]]],
+) -> str:
+    path = output_dir / "plot_data_csv" / f"layer_{layer_idx:02d}" / f"kvhead_{kv_head:02d}.csv"
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    query_heads = sorted(per_query_qk_values)
+    fieldnames = [
+        "layer",
+        "kv_head",
+        "target_rank",
+        "target_input_token_index",
+        "target_file_token_index",
+        "target_token_text",
+        "previous_input_token_index",
+        "previous_file_token_index",
+        "k_l2",
+        "qk_score_reduced",
+        "qk_attention_reduced",
+    ]
+    for query_head in query_heads:
+        fieldnames.append(f"qhead_{query_head:02d}_qk_score")
+        fieldnames.append(f"qhead_{query_head:02d}_qk_attention")
+
+    target_text_by_index = dict(
+        zip(target_metadata["input_token_indices"], target_metadata["token_texts"])
+    )
+    target_file_by_index = dict(
+        zip(target_metadata["input_token_indices"], target_metadata["file_token_indices"])
+    )
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for target_rank, (target_index, kk_tensor) in enumerate(kk_values, start=1):
+            qk_tensor = qk_values[target_rank - 1][1]
+            attn_tensor = attn_values[target_rank - 1][1]
+            per_qk_for_target = {
+                query_head: per_query_qk_values[query_head][target_rank - 1][1]
+                for query_head in query_heads
+            }
+            per_attn_for_target = {
+                query_head: per_query_attn_values[query_head][target_rank - 1][1]
+                for query_head in query_heads
+            }
+            for previous_index in range(int(kk_tensor.numel())):
+                row: dict[str, Any] = {
+                    "layer": layer_idx,
+                    "kv_head": kv_head,
+                    "target_rank": target_rank,
+                    "target_input_token_index": int(target_index),
+                    "target_file_token_index": int(target_file_by_index[target_index]),
+                    "target_token_text": target_text_by_index[target_index],
+                    "previous_input_token_index": previous_index,
+                    "previous_file_token_index": input_offset + previous_index,
+                    "k_l2": float(kk_tensor[previous_index]),
+                    "qk_score_reduced": float(qk_tensor[previous_index]),
+                    "qk_attention_reduced": float(attn_tensor[previous_index]),
+                }
+                for query_head in query_heads:
+                    row[f"qhead_{query_head:02d}_qk_score"] = float(
+                        per_qk_for_target[query_head][previous_index]
+                    )
+                    row[f"qhead_{query_head:02d}_qk_attention"] = float(
+                        per_attn_for_target[query_head][previous_index]
+                    )
+                writer.writerow(row)
+    return str(path)
+
+
+def load_inputs(args: argparse.Namespace) -> tuple[
+    torch.Tensor,
+    list[int],
+    list[tuple[int, int]] | None,
+    int,
+    int,
+    Any,
+]:
     text = read_text_prefix(Path(args.text_path), args.max_chars)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
-    full_token_ids = tokenizer(text, add_special_tokens=args.add_special_tokens)["input_ids"]
+    encoded = tokenizer(
+        text,
+        add_special_tokens=args.add_special_tokens,
+        return_offsets_mapping=True,
+    )
+    full_token_ids = encoded["input_ids"]
+    full_offsets = encoded.get("offset_mapping")
     if args.append_eos and tokenizer.eos_token_id is not None:
         full_token_ids.append(tokenizer.eos_token_id)
+        if full_offsets is not None:
+            full_offsets.append((len(text), len(text)))
     if args.require_max_tokens and len(full_token_ids) < args.max_tokens:
         raise ValueError(f"Tokenization produced {len(full_token_ids)} tokens, fewer than {args.max_tokens}.")
     input_offset = 0
     if args.max_tokens > 0 and len(full_token_ids) > args.max_tokens:
         if args.truncate_side == "head":
             token_ids = full_token_ids[: args.max_tokens]
+            token_offsets = full_offsets[: args.max_tokens] if full_offsets is not None else None
         else:
             input_offset = len(full_token_ids) - args.max_tokens
             token_ids = full_token_ids[input_offset:]
+            token_offsets = full_offsets[input_offset:] if full_offsets is not None else None
     else:
         token_ids = full_token_ids
+        token_offsets = full_offsets
     if len(token_ids) <= 1:
         raise ValueError("Need at least two tokens.")
-    return torch.tensor(token_ids, dtype=torch.long).view(1, -1), token_ids, len(full_token_ids), input_offset, tokenizer
+    return (
+        torch.tensor(token_ids, dtype=torch.long).view(1, -1),
+        token_ids,
+        token_offsets,
+        len(full_token_ids),
+        input_offset,
+        tokenizer,
+    )
 
 
 def write_target_tokens(
     output_dir: Path,
     tokenizer: Any,
     token_ids: list[int],
+    token_offsets: list[tuple[int, int]] | None,
     target_indices: list[int],
     input_offset: int,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
-    for input_index in target_indices:
+    target_index_set = set(target_indices)
+    target_rank_by_index = {
+        input_index: rank for rank, input_index in enumerate(target_indices, start=1)
+    }
+    target_rows: list[dict[str, Any]] = []
+    for input_index, _ in enumerate(token_ids):
         token_id = int(token_ids[input_index])
-        rows.append(
-            {
-                "input_token_index": input_index,
-                "file_token_index": input_offset + input_index,
-                "token_id": token_id,
-                "token_text": tokenizer.decode([token_id]),
-            }
-        )
+        char_start = ""
+        char_end = ""
+        if token_offsets is not None:
+            char_start, char_end = token_offsets[input_index]
+        row = {
+            "input_token_index": input_index,
+            "file_token_index": input_offset + input_index,
+            "char_start": char_start,
+            "char_end": char_end,
+            "is_target": input_index in target_index_set,
+            "target_rank": target_rank_by_index.get(input_index, ""),
+            "token_id": token_id,
+            "token_text": tokenizer.decode([token_id]),
+        }
+        rows.append(row)
+        if input_index in target_index_set:
+            target_rows.append(row)
     write_csv(
         output_dir / "target_tokens.csv",
         rows,
-        ["input_token_index", "file_token_index", "token_id", "token_text"],
+        [
+            "input_token_index",
+            "file_token_index",
+            "char_start",
+            "char_end",
+            "is_target",
+            "target_rank",
+            "token_id",
+            "token_text",
+        ],
     )
     target_token_ids = [int(token_ids[index]) for index in target_indices]
     metadata = {
         "input_token_indices": target_indices,
         "file_token_indices": [input_offset + index for index in target_indices],
+        "char_spans": [
+            list(token_offsets[index]) if token_offsets is not None else None
+            for index in target_indices
+        ],
         "token_ids": target_token_ids,
-        "token_texts": [row["token_text"] for row in rows],
+        "token_texts": [row["token_text"] for row in target_rows],
         "decoded_text": tokenizer.decode(target_token_ids),
     }
     (output_dir / "target_tokens.json").write_text(
@@ -288,6 +478,38 @@ def write_target_tokens(
         encoding="utf-8",
     )
     return metadata
+
+
+def locate_text_tokens(
+    tokenizer: Any,
+    token_ids: list[int],
+    text: str,
+    input_offset: int,
+) -> dict[str, Any]:
+    if not text:
+        return {"enabled": False}
+    needle_ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+    if not needle_ids:
+        return {"enabled": True, "present": False, "reason": "needle tokenized to empty"}
+    starts: list[int] = []
+    width = len(needle_ids)
+    for start in range(0, len(token_ids) - width + 1):
+        if token_ids[start : start + width] == needle_ids:
+            starts.append(start)
+    result: dict[str, Any] = {
+        "enabled": True,
+        "present": bool(starts),
+        "needle_token_count": width,
+        "needle_token_ids": [int(item) for item in needle_ids],
+        "input_token_starts": starts,
+        "input_token_ends_exclusive": [start + width for start in starts],
+        "file_token_starts": [input_offset + start for start in starts],
+        "file_token_ends_exclusive": [input_offset + start + width for start in starts],
+        "decoded_needle": tokenizer.decode(needle_ids),
+    }
+    if not starts:
+        result["reason"] = "needle token sequence is not present in the retained model input"
+    return result
 
 
 def load_model(args: argparse.Namespace) -> torch.nn.Module:
@@ -318,7 +540,7 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    input_ids, token_ids, full_token_count, input_offset, tokenizer = load_inputs(args)
+    input_ids, token_ids, token_offsets, full_token_count, input_offset, tokenizer = load_inputs(args)
     total_tokens = int(input_ids.shape[1])
     last_count = min(args.last_token_count, total_tokens - 1)
     target_indices = list(range(total_tokens - last_count, total_tokens))
@@ -326,8 +548,16 @@ def main() -> None:
         output_dir,
         tokenizer,
         token_ids,
+        token_offsets,
         target_indices,
         input_offset,
+    )
+    target_tokens_plot_path = output_dir / "plots" / "target_tokens.png"
+    plot_target_tokens(target_token_metadata, target_tokens_plot_path, args.plot_dpi)
+    needle_location = locate_text_tokens(tokenizer, token_ids, args.needle_text, input_offset)
+    (output_dir / "needle_location.json").write_text(
+        json.dumps(needle_location, indent=2, ensure_ascii=False),
+        encoding="utf-8",
     )
 
     model = load_model(args)
@@ -356,6 +586,8 @@ def main() -> None:
     csv_rows: list[dict[str, Any]] = []
     sink_rows: list[dict[str, Any]] = []
     plot_paths: list[str] = []
+    plot_data_paths: list[str] = []
+    plot_paths.append(str(target_tokens_plot_path))
     query_sink_heatmap = torch.full((len(key_tensors), num_attention_heads), float("nan"))
     kv_sink_heatmap = torch.full((len(key_tensors), num_kv_heads), float("nan"))
     for layer_idx in layer_indices:
@@ -604,6 +836,21 @@ def main() -> None:
             kv_sink_heatmap[layer_idx, kv_head] = float(torch.tensor(kv_sink_masses).mean())
             for query_head, masses in query_sink_masses.items():
                 query_sink_heatmap[layer_idx, query_head] = float(torch.tensor(masses).mean())
+            if args.save_plot_data:
+                plot_data_paths.append(
+                    save_head_plot_data(
+                        output_dir,
+                        layer_idx,
+                        kv_head,
+                        target_token_metadata,
+                        input_offset,
+                        kk_values,
+                        qk_values,
+                        attn_values,
+                        per_query_qk_values,
+                        per_query_attn_values,
+                    )
+                )
         del key_by_head
 
     if args.save_csv:
@@ -660,6 +907,7 @@ def main() -> None:
             "target_token_indices": target_indices,
             "target_file_token_indices": target_token_metadata["file_token_indices"],
             "target_decoded_text": target_token_metadata["decoded_text"],
+            "needle_location": needle_location,
             "layers": layer_indices,
             "num_attention_heads": num_attention_heads,
             "num_key_value_heads": num_kv_heads,
@@ -668,16 +916,21 @@ def main() -> None:
             "sink_token_count": args.sink_token_count,
             "zoom_first_tokens": args.zoom_first_tokens,
             "plot_count": len(plot_paths),
+            "plot_data_count": len(plot_data_paths),
+            "plot_data_saved": bool(args.save_plot_data),
             "csv_saved": bool(args.save_csv),
         },
         "paths": {
             "plots_dir": str(output_dir / "plots"),
+            "target_tokens_plot": str(target_tokens_plot_path),
+            "plot_data_csv_dir": str(output_dir / "plot_data_csv") if args.save_plot_data else None,
             "k_l2_plots_dir": str(output_dir / "plots" / "k_l2"),
             "qk_score_plots_dir": str(output_dir / "plots" / "qk_score"),
             "qk_attention_plots_dir": str(output_dir / "plots" / "qk_attention"),
             "sink_summary": str(output_dir / "sink_summary_by_target.csv"),
             "target_tokens_csv": str(output_dir / "target_tokens.csv"),
             "target_tokens_json": str(output_dir / "target_tokens.json"),
+            "needle_location_json": str(output_dir / "needle_location.json"),
             "profile_timings": str(output_dir / "profile_timings.csv"),
             "dense_csv": str(output_dir / "last_tokens_k_l2_qk_by_index.csv") if args.save_csv else None,
         },

@@ -29,6 +29,7 @@ python "${PROJECT_DIR}/src/analyze_qwen3_last10_k_l2_qk.py" \
   --layers "${LAYERS:-all}" \
   --heads "${HEADS:-all}" \
   --last_token_count "${LAST_TOKEN_COUNT:-10}" \
+  --needle_text "${NEEDLE_TEXT:-The best thing to do in San Francisco is eat a sandwich and sit in Dolores Park on a sunny day.}" \
   --qk_reduce "${QK_REDUCE:-mean}" \
   --plot_dpi "${PLOT_DPI:-180}" \
   --line_alpha "${LINE_ALPHA:-0.85}" \
@@ -39,4 +40,5 @@ python "${PROJECT_DIR}/src/analyze_qwen3_last10_k_l2_qk.py" \
   --make_zoom_plots "${MAKE_ZOOM_PLOTS:-true}" \
   --make_per_query_head_plots "${MAKE_PER_QUERY_HEAD_PLOTS:-true}" \
   --make_sink_heatmaps "${MAKE_SINK_HEATMAPS:-true}" \
+  --save_plot_data "${SAVE_PLOT_DATA:-true}" \
   --save_csv "${SAVE_CSV:-false}"
