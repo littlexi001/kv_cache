@@ -6,6 +6,7 @@ import time
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.parallel.distributed import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 from transformers import AutoConfig, AutoTokenizer, get_cosine_schedule_with_warmup
@@ -42,6 +43,7 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--config_dir", type=str, default="../../Qwen3-0.6B")
     parser.add_argument("--data_dir", type=str, default="../../dclm/global-shard_01_of_10")
     parser.add_argument("--ckpt_dir", type=str, default="")
+    parser.add_argument("--init_checkpoint", type=str, default="")
 
     parser.add_argument(
         "--dataset_type",
@@ -67,6 +69,15 @@ def add_common_training_args(parser: argparse.ArgumentParser):
     parser.add_argument("--synthetic_zipf_alpha", type=float, default=1.0)
     parser.add_argument("--synthetic_zipf_shuffle_ranks", action="store_true", default=True)
     parser.add_argument("--synthetic_no_zipf_shuffle_ranks", action="store_false", dest="synthetic_zipf_shuffle_ranks")
+    parser.add_argument(
+        "--frequency_loss_weighting",
+        type=str,
+        choices=["none", "inverse", "inverse_sqrt"],
+        default="none",
+        help="Reweight hierarchical-pattern token loss by top-level feature training frequency.",
+    )
+    parser.add_argument("--frequency_loss_feature_layer", type=int, default=1)
+    parser.add_argument("--frequency_loss_max_weight", type=float, default=10.0)
     parser.add_argument("--controlled_same_input_diff_output_rate", type=float, default=0.3)
     parser.add_argument("--controlled_same_input_diff_output_size", type=int, default=4)
     parser.add_argument(
@@ -546,7 +557,7 @@ def prepare_data(local_rank, world_size, args):
             sampling_distribution=args.synthetic_sampling_distribution,
             zipf_alpha=args.synthetic_zipf_alpha,
             zipf_shuffle_ranks=args.synthetic_zipf_shuffle_ranks,
-            return_metadata=args.ground_truth_routing_strategy != "none",
+            return_metadata=args.ground_truth_routing_strategy != "none" or args.frequency_loss_weighting != "none",
         )
     elif args.dataset_type == "controlled_reused_token":
         if args.ground_truth_routing_strategy != "none":
@@ -580,7 +591,28 @@ def prepare_data(local_rank, world_size, args):
     sampler = DistributedSampler(dataset, num_replicas=world_size, rank=local_rank, shuffle=args.data_shuffle)
     dataloader = DataLoader(dataset, batch_size=args.local_batch_size, num_workers=args.num_workers, sampler=sampler)
     ground_truth_expert_mapping = build_ground_truth_expert_mapping(dataset, args) if args.ground_truth_routing_strategy != "none" else None
-    return dataloader, ground_truth_expert_mapping
+    frequency_loss_weights = build_frequency_loss_weights(dataset, args) if args.frequency_loss_weighting != "none" else None
+    return dataloader, ground_truth_expert_mapping, frequency_loss_weights
+
+
+def build_frequency_loss_weights(dataset, args):
+    if args.dataset_type != "hierarchical_pattern":
+        raise ValueError("frequency_loss_weighting currently supports only hierarchical_pattern data.")
+    if args.frequency_loss_feature_layer != args.synthetic_num_hierarchy_layers - 1:
+        raise ValueError("frequency_loss_weighting currently expects the top hierarchy layer.")
+    if dataset.top_unit_sample_weights is None:
+        return torch.ones(args.synthetic_num_units_per_layer, dtype=torch.float32)
+    weights = torch.tensor(dataset.top_unit_sample_weights, dtype=torch.float32)
+    weights = weights / weights.sum().clamp_min(1e-12)
+    if args.frequency_loss_weighting == "inverse":
+        loss_weights = 1.0 / weights.clamp_min(1e-12)
+    elif args.frequency_loss_weighting == "inverse_sqrt":
+        loss_weights = 1.0 / weights.clamp_min(1e-12).sqrt()
+    else:
+        raise ValueError(f"Unsupported frequency_loss_weighting: {args.frequency_loss_weighting}")
+    expected = (loss_weights * weights).sum().clamp_min(1e-12)
+    loss_weights = loss_weights / expected
+    return loss_weights.clamp_max(float(args.frequency_loss_max_weight))
 
 
 def build_ground_truth_expert_mapping(dataset, args):
@@ -651,7 +683,35 @@ def make_ground_truth_expert_ids(metadata, ground_truth_expert_mapping, args, de
     return ground_truth_expert_ids.masked_fill(feature_ids < 0, 0)
 
 
-def forward_step(local_rank, device, source, target, model, token_loss_fn, args, metadata=None, ground_truth_expert_mapping=None):
+def frequency_weighted_token_loss(logits, target, metadata, frequency_loss_weights, args, device):
+    flat_loss = F.cross_entropy(logits.view(-1, logits.size(-1)), target.reshape(-1), reduction="none")
+    token_loss = flat_loss.reshape_as(target)
+    if metadata is None or frequency_loss_weights is None:
+        return token_loss.mean()
+    feature_ids = metadata[:, :, args.frequency_loss_feature_layer].to(device)
+    # Metadata describes source positions. Shifting approximates target-token feature ids;
+    # the final position reuses the last source feature, which has negligible effect for long seqs.
+    shifted_feature_ids = torch.cat([feature_ids[:, 1:], feature_ids[:, -1:]], dim=1)
+    valid = shifted_feature_ids.ge(0)
+    safe_feature_ids = shifted_feature_ids.clamp_min(0)
+    weights = frequency_loss_weights.to(device)[safe_feature_ids].to(token_loss.dtype)
+    weights = weights * valid.to(weights.dtype)
+    denom = weights.sum().clamp_min(1e-12)
+    return (token_loss * weights).sum() / denom
+
+
+def forward_step(
+    local_rank,
+    device,
+    source,
+    target,
+    model,
+    token_loss_fn,
+    args,
+    metadata=None,
+    ground_truth_expert_mapping=None,
+    frequency_loss_weights=None,
+):
     source, target = source.to(device), target.to(device)
     use_load_balance = args.moe_load_balance_loss_weight > 0
     use_router_inhibition = args.moe_router_inhibition_loss_weight > 0
@@ -678,8 +738,11 @@ def forward_step(local_rank, device, source, target, model, token_loss_fn, args,
         ground_truth_expert_ids=ground_truth_expert_ids,
         router_supervision_expert_ids=router_supervision_expert_ids,
     )
-    target = target.reshape(-1)
-    token_loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
+    if args.frequency_loss_weighting != "none":
+        token_loss = frequency_weighted_token_loss(output.logits, target, metadata, frequency_loss_weights, args, device)
+    else:
+        target = target.reshape(-1)
+        token_loss = token_loss_fn(output.logits.view(-1, output.logits.size(-1)), target)
     loss = token_loss
     load_balance_loss = None
     router_inhibition_loss = None
@@ -724,9 +787,14 @@ def thread_main(local_rank, world_size, device, args):
     if local_rank == 0 and args.ckpt_dir and not os.path.exists(args.ckpt_dir):
         os.makedirs(args.ckpt_dir)
 
-    dataloader, ground_truth_expert_mapping = prepare_data(local_rank, world_size, args)
+    dataloader, ground_truth_expert_mapping, frequency_loss_weights = prepare_data(local_rank, world_size, args)
     model = prepare_model(local_rank, world_size, device, args)
     real_model = model.module if world_size > 1 else model
+    if args.init_checkpoint:
+        state = torch.load(args.init_checkpoint, map_location=device)
+        real_model.load_state_dict(state, strict=True)
+        if local_rank == 0:
+            print(f"Loaded init checkpoint: {args.init_checkpoint}", flush=True)
     if local_rank == 0:
         write_runtime_config(
             args.ckpt_dir,
@@ -761,6 +829,7 @@ def thread_main(local_rank, world_size, device, args):
                 args,
                 metadata=metadata,
                 ground_truth_expert_mapping=ground_truth_expert_mapping,
+                frequency_loss_weights=frequency_loss_weights,
             )
 
         if world_size == 1:

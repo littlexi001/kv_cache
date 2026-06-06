@@ -32,6 +32,9 @@ SYNTHETIC_MIN_TOKEN_ID="${SYNTHETIC_MIN_TOKEN_ID:-1}"
 SYNTHETIC_SAMPLING_DISTRIBUTION="${SYNTHETIC_SAMPLING_DISTRIBUTION:-uniform}"  # uniform/zipf
 SYNTHETIC_ZIPF_ALPHA="${SYNTHETIC_ZIPF_ALPHA:-1.0}"
 SYNTHETIC_ZIPF_SHUFFLE_RANKS="${SYNTHETIC_ZIPF_SHUFFLE_RANKS:-true}"  # true/false
+FREQUENCY_LOSS_WEIGHTING="${FREQUENCY_LOSS_WEIGHTING:-none}"  # none/inverse/inverse_sqrt
+FREQUENCY_LOSS_FEATURE_LAYER="${FREQUENCY_LOSS_FEATURE_LAYER:-1}"
+FREQUENCY_LOSS_MAX_WEIGHT="${FREQUENCY_LOSS_MAX_WEIGHT:-10.0}"
 CONTROLLED_SAME_INPUT_DIFF_OUTPUT_RATE="${CONTROLLED_SAME_INPUT_DIFF_OUTPUT_RATE:-0.3}"
 CONTROLLED_SAME_INPUT_DIFF_OUTPUT_SIZE="${CONTROLLED_SAME_INPUT_DIFF_OUTPUT_SIZE:-4}"
 CONTROLLED_SAME_INPUT_DIFF_OUTPUT_DISTRIBUTION="${CONTROLLED_SAME_INPUT_DIFF_OUTPUT_DISTRIBUTION:-zipf}"  # uniform/zipf
@@ -100,6 +103,7 @@ RESIDUAL_SOURCE_PATTERN="${RESIDUAL_SOURCE_PATTERN--1,-1}"
 
 # ========== 动态构建 CKPT_DIR ==========
 CKPT_DIR="${CKPT_DIR:-../checkpoints/single-thread-debug}"
+INIT_CHECKPOINT="${INIT_CHECKPOINT:-}"
 
 # ========== 构建 Python 命令 ==========
 ARGS=""
@@ -112,6 +116,9 @@ ARGS+=" --config_dir $CONFIG_DIR"
 ARGS+=" --data_dir $DATA_DIR"
 ARGS+=" --dataset_type $DATASET_TYPE"
 ARGS+=" --ckpt_dir $CKPT_DIR"  # ← 关键：传入构建好的路径
+if [ -n "$INIT_CHECKPOINT" ]; then
+  ARGS+=" --init_checkpoint $INIT_CHECKPOINT"
+fi
 ARGS+=" --synthetic_num_samples $SYNTHETIC_NUM_SAMPLES"
 ARGS+=" --synthetic_block_size $SYNTHETIC_BLOCK_SIZE"
 ARGS+=" --synthetic_num_hierarchy_layers $SYNTHETIC_NUM_HIERARCHY_LAYERS"
@@ -127,6 +134,9 @@ if [ "$SYNTHETIC_ZIPF_SHUFFLE_RANKS" = "true" ]; then
 else
   ARGS+=" --synthetic_no_zipf_shuffle_ranks"
 fi
+ARGS+=" --frequency_loss_weighting $FREQUENCY_LOSS_WEIGHTING"
+ARGS+=" --frequency_loss_feature_layer $FREQUENCY_LOSS_FEATURE_LAYER"
+ARGS+=" --frequency_loss_max_weight $FREQUENCY_LOSS_MAX_WEIGHT"
 ARGS+=" --controlled_same_input_diff_output_rate $CONTROLLED_SAME_INPUT_DIFF_OUTPUT_RATE"
 ARGS+=" --controlled_same_input_diff_output_size $CONTROLLED_SAME_INPUT_DIFF_OUTPUT_SIZE"
 ARGS+=" --controlled_same_input_diff_output_distribution $CONTROLLED_SAME_INPUT_DIFF_OUTPUT_DISTRIBUTION"
