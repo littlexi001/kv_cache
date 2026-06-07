@@ -84,6 +84,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument("--compute_baseline_ppl", type=str2bool, default=True)
     parser.add_argument("--compute_tree_ppl", type=str2bool, default=True)
+    parser.add_argument(
+        "--tree_prefill",
+        type=str2bool,
+        default=True,
+        help="Use tree attention during the tree PPL prefill. False means baseline prefill + tree eval.",
+    )
     parser.add_argument("--layers", default="all")
     parser.add_argument("--kv_heads", default="all")
     parser.add_argument("--boundary_fraction", type=float, default=0.01)
@@ -200,6 +206,7 @@ def ppl_fields() -> list[str]:
         "tree_branch_counts",
         "candidate_granularity",
         "tree_attention_impl",
+        "tree_prefill",
     ]
 
 
@@ -596,11 +603,13 @@ def compute_eval_loss(
     chunk_size: int,
     input_device: torch.device,
     use_tree_mask: bool,
+    tree_prefill: bool,
 ) -> tuple[float, float, int, dict[str, float]]:
     label = "tree" if use_tree_mask else "baseline"
+    use_tree_prefill = use_tree_mask and tree_prefill
     timings: dict[str, float] = {}
     with timed_section(f"{label}_prefill", input_device, timings):
-        with tree_mask_enabled(use_tree_mask):
+        with tree_mask_enabled(use_tree_prefill):
             past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
     if prev_logits is None:
         raise RuntimeError("Prefill did not return last logits.")
@@ -660,6 +669,7 @@ def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_hea
         "tree_branch_counts": args.tree_branch_counts,
         "candidate_granularity": args.candidate_granularity,
         "tree_attention_impl": args.tree_attention_impl,
+        "tree_prefill": args.tree_prefill,
     }
 
 
@@ -733,7 +743,7 @@ def main() -> None:
     timing_rows: list[dict[str, Any]] = []
     if args.compute_baseline_ppl:
         baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
-            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False
+            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False, args.tree_prefill
         )
         rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
         timing_rows.append(
@@ -747,7 +757,7 @@ def main() -> None:
         )
     if args.compute_tree_ppl:
         tree_loss, tree_ppl, tree_count, tree_timings = compute_eval_loss(
-            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True
+            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True, args.tree_prefill
         )
         rows.append({"mode": "tree", "loss": tree_loss, "ppl": tree_ppl, "token_count": tree_count, **metadata})
         timing_rows.append(

@@ -7,8 +7,8 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export TOKENIZERS_PARALLELISM=false
 
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-0.6B}"
-TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
-OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/ppl_only}"
+TEXT_PATH="${TEXT_PATH:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/outputs/part-00000.txt}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/ppl_tree_eval_only}"
 
 python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --model_name_or_path "${MODEL_PATH}" \
@@ -26,15 +26,15 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --device "${DEVICE:-cuda}" \
   --device_map "${DEVICE_MAP:-auto}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
-  --compute_baseline_ppl "${COMPUTE_BASELINE_PPL:-true}" \
+  --compute_baseline_ppl "${COMPUTE_BASELINE_PPL:-false}" \
   --compute_tree_ppl "${COMPUTE_TREE_PPL:-true}" \
-  --tree_prefill "${TREE_PREFILL:-true}" \
+  --tree_prefill "${TREE_PREFILL:-false}" \
   --layers "${LAYERS:-all}" \
   --kv_heads "${KV_HEADS:-all}" \
-  --boundary_fraction "${BOUNDARY_FRACTION:-0.01}" \
+  --boundary_fraction "${BOUNDARY_FRACTION:-0.005}" \
   --leaf_fraction "${LEAF_FRACTION:-0.001}" \
   --leaf_size "${LEAF_SIZE:-0}" \
   --tree_fanout "${TREE_FANOUT:-10}" \
-  --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,5,5}" \
+  --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,2,2}" \
   --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}" \
   --tree_attention_impl "${TREE_ATTENTION_IMPL:-sparse_gather}"
