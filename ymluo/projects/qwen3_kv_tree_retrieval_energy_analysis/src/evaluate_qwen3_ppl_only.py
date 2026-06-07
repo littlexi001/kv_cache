@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import math
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -203,6 +204,28 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def synchronize_if_cuda(device: torch.device) -> None:
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
+
+
+@contextmanager
+def timed_section(name: str, device: torch.device, timings: dict[str, float]):
+    synchronize_if_cuda(device)
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        synchronize_if_cuda(device)
+        elapsed = time.perf_counter() - start
+        timings[name] = timings.get(name, 0.0) + elapsed
+        print(f"timer {name}: {elapsed:.3f}s", flush=True)
+
+
+def timing_fields() -> list[str]:
+    return ["mode", "prefill_seconds", "eval_seconds", "total_seconds", "tokens_per_second"]
 
 
 @torch.inference_mode()
@@ -502,48 +525,57 @@ def compute_eval_loss(
     chunk_size: int,
     input_device: torch.device,
     use_tree_mask: bool,
-) -> tuple[float, float, int]:
-    with tree_mask_enabled(use_tree_mask):
-        past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
+) -> tuple[float, float, int, dict[str, float]]:
+    label = "tree" if use_tree_mask else "baseline"
+    timings: dict[str, float] = {}
+    with timed_section(f"{label}_prefill", input_device, timings):
+        with tree_mask_enabled(use_tree_mask):
+            past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
     if prev_logits is None:
         raise RuntimeError("Prefill did not return last logits.")
     total_loss = 0.0
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
     total_chunks = math.ceil(eval_tokens / chunk_size)
-    for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, chunk_size), start=1):
-        end = min(start + chunk_size, eval_end)
-        chunk = input_ids[:, start:end].to(input_device)
-        kwargs: dict[str, Any] = {
-            "input_ids": chunk,
-            "use_cache": True,
-            "return_dict": True,
-            "output_attentions": False,
-            "output_hidden_states": False,
-            "cache_position": torch.arange(start, end, device=input_device),
-        }
-        if past_key_values is not None:
-            kwargs["past_key_values"] = past_key_values
-        label = "tree" if use_tree_mask else "baseline"
-        print(f"ppl {label} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
-        with tree_mask_enabled(use_tree_mask):
-            outputs = model_forward(model, kwargs)
-        logits = outputs.logits
-        shifted_logits = torch.cat([prev_logits.unsqueeze(1), logits[:, :-1, :]], dim=1)
-        loss = F.cross_entropy(
-            shifted_logits.reshape(-1, shifted_logits.shape[-1]).float(),
-            chunk.reshape(-1),
-            reduction="sum",
-        )
-        total_loss += float(loss)
-        total_count += int(chunk.numel())
-        prev_logits = logits[:, -1, :].detach()
-        past_key_values = outputs.past_key_values
-        del outputs, chunk, logits, shifted_logits, loss
-        if input_device.type == "cuda":
-            torch.cuda.empty_cache()
+    with timed_section(f"{label}_eval", input_device, timings):
+        for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, chunk_size), start=1):
+            end = min(start + chunk_size, eval_end)
+            chunk = input_ids[:, start:end].to(input_device)
+            kwargs: dict[str, Any] = {
+                "input_ids": chunk,
+                "use_cache": True,
+                "return_dict": True,
+                "output_attentions": False,
+                "output_hidden_states": False,
+                "cache_position": torch.arange(start, end, device=input_device),
+            }
+            if past_key_values is not None:
+                kwargs["past_key_values"] = past_key_values
+            print(f"ppl {label} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
+            with tree_mask_enabled(use_tree_mask):
+                outputs = model_forward(model, kwargs)
+            logits = outputs.logits
+            shifted_logits = torch.cat([prev_logits.unsqueeze(1), logits[:, :-1, :]], dim=1)
+            loss = F.cross_entropy(
+                shifted_logits.reshape(-1, shifted_logits.shape[-1]).float(),
+                chunk.reshape(-1),
+                reduction="sum",
+            )
+            total_loss += float(loss)
+            total_count += int(chunk.numel())
+            prev_logits = logits[:, -1, :].detach()
+            past_key_values = outputs.past_key_values
+            del outputs, chunk, logits, shifted_logits, loss
+            if input_device.type == "cuda":
+                torch.cuda.empty_cache()
     mean_loss = total_loss / max(1, total_count)
-    return mean_loss, math.exp(mean_loss), total_count
+    timings[f"{label}_total"] = timings.get(f"{label}_prefill", 0.0) + timings.get(f"{label}_eval", 0.0)
+    print(
+        f"timer {label}_total: {timings[f'{label}_total']:.3f}s, "
+        f"eval throughput: {total_count / max(timings.get(f'{label}_eval', 0.0), 1e-9):.2f} tokens/s",
+        flush=True,
+    )
+    return mean_loss, math.exp(mean_loss), total_count, timings
 
 
 def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_head_indices: list[int]) -> dict[str, Any]:
@@ -625,18 +657,39 @@ def main() -> None:
 
     metadata = tree_metadata_row(args, layer_indices, kv_head_indices)
     rows: list[dict[str, Any]] = []
-    baseline_loss, baseline_ppl, baseline_count = compute_eval_loss(
+    timing_rows: list[dict[str, Any]] = []
+    baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
         model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False
     )
     rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
+    timing_rows.append(
+        {
+            "mode": "baseline",
+            "prefill_seconds": baseline_timings.get("baseline_prefill", 0.0),
+            "eval_seconds": baseline_timings.get("baseline_eval", 0.0),
+            "total_seconds": baseline_timings.get("baseline_total", 0.0),
+            "tokens_per_second": baseline_count / max(baseline_timings.get("baseline_eval", 0.0), 1e-9),
+        }
+    )
     if args.compute_tree_ppl:
-        tree_loss, tree_ppl, tree_count = compute_eval_loss(
+        tree_loss, tree_ppl, tree_count, tree_timings = compute_eval_loss(
             model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True
         )
         rows.append({"mode": "tree", "loss": tree_loss, "ppl": tree_ppl, "token_count": tree_count, **metadata})
+        timing_rows.append(
+            {
+                "mode": "tree",
+                "prefill_seconds": tree_timings.get("tree_prefill", 0.0),
+                "eval_seconds": tree_timings.get("tree_eval", 0.0),
+                "total_seconds": tree_timings.get("tree_total", 0.0),
+                "tokens_per_second": tree_count / max(tree_timings.get("tree_eval", 0.0), 1e-9),
+            }
+        )
 
     ppl_path = output_dir / "ppl_by_tree.csv"
+    timing_path = output_dir / "timing_by_mode.csv"
     write_csv(ppl_path, rows, ppl_fields())
+    write_csv(timing_path, timing_rows, timing_fields())
     (output_dir / "summary.json").write_text(
         json.dumps(
             {
@@ -650,7 +703,8 @@ def main() -> None:
                     "kv_heads": kv_head_indices,
                     "tree_branch_counts": branch_counts,
                 },
-                "paths": {"ppl_by_tree": str(ppl_path)},
+                "timings": timing_rows,
+                "paths": {"ppl_by_tree": str(ppl_path), "timing_by_mode": str(timing_path)},
             },
             indent=2,
             ensure_ascii=False,
