@@ -127,17 +127,17 @@ candidate percentage.
 bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_analysis.sh
 ```
 
-PPL-only run:
+Tree PPL-only run:
 
 ```bash
 bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
 ```
 
-By default this only writes the baseline PPL. To also evaluate top-attention
-keep-ratio PPL values:
+This writes baseline PPL and tree-retrieval-masked PPL to `ppl_by_tree.csv`.
+The PPL script uses the same tree controls as the energy script:
 
 ```bash
-RATIOS=0.001,0.005,0.01,0.02,0.04,0.06,0.08,0.10,0.15,0.20 \
+LAYERS=15 KV_HEADS=2 TREE_BRANCH_COUNTS=5,5,5 \
 bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
 ```
 

@@ -26,4 +26,12 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --device "${DEVICE:-cuda}" \
   --device_map "${DEVICE_MAP:-auto}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
-  --ratios "${RATIOS:-}"
+  --compute_tree_ppl "${COMPUTE_TREE_PPL:-true}" \
+  --layers "${LAYERS:-all}" \
+  --kv_heads "${KV_HEADS:-all}" \
+  --boundary_fraction "${BOUNDARY_FRACTION:-0.01}" \
+  --leaf_fraction "${LEAF_FRACTION:-0.001}" \
+  --leaf_size "${LEAF_SIZE:-0}" \
+  --tree_fanout "${TREE_FANOUT:-10}" \
+  --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,5,5}" \
+  --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}"
