@@ -51,6 +51,7 @@ class TreeMaskConfig:
     tree_fanout: int
     branch_counts: tuple[int, int, int]
     candidate_granularity: str
+    attention_impl: str
 
 
 def str2bool(value: str | bool) -> bool:
@@ -81,6 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--device_map", default="auto")
     parser.add_argument("--attn_implementation", default="eager")
+    parser.add_argument("--compute_baseline_ppl", type=str2bool, default=True)
     parser.add_argument("--compute_tree_ppl", type=str2bool, default=True)
     parser.add_argument("--layers", default="all")
     parser.add_argument("--kv_heads", default="all")
@@ -90,6 +92,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tree_fanout", type=int, default=10)
     parser.add_argument("--tree_branch_counts", default="5,5,5")
     parser.add_argument("--candidate_granularity", choices=["attention_head", "kv_head_union"], default="attention_head")
+    parser.add_argument("--tree_attention_impl", choices=["mask", "sparse_gather"], default="sparse_gather")
     return parser.parse_args()
 
 
@@ -196,6 +199,7 @@ def ppl_fields() -> list[str]:
         "tree_fanout",
         "tree_branch_counts",
         "candidate_granularity",
+        "tree_attention_impl",
     ]
 
 
@@ -456,6 +460,68 @@ def tree_keep_mask(
     return keep & valid_scores
 
 
+def max_candidate_count(key_count: int, leaf_size: int, group_size: int, config: TreeMaskConfig) -> int:
+    boundary = max(1, math.ceil(config.boundary_fraction * key_count))
+    leaf_tokens = config.branch_counts[0] * config.branch_counts[1] * config.branch_counts[2] * leaf_size
+    if config.candidate_granularity == "kv_head_union":
+        leaf_tokens *= group_size
+    return min(key_count, 2 * boundary + leaf_tokens)
+
+
+def sparse_tree_attention(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    layer: int,
+    config: TreeMaskConfig,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    batch, attention_heads, query_count, head_dim = query_states.shape
+    _, kv_heads, key_count, _ = key_states.shape
+    if batch != 1:
+        raise ValueError("Tree sparse attention currently supports batch size 1.")
+    if layer not in config.layers or set(range(kv_heads)) - config.kv_heads:
+        raise RuntimeError("sparse_gather requires the current layer and all KV heads to be tree-masked.")
+
+    group_size = attention_heads // kv_heads
+    leaf_size = config.leaf_size if config.leaf_size > 0 else max(1, math.ceil(config.leaf_fraction * key_count))
+    candidate_slots = max_candidate_count(key_count, leaf_size, group_size, config)
+    dummy_scores = torch.zeros(
+        (batch, attention_heads, query_count, key_count),
+        dtype=torch.float32,
+        device=query_states.device,
+    )
+    keep = tree_keep_mask(query_states, key_states, layer, dummy_scores, config)
+    candidate_values, candidate_ids = torch.topk(keep.to(torch.int8), k=candidate_slots, dim=-1, largest=True)
+    candidate_valid = candidate_values > 0
+    candidate_ids = candidate_ids.masked_fill(~candidate_valid, 0)
+
+    if key_states.shape[1] != attention_heads:
+        key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
+        value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
+    else:
+        key_states_for_attention = key_states
+        value_states_for_attention = value_states
+
+    gather_index = candidate_ids.unsqueeze(-1).expand(batch, attention_heads, query_count, candidate_slots, head_dim)
+    expanded_keys = key_states_for_attention.unsqueeze(2).expand(batch, attention_heads, query_count, key_count, head_dim)
+    expanded_values = value_states_for_attention.unsqueeze(2).expand(batch, attention_heads, query_count, key_count, head_dim)
+    selected_keys = torch.gather(expanded_keys, dim=3, index=gather_index)
+    selected_values = torch.gather(expanded_values, dim=3, index=gather_index)
+
+    scores = (query_states.unsqueeze(3) * selected_keys).sum(dim=-1) * scaling
+    if attention_mask is not None:
+        mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
+        gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids)
+        scores = scores + gathered_mask
+    scores = scores.masked_fill(~candidate_valid, torch.finfo(scores.dtype).min)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.sum(attention_weights.unsqueeze(-1) * selected_values, dim=3)
+    attention_output = attention_output.transpose(1, 2).contiguous()
+    return attention_output, None
+
+
 def _tree_eager_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -470,6 +536,12 @@ def _tree_eager_attention_forward(
     if scaling is None:
         scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
     original_key_states = key_states
+    layer = _MODULE_TO_LAYER.get(id(module), -1)
+    if _TREE_ENABLED and config is not None and config.attention_impl == "sparse_gather":
+        try:
+            return sparse_tree_attention(query_states, key_states, value_states, attention_mask, scaling, layer, config)
+        except RuntimeError:
+            pass
     if key_states.shape[1] != query_states.shape[1]:
         repeat_groups = query_states.shape[1] // key_states.shape[1]
         key_states_for_attention = key_states.repeat_interleave(repeat_groups, dim=1)
@@ -480,7 +552,6 @@ def _tree_eager_attention_forward(
     if attention_mask is not None:
         scores = scores + attention_mask[:, :, :, : scores.shape[-1]]
     if _TREE_ENABLED and config is not None:
-        layer = _MODULE_TO_LAYER.get(id(module), -1)
         keep = tree_keep_mask(query_states, original_key_states, layer, scores, config)
         scores = scores.masked_fill(~keep, torch.finfo(scores.dtype).min)
     attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
@@ -588,6 +659,7 @@ def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_hea
         "tree_fanout": args.tree_fanout,
         "tree_branch_counts": args.tree_branch_counts,
         "candidate_granularity": args.candidate_granularity,
+        "tree_attention_impl": args.tree_attention_impl,
     }
 
 
@@ -650,6 +722,7 @@ def main() -> None:
         tree_fanout=args.tree_fanout,
         branch_counts=branch_counts,
         candidate_granularity=args.candidate_granularity,
+        attention_impl=args.tree_attention_impl,
     )
     register_attention_layers(model)
     install_qwen3_attention_patch()
@@ -658,19 +731,20 @@ def main() -> None:
     metadata = tree_metadata_row(args, layer_indices, kv_head_indices)
     rows: list[dict[str, Any]] = []
     timing_rows: list[dict[str, Any]] = []
-    baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
-        model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False
-    )
-    rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
-    timing_rows.append(
-        {
-            "mode": "baseline",
-            "prefill_seconds": baseline_timings.get("baseline_prefill", 0.0),
-            "eval_seconds": baseline_timings.get("baseline_eval", 0.0),
-            "total_seconds": baseline_timings.get("baseline_total", 0.0),
-            "tokens_per_second": baseline_count / max(baseline_timings.get("baseline_eval", 0.0), 1e-9),
-        }
-    )
+    if args.compute_baseline_ppl:
+        baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
+            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False
+        )
+        rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
+        timing_rows.append(
+            {
+                "mode": "baseline",
+                "prefill_seconds": baseline_timings.get("baseline_prefill", 0.0),
+                "eval_seconds": baseline_timings.get("baseline_eval", 0.0),
+                "total_seconds": baseline_timings.get("baseline_total", 0.0),
+                "tokens_per_second": baseline_count / max(baseline_timings.get("baseline_eval", 0.0), 1e-9),
+            }
+        )
     if args.compute_tree_ppl:
         tree_loss, tree_ppl, tree_count, tree_timings = compute_eval_loss(
             model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True

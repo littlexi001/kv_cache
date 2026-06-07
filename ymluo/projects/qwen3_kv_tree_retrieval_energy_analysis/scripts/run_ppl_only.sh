@@ -26,6 +26,7 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --device "${DEVICE:-cuda}" \
   --device_map "${DEVICE_MAP:-auto}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
+  --compute_baseline_ppl "${COMPUTE_BASELINE_PPL:-true}" \
   --compute_tree_ppl "${COMPUTE_TREE_PPL:-true}" \
   --layers "${LAYERS:-all}" \
   --kv_heads "${KV_HEADS:-all}" \
@@ -34,4 +35,5 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --leaf_size "${LEAF_SIZE:-0}" \
   --tree_fanout "${TREE_FANOUT:-10}" \
   --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,5,5}" \
-  --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}"
+  --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}" \
+  --tree_attention_impl "${TREE_ATTENTION_IMPL:-sparse_gather}"
