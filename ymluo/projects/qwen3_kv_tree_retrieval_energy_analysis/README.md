@@ -127,6 +127,20 @@ candidate percentage.
 bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_analysis.sh
 ```
 
+PPL-only run:
+
+```bash
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
+By default this only writes the baseline PPL. To also evaluate top-attention
+keep-ratio PPL values:
+
+```bash
+RATIOS=0.001,0.005,0.01,0.02,0.04,0.06,0.08,0.10,0.15,0.20 \
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
 Focused smoke test:
 
 ```bash
