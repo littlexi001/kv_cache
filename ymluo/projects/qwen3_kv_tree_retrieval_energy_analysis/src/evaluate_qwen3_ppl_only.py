@@ -256,111 +256,123 @@ def build_tree_layout(total_tokens: int, leaf_size: int, fanout: int) -> TreeLay
     return TreeLayout(leaf_size, leaf_ranges, mid_ranges, mid_children, big_ranges, big_children)
 
 
-def visible_regions(token: int, boundary_fraction: float) -> tuple[set[int], set[int], tuple[int, int]]:
-    visible = token + 1
-    boundary_count = max(1, math.ceil(boundary_fraction * visible))
-    prefix = set(range(0, min(boundary_count, visible)))
-    recent_start = max(0, visible - boundary_count)
-    recent = set(range(recent_start, visible))
-    middle_start = min(boundary_count, visible)
-    middle_end = max(middle_start, recent_start)
-    return prefix, recent, (middle_start, middle_end)
+def ranges_tensor(ranges: list[tuple[int, int]], device: torch.device) -> torch.Tensor:
+    return torch.tensor(ranges, dtype=torch.long, device=device)
 
 
-def range_center(
+def padded_children_tensor(children: list[list[int]], width: int, device: torch.device) -> torch.Tensor:
+    result = torch.full((len(children), width), -1, dtype=torch.long, device=device)
+    for row, values in enumerate(children):
+        if values:
+            result[row, : len(values)] = torch.tensor(values, dtype=torch.long, device=device)
+    return result
+
+
+def query_clipped_centers(
     prefix_sum: torch.Tensor,
-    start: int,
-    end: int,
-    middle_range: tuple[int, int],
-    visible: int,
-) -> tuple[torch.Tensor | None, int, tuple[int, int]]:
-    left = max(start, middle_range[0])
-    right = min(end, middle_range[1], visible)
-    count = right - left
-    if count <= 0:
-        return None, 0, (left, right)
-    return (prefix_sum[right] - prefix_sum[left]) / count, count, (left, right)
+    ranges: torch.Tensor,
+    middle_start: torch.Tensor,
+    middle_end: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    # Returns centers with shape [query_count, node_count, head_dim].
+    starts = ranges[:, 0].unsqueeze(0)
+    ends = ranges[:, 1].unsqueeze(0)
+    left = torch.maximum(starts, middle_start.unsqueeze(1))
+    right = torch.minimum(ends, middle_end.unsqueeze(1))
+    counts = (right - left).clamp_min(0)
+    centers = (prefix_sum[right] - prefix_sum[left]) / counts.clamp_min(1).unsqueeze(-1)
+    return centers, counts > 0
 
 
-def top_scored_indices(
-    query: torch.Tensor,
-    prefix_sum: torch.Tensor,
-    ranges: list[tuple[int, int]],
-    candidate_indices: list[int],
-    middle_range: tuple[int, int],
-    visible: int,
-    top_count: int,
-) -> list[int]:
-    scored: list[tuple[float, int]] = []
-    for index in candidate_indices:
-        center, count, _ = range_center(prefix_sum, ranges[index][0], ranges[index][1], middle_range, visible)
-        if center is None or count <= 0:
-            continue
-        scored.append((float(torch.dot(query, center)), index))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [index for _, index in scored[:top_count]]
+def score_candidate_nodes(
+    queries: torch.Tensor,
+    centers: torch.Tensor,
+    valid_nodes: torch.Tensor,
+    candidate_ids: torch.Tensor,
+) -> torch.Tensor:
+    # queries: [heads, query_count, head_dim]
+    # centers: [query_count, node_count, head_dim]
+    safe_ids = candidate_ids.clamp_min(0)
+    query_count = queries.shape[1]
+    candidate_rank = candidate_ids.ndim - 2
+    query_index_shape = (1, query_count) + (1,) * candidate_rank
+    query_index = torch.arange(query_count, device=queries.device).view(query_index_shape)
+    candidate_centers = centers[query_index, safe_ids]
+    candidate_valid = valid_nodes[query_index, safe_ids] & (candidate_ids >= 0)
+    query_view = queries.view(queries.shape[0], query_count, *([1] * candidate_rank), queries.shape[-1])
+    scores = (query_view.float() * candidate_centers).sum(dim=-1)
+    return scores.masked_fill(~candidate_valid, -torch.inf)
 
 
-def tree_candidate_indices(
-    token: int,
-    query: torch.Tensor,
-    prefix_sum: torch.Tensor,
+def select_tree_leaf_ids_for_kv_head(
+    queries: torch.Tensor,
+    key_vectors: torch.Tensor,
     layout: TreeLayout,
     config: TreeMaskConfig,
-) -> set[int]:
-    visible = token + 1
-    prefix, recent, middle_range = visible_regions(token, config.boundary_fraction)
-    if middle_range[1] <= middle_range[0]:
-        return {idx for idx in prefix | recent if idx <= token}
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    device = queries.device
+    query_count = queries.shape[1]
+    key_count = key_vectors.shape[0]
+    query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=device)
+    visible = query_tokens + 1
+    boundary_count = torch.ceil(config.boundary_fraction * visible.float()).long().clamp_min(1)
+    middle_start = torch.minimum(boundary_count, visible)
+    recent_start = (visible - boundary_count).clamp_min(0)
+    middle_end = torch.maximum(middle_start, recent_start)
 
-    big_indices = top_scored_indices(
-        query,
-        prefix_sum,
-        layout.big_ranges,
-        list(range(len(layout.big_ranges))),
-        middle_range,
-        visible,
-        config.branch_counts[0],
-    )
-    mid_indices: list[int] = []
-    for big_index in big_indices:
-        mid_indices.extend(
-            top_scored_indices(
-                query,
-                prefix_sum,
-                layout.mid_ranges,
-                layout.big_children[big_index],
-                middle_range,
-                visible,
-                config.branch_counts[1],
-            )
-        )
-    leaf_indices: list[int] = []
-    for mid_index in mid_indices:
-        leaf_indices.extend(
-            top_scored_indices(
-                query,
-                prefix_sum,
-                layout.leaf_ranges,
-                layout.mid_children[mid_index],
-                middle_range,
-                visible,
-                config.branch_counts[2],
-            )
-        )
+    zeros = torch.zeros((1, key_vectors.shape[-1]), dtype=torch.float32, device=device)
+    prefix_sum = torch.cat([zeros, torch.cumsum(key_vectors.detach().float(), dim=0)], dim=0)
+    big_ranges = ranges_tensor(layout.big_ranges, device)
+    mid_ranges = ranges_tensor(layout.mid_ranges, device)
+    leaf_ranges = ranges_tensor(layout.leaf_ranges, device)
+    big_to_mid = padded_children_tensor(layout.big_children, config.tree_fanout, device)
+    mid_to_leaf = padded_children_tensor(layout.mid_children, config.tree_fanout, device)
 
-    tree_tokens: set[int] = set()
-    for leaf_index in sorted(set(leaf_indices)):
-        _, count, valid_range = range_center(
-            prefix_sum,
-            layout.leaf_ranges[leaf_index][0],
-            layout.leaf_ranges[leaf_index][1],
-            middle_range,
-            visible,
-        )
-        if count > 0:
-            tree_tokens.update(range(valid_range[0], valid_range[1]))
-    return {idx for idx in prefix | recent | tree_tokens if 0 <= idx <= token}
+    big_centers, big_valid = query_clipped_centers(prefix_sum, big_ranges, middle_start, middle_end)
+    big_ids = torch.arange(big_ranges.shape[0], dtype=torch.long, device=device).view(1, 1, -1)
+    big_scores = score_candidate_nodes(queries, big_centers, big_valid, big_ids.expand(queries.shape[0], query_count, -1))
+    big_k = min(config.branch_counts[0], big_scores.shape[-1])
+    top_big_scores, top_big_ids = torch.topk(big_scores, k=big_k, dim=-1)
+    top_big_ids = top_big_ids.masked_fill(~torch.isfinite(top_big_scores), -1)
+
+    mid_centers, mid_valid = query_clipped_centers(prefix_sum, mid_ranges, middle_start, middle_end)
+    mid_candidates = big_to_mid[top_big_ids.clamp_min(0)]
+    mid_candidates = mid_candidates.masked_fill(top_big_ids.unsqueeze(-1) < 0, -1)
+    mid_scores = score_candidate_nodes(queries, mid_centers, mid_valid, mid_candidates)
+    mid_k = min(config.branch_counts[1], mid_scores.shape[-1])
+    top_mid_scores, top_mid_pos = torch.topk(mid_scores, k=mid_k, dim=-1)
+    top_mid_ids = torch.gather(mid_candidates, dim=-1, index=top_mid_pos)
+    top_mid_ids = top_mid_ids.masked_fill(~torch.isfinite(top_mid_scores), -1).flatten(start_dim=2)
+
+    leaf_centers, leaf_valid = query_clipped_centers(prefix_sum, leaf_ranges, middle_start, middle_end)
+    leaf_candidates = mid_to_leaf[top_mid_ids.clamp_min(0)]
+    leaf_candidates = leaf_candidates.masked_fill(top_mid_ids.unsqueeze(-1) < 0, -1)
+    leaf_scores = score_candidate_nodes(queries, leaf_centers, leaf_valid, leaf_candidates)
+    leaf_k = min(config.branch_counts[2], leaf_scores.shape[-1])
+    top_leaf_scores, top_leaf_pos = torch.topk(leaf_scores, k=leaf_k, dim=-1)
+    top_leaf_ids = torch.gather(leaf_candidates, dim=-1, index=top_leaf_pos)
+    top_leaf_ids = top_leaf_ids.masked_fill(~torch.isfinite(top_leaf_scores), -1).flatten(start_dim=2)
+    return top_leaf_ids, leaf_ranges, middle_start, middle_end
+
+
+def scatter_leaf_tokens(
+    keep: torch.Tensor,
+    selected_leaf_ids: torch.Tensor,
+    leaf_ranges: torch.Tensor,
+    middle_start: torch.Tensor,
+    middle_end: torch.Tensor,
+    leaf_size: int,
+) -> None:
+    safe_leaf_ids = selected_leaf_ids.clamp_min(0)
+    starts = leaf_ranges[safe_leaf_ids, 0]
+    ends = leaf_ranges[safe_leaf_ids, 1]
+    starts = torch.maximum(starts, middle_start.view(1, -1, 1))
+    ends = torch.minimum(ends, middle_end.view(1, -1, 1))
+    offsets = torch.arange(leaf_size, dtype=torch.long, device=keep.device).view(1, 1, 1, -1)
+    token_ids = starts.unsqueeze(-1) + offsets
+    valid = (selected_leaf_ids.unsqueeze(-1) >= 0) & (token_ids < ends.unsqueeze(-1))
+    token_ids = token_ids.masked_fill(~valid, 0).flatten(start_dim=2)
+    keep.scatter_(dim=-1, index=token_ids, src=torch.ones_like(token_ids, dtype=torch.bool))
 
 
 def tree_keep_mask(
@@ -374,57 +386,51 @@ def tree_keep_mask(
     _, kv_heads, key_count, _ = key_states.shape
     if batch != 1:
         raise ValueError("Tree PPL currently supports batch size 1.")
+    valid_scores = torch.isfinite(scores)
     if layer not in config.layers:
-        return torch.isfinite(scores)
+        return valid_scores
 
     group_size = attention_heads // kv_heads
     active_kv_heads = {kv_head for kv_head in range(kv_heads) if kv_head in config.kv_heads}
     if not active_kv_heads:
-        return torch.isfinite(scores)
+        return valid_scores
 
     leaf_size = config.leaf_size if config.leaf_size > 0 else max(1, math.ceil(config.leaf_fraction * key_count))
     layout = build_tree_layout(key_count, leaf_size, config.tree_fanout)
-    prefix_sums = []
-    for kv_head in range(kv_heads):
-        vectors = key_states[0, kv_head].detach().float()
-        zeros = torch.zeros((1, vectors.shape[-1]), dtype=torch.float32, device=vectors.device)
-        prefix_sums.append(torch.cat([zeros, torch.cumsum(vectors, dim=0)], dim=0))
-
     keep = torch.zeros_like(scores, dtype=torch.bool)
-    keep |= ~torch.isfinite(scores)
-    keep.logical_not_()
-    keep.fill_(False)
+    token_positions = torch.arange(key_count, dtype=torch.long, device=scores.device)
+    query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=scores.device)
+    visible = query_tokens + 1
+    causal_keep = token_positions.view(1, -1) < visible.view(-1, 1)
+    boundary_count = torch.ceil(config.boundary_fraction * visible.float()).long().clamp_min(1)
+    prefix_keep = token_positions.view(1, -1) < boundary_count.view(-1, 1)
+    recent_start = (visible - boundary_count).clamp_min(0)
+    recent_keep = (token_positions.view(1, -1) >= recent_start.view(-1, 1)) & causal_keep
+    boundary_keep = (prefix_keep | recent_keep) & causal_keep
 
-    for local_query in range(query_count):
-        token = key_count - query_count + local_query
-        if token < 0:
+    for kv_head in range(kv_heads):
+        head_start = kv_head * group_size
+        head_end = min((kv_head + 1) * group_size, attention_heads)
+        if head_start >= head_end:
             continue
-        per_head_candidates: dict[int, set[int]] = {}
-        for attention_head in range(attention_heads):
-            kv_head = attention_head // group_size
-            if kv_head not in active_kv_heads:
-                keep[:, attention_head, local_query, : token + 1] = True
-                continue
-            query = query_states[0, attention_head, local_query].detach().float()
-            per_head_candidates[attention_head] = tree_candidate_indices(
-                token, query, prefix_sums[kv_head], layout, config
-            )
+        if kv_head not in active_kv_heads:
+            keep[:, head_start:head_end] = causal_keep.view(1, 1, query_count, key_count)
+            continue
+
+        queries = query_states[0, head_start:head_end].detach()
+        key_vectors = key_states[0, kv_head].detach()
+        selected_leaf_ids, leaf_ranges, middle_start, middle_end = select_tree_leaf_ids_for_kv_head(
+            queries,
+            key_vectors,
+            layout,
+            config,
+        )
+        kv_keep = boundary_keep.view(1, query_count, key_count).expand(head_end - head_start, -1, -1).clone()
+        scatter_leaf_tokens(kv_keep, selected_leaf_ids, leaf_ranges, middle_start, middle_end, leaf_size)
         if config.candidate_granularity == "kv_head_union":
-            for kv_head in active_kv_heads:
-                union_candidates: set[int] = set()
-                heads = range(kv_head * group_size, min((kv_head + 1) * group_size, attention_heads))
-                for attention_head in heads:
-                    union_candidates.update(per_head_candidates.get(attention_head, set()))
-                for attention_head in heads:
-                    if union_candidates:
-                        idx = torch.tensor(sorted(union_candidates), dtype=torch.long, device=scores.device)
-                        keep[:, attention_head, local_query, idx] = True
-        else:
-            for attention_head, candidates in per_head_candidates.items():
-                if candidates:
-                    idx = torch.tensor(sorted(candidates), dtype=torch.long, device=scores.device)
-                    keep[:, attention_head, local_query, idx] = True
-    return keep
+            kv_keep = kv_keep.any(dim=0, keepdim=True).expand(head_end - head_start, -1, -1)
+        keep[:, head_start:head_end] = kv_keep.unsqueeze(0)
+    return keep & valid_scores
 
 
 def _tree_eager_attention_forward(
