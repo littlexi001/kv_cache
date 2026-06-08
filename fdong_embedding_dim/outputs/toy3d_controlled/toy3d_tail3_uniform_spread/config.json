@@ -1,0 +1,13 @@
+{
+  "experiment_name": "toy3d_tail3_uniform_spread",
+  "group_probs": "common:0.70,tail1:0.10,tail2:0.10,tail3:0.10",
+  "outdir": "fdong_embedding_dim/outputs/toy3d_controlled",
+  "dim": 3,
+  "seed": 0,
+  "steps": 2000,
+  "lr": 0.03,
+  "record_every": 20,
+  "theta_deg": 12.0,
+  "tail_centers": "0,1,0;0,-1,0;0,0,1",
+  "init_noise": 0.0
+}
