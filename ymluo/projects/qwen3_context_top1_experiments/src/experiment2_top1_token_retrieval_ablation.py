@@ -60,6 +60,12 @@ def parse_args() -> argparse.Namespace:
         default=16,
         help="Used only when --dump_query_scope prompt_last.",
     )
+    parser.add_argument(
+        "--simple_tail_tokens",
+        type=int,
+        default=10,
+        help="Write a compact file for the last N prompt tokens and their selected top-ratio key tokens.",
+    )
     parser.add_argument("--max_context_chars", type=int, default=24000)
     parser.add_argument("--dtype", choices=["auto", "bfloat16", "float16", "float32"], default="bfloat16")
     parser.add_argument("--device", default="cuda")
@@ -393,6 +399,80 @@ def dump_top_token_rows(
                         writer.writerow(row)
 
 
+def dump_simple_tail_top_tokens(
+    path: Path,
+    tokenizer: Any,
+    prompt: str,
+    sample: dict[str, Any],
+    token_ids: list[int],
+    layer_head_rows: dict[int, dict[int, list[tuple[int, int, float]]]],
+) -> None:
+    fields = [
+        "sample_id",
+        "layer",
+        "head",
+        "query_token_index",
+        "query_token_text",
+        "rank",
+        "key_token_index",
+        "attention_weight",
+        "key_token_text",
+    ]
+    rows: list[dict[str, Any]] = []
+    for layer, head_map in layer_head_rows.items():
+        for head, triples in head_map.items():
+            for query_index, key_index, score in triples:
+                rows.append(
+                    {
+                        "sample_id": sample["sample_id"],
+                        "layer": layer,
+                        "head": head,
+                        "query_token_index": query_index,
+                        "query_token_text": compact_piece(
+                            tokenizer.decode([token_ids[query_index]], skip_special_tokens=False)
+                        ),
+                        "rank": 0,
+                        "key_token_index": key_index,
+                        "attention_weight": score,
+                        "key_token_text": compact_piece(
+                            tokenizer.decode([token_ids[key_index]], skip_special_tokens=False)
+                        ),
+                    }
+                )
+
+    rows.sort(
+        key=lambda row: (
+            row["sample_id"],
+            int(row["layer"]),
+            int(row["head"]),
+            int(row["query_token_index"]),
+            -float(row["attention_weight"]),
+            int(row["key_token_index"]),
+        )
+    )
+    previous_key: tuple[str, int, int, int] | None = None
+    rank = 0
+    for row in rows:
+        current_key = (
+            str(row["sample_id"]),
+            int(row["layer"]),
+            int(row["head"]),
+            int(row["query_token_index"]),
+        )
+        if current_key != previous_key:
+            rank = 1
+            previous_key = current_key
+        else:
+            rank += 1
+        row["rank"] = rank
+
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields)
+        if handle.tell() == 0:
+            writer.writeheader()
+        writer.writerows(rows)
+
+
 def write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "mode",
@@ -453,8 +533,11 @@ def main() -> None:
     result_rows: list[dict[str, Any]] = []
     per_sample_path = output_dir / "attention_pruning_results.jsonl"
     top_token_path = output_dir / "layer_head_top1_tokens.csv"
+    simple_tail_path = output_dir / "tail10_top1_tokens_simple.csv"
     if top_token_path.exists():
         top_token_path.unlink()
+    if simple_tail_path.exists():
+        simple_tail_path.unlink()
 
     with per_sample_path.open("w", encoding="utf-8") as result_handle:
         for sample in samples:
@@ -500,17 +583,39 @@ def main() -> None:
                 eval_offsets,
                 layer_head_rows,
             )
+            simple_tail_query_indices = select_dump_query_indices(
+                "prompt_last",
+                prompt_token_count,
+                len(eval_token_ids),
+                args.simple_tail_tokens,
+            )
+            simple_tail_rows = collect_full_attention_top_tokens(
+                model, eval_input_ids, args.top_ratio, simple_tail_query_indices, input_device
+            )
+            dump_simple_tail_top_tokens(
+                simple_tail_path,
+                tokenizer,
+                eval_text,
+                sample,
+                eval_token_ids,
+                simple_tail_rows,
+            )
             print(
                 f"finished {sample['sample_id']}: full_loss={full_metrics['loss']:.4f}, "
                 f"top{args.top_ratio:g}_loss={pruned_metrics['loss']:.4f}, "
-                f"dumped_query_rows={len(query_indices)} ({args.dump_query_scope})",
+                f"dumped_query_rows={len(query_indices)} ({args.dump_query_scope}), "
+                f"simple_tail_rows={len(simple_tail_query_indices)}",
                 flush=True,
             )
 
     write_summary(output_dir / "attention_pruning_summary.csv", result_rows)
     with (output_dir / "config.json").open("w", encoding="utf-8") as handle:
         json.dump(vars(args), handle, ensure_ascii=False, indent=2)
-    print(f"wrote {per_sample_path}, {output_dir / 'attention_pruning_summary.csv'}, and {top_token_path}", flush=True)
+    print(
+        f"wrote {per_sample_path}, {output_dir / 'attention_pruning_summary.csv'}, "
+        f"{top_token_path}, and {simple_tail_path}",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":
