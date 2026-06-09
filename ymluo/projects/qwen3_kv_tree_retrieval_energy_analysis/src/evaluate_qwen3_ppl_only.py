@@ -1178,19 +1178,15 @@ def shared_matmul_tree_attention(
         candidate_ids, candidate_valid = tree_candidate_ids_for_chunk(query_states, key_states, layer, config)
     record_tree_candidate_stats(candidate_valid.unsqueeze(2).expand(-1, -1, query_count, -1))
 
-    with profile_tree_stage("shared_matmul/repeat_kv", query_states.device):
-        if key_states.shape[1] != attention_heads:
-            key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
-            value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
-        else:
-            key_states_for_attention = key_states
-            value_states_for_attention = value_states
-
     batch_index = torch.arange(batch, device=query_states.device).view(batch, 1, 1)
-    head_index = torch.arange(attention_heads, device=query_states.device).view(1, attention_heads, 1)
+    kv_head_index = torch.div(
+        torch.arange(attention_heads, device=query_states.device),
+        group_size,
+        rounding_mode="floor",
+    ).view(1, attention_heads, 1)
     with profile_tree_stage("shared_matmul/select_kv", query_states.device):
-        selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
-        selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
+        selected_keys = key_states[batch_index, kv_head_index, candidate_ids]
+        selected_values = value_states[batch_index, kv_head_index, candidate_ids]
 
     with profile_tree_stage("shared_matmul/qk_matmul", query_states.device):
         scores = torch.matmul(query_states, selected_keys.transpose(-2, -1)) * scaling
