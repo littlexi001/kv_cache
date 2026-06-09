@@ -188,6 +188,20 @@ def pick_input_device(model: torch.nn.Module, fallback_device: torch.device) -> 
         return fallback_device
 
 
+def validate_triton_tensor_devices(*named_tensors: tuple[str, torch.Tensor]) -> None:
+    devices = {name: tensor.device for name, tensor in named_tensors}
+    non_cuda = {name: device for name, device in devices.items() if device.type != "cuda"}
+    if non_cuda:
+        raise RuntimeError(
+            "tree_attention_impl=triton_shared requires CUDA tensors, but got "
+            f"{non_cuda}. Set DEVICE_MAP=none, or keep DEVICE_MAP=auto and let this script "
+            "force the whole model onto the requested CUDA device."
+        )
+    unique_devices = {device for device in devices.values()}
+    if len(unique_devices) != 1:
+        raise RuntimeError(f"triton_shared requires all tensors on the same CUDA device, got {devices}.")
+
+
 def model_forward(model: torch.nn.Module, kwargs: dict[str, Any]) -> Any:
     try:
         return model(**kwargs)
@@ -1048,6 +1062,11 @@ def triton_shared_tree_attention(
         # The current PPL runs do not use padding, so the dense attention mask is
         # intentionally not gathered here.
         pass
+    validate_triton_tensor_devices(
+        ("query_states", query_states),
+        ("key_states", key_states),
+        ("value_states", value_states),
+    )
     batch, attention_heads, query_count, head_dim = query_states.shape
     _, kv_heads, key_count, _ = key_states.shape
     if batch != 1:
@@ -1423,7 +1442,11 @@ def main() -> None:
     model_dtype = resolve_dtype(args.dtype, requested_device)
     load_kwargs: dict[str, Any] = {"trust_remote_code": True, "torch_dtype": model_dtype}
     if args.device_map.lower() != "none":
-        load_kwargs["device_map"] = args.device_map
+        if args.tree_attention_impl == "triton_shared" and args.device_map.lower() == "auto" and requested_device.type == "cuda":
+            load_kwargs["device_map"] = {"": str(requested_device)}
+            print(f"triton_shared: forcing device_map={{'': '{requested_device}'}}", flush=True)
+        else:
+            load_kwargs["device_map"] = args.device_map
     if args.attn_implementation.lower() != "auto":
         load_kwargs["attn_implementation"] = args.attn_implementation
     model = AutoModelForCausalLM.from_pretrained(args.model_name_or_path, **load_kwargs)
