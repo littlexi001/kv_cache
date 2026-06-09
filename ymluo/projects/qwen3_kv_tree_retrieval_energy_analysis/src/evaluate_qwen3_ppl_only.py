@@ -94,6 +94,12 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="Use tree attention during the tree PPL prefill. False means baseline prefill + tree eval.",
     )
+    parser.add_argument(
+        "--share_prefill_for_eval",
+        type=str2bool,
+        default=True,
+        help="When baseline and tree are both evaluated with tree_prefill=false, prefill once and branch eval from the same cache.",
+    )
     parser.add_argument("--layers", default="all")
     parser.add_argument("--kv_heads", default="all")
     parser.add_argument("--boundary_fraction", type=float, default=0.01)
@@ -1027,26 +1033,46 @@ def tree_mask_enabled(enabled: bool):
         _TREE_ENABLED = previous
 
 
+def crop_past_key_values(past_key_values: Any, max_length: int) -> Any:
+    if past_key_values is None:
+        return None
+    if hasattr(past_key_values, "crop"):
+        result = past_key_values.crop(max_length)
+        return past_key_values if result is None else result
+    if isinstance(past_key_values, tuple):
+        cropped_layers = []
+        for layer_cache in past_key_values:
+            if isinstance(layer_cache, tuple):
+                cropped_layers.append(tuple(tensor[..., :max_length, :] for tensor in layer_cache))
+            else:
+                cropped_layers.append(layer_cache)
+        return tuple(cropped_layers)
+    if isinstance(past_key_values, list):
+        cropped_layers = []
+        for layer_cache in past_key_values:
+            if isinstance(layer_cache, tuple):
+                cropped_layers.append(tuple(tensor[..., :max_length, :] for tensor in layer_cache))
+            else:
+                cropped_layers.append(layer_cache)
+        return cropped_layers
+    raise TypeError(f"Unsupported past_key_values type for shared prefill crop: {type(past_key_values)!r}")
+
+
 @torch.inference_mode()
-def compute_eval_loss(
+def compute_eval_loss_from_prefill(
     model: torch.nn.Module,
     input_ids: torch.Tensor,
     prefill_tokens: int,
     eval_tokens: int,
     chunk_size: int,
     input_device: torch.device,
+    past_key_values: Any,
+    prev_logits: torch.Tensor,
     use_tree_mask: bool,
-    tree_prefill: bool,
-) -> tuple[float, float, int, dict[str, float]]:
+) -> tuple[float, float, int, dict[str, float], Any]:
     label = "tree" if use_tree_mask else "baseline"
-    use_tree_prefill = use_tree_mask and tree_prefill
     timings: dict[str, float] = {}
     clear_tree_candidate_stats()
-    with timed_section(f"{label}_prefill", input_device, timings):
-        with tree_mask_enabled(use_tree_prefill):
-            past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
-    if prev_logits is None:
-        raise RuntimeError("Prefill did not return last logits.")
     total_loss = 0.0
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
@@ -1087,13 +1113,53 @@ def compute_eval_loss(
     if use_tree_mask:
         timings.update(read_tree_candidate_stats())
     mean_loss = total_loss / max(1, total_count)
-    timings[f"{label}_total"] = timings.get(f"{label}_prefill", 0.0) + timings.get(f"{label}_eval", 0.0)
+    timings[f"{label}_total"] = timings.get(f"{label}_eval", 0.0)
     print(
         f"timer {label}_total: {timings[f'{label}_total']:.3f}s, "
         f"eval throughput: {total_count / max(timings.get(f'{label}_eval', 0.0), 1e-9):.2f} tokens/s",
         flush=True,
     )
-    return mean_loss, math.exp(mean_loss), total_count, timings
+    return mean_loss, math.exp(mean_loss), total_count, timings, past_key_values
+
+
+@torch.inference_mode()
+def compute_eval_loss(
+    model: torch.nn.Module,
+    input_ids: torch.Tensor,
+    prefill_tokens: int,
+    eval_tokens: int,
+    chunk_size: int,
+    input_device: torch.device,
+    use_tree_mask: bool,
+    tree_prefill: bool,
+) -> tuple[float, float, int, dict[str, float]]:
+    label = "tree" if use_tree_mask else "baseline"
+    use_tree_prefill = use_tree_mask and tree_prefill
+    timings: dict[str, float] = {}
+    with timed_section(f"{label}_prefill", input_device, timings):
+        with tree_mask_enabled(use_tree_prefill):
+            past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
+    if prev_logits is None:
+        raise RuntimeError("Prefill did not return last logits.")
+    loss, ppl, count, eval_timings, _ = compute_eval_loss_from_prefill(
+        model,
+        input_ids,
+        prefill_tokens,
+        eval_tokens,
+        chunk_size,
+        input_device,
+        past_key_values,
+        prev_logits,
+        use_tree_mask,
+    )
+    timings.update(eval_timings)
+    timings[f"{label}_total"] = timings.get(f"{label}_prefill", 0.0) + timings.get(f"{label}_eval", 0.0)
+    print(
+        f"timer {label}_total_with_prefill: {timings[f'{label}_total']:.3f}s, "
+        f"eval throughput: {count / max(timings.get(f'{label}_eval', 0.0), 1e-9):.2f} tokens/s",
+        flush=True,
+    )
+    return loss, ppl, count, timings
 
 
 def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_head_indices: list[int]) -> dict[str, Any]:
@@ -1182,7 +1248,77 @@ def main() -> None:
     metadata = tree_metadata_row(args, layer_indices, kv_head_indices)
     rows: list[dict[str, Any]] = []
     timing_rows: list[dict[str, Any]] = []
-    if args.compute_baseline_ppl:
+    use_shared_prefill = (
+        args.share_prefill_for_eval
+        and args.compute_baseline_ppl
+        and args.compute_tree_ppl
+        and not args.tree_prefill
+    )
+    if use_shared_prefill:
+        shared_timings: dict[str, float] = {}
+        with timed_section("shared_prefill", input_device, shared_timings):
+            with tree_mask_enabled(False):
+                shared_past, shared_prev_logits = prefill_cache(
+                    model,
+                    input_ids,
+                    prefill_tokens,
+                    args.chunk_size,
+                    input_device,
+                )
+        if shared_prev_logits is None:
+            raise RuntimeError("Shared prefill did not return last logits.")
+
+        baseline_loss, baseline_ppl, baseline_count, baseline_timings, shared_past = compute_eval_loss_from_prefill(
+            model,
+            input_ids,
+            prefill_tokens,
+            args.eval_tokens,
+            args.chunk_size,
+            input_device,
+            shared_past,
+            shared_prev_logits,
+            False,
+        )
+        baseline_timings["baseline_prefill"] = shared_timings.get("shared_prefill", 0.0)
+        baseline_timings["baseline_total"] = baseline_timings["baseline_prefill"] + baseline_timings.get("baseline_eval", 0.0)
+        rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
+        timing_rows.append(
+            {
+                "mode": "baseline",
+                "prefill_seconds": baseline_timings.get("baseline_prefill", 0.0),
+                "eval_seconds": baseline_timings.get("baseline_eval", 0.0),
+                "total_seconds": baseline_timings.get("baseline_total", 0.0),
+                "tokens_per_second": baseline_count / max(baseline_timings.get("baseline_eval", 0.0), 1e-9),
+                "avg_candidate_tokens": "",
+            }
+        )
+
+        shared_past = crop_past_key_values(shared_past, prefill_tokens)
+        tree_loss, tree_ppl, tree_count, tree_timings, _ = compute_eval_loss_from_prefill(
+            model,
+            input_ids,
+            prefill_tokens,
+            args.eval_tokens,
+            args.chunk_size,
+            input_device,
+            shared_past,
+            shared_prev_logits,
+            True,
+        )
+        tree_timings["tree_prefill"] = shared_timings.get("shared_prefill", 0.0)
+        tree_timings["tree_total"] = tree_timings["tree_prefill"] + tree_timings.get("tree_eval", 0.0)
+        rows.append({"mode": "tree", "loss": tree_loss, "ppl": tree_ppl, "token_count": tree_count, **metadata})
+        timing_rows.append(
+            {
+                "mode": "tree",
+                "prefill_seconds": tree_timings.get("tree_prefill", 0.0),
+                "eval_seconds": tree_timings.get("tree_eval", 0.0),
+                "total_seconds": tree_timings.get("tree_total", 0.0),
+                "tokens_per_second": tree_count / max(tree_timings.get("tree_eval", 0.0), 1e-9),
+                "avg_candidate_tokens": tree_timings.get("avg_candidate_tokens", ""),
+            }
+        )
+    elif args.compute_baseline_ppl:
         baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
             model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False, args.tree_prefill
         )
@@ -1197,7 +1333,7 @@ def main() -> None:
                 "avg_candidate_tokens": "",
             }
         )
-    if args.compute_tree_ppl:
+    if not use_shared_prefill and args.compute_tree_ppl:
         tree_loss, tree_ppl, tree_count, tree_timings = compute_eval_loss(
             model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True, args.tree_prefill
         )

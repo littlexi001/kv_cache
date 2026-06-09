@@ -29,6 +29,7 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --compute_baseline_ppl "${COMPUTE_BASELINE_PPL:-true}" \
   --compute_tree_ppl "${COMPUTE_TREE_PPL:-true}" \
   --tree_prefill "${TREE_PREFILL:-false}" \
+  --share_prefill_for_eval "${SHARE_PREFILL_FOR_EVAL:-true}" \
   --layers "${LAYERS:-all}" \
   --kv_heads "${KV_HEADS:-all}" \
   --boundary_fraction "${BOUNDARY_FRACTION:-0.005}" \

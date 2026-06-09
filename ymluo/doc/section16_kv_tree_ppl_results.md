@@ -111,3 +111,205 @@ boundary_fraction=0.005, tree_branch_counts=5,3,3  # 约 5.5%
 
 如果 Run A 中 50k-token 的 PPL 改善能在不同文本片段上复现，那么当前 tree
 retrieval policy 就值得继续推进到更优化的 sparse attention 实现。
+
+## 7. 当前实现版本：shared-matmul tree PPL
+
+后续代码已经从最初的 `mask` / `sparse_gather` 原型，演进到一个更偏工程验证的
+`shared_matmul` 版本。当前实验目标是：在超长 context 下，用 K-cache tree
+retrieval 选出少量候选 KV token，替代 full attention，并同时比较 PPL 退化、
+eval 速度和平均候选 token 数。
+
+对应脚本：
+
+```text
+ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
+当前默认配置已经改为：
+
+```text
+prefill_tokens = 20000
+eval_tokens = 5000
+chunk_size = 128
+tree_prefill = false
+tree_attention_impl = shared_matmul
+tree_branch_counts = 5,2,2
+leaf_fraction = 0.001
+candidate_granularity = attention_head
+profile_tree_stages = true
+```
+
+如果运行 200k context，需要通过环境变量覆盖：
+
+```bash
+PREFILL_TOKENS=200000 \
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
+### 7.1 Boundary 规则
+
+虽然脚本里仍保留 `--boundary_fraction` 参数用于 metadata 兼容，但当前 PPL
+tree 路径实际使用固定 token 数规则：
+
+```text
+key_count <= 10000: prefix 50 + recent 50
+key_count > 10000:  prefix 500 + recent 500
+```
+
+因此在 200k context 下，固定保留前 500 个 token 和最近 500 个 token。
+tree 只在去掉 prefix/recent 后的 middle 区域中检索。
+
+### 7.2 shared-matmul 检索与计算方式
+
+当前 `shared_matmul` 不是每个 query 单独检索，而是按 chunk 共享候选集合：
+
+```text
+每个 layer
+每个 KV head
+每个 eval chunk
+使用 chunk 最后一个 query 作为 representative query
+在 middle 区域做 tree retrieval
+得到该 chunk/head 共用的一组 candidate tokens
+chunk 内所有 query 共用这组候选
+```
+
+由于后续仍然施加 causal mask，chunk 中较早的 query 不会看到未来 token。
+
+tree 的 leaf 是连续 token block：
+
+```text
+leaf_size = ceil(leaf_fraction * key_count)
+```
+
+例如 200k context、`leaf_fraction=0.001` 时：
+
+```text
+leaf_size ≈ 200 tokens
+```
+
+`tree_branch_counts=5,2,1` 时选出：
+
+```text
+5 * 2 * 1 = 10 leaves
+tree middle tokens ≈ 10 * 200 = 2000
+prefix/recent = 500 + 500
+total candidates ≈ 3000
+```
+
+这与最新实验中的 `avg_candidate_tokens≈2990` 基本一致。
+
+attention 计算方式为：
+
+```text
+candidate_ids: [batch, heads, shared_candidates]
+K_selected:    [batch, heads, shared_candidates, head_dim]
+Q_chunk:       [batch, heads, query_count, head_dim]
+scores = Q_chunk @ K_selected^T
+softmax
+output = attention @ V_selected
+```
+
+这比 per-query `sparse_gather` 更接近 GPU 高效的 batched matmul 路径。
+
+### 7.3 已完成的工程优化
+
+当前实现相对早期版本已经做过以下优化：
+
+1. 去掉 dense `keep` mask，不再先构造 `[heads, query, key]` mask 再反向
+   `topk` 得到候选 token。
+2. 去掉 sort 去重，依赖 prefix/recent 与 middle tree 区域不重叠来避免
+   大部分重复。
+3. 增加 `avg_candidate_tokens` 统计，写入 `timing_by_mode.csv`。
+4. 增加 `profile_tree_stages` 分段计时，写入 `tree_stage_profile.csv`。
+5. 新增 `shared_matmul` 路径，chunk 内 query 共用一组候选 token。
+6. 将 `shared_matmul` 从“每个 query 检索后做 union”改成“每个 chunk 只用
+   最后一个 query 检索一次”。
+7. 去掉 `shared_matmul` 中的 `prefix_sum/cumsum` 和 range tensor 构造，
+   改成直接在 middle 区域按连续 leaf block 计算 leaf/mid/big centers。
+
+### 7.4 最新 200k / 5k 结果
+
+最新一组 200k prefill、5k eval 的结果如下：
+
+```text
+prefill_tokens = 200000
+eval_tokens = 5000
+tree_branch_counts = 5,2,1
+tree_attention_impl = shared_matmul
+tree_prefill = false
+```
+
+PPL 结果：
+
+| mode | loss | PPL | token_count | avg_candidate_tokens |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | 8.458820 | 4716.4910 | 5000 | full attention |
+| tree | 8.543097 | 5131.2134 | 5000 | 2990.42 |
+
+速度结果：
+
+| mode | prefill_seconds | eval_seconds | total_seconds | tokens_per_second |
+| --- | ---: | ---: | ---: | ---: |
+| baseline | 467.392 | 23.846 | 491.239 | 209.68 |
+| tree | 462.647 | 22.281 | 484.927 | 224.41 |
+
+这一组说明，在 200k context 下，tree 版本平均只使用约 2990 个候选 token：
+
+```text
+2990 / 200000 ≈ 1.5%
+```
+
+质量上，tree 相比 baseline：
+
+```text
+delta loss ≈ +0.0843
+PPL ratio ≈ 1.088
+```
+
+也就是 PPL 增加约 8.8%。速度上，tree eval 比 baseline eval 略快：
+
+```text
+23.846 / 22.281 ≈ 1.07x
+```
+
+这说明 tree retrieval 在超长 context 下开始出现实际速度收益，但当前实现仍然
+不是生产级 fused sparse attention kernel，因此 1.5% 候选 token 并不会直接
+转化为 60x 级别加速。
+
+### 7.5 当前运行建议
+
+如果只是调 tree 参数，不需要每次重复跑 baseline。可以固定已有 baseline，
+只运行 tree：
+
+```bash
+COMPUTE_BASELINE_PPL=false \
+COMPUTE_TREE_PPL=true \
+TREE_PREFILL=false \
+PROFILE_TREE_STAGES=false \
+PREFILL_TOKENS=200000 \
+EVAL_TOKENS=5000 \
+TREE_BRANCH_COUNTS=5,2,1 \
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
+如果需要分析瓶颈，可以短跑打开 profile：
+
+```bash
+COMPUTE_BASELINE_PPL=false \
+PROFILE_TREE_STAGES=true \
+PREFILL_TOKENS=200000 \
+EVAL_TOKENS=256 \
+TREE_BRANCH_COUNTS=5,2,1 \
+bash ymluo/projects/qwen3_kv_tree_retrieval_energy_analysis/scripts/run_ppl_only.sh
+```
+
+主要输出文件：
+
+```text
+ppl_by_tree.csv
+timing_by_mode.csv
+tree_stage_profile.csv
+```
+
+其中 `timing_by_mode.csv` 中的 `avg_candidate_tokens` 只对 tree 行有意义；
+baseline 行的 `tokens_per_second` 不是候选 token 数。
