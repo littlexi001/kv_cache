@@ -2,31 +2,25 @@
 
 ## 问题与当前结论
 
-### 问题一：提升维度让 tail 数据学好的原理是什么？
+### 问题一：提升维度为什么能让 tail 数据学得更好？为什么初始化不好时又不行？
 
-**当前结论：提升维度给 tail 提供了更多可以避开 common 主方向的表征空间。**
+**当前结论：提升维度提供的是潜在 residual 表征容量；初始化决定这些容量能否真的被 tail 使用。**
 
-更准确地说，高频 common 数据仍然会优先塑造一个主方向或主子空间；维度增加以后，tail 不必全部挤在同一条反方向或同一个局部区域里，而是可以在 common 主方向之外的剩余空间中展开。这个机制解释了为什么更宽模型常常对 tail 的改善更明显：tail 原本更受表征空间竞争限制，新增维度首先缓解的是 tail 之间的竞争，而不是 head 的学习瓶颈。
+初始化观察和梯度竞争理论可以统一起来：初始化决定竞争结构是否在训练早期出现；梯度干扰 / effective rank 理论解释这种竞争为什么会影响收敛后的表征空间和预测效果。
 
-但这个结论依赖训练过程能让 tail 真正使用这些新维度。**额外维度只是提供可能性，不保证 tail 一定使用这些维度。** 在简单 toy MLP 中，如果所有 tail 数据都初始化在同一维度或同一个局部方向上，最后可能仍然无法利用更多维度，而是继续在低维区域里竞争。Transformer 中情况会更复杂：token embedding 可能保留这种 packed 几何，但多层 hidden representation 又可能把 tail 重新展开。
+所以，维度提升不是自动有效。只有当 tail 真正进入 common 主方向之外的 residual space，raw dimension 才会转化为 tail effective dimension，并改善 tail 学习。
 
 ### 问题二：tail 内部会不会继续出现 head-tail 竞争结构？
 
 **当前结论：会。**
 
-当 tail 内部也有频率差异时，tail 中相对更高频的部分会获得更稳定的位置、更大的 margin 和更低的 loss；更低频的 tail-tail 数据仍然更弱。也就是说，head-tail 不是只发生在 common 与 tail 之间，而是可以在 tail 内部递归出现。
+长尾学习困难不是简单的“head 学好、tail 学不好”。频率分布会在表征空间中形成层级化竞争：common 先塑造主空间，tail 在剩余空间里竞争；tail 内部如果仍然不均匀，就会继续出现次一级的方向分配和 margin 差异。
 
-这意味着长尾学习困难不是一个二分类问题，不是简单的“head 学好、tail 学不好”。更合理的理解是：频率分布会在表征空间中形成层级化的竞争结构。Common 先塑造主空间，tail 在剩余空间里竞争；tail 内部如果仍然不均匀，就会继续出现次一级的方向分配和 margin 差异。
+### 问题三：真实 Transformer 是否也符合这个图景？
 
-### 问题三：真实 Transformer 是否也符合 toy MLP 中的表征竞争图景？
+**当前结论：大方向符合，但 Transformer 会弱化简单 toy MLP 中“初始化几何决定最终几何”的强说法。**
 
-**当前结论：大方向符合，但 Transformer 会弱化 toy MLP 中“初始化几何决定最终几何”的强说法。**
-
-真实 Transformer 中，token embedding / lm_head 仍然会保留初始化几何：如果一开始把 tail token packed 在一起，训练后它们在参数空间里仍然更压缩。但是经过 Transformer 层之后，hidden representation 可以重新展开；tail 的最终 hidden state 不会像简单 toy MLP 那样被初始化几何完全锁死。
-
-所以 Transformer 上更准确的解释是：
-
-> Common/head 会占据一个更稳定的主子空间；tail 主要进入这个主子空间之外的 residual space。更宽的 hidden dimension 可能帮助 tail，不只是因为 embedding 轴更多，而是因为多层 hidden representation 中有更多 residual 子空间可以被 tail 使用。
+真实 Transformer 中，common/head 仍然会形成更稳定的主子空间，tail 主要进入这个主子空间之外的 residual space。但 Transformer 的多层结构可能把 packed embedding 中的 tail 重新展开，因此 toy 模型中的初始化结论不能被机械外推。
 
 ### 当前理论图像
 
@@ -34,10 +28,10 @@
 
 1. 高频数据先决定最容易降低 loss 的主方向 / 主子空间。
 2. 低频数据不是自由学习，而是在 common 已经塑形的空间里寻找可区分位置。
-3. 维度越有限，tail 之间越容易被迫共享方向或压缩在低维区域。
-4. 提升维度可以增加 residual 空间，让 tail 有更多可分离的位置。
-5. 但是 tail 能不能真正用上这些位置，取决于初始化、频率梯度强度和模型结构。
-6. Transformer 的多层结构可以把 embedding 中被压缩的 tail 表征重新展开，因此真实 Transformer 比简单线性 / MLP toy 模型更不容易被初始几何完全限制。
+3. 提升维度可以增加 residual 空间，但只有当训练真的把 tail 放进这些方向时，raw dimension 才会转化为 tail effective dimension。
+4. 初始化影响训练早期的竞争格局；梯度干扰 / effective rank 描述这种竞争如何影响后续收敛。
+5. Tail 内部如果还有频率差异，会继续出现递归的 head-tail 结构。
+6. 在真实 Transformer 中，多层结构可能把 packed embedding 中的 tail 重新展开，因此 toy 结论不能被机械外推。
 
 ## 三维 Toy 实验
 
@@ -143,6 +137,140 @@ fdong_embedding_dim/outputs/toy3d_controlled
 三维实验支持“提升维度帮助 tail”的机制，但这个机制不是“维度一高，tail 自动变好”。更准确地说：
 
 > 三维提供了 common 主方向之外的二维 residual plane；如果 tail 的几何和训练信号允许，它们可以在这个 residual plane 中展开，从而降低互相挤压。但如果 tail 从一开始就 packed，训练可能仍然把它们留在低维竞争结构中。
+
+## 梯度干扰机制实验
+
+### 实验目的
+
+前面的三维 toy 实验已经观察到：初始化会影响最终表征空间和预测效果。这里进一步要回答的是：
+
+> 初始化为什么会影响后续收敛？这种影响是否可以被梯度干扰 / effective rank 理论解释？
+
+因此，这组实验不再只是看最终 loss，而是在训练过程中记录不同 data condition 诱导出的 group-conditioned gradients。具体地说，对每个 checkpoint，分别用 `common`、`tail1`、`tail2`、`tail3` 数据计算平均梯度，然后统计：
+
+- tail gradient effective rank；
+- all gradient effective rank；
+- tail representation residual effective rank；
+- tail SIR；
+- tail-tail gradient cosine；
+- common-tail gradient cosine；
+- group-wise loss / margin。
+
+这里的 feature 不被预设为训练前固定方向。我们实际测量的是：
+
+> 某个 data condition 在当前模型状态下诱导出的表征结构和参数更新方向。
+
+这样可以把导师的梯度干扰理论和我们的初始化观察连接起来：初始化决定 data condition 一开始是否进入同一个低维竞争结构；梯度统计描述这个竞争结构如何在训练中表现出来。
+
+### 实验设置
+
+实验只比较 `dim=2` 和 `dim=3`，因为三维仍然可以直接可视化和直观理解。每个维度下比较：
+
+- `uniform + spread`
+- `uniform + packed_common`
+- `zipf + spread`
+- `zipf + packed_common`
+
+输出目录：
+
+```text
+fdong_embedding_dim/outputs/toy_gradient_interference
+```
+
+总汇总表：
+
+```text
+fdong_embedding_dim/outputs/toy_gradient_interference/all_runs_summary.csv
+```
+
+### 结果一：坏初始化下，三维也不会自动变成高 effective dimension
+
+最关键的对照是三维 `spread` 和三维 `packed_common`。
+
+`3D uniform spread`：
+
+- final loss：`0.000428`
+- tail representation residual effective rank：`1.997`
+- `tail1 / tail2 / tail3` loss：`0.000743 / 0.000818 / 0.000705`
+- `tail1 / tail2 / tail3` margin：`8.176 / 8.311 / 8.404`
+- final tail SIR：`1.483 / 1.390 / 1.196`
+
+`3D uniform packed_common`：
+
+- final loss：`0.002730`
+- tail representation residual effective rank：`1.000`
+- `tail1 / tail2 / tail3` loss：`0.005732 / 0.005874 / 0.005677`
+- `tail1 / tail2 / tail3` margin：`5.679 / 5.767 / 5.746`
+- final tail SIR：`0.990 / 0.911 / 0.991`
+
+这说明：raw dimension 都是 `3`，但实际使用的 tail residual effective dimension 完全不同。Spread 初始化下，tail 使用了接近二维的 residual plane；packed 初始化下，tail 仍然只使用接近一维的 residual subspace。
+
+因此，坏初始化导致长尾数据学不好，并不是因为三维空间里没有额外方向，而是因为训练过程没有把 tail 分配到这些方向上。这个结果支持导师梯度理论中的核心修正：
+
+> 控制 tail 学习的是 effective dimension，而不是 raw dimension。
+
+同时，它也解释了初始化为什么重要：
+
+> 初始化会决定训练早期 tail 是否已经被放进同一个低 effective dimension 的竞争结构中。
+
+### 结果二：好初始化下，三维提升能真正改善 tail 学习
+
+`2D uniform spread`：
+
+- final loss：`0.002211`
+- tail representation residual effective rank：`1.000`
+- tail loss 约为：`0.0045`
+
+`3D uniform spread`：
+
+- final loss：`0.000428`
+- tail representation residual effective rank：`1.997`
+- tail loss 约为：`0.0007` 到 `0.0008`
+
+这说明：当初始化没有让 tail 和 common packed 在同一个方向附近时，维度从二维提升到三维会真实转化为更高的 tail residual effective dimension，并显著降低 tail loss、提高 tail margin。
+
+所以“提升维度让 tail 学得更好”的具体机制是：
+
+> 维度提升提供了更大的 residual 表征容量；spread 初始化让 tail 能使用这个容量；tail effective dimension 提升后，不同 tail data condition 在表征空间和梯度空间中的重叠降低，因此 tail loss 和 margin 改善。
+
+### 结果三：tail 内部 Zipf 会产生递归的 head-tail 竞争
+
+`3D zipf spread`：
+
+- final loss：`0.000393`
+- tail representation residual effective rank：`1.976`
+- `tail1` prob `0.20`：loss `0.000411`，margin `8.662`，SIR `1.861`
+- `tail2` prob `0.07`：loss `0.001072`，margin `7.594`，SIR `1.322`
+- `tail3` prob `0.03`：loss `0.001786`，margin `7.405`，SIR `0.981`
+
+这个结果说明，即使 tail 已经能进入二维 residual plane，tail 内部如果还有 Zipf 频率差异，也会继续出现 head-tail 排序。更高频的 tail 获得更低 loss、更高 margin 和更高 SIR；最低频的 tail 表现最弱。
+
+`3D zipf packed_common`：
+
+- final loss：`0.002362`
+- tail representation residual effective rank：`1.000`
+- `tail1` prob `0.20`：loss `0.002851`，margin `6.484`
+- `tail2` prob `0.07`：loss `0.006372`，margin `5.484`
+- `tail3` prob `0.03`：loss `0.014238`，margin `4.808`
+
+这说明 packed 初始化和 Zipf 频率差异会叠加：packed 让所有 tail 都处在低 effective dimension 的竞争结构中；Zipf 让其中最低频 tail 进一步变得最差。
+
+### 机制结论
+
+这组实验把两种解释统一起来：
+
+1. 我们原本观察到的是初始化对模型收敛效果的影响。
+2. 梯度干扰 / effective rank 理论解释了为什么初始化会影响收敛后的表征空间和预测效果。
+
+更准确地说：
+
+> 初始化不是梯度竞争理论之外的另一种解释。初始化决定竞争结构是否在训练早期出现；梯度竞争理论解释这个竞争结构如何通过 low effective rank、low SIR 和 gradient overlap 影响 tail 学习。
+
+因此，当前结论是：
+
+> 如果 tail 初始化时避开 common 主方向，并且 tail 内部频率相对均匀，那么提升维度可以让 tail 在 residual space 中形成高 effective dimension 表示，tail 学得接近一样好。
+> 如果 tail 初始化时和 common packed 在一起，即使 raw dimension 提升，tail 也可能仍然停留在低 effective dimension 子空间中，最终学得更差。
+> 如果 tail 内部还有 Zipf 分布，那么 tail-high 会比 tail-low 学得更好；packed 初始化会进一步放大最低频 tail 的劣势。
 
 ## Transformer 实验
 

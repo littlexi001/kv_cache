@@ -133,6 +133,14 @@ uniform tail group 对初始化几何非常敏感。spread 初始化会让 tail 
   - 2.4：比较不同 embedding 初始化是否导致不同的最终表征几何。
   - 这个实验不直接修改 `fdong` 下的训练代码，而是在 `fdong_embedding_dim` 中生成 init checkpoint，再调用现有训练入口从该 checkpoint 开始训练。
 
+- `toy_gradient_interference`：二维 / 三维 toy 上的训练动态机制分析。
+  - 目的不是再证明最终 loss 现象，而是区分“初始化几何直接预测结果”和“梯度干扰 / effective rank 动态解释”。
+  - 只比较 `dim=2` 和 `dim=3`，避免进入不可直接可视化的更高维。
+  - 对 `spread` / `packed_common`、tail 内部 `uniform` / `Zipf` 做 8 个 run。
+  - 每个 checkpoint 分别计算 common、tail1、tail2、tail3 的 group-conditioned gradient。
+  - 记录 tail gradient effective rank、all gradient effective rank、tail representation residual effective rank、tail SIR、tail-tail gradient cosine、common-tail gradient cosine。
+  - 如果 packed 初始化导致 tail 学不好是因为 effective dimension 没有被真正用起来，那么应该看到 raw dimension 从 2 到 3 后，packed run 的 tail representation / gradient effective rank 仍然偏低。
+
 ## 输出文件
 
 每个 run 会输出：
@@ -151,6 +159,14 @@ uniform tail group 对初始化几何非常敏感。spread 初始化会让 tail 
 - group centroid norm
 - group centroid 与奇异向量的 cosine
 - group centroid 两两之间的 cosine
+
+全量实验输出默认写入 `fdong_embedding_dim/outputs/`，这个目录不进入 git。适合跨机器同步和讨论展示的轻量结果放在：
+
+```text
+fdong_embedding_dim/curated_results/
+```
+
+其中包含关键 2D / 3D 轨迹图、3D residual plane 图、梯度干扰机制图和轻量汇总表。
 
 ## 运行方式
 
@@ -172,6 +188,12 @@ Transformer 受控 embedding 初始化实验：
 fdong_embedding_dim/scripts/run_transformer_embedding_init_experiments.sh
 ```
 
+二维 / 三维 toy 梯度干扰机制分析：
+
+```bash
+fdong_embedding_dim/scripts/run_toy_gradient_interference_experiments.sh
+```
+
 常用覆盖参数：
 
 ```bash
@@ -180,4 +202,5 @@ OUTDIR=fdong_embedding_dim/outputs/my_sweep fdong_embedding_dim/scripts/run_embe
 RUN_FILTER=single_tail STEPS=1000 fdong_embedding_dim/scripts/run_embedding_dim_sweeps.sh
 STEPS=500 fdong_embedding_dim/scripts/run_toy_3d_experiments.sh
 RUN_FILTER=packed_common TOTAL_TRAINING_STEPS=500 fdong_embedding_dim/scripts/run_transformer_embedding_init_experiments.sh
+STEPS=500 RECORD_EVERY=10 fdong_embedding_dim/scripts/run_toy_gradient_interference_experiments.sh
 ```
