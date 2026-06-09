@@ -31,6 +31,8 @@ _MODULE_TO_LAYER: dict[int, int] = {}
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 _TREE_CANDIDATE_TOKEN_SUM: torch.Tensor | None = None
 _TREE_CANDIDATE_OBS_COUNT: torch.Tensor | None = None
+_TREE_STAGE_PROFILE_ENABLED = False
+_TREE_STAGE_PROFILE: dict[str, dict[str, float]] = {}
 
 
 @dataclass(frozen=True)
@@ -104,6 +106,12 @@ def parse_args() -> argparse.Namespace:
         "--tree_attention_impl",
         choices=["mask", "sparse_gather", "shared_matmul"],
         default="sparse_gather",
+    )
+    parser.add_argument(
+        "--profile_tree_stages",
+        type=str2bool,
+        default=False,
+        help="Synchronously profile tree attention stages. This adds overhead and should be used for diagnosis only.",
     )
     return parser.parse_args()
 
@@ -244,6 +252,49 @@ def timed_section(name: str, device: torch.device, timings: dict[str, float]):
 
 def timing_fields() -> list[str]:
     return ["mode", "prefill_seconds", "eval_seconds", "total_seconds", "tokens_per_second", "avg_candidate_tokens"]
+
+
+def reset_tree_stage_profile() -> None:
+    _TREE_STAGE_PROFILE.clear()
+
+
+def tree_stage_profile_rows() -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    total_seconds = sum(row["seconds"] for row in _TREE_STAGE_PROFILE.values())
+    for stage, values in sorted(_TREE_STAGE_PROFILE.items()):
+        seconds = values["seconds"]
+        calls = int(values["calls"])
+        rows.append(
+            {
+                "stage": stage,
+                "seconds": seconds,
+                "calls": calls,
+                "seconds_per_call": seconds / max(calls, 1),
+                "percent_profiled": 100.0 * seconds / max(total_seconds, 1e-12),
+            }
+        )
+    return rows
+
+
+def tree_stage_profile_fields() -> list[str]:
+    return ["stage", "seconds", "calls", "seconds_per_call", "percent_profiled"]
+
+
+@contextmanager
+def profile_tree_stage(name: str, device: torch.device):
+    if not _TREE_STAGE_PROFILE_ENABLED:
+        yield
+        return
+    synchronize_if_cuda(device)
+    start = time.perf_counter()
+    try:
+        yield
+    finally:
+        synchronize_if_cuda(device)
+        elapsed = time.perf_counter() - start
+        row = _TREE_STAGE_PROFILE.setdefault(name, {"seconds": 0.0, "calls": 0.0})
+        row["seconds"] += elapsed
+        row["calls"] += 1.0
 
 
 @torch.inference_mode()
@@ -644,31 +695,38 @@ def sparse_tree_attention(
         raise RuntimeError("sparse_gather requires the current layer and all KV heads to be tree-masked.")
 
     group_size = attention_heads // kv_heads
-    candidate_ids, candidate_valid = tree_candidate_ids(query_states, key_states, layer, config)
+    with profile_tree_stage("sparse_gather/candidate_ids", query_states.device):
+        candidate_ids, candidate_valid = tree_candidate_ids(query_states, key_states, layer, config)
     candidate_slots = candidate_ids.shape[-1]
     record_tree_candidate_stats(candidate_valid)
 
-    if key_states.shape[1] != attention_heads:
-        key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
-        value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
-    else:
-        key_states_for_attention = key_states
-        value_states_for_attention = value_states
+    with profile_tree_stage("sparse_gather/repeat_kv", query_states.device):
+        if key_states.shape[1] != attention_heads:
+            key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
+            value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
+        else:
+            key_states_for_attention = key_states
+            value_states_for_attention = value_states
 
     batch_index = torch.arange(batch, device=query_states.device).view(batch, 1, 1, 1)
     head_index = torch.arange(attention_heads, device=query_states.device).view(1, attention_heads, 1, 1)
-    selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
-    selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
+    with profile_tree_stage("sparse_gather/select_kv", query_states.device):
+        selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
+        selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
 
-    scores = (query_states.unsqueeze(3) * selected_keys).sum(dim=-1) * scaling
-    if attention_mask is not None:
-        mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
-        gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids)
-        scores = scores + gathered_mask
-    scores = scores.masked_fill(~candidate_valid, torch.finfo(scores.dtype).min)
-    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
-    attention_output = torch.sum(attention_weights.unsqueeze(-1) * selected_values, dim=3)
-    attention_output = attention_output.transpose(1, 2).contiguous()
+    with profile_tree_stage("sparse_gather/qk", query_states.device):
+        scores = (query_states.unsqueeze(3) * selected_keys).sum(dim=-1) * scaling
+    with profile_tree_stage("sparse_gather/mask", query_states.device):
+        if attention_mask is not None:
+            mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
+            gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids)
+            scores = scores + gathered_mask
+        scores = scores.masked_fill(~candidate_valid, torch.finfo(scores.dtype).min)
+    with profile_tree_stage("sparse_gather/softmax", query_states.device):
+        attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    with profile_tree_stage("sparse_gather/av", query_states.device):
+        attention_output = torch.sum(attention_weights.unsqueeze(-1) * selected_values, dim=3)
+        attention_output = attention_output.transpose(1, 2).contiguous()
     return attention_output, None
 
 
@@ -689,35 +747,43 @@ def shared_matmul_tree_attention(
         raise RuntimeError("shared_matmul requires the current layer and all KV heads to be tree-masked.")
 
     group_size = attention_heads // kv_heads
-    per_query_ids, per_query_valid = tree_candidate_ids(query_states, key_states, layer, config)
-    candidate_ids, candidate_valid = shared_candidate_ids_for_chunk(per_query_ids, per_query_valid, key_count)
+    with profile_tree_stage("shared_matmul/candidate_ids", query_states.device):
+        per_query_ids, per_query_valid = tree_candidate_ids(query_states, key_states, layer, config)
+    with profile_tree_stage("shared_matmul/shared_union", query_states.device):
+        candidate_ids, candidate_valid = shared_candidate_ids_for_chunk(per_query_ids, per_query_valid, key_count)
     record_tree_candidate_stats(candidate_valid.unsqueeze(2).expand(-1, -1, query_count, -1))
 
-    if key_states.shape[1] != attention_heads:
-        key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
-        value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
-    else:
-        key_states_for_attention = key_states
-        value_states_for_attention = value_states
+    with profile_tree_stage("shared_matmul/repeat_kv", query_states.device):
+        if key_states.shape[1] != attention_heads:
+            key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
+            value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
+        else:
+            key_states_for_attention = key_states
+            value_states_for_attention = value_states
 
     batch_index = torch.arange(batch, device=query_states.device).view(batch, 1, 1)
     head_index = torch.arange(attention_heads, device=query_states.device).view(1, attention_heads, 1)
-    selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
-    selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
+    with profile_tree_stage("shared_matmul/select_kv", query_states.device):
+        selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
+        selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
 
-    scores = torch.matmul(query_states, selected_keys.transpose(-2, -1)) * scaling
-    query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=query_states.device)
-    visible = query_tokens + 1
-    visible_keep = candidate_ids.unsqueeze(2) < visible.view(1, 1, query_count, 1)
-    valid_keep = candidate_valid.unsqueeze(2) & visible_keep
-    if attention_mask is not None:
-        mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
-        gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids.unsqueeze(2).expand(-1, -1, query_count, -1))
-        scores = scores + gathered_mask
-    scores = scores.masked_fill(~valid_keep, torch.finfo(scores.dtype).min)
-    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
-    attention_output = torch.matmul(attention_weights, selected_values)
-    attention_output = attention_output.transpose(1, 2).contiguous()
+    with profile_tree_stage("shared_matmul/qk_matmul", query_states.device):
+        scores = torch.matmul(query_states, selected_keys.transpose(-2, -1)) * scaling
+    with profile_tree_stage("shared_matmul/mask", query_states.device):
+        query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=query_states.device)
+        visible = query_tokens + 1
+        visible_keep = candidate_ids.unsqueeze(2) < visible.view(1, 1, query_count, 1)
+        valid_keep = candidate_valid.unsqueeze(2) & visible_keep
+        if attention_mask is not None:
+            mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
+            gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids.unsqueeze(2).expand(-1, -1, query_count, -1))
+            scores = scores + gathered_mask
+        scores = scores.masked_fill(~valid_keep, torch.finfo(scores.dtype).min)
+    with profile_tree_stage("shared_matmul/softmax", query_states.device):
+        attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    with profile_tree_stage("shared_matmul/av_matmul", query_states.device):
+        attention_output = torch.matmul(attention_weights, selected_values)
+        attention_output = attention_output.transpose(1, 2).contiguous()
     return attention_output, None
 
 
@@ -877,7 +943,7 @@ def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_hea
 
 
 def main() -> None:
-    global _TREE_CONFIG
+    global _TREE_CONFIG, _TREE_STAGE_PROFILE_ENABLED
     args = parse_args()
     if args.boundary_fraction <= 0 or args.leaf_fraction <= 0:
         raise ValueError("fractions must be positive.")
@@ -887,6 +953,8 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    _TREE_STAGE_PROFILE_ENABLED = args.profile_tree_stages
+    reset_tree_stage_profile()
 
     text = read_text_prefix(Path(args.text_path), args.max_chars)
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=True)
@@ -977,8 +1045,11 @@ def main() -> None:
 
     ppl_path = output_dir / "ppl_by_tree.csv"
     timing_path = output_dir / "timing_by_mode.csv"
+    profile_path = output_dir / "tree_stage_profile.csv"
     write_csv(ppl_path, rows, ppl_fields())
     write_csv(timing_path, timing_rows, timing_fields())
+    if args.profile_tree_stages:
+        write_csv(profile_path, tree_stage_profile_rows(), tree_stage_profile_fields())
     (output_dir / "summary.json").write_text(
         json.dumps(
             {
@@ -993,7 +1064,12 @@ def main() -> None:
                     "tree_branch_counts": branch_counts,
                 },
                 "timings": timing_rows,
-                "paths": {"ppl_by_tree": str(ppl_path), "timing_by_mode": str(timing_path)},
+                "tree_stage_profile": tree_stage_profile_rows() if args.profile_tree_stages else [],
+                "paths": {
+                    "ppl_by_tree": str(ppl_path),
+                    "timing_by_mode": str(timing_path),
+                    "tree_stage_profile": str(profile_path) if args.profile_tree_stages else "",
+                },
             },
             indent=2,
             ensure_ascii=False,

@@ -37,4 +37,5 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --tree_fanout "${TREE_FANOUT:-10}" \
   --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,5,5}" \
   --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}" \
-  --tree_attention_impl "${TREE_ATTENTION_IMPL:-sparse_gather}"
+  --tree_attention_impl "${TREE_ATTENTION_IMPL:-sparse_gather}" \
+  --profile_tree_stages "${PROFILE_TREE_STAGES:-false}"
