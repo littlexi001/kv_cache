@@ -100,7 +100,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tree_fanout", type=int, default=10)
     parser.add_argument("--tree_branch_counts", default="5,5,5")
     parser.add_argument("--candidate_granularity", choices=["attention_head", "kv_head_union"], default="attention_head")
-    parser.add_argument("--tree_attention_impl", choices=["mask", "sparse_gather"], default="sparse_gather")
+    parser.add_argument(
+        "--tree_attention_impl",
+        choices=["mask", "sparse_gather", "shared_matmul"],
+        default="sparse_gather",
+    )
     return parser.parse_args()
 
 
@@ -512,6 +516,21 @@ def tree_candidate_ids(
     return candidate_ids, candidate_valid
 
 
+def shared_candidate_ids_for_chunk(
+    candidate_ids: torch.Tensor,
+    candidate_valid: torch.Tensor,
+    key_count: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    sentinel = torch.full_like(candidate_ids, key_count)
+    flat = torch.where(candidate_valid, candidate_ids, sentinel).flatten(start_dim=2)
+    sorted_ids, _ = torch.sort(flat, dim=-1)
+    sorted_valid = sorted_ids < key_count
+    duplicate = torch.zeros_like(sorted_valid)
+    duplicate[..., 1:] = sorted_ids[..., 1:] == sorted_ids[..., :-1]
+    sorted_valid = sorted_valid & ~duplicate
+    return sorted_ids.masked_fill(~sorted_valid, 0), sorted_valid
+
+
 def reset_tree_candidate_stats(device: torch.device) -> None:
     global _TREE_CANDIDATE_TOKEN_SUM, _TREE_CANDIDATE_OBS_COUNT
     _TREE_CANDIDATE_TOKEN_SUM = torch.zeros((), dtype=torch.float64, device=device)
@@ -653,6 +672,55 @@ def sparse_tree_attention(
     return attention_output, None
 
 
+def shared_matmul_tree_attention(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    layer: int,
+    config: TreeMaskConfig,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    batch, attention_heads, query_count, head_dim = query_states.shape
+    _, kv_heads, key_count, _ = key_states.shape
+    if batch != 1:
+        raise ValueError("Tree shared-matmul attention currently supports batch size 1.")
+    if layer not in config.layers or set(range(kv_heads)) - config.kv_heads:
+        raise RuntimeError("shared_matmul requires the current layer and all KV heads to be tree-masked.")
+
+    group_size = attention_heads // kv_heads
+    per_query_ids, per_query_valid = tree_candidate_ids(query_states, key_states, layer, config)
+    candidate_ids, candidate_valid = shared_candidate_ids_for_chunk(per_query_ids, per_query_valid, key_count)
+    record_tree_candidate_stats(candidate_valid.unsqueeze(2).expand(-1, -1, query_count, -1))
+
+    if key_states.shape[1] != attention_heads:
+        key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
+        value_states_for_attention = value_states.repeat_interleave(group_size, dim=1)
+    else:
+        key_states_for_attention = key_states
+        value_states_for_attention = value_states
+
+    batch_index = torch.arange(batch, device=query_states.device).view(batch, 1, 1)
+    head_index = torch.arange(attention_heads, device=query_states.device).view(1, attention_heads, 1)
+    selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
+    selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
+
+    scores = torch.matmul(query_states, selected_keys.transpose(-2, -1)) * scaling
+    query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=query_states.device)
+    visible = query_tokens + 1
+    visible_keep = candidate_ids.unsqueeze(2) < visible.view(1, 1, query_count, 1)
+    valid_keep = candidate_valid.unsqueeze(2) & visible_keep
+    if attention_mask is not None:
+        mask = attention_mask[:, :, :, :key_count].expand(batch, attention_heads, query_count, key_count)
+        gathered_mask = torch.gather(mask, dim=-1, index=candidate_ids.unsqueeze(2).expand(-1, -1, query_count, -1))
+        scores = scores + gathered_mask
+    scores = scores.masked_fill(~valid_keep, torch.finfo(scores.dtype).min)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, selected_values)
+    attention_output = attention_output.transpose(1, 2).contiguous()
+    return attention_output, None
+
+
 def _tree_eager_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -668,6 +736,11 @@ def _tree_eager_attention_forward(
         scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
     original_key_states = key_states
     layer = _MODULE_TO_LAYER.get(id(module), -1)
+    if _TREE_ENABLED and config is not None and config.attention_impl == "shared_matmul":
+        try:
+            return shared_matmul_tree_attention(query_states, key_states, value_states, attention_mask, scaling, layer, config)
+        except RuntimeError:
+            pass
     if _TREE_ENABLED and config is not None and config.attention_impl == "sparse_gather":
         try:
             return sparse_tree_attention(query_states, key_states, value_states, attention_mask, scaling, layer, config)
