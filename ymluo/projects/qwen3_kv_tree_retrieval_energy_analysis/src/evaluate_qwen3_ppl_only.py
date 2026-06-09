@@ -114,7 +114,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--leaf_size", type=int, default=0)
     parser.add_argument("--tree_fanout", type=int, default=10)
     parser.add_argument("--tree_branch_counts", default="5,5,5")
-    parser.add_argument("--candidate_granularity", choices=["attention_head", "kv_head_union"], default="attention_head")
+    parser.add_argument(
+        "--candidate_granularity",
+        choices=["attention_head", "kv_head_union", "layer_shared"],
+        default="attention_head",
+    )
     parser.add_argument(
         "--tree_attention_impl",
         choices=["mask", "sparse_gather", "shared_matmul", "triton_shared"],
@@ -741,6 +745,28 @@ def tree_candidate_ids_for_chunk(
     recent_start = max(0, key_count - boundary_count)
     recent_ids = (recent_start + boundary_offsets).view(1, -1)
     recent_valid = recent_ids < key_count
+
+    if config.candidate_granularity == "layer_shared":
+        # Aggressive speed path: generate one candidate token set per layer and
+        # share it across all heads. This removes the per-KV-head tree search
+        # cost at the price of a coarser candidate set.
+        queries = query_states[0, :, -1, :].detach().float().mean(dim=0, keepdim=True)
+        key_vectors = key_states[0].detach().float().mean(dim=0)
+        leaf_ids, leaf_valid = select_middle_leaf_token_ids_for_chunk(
+            queries,
+            key_vectors,
+            config,
+            profile_prefix="shared_matmul/chunk_candidate_ids",
+        )
+        head_prefix_ids = prefix_ids.expand(attention_heads, -1)
+        head_prefix_valid = prefix_valid.expand(attention_heads, -1)
+        head_recent_ids = recent_ids.expand(attention_heads, -1)
+        head_recent_valid = recent_valid.expand(attention_heads, -1)
+        head_leaf_ids = leaf_ids.expand(attention_heads, -1)
+        head_leaf_valid = leaf_valid.expand(attention_heads, -1)
+        ids = torch.cat([head_prefix_ids, head_recent_ids, head_leaf_ids], dim=-1)
+        valid = torch.cat([head_prefix_valid, head_recent_valid, head_leaf_valid], dim=-1)
+        return ids.masked_fill(~valid, 0).unsqueeze(0), valid.unsqueeze(0)
 
     per_head_ids: list[torch.Tensor] = []
     per_head_valid: list[torch.Tensor] = []

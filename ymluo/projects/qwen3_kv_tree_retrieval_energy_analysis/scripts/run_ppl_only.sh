@@ -37,6 +37,6 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --leaf_size "${LEAF_SIZE:-0}" \
   --tree_fanout "${TREE_FANOUT:-10}" \
   --tree_branch_counts "${TREE_BRANCH_COUNTS:-5,2,2}" \
-  --candidate_granularity "${CANDIDATE_GRANULARITY:-attention_head}" \
+  --candidate_granularity "${CANDIDATE_GRANULARITY:-layer_shared}" \
   --tree_attention_impl "${TREE_ATTENTION_IMPL:-shared_matmul}" \
   --profile_tree_stages "${PROFILE_TREE_STAGES:-true}"
