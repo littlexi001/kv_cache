@@ -4,7 +4,7 @@ import argparse
 import csv
 import json
 import math
-import random
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +23,9 @@ DEFAULT_DATA_PATH = (
     "ymluo/projects/qwen3_kcache_l2_neighbor_analysis/data/needle_in_haystack/needle_in_haystack.jsonl"
 )
 
+_ACTIVE_PRUNE_RATIO: float | None = None
+_ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
+
 
 def str2bool(value: str | bool) -> bool:
     if isinstance(value, bool):
@@ -32,24 +35,28 @@ def str2bool(value: str | bool) -> bool:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Top-1% attention retrieval, token text dump, and category ablation."
+        description=(
+            "Evaluate full attention vs per-layer/per-head top-ratio attention pruning, "
+            "and dump the selected top tokens for inspection."
+        )
     )
     parser.add_argument("--model_name_or_path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--data_path", default=DEFAULT_DATA_PATH)
-    parser.add_argument("--output_dir", default="outputs/experiment2_top1_token_retrieval_ablation")
+    parser.add_argument("--output_dir", default="outputs/experiment2_attention_top1_pruning")
     parser.add_argument("--max_samples", type=int, default=16)
-    parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--top_ratio", type=float, default=0.01)
-    parser.add_argument("--query_last_tokens", type=int, default=16)
-    parser.add_argument("--ablation_layer", default="last", help="last, all_union, or an integer layer id.")
+    parser.add_argument(
+        "--dump_query_last_tokens",
+        type=int,
+        default=16,
+        help="Dump top key tokens for the last N prompt query positions. Pruning itself applies to all rows.",
+    )
     parser.add_argument("--max_context_chars", type=int, default=24000)
     parser.add_argument("--dtype", choices=["auto", "bfloat16", "float16", "float32"], default="bfloat16")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--device_map", default="auto")
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument("--trust_remote_code", type=str2bool, default=True)
-    parser.add_argument("--include_special_tokens", type=str2bool, default=False)
-    parser.add_argument("--random_keep_trials", type=int, default=3)
     return parser.parse_args()
 
 
@@ -152,6 +159,68 @@ def classify_token(
     return "other_context"
 
 
+def _pruned_eager_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float | None = None,
+    dropout: float = 0.0,
+    **kwargs: Any,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    ratio = _ACTIVE_PRUNE_RATIO
+    if scaling is None:
+        scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
+    if key_states.shape[1] != query_states.shape[1]:
+        repeat_groups = query_states.shape[1] // key_states.shape[1]
+        key_states = key_states.repeat_interleave(repeat_groups, dim=1)
+        value_states = value_states.repeat_interleave(repeat_groups, dim=1)
+    scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        scores = scores + attention_mask[:, :, :, : scores.shape[-1]]
+    if ratio is not None:
+        keep = torch.zeros_like(scores, dtype=torch.bool)
+        query_count = scores.shape[-2]
+        for query_index in range(query_count):
+            row = scores[:, :, query_index, :]
+            valid_count = int(torch.isfinite(row[0, 0]).sum().item())
+            keep_count = min(valid_count, max(1, math.ceil(ratio * valid_count))) if valid_count > 0 else 1
+            _, top_indices = torch.topk(row, k=keep_count, dim=-1, largest=True)
+            keep[:, :, query_index, :].scatter_(-1, top_indices, True)
+        scores = scores.masked_fill(~keep, torch.finfo(scores.dtype).min)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    if dropout and module.training:
+        attention_weights = F.dropout(attention_weights, p=dropout, training=True)
+    attention_output = torch.matmul(attention_weights, value_states)
+    attention_output = attention_output.transpose(1, 2).contiguous()
+    return attention_output, attention_weights
+
+
+def install_qwen3_attention_patch() -> None:
+    global _ORIGINAL_EAGER_ATTENTION_FORWARD
+    try:
+        import transformers.models.qwen3.modeling_qwen3 as modeling_qwen3
+    except Exception as exc:
+        raise RuntimeError("Could not import transformers.models.qwen3.modeling_qwen3.") from exc
+    if _ORIGINAL_EAGER_ATTENTION_FORWARD is None:
+        _ORIGINAL_EAGER_ATTENTION_FORWARD = getattr(modeling_qwen3, "eager_attention_forward")
+        setattr(modeling_qwen3, "eager_attention_forward", _pruned_eager_attention_forward)
+        if hasattr(modeling_qwen3, "ALL_ATTENTION_FUNCTIONS"):
+            modeling_qwen3.ALL_ATTENTION_FUNCTIONS["eager"] = _pruned_eager_attention_forward
+
+
+@contextmanager
+def pruning_ratio(ratio: float | None):
+    global _ACTIVE_PRUNE_RATIO
+    previous = _ACTIVE_PRUNE_RATIO
+    _ACTIVE_PRUNE_RATIO = ratio
+    try:
+        yield
+    finally:
+        _ACTIVE_PRUNE_RATIO = previous
+
+
 @torch.inference_mode()
 def answer_nll(
     model: torch.nn.Module,
@@ -159,11 +228,13 @@ def answer_nll(
     prompt: str,
     answer: str,
     input_device: torch.device,
+    prune_ratio: float | None,
 ) -> dict[str, float]:
     prompt_ids = tokenizer(prompt, return_tensors="pt", add_special_tokens=False).input_ids
     answer_ids = tokenizer(" " + answer, return_tensors="pt", add_special_tokens=False).input_ids
     input_ids = torch.cat([prompt_ids, answer_ids], dim=1).to(input_device)
-    outputs = model(input_ids=input_ids, return_dict=True, use_cache=False)
+    with pruning_ratio(prune_ratio):
+        outputs = model(input_ids=input_ids, return_dict=True, use_cache=False)
     logits = outputs.logits[:, :-1, :].float()
     labels = input_ids[:, 1:]
     answer_start = prompt_ids.shape[1] - 1
@@ -184,36 +255,42 @@ def answer_nll(
 
 
 @torch.inference_mode()
-def collect_attention_top_tokens(
+def collect_full_attention_top_tokens(
     model: torch.nn.Module,
     input_ids: torch.Tensor,
     top_ratio: float,
-    query_last_tokens: int,
+    dump_query_last_tokens: int,
     input_device: torch.device,
-) -> tuple[dict[int, list[tuple[int, float]]], int]:
+) -> dict[int, dict[int, list[tuple[int, int, float]]]]:
     input_ids = input_ids.to(input_device)
-    outputs = model(
-        input_ids=input_ids,
-        output_attentions=True,
-        return_dict=True,
-        use_cache=False,
-    )
+    with pruning_ratio(None):
+        outputs = model(
+            input_ids=input_ids,
+            output_attentions=True,
+            return_dict=True,
+            use_cache=False,
+        )
     attentions = outputs.attentions
     if attentions is None:
-        raise RuntimeError("Model did not return attentions. Use --attn_implementation eager for Qwen models.")
+        raise RuntimeError("Model did not return attentions. Use --attn_implementation eager.")
     total_tokens = int(input_ids.shape[1])
-    query_start = max(0, total_tokens - query_last_tokens)
-    keep_count = max(1, math.ceil(top_ratio * total_tokens))
-    layer_to_tokens: dict[int, list[tuple[int, float]]] = {}
+    query_start = max(0, total_tokens - dump_query_last_tokens)
+    layer_head_rows: dict[int, dict[int, list[tuple[int, int, float]]]] = {}
     for layer_idx, attn in enumerate(attentions):
-        # [batch, heads, query, key]
-        score = attn[0, :, query_start:, :].float().mean(dim=(0, 1))
-        score = score[:total_tokens]
-        values, indices = torch.topk(score, k=min(keep_count, score.numel()))
-        layer_to_tokens[layer_idx] = [
-            (int(index), float(value)) for index, value in zip(indices.cpu(), values.cpu())
-        ]
-    return layer_to_tokens, keep_count
+        # attn: [batch, heads, query, key], post-softmax full attention.
+        attn = attn[0].float().cpu()
+        head_rows: dict[int, list[tuple[int, int, float]]] = {}
+        for head_idx in range(attn.shape[0]):
+            rows: list[tuple[int, int, float]] = []
+            for query_index in range(query_start, total_tokens):
+                current = attn[head_idx, query_index, : query_index + 1]
+                keep_count = max(1, math.ceil(top_ratio * current.numel()))
+                values, indices = torch.topk(current, k=keep_count, largest=True)
+                for key_index, value in zip(indices.tolist(), values.tolist()):
+                    rows.append((query_index, int(key_index), float(value)))
+            head_rows[head_idx] = rows
+        layer_head_rows[layer_idx] = head_rows
+    return layer_head_rows
 
 
 def dump_top_token_rows(
@@ -223,17 +300,20 @@ def dump_top_token_rows(
     sample: dict[str, Any],
     token_ids: list[int],
     offsets: list[tuple[int, int]],
-    layer_to_tokens: dict[int, list[tuple[int, float]]],
+    layer_head_rows: dict[int, dict[int, list[tuple[int, int, float]]]],
 ) -> None:
     fields = [
         "sample_id",
         "layer",
-        "rank",
-        "token_index",
-        "attention_score",
-        "token_id",
-        "token_text",
-        "context_piece",
+        "head",
+        "query_token_index",
+        "query_token_text",
+        "rank_within_query",
+        "key_token_index",
+        "attention_weight",
+        "key_token_id",
+        "key_token_text",
+        "key_context_piece",
         "left_context",
         "right_context",
         "category",
@@ -243,83 +323,35 @@ def dump_top_token_rows(
         if handle.tell() == 0:
             writer.writeheader()
         total_tokens = len(token_ids)
-        for layer, pairs in layer_to_tokens.items():
-            for rank, (token_index, score) in enumerate(pairs, start=1):
-                start, end = offsets[token_index]
-                left = prompt[max(0, start - 40) : start]
-                right = prompt[end : min(len(prompt), end + 40)]
-                row = {
-                    "sample_id": sample["sample_id"],
-                    "layer": layer,
-                    "rank": rank,
-                    "token_index": token_index,
-                    "attention_score": score,
-                    "token_id": token_ids[token_index],
-                    "token_text": compact_piece(tokenizer.decode([token_ids[token_index]], skip_special_tokens=False)),
-                    "context_piece": compact_piece(prompt[start:end]),
-                    "left_context": compact_piece(left),
-                    "right_context": compact_piece(right),
-                    "category": classify_token(token_index, offsets, prompt, sample, total_tokens),
-                }
-                writer.writerow(row)
-
-
-def choose_ablation_tokens(
-    layer_to_tokens: dict[int, list[tuple[int, float]]],
-    layer_spec: str,
-) -> set[int]:
-    if layer_spec == "last":
-        layer = max(layer_to_tokens)
-        return {idx for idx, _ in layer_to_tokens[layer]}
-    if layer_spec == "all_union":
-        return {idx for pairs in layer_to_tokens.values() for idx, _ in pairs}
-    layer = int(layer_spec)
-    return {idx for idx, _ in layer_to_tokens[layer]}
-
-
-def compress_prompt_by_token_indices(
-    tokenizer: Any,
-    token_ids: list[int],
-    keep_indices: set[int],
-    include_special_tokens: bool,
-) -> str:
-    kept = [token_id for idx, token_id in enumerate(token_ids) if idx in keep_indices]
-    return tokenizer.decode(kept, skip_special_tokens=not include_special_tokens)
-
-
-def ablation_keep_sets(
-    selected: set[int],
-    offsets: list[tuple[int, int]],
-    prompt: str,
-    sample: dict[str, Any],
-    total_tokens: int,
-    rng: random.Random,
-    random_trials: int,
-) -> dict[str, set[int]]:
-    categories: dict[str, set[int]] = {}
-    for idx in selected:
-        category = classify_token(idx, offsets, prompt, sample, total_tokens)
-        categories.setdefault(category, set()).add(idx)
-    answer_like = categories.get("answer_evidence", set()) | categories.get("needle_context", set())
-    query_like = categories.get("query_bridge", set()) | categories.get("query_or_recent", set())
-    sink_like = categories.get("sink_prefix", set())
-    rare_like = categories.get("rare_or_number", set()) | categories.get("rare_or_symbol", set())
-
-    keep_sets = {
-        "attention_top1_all": set(selected),
-        "answer_or_needle_only": set(answer_like),
-        "answer_plus_query": set(answer_like | query_like),
-        "answer_plus_sink": set(answer_like | sink_like),
-        "answer_plus_rare": set(answer_like | rare_like),
-        "drop_answer_or_needle": set(selected - answer_like),
-        "drop_query_recent": set(selected - query_like),
-        "drop_sink_prefix": set(selected - sink_like),
-        "drop_rare": set(selected - rare_like),
-    }
-    population = list(range(total_tokens))
-    for trial in range(random_trials):
-        keep_sets[f"random_same_budget_{trial + 1}"] = set(rng.sample(population, k=min(len(selected), total_tokens)))
-    return keep_sets
+        for layer, head_map in layer_head_rows.items():
+            for head, rows in head_map.items():
+                by_query: dict[int, list[tuple[int, float]]] = {}
+                for query_index, key_index, score in rows:
+                    by_query.setdefault(query_index, []).append((key_index, score))
+                for query_index, pairs in by_query.items():
+                    pairs = sorted(pairs, key=lambda item: item[1], reverse=True)
+                    query_text = compact_piece(tokenizer.decode([token_ids[query_index]], skip_special_tokens=False))
+                    for rank, (key_index, score) in enumerate(pairs, start=1):
+                        start, end = offsets[key_index]
+                        row = {
+                            "sample_id": sample["sample_id"],
+                            "layer": layer,
+                            "head": head,
+                            "query_token_index": query_index,
+                            "query_token_text": query_text,
+                            "rank_within_query": rank,
+                            "key_token_index": key_index,
+                            "attention_weight": score,
+                            "key_token_id": token_ids[key_index],
+                            "key_token_text": compact_piece(
+                                tokenizer.decode([token_ids[key_index]], skip_special_tokens=False)
+                            ),
+                            "key_context_piece": compact_piece(prompt[start:end]),
+                            "left_context": compact_piece(prompt[max(0, start - 40) : start]),
+                            "right_context": compact_piece(prompt[end : min(len(prompt), end + 40)]),
+                            "category": classify_token(key_index, offsets, prompt, sample, total_tokens),
+                        }
+                        writer.writerow(row)
 
 
 def write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -328,22 +360,23 @@ def write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
         "sample_count",
         "mean_loss",
         "mean_ppl",
-        "mean_delta_loss_vs_full",
+        "mean_delta_loss_vs_full_attention",
         "mean_prompt_token_count",
     ]
     modes = sorted({row["mode"] for row in rows})
-    summary: list[dict[str, Any]] = []
+    summary_rows: list[dict[str, Any]] = []
+    full_by_sample = {row["sample_id"]: float(row["loss"]) for row in rows if row["mode"] == "full_attention"}
     for mode in modes:
         mode_rows = [row for row in rows if row["mode"] == mode]
         mean_loss = sum(float(row["loss"]) for row in mode_rows) / len(mode_rows)
-        summary.append(
+        mean_delta = sum(float(row["loss"]) - full_by_sample[row["sample_id"]] for row in mode_rows) / len(mode_rows)
+        summary_rows.append(
             {
                 "mode": mode,
                 "sample_count": len(mode_rows),
                 "mean_loss": mean_loss,
                 "mean_ppl": math.exp(min(mean_loss, 80.0)),
-                "mean_delta_loss_vs_full": sum(float(row["delta_loss_vs_full"]) for row in mode_rows)
-                / len(mode_rows),
+                "mean_delta_loss_vs_full_attention": mean_delta,
                 "mean_prompt_token_count": sum(int(row["prompt_token_count"]) for row in mode_rows)
                 / len(mode_rows),
             }
@@ -351,7 +384,7 @@ def write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
-        writer.writerows(summary)
+        writer.writerows(summary_rows)
 
 
 def main() -> None:
@@ -360,10 +393,10 @@ def main() -> None:
         raise ValueError("--top_ratio must be in (0, 1].")
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    rng = random.Random(args.seed)
 
     requested_device = torch.device(args.device if torch.cuda.is_available() or args.device == "cpu" else "cpu")
     dtype = resolve_dtype(args.dtype, requested_device)
+    install_qwen3_attention_patch()
     tokenizer = AutoTokenizer.from_pretrained(args.model_name_or_path, trust_remote_code=args.trust_remote_code)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name_or_path,
@@ -379,8 +412,8 @@ def main() -> None:
 
     samples = load_samples(Path(args.data_path), args.max_samples, args.max_context_chars)
     result_rows: list[dict[str, Any]] = []
-    per_sample_path = output_dir / "ablation_results.jsonl"
-    top_token_path = output_dir / "layer_top1_tokens.csv"
+    per_sample_path = output_dir / "attention_pruning_results.jsonl"
+    top_token_path = output_dir / "layer_head_top1_tokens.csv"
     if top_token_path.exists():
         top_token_path.unlink()
 
@@ -389,56 +422,39 @@ def main() -> None:
             prompt = build_prompt(sample)
             token_ids, offsets = token_offsets(tokenizer, prompt)
             input_ids = torch.tensor([token_ids], dtype=torch.long)
-            layer_to_tokens, keep_count = collect_attention_top_tokens(
-                model, input_ids, args.top_ratio, args.query_last_tokens, input_device
-            )
-            dump_top_token_rows(top_token_path, tokenizer, prompt, sample, token_ids, offsets, layer_to_tokens)
 
-            full_metrics = answer_nll(model, tokenizer, prompt, sample["answer"], input_device)
-            selected = choose_ablation_tokens(layer_to_tokens, args.ablation_layer)
-            keep_sets = ablation_keep_sets(
-                selected, offsets, prompt, sample, len(token_ids), rng, args.random_keep_trials
-            )
-            modes = {"full_context": prompt}
-            for mode, keep_indices in keep_sets.items():
-                if not keep_indices:
-                    continue
-                compressed = compress_prompt_by_token_indices(
-                    tokenizer, token_ids, keep_indices, args.include_special_tokens
-                )
-                modes[mode] = (
-                    "Use the compressed context tokens to answer the question.\n\n"
-                    f"Compressed context:\n{compressed}\n\n"
-                    f"Question: {sample['question']}\n"
-                    "Answer:"
-                )
-
-            for mode, mode_prompt in modes.items():
-                metrics = full_metrics if mode == "full_context" else answer_nll(
-                    model, tokenizer, mode_prompt, sample["answer"], input_device
-                )
+            full_metrics = answer_nll(model, tokenizer, prompt, sample["answer"], input_device, None)
+            pruned_metrics = answer_nll(model, tokenizer, prompt, sample["answer"], input_device, args.top_ratio)
+            for mode, metrics in [("full_attention", full_metrics), ("attention_top1_pruned", pruned_metrics)]:
                 row = {
                     "sample_id": sample["sample_id"],
                     "mode": mode,
                     "answer": sample["answer"],
                     "loss": metrics["loss"],
                     "ppl": metrics["ppl"],
-                    "delta_loss_vs_full": metrics["loss"] - full_metrics["loss"],
+                    "delta_loss_vs_full_attention": metrics["loss"] - full_metrics["loss"],
                     "prompt_token_count": metrics["prompt_token_count"],
                     "answer_token_count": metrics["answer_token_count"],
-                    "top_ratio": args.top_ratio,
-                    "keep_count": keep_count,
-                    "ablation_layer": args.ablation_layer,
+                    "top_ratio": args.top_ratio if mode == "attention_top1_pruned" else "",
                 }
                 result_rows.append(row)
                 result_handle.write(json.dumps(row, ensure_ascii=False) + "\n")
                 result_handle.flush()
-            print(f"finished {sample['sample_id']} with {keep_count} selected tokens per layer", flush=True)
 
-    write_summary(output_dir / "ablation_summary.csv", result_rows)
+            layer_head_rows = collect_full_attention_top_tokens(
+                model, input_ids, args.top_ratio, args.dump_query_last_tokens, input_device
+            )
+            dump_top_token_rows(top_token_path, tokenizer, prompt, sample, token_ids, offsets, layer_head_rows)
+            print(
+                f"finished {sample['sample_id']}: full_loss={full_metrics['loss']:.4f}, "
+                f"top{args.top_ratio:g}_loss={pruned_metrics['loss']:.4f}",
+                flush=True,
+            )
+
+    write_summary(output_dir / "attention_pruning_summary.csv", result_rows)
     with (output_dir / "config.json").open("w", encoding="utf-8") as handle:
         json.dump(vars(args), handle, ensure_ascii=False, indent=2)
-    print(f"wrote {top_token_path}, {per_sample_path}, and {output_dir / 'ablation_summary.csv'}", flush=True)
+    print(f"wrote {per_sample_path}, {output_dir / 'attention_pruning_summary.csv'}, and {top_token_path}", flush=True)
 
 
 if __name__ == "__main__":
