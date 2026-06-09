@@ -1,0 +1,67 @@
+{
+  "experiment_name": "single_tail_init_y_pos",
+  "final_step": 2000,
+  "matrix": "E",
+  "final_metrics": {
+    "loss": 6.107594526838511e-05,
+    "acc_all_weighted": 1.0,
+    "margin_all_weighted": 10.408414840698242,
+    "loss_common": 4.6172644942998886e-05,
+    "acc_common": 1.0,
+    "margin_common": 10.556290626525879,
+    "loss_tail1": 0.00019520556088536978,
+    "acc_tail1": 1.0,
+    "margin_tail1": 9.077532768249512
+  },
+  "singular_values": [
+    9.352129936218262,
+    8.655709266662598
+  ],
+  "sigma1_over_sigma2": 1.0804579257965088,
+  "groups": {
+    "common": {
+      "prob": 0.9,
+      "init_center": [
+        1.0,
+        0.0
+      ],
+      "centroid": [
+        2.0922698974609375,
+        -1.5077786445617676
+      ],
+      "centroid_norm": 2.578951358795166,
+      "loss": 4.6172644942998886e-05,
+      "accuracy": 1.0,
+      "margin": 10.556290626525879,
+      "cos_to_v1": -0.9518150687217712,
+      "cos_to_v2": -0.30667245388031006
+    },
+    "tail1": {
+      "prob": 0.1,
+      "init_center": [
+        0.0,
+        1.0
+      ],
+      "centroid": [
+        -2.6952064037323,
+        3.2972190380096436
+      ],
+      "centroid_norm": 4.2586140632629395,
+      "loss": 0.00019520556088536978,
+      "accuracy": 1.0,
+      "margin": 9.077532768249512,
+      "cos_to_v1": 0.9987191557884216,
+      "cos_to_v2": 0.050595030188560486
+    }
+  },
+  "pairwise_centroid_cosine": {
+    "common": {
+      "common": 1.0,
+      "tail1": -0.9661120772361755
+    },
+    "tail1": {
+      "common": -0.9661120772361755,
+      "tail1": 0.9999998807907104
+    }
+  }
+}

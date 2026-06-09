@@ -1,0 +1,18 @@
+{
+  "experiment_name": "tail4_zipf_packed_x_pos",
+  "group_probs": "common:0.60,tail1:0.25,tail2:0.09,tail3:0.04,tail4:0.02",
+  "outdir": "fdong_embedding_dim/outputs/controlled_sweeps",
+  "matrix_to_visualize": "E",
+  "seed": 0,
+  "steps": 2000,
+  "lr": 0.03,
+  "weight_decay": 0.0,
+  "record_every": 20,
+  "theta_deg": 12.0,
+  "init_layout": "packed_x_pos",
+  "tail_centers": "1,0;1,0;1,0;1,0",
+  "init_noise": 0.001,
+  "num_snapshots": 6,
+  "use_real_singular_value_length": true,
+  "singular_vector_scale": null
+}

@@ -1,0 +1,11 @@
+{
+  "init_mode": "spread",
+  "init_scale": 0.2,
+  "init_noise": 0.01,
+  "seed": 0,
+  "token_bucket_counts": {
+    "1": 169,
+    "2": 67,
+    "0": 21
+  }
+}
