@@ -592,6 +592,103 @@ def shared_candidate_ids_for_chunk(
     return sorted_ids.masked_fill(~sorted_valid, 0), sorted_valid
 
 
+def grouped_sums_and_counts(
+    sums: torch.Tensor,
+    counts: torch.Tensor,
+    fanout: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    group_count = math.ceil(sums.shape[0] / fanout)
+    padded_count = group_count * fanout
+    if padded_count > sums.shape[0]:
+        pad_rows = padded_count - sums.shape[0]
+        sums = torch.cat([sums, torch.zeros((pad_rows, sums.shape[-1]), dtype=sums.dtype, device=sums.device)], dim=0)
+        counts = torch.cat([counts, torch.zeros((pad_rows,), dtype=counts.dtype, device=counts.device)], dim=0)
+    grouped_sums = sums.view(group_count, fanout, sums.shape[-1]).sum(dim=1)
+    grouped_counts = counts.view(group_count, fanout).sum(dim=1)
+    return grouped_sums, grouped_counts
+
+
+def select_middle_leaf_token_ids_for_chunk(
+    queries: torch.Tensor,
+    key_vectors: torch.Tensor,
+    config: TreeMaskConfig,
+    profile_prefix: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    device = queries.device
+    key_count = key_vectors.shape[0]
+    leaf_size = config.leaf_size if config.leaf_size > 0 else max(1, math.ceil(config.leaf_fraction * key_count))
+    boundary = min(fixed_boundary_token_count(key_count), max(1, key_count // 2))
+    middle_start = min(boundary, key_count)
+    middle_end = max(middle_start, key_count - boundary)
+    middle_len = middle_end - middle_start
+    if middle_len <= 0:
+        empty_ids = torch.zeros((queries.shape[0], 0), dtype=torch.long, device=device)
+        empty_valid = torch.zeros((queries.shape[0], 0), dtype=torch.bool, device=device)
+        return empty_ids, empty_valid
+
+    with profile_tree_stage(f"{profile_prefix}/leaf_centers_fast", device):
+        middle = key_vectors[middle_start:middle_end].detach().float()
+        leaf_count = math.ceil(middle_len / leaf_size)
+        padded_len = leaf_count * leaf_size
+        if padded_len > middle_len:
+            middle = torch.cat(
+                [middle, torch.zeros((padded_len - middle_len, middle.shape[-1]), dtype=middle.dtype, device=device)],
+                dim=0,
+            )
+        leaf_blocks = middle.view(leaf_count, leaf_size, middle.shape[-1])
+        leaf_sums = leaf_blocks.sum(dim=1)
+        leaf_counts = torch.full((leaf_count,), leaf_size, dtype=torch.float32, device=device)
+        leaf_counts[-1] = middle_len - (leaf_count - 1) * leaf_size
+        leaf_centers = leaf_sums / leaf_counts.unsqueeze(-1)
+
+    with profile_tree_stage(f"{profile_prefix}/mid_centers_fast", device):
+        mid_sums, mid_counts = grouped_sums_and_counts(leaf_sums, leaf_counts, config.tree_fanout)
+        mid_centers = mid_sums / mid_counts.clamp_min(1).unsqueeze(-1)
+
+    with profile_tree_stage(f"{profile_prefix}/big_centers_fast", device):
+        big_sums, big_counts = grouped_sums_and_counts(mid_sums, mid_counts, config.tree_fanout)
+        big_centers = big_sums / big_counts.clamp_min(1).unsqueeze(-1)
+
+    with profile_tree_stage(f"{profile_prefix}/big_topk_fast", device):
+        big_scores = queries.float() @ big_centers.transpose(0, 1)
+        big_k = min(config.branch_counts[0], big_scores.shape[-1])
+        _, top_big_ids = torch.topk(big_scores, k=big_k, dim=-1)
+
+    with profile_tree_stage(f"{profile_prefix}/mid_topk_fast", device):
+        child_offsets = torch.arange(config.tree_fanout, dtype=torch.long, device=device).view(1, 1, -1)
+        mid_candidates = top_big_ids.unsqueeze(-1) * config.tree_fanout + child_offsets
+        mid_valid = mid_candidates < mid_centers.shape[0]
+        safe_mid = mid_candidates.clamp_max(max(mid_centers.shape[0] - 1, 0))
+        candidate_mid_centers = mid_centers[safe_mid]
+        mid_scores = (queries.float().view(queries.shape[0], 1, 1, -1) * candidate_mid_centers).sum(dim=-1)
+        mid_scores = mid_scores.masked_fill(~mid_valid, -torch.inf)
+        mid_k = min(config.branch_counts[1], mid_scores.shape[-1])
+        top_mid_scores, top_mid_pos = torch.topk(mid_scores, k=mid_k, dim=-1)
+        top_mid_ids = torch.gather(mid_candidates, dim=-1, index=top_mid_pos)
+        top_mid_ids = top_mid_ids.masked_fill(~torch.isfinite(top_mid_scores), -1).flatten(start_dim=1)
+
+    with profile_tree_stage(f"{profile_prefix}/leaf_topk_fast", device):
+        leaf_candidates = top_mid_ids.clamp_min(0).unsqueeze(-1) * config.tree_fanout + child_offsets
+        leaf_candidates = leaf_candidates.masked_fill(top_mid_ids.unsqueeze(-1) < 0, -1)
+        leaf_valid = (leaf_candidates >= 0) & (leaf_candidates < leaf_centers.shape[0])
+        safe_leaf = leaf_candidates.clamp_min(0).clamp_max(max(leaf_centers.shape[0] - 1, 0))
+        candidate_leaf_centers = leaf_centers[safe_leaf]
+        leaf_scores = (queries.float().view(queries.shape[0], 1, 1, -1) * candidate_leaf_centers).sum(dim=-1)
+        leaf_scores = leaf_scores.masked_fill(~leaf_valid, -torch.inf)
+        leaf_k = min(config.branch_counts[2], leaf_scores.shape[-1])
+        top_leaf_scores, top_leaf_pos = torch.topk(leaf_scores, k=leaf_k, dim=-1)
+        top_leaf_ids = torch.gather(leaf_candidates, dim=-1, index=top_leaf_pos)
+        top_leaf_ids = top_leaf_ids.masked_fill(~torch.isfinite(top_leaf_scores), -1).flatten(start_dim=1)
+
+    with profile_tree_stage(f"{profile_prefix}/leaf_tokens_fast", device):
+        starts = middle_start + top_leaf_ids.clamp_min(0) * leaf_size
+        ends = torch.minimum(starts + leaf_size, torch.tensor(middle_end, dtype=torch.long, device=device))
+        offsets = torch.arange(leaf_size, dtype=torch.long, device=device).view(1, 1, -1)
+        token_ids = starts.unsqueeze(-1) + offsets
+        token_valid = (top_leaf_ids.unsqueeze(-1) >= 0) & (token_ids < ends.unsqueeze(-1))
+        return token_ids.flatten(start_dim=1).masked_fill(~token_valid.flatten(start_dim=1), 0), token_valid.flatten(start_dim=1)
+
+
 def tree_candidate_ids_for_chunk(
     query_states: torch.Tensor,
     key_states: torch.Tensor,
@@ -629,24 +726,14 @@ def tree_candidate_ids_for_chunk(
         # Use the last query in the chunk as a representative query for a shared
         # candidate set. Causal masking below still prevents earlier queries from
         # attending to future in-chunk tokens.
-        queries = query_states[0, head_start:head_end, -1:, :].detach()
+        queries = query_states[0, head_start:head_end, -1, :].detach()
         key_vectors = key_states[0, kv_head].detach()
-        selected_leaf_ids, leaf_ranges, middle_start, middle_end = select_tree_leaf_ids_for_kv_head(
+        leaf_ids, leaf_valid = select_middle_leaf_token_ids_for_chunk(
             queries,
             key_vectors,
-            layout,
             config,
             profile_prefix="shared_matmul/chunk_candidate_ids",
         )
-        leaf_ids, leaf_valid = leaf_token_ids_from_selection(
-            selected_leaf_ids,
-            leaf_ranges,
-            middle_start,
-            middle_end,
-            leaf_size,
-        )
-        leaf_ids = leaf_ids.squeeze(1)
-        leaf_valid = leaf_valid.squeeze(1)
         head_count = head_end - head_start
         if config.candidate_granularity == "kv_head_union":
             leaf_ids = leaf_ids.reshape(1, -1).expand(head_count, -1)

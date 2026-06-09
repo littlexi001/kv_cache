@@ -8,7 +8,7 @@ export TOKENIZERS_PARALLELISM=false
 
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-0.6B}"
 TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
-OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/ppl_only_20000_5000_v6}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/ppl_only_20000_5000_v7}"
 
 python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --model_name_or_path "${MODEL_PATH}" \
