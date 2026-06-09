@@ -1,6 +1,6 @@
 # Qwen3 KV Cache 研究工作区
 
-> 最近同步日期：2026-05-23
+> 最近同步日期：2026-06-08
 
 核心问题：**能否把长上下文 KV cache 看成一个可索引、可压缩、可检索的记忆系统，而不是每次 decode 都密集扫描的扁平 token 序列。**
 
@@ -23,6 +23,12 @@
 | 9 | [section09_kcache_value_delta](doc/section09_kcache_value_delta.md) | K-cache Value / Delta 分析 |
 | 10 | [section10_moe_selectivity](doc/section10_moe_selectivity.md) | MoE Selectivity 实验（Exp1~Exp4） |
 | 11 | [section11_common_params](doc/section11_common_params.md) | 常用参数与注意事项 |
+| 12 | [section12_structured_language_synthetic](doc/section12_structured_language_synthetic.md) | Structured language synthetic 任务与 MoE 路由分析 |
+| 13 | [section13_topk_negative_update](doc/section13_topk_negative_update.md) | Top-k negative update 实验 |
+| 14 | [section14_kcache_l2_neighbor_analysis](doc/section14_kcache_l2_neighbor_analysis.md) | K-cache L2 最近邻结构分析 |
+| 15 | [section15_kv_retrieval_energy_analysis](doc/section15_kv_retrieval_energy_analysis.md) | 基于 K-L2 图的 KV 检索候选集合能量覆盖 |
+| 16 | [section16_kv_tree_ppl_results](doc/section16_kv_tree_ppl_results.md) | KV tree retrieval 的 loss/PPL 结果 |
+| 17 | [section17_attention_pruning_ppl](doc/section17_attention_pruning_ppl.md) | Attention top-ratio pruning 的长文本检索与普通生成 PPL |
 
 ## 项目目录速查
 
@@ -37,6 +43,7 @@
 | `projects/pyramid_kv_compression` | Pyramid KV 压缩继续预训练 |
 | `projects/qwen3_kcache_value_delta_analysis` | K-cache 取值与 delta 分布分析 |
 | `projects/qwen3_moe_attention_cluster` | MoE attention cluster 专家选择性实验 |
+| `projects/qwen3_attention_pruning_cos_ppl` | Attention top-ratio pruning 的 cosine/PPL 诊断 |
 | `logs/` | 历史日志 |
 | `utils/` | 共享工具（含 `moe_selectivity_experiment.py`） |
 

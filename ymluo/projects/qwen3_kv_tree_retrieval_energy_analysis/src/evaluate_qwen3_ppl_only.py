@@ -29,6 +29,8 @@ _TREE_CONFIG: TreeMaskConfig | None = None
 _TREE_ENABLED = False
 _MODULE_TO_LAYER: dict[int, int] = {}
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
+_TREE_CANDIDATE_TOKEN_SUM: torch.Tensor | None = None
+_TREE_CANDIDATE_OBS_COUNT: torch.Tensor | None = None
 
 
 @dataclass(frozen=True)
@@ -200,6 +202,7 @@ def ppl_fields() -> list[str]:
         "layers",
         "kv_heads",
         "boundary_fraction",
+        "boundary_token_rule",
         "leaf_fraction",
         "leaf_size",
         "tree_fanout",
@@ -236,7 +239,7 @@ def timed_section(name: str, device: torch.device, timings: dict[str, float]):
 
 
 def timing_fields() -> list[str]:
-    return ["mode", "prefill_seconds", "eval_seconds", "total_seconds", "tokens_per_second"]
+    return ["mode", "prefill_seconds", "eval_seconds", "total_seconds", "tokens_per_second", "avg_candidate_tokens"]
 
 
 @torch.inference_mode()
@@ -302,6 +305,16 @@ def padded_children_tensor(children: list[list[int]], width: int, device: torch.
     return result
 
 
+def fixed_boundary_token_count(key_count: int) -> int:
+    return 500 if key_count > 10_000 else 50
+
+
+def boundary_count_for_visible(visible: torch.Tensor, key_count: int) -> torch.Tensor:
+    raw = torch.full_like(visible, fixed_boundary_token_count(key_count))
+    max_nonoverlap = torch.div(visible, 2, rounding_mode="floor").clamp_min(1)
+    return torch.minimum(raw, max_nonoverlap)
+
+
 def query_clipped_centers(
     prefix_sum: torch.Tensor,
     ranges: torch.Tensor,
@@ -349,7 +362,7 @@ def select_tree_leaf_ids_for_kv_head(
     key_count = key_vectors.shape[0]
     query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=device)
     visible = query_tokens + 1
-    boundary_count = torch.ceil(config.boundary_fraction * visible.float()).long().clamp_min(1)
+    boundary_count = boundary_count_for_visible(visible, key_count)
     middle_start = torch.minimum(boundary_count, visible)
     recent_start = (visible - boundary_count).clamp_min(0)
     middle_end = torch.maximum(middle_start, recent_start)
@@ -409,6 +422,126 @@ def scatter_leaf_tokens(
     keep.scatter_(dim=-1, index=token_ids, src=torch.ones_like(token_ids, dtype=torch.bool))
 
 
+def leaf_token_ids_from_selection(
+    selected_leaf_ids: torch.Tensor,
+    leaf_ranges: torch.Tensor,
+    middle_start: torch.Tensor,
+    middle_end: torch.Tensor,
+    leaf_size: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    safe_leaf_ids = selected_leaf_ids.clamp_min(0)
+    starts = leaf_ranges[safe_leaf_ids, 0]
+    ends = leaf_ranges[safe_leaf_ids, 1]
+    starts = torch.maximum(starts, middle_start.view(1, -1, 1))
+    ends = torch.minimum(ends, middle_end.view(1, -1, 1))
+    offsets = torch.arange(leaf_size, dtype=torch.long, device=selected_leaf_ids.device).view(1, 1, 1, -1)
+    token_ids = starts.unsqueeze(-1) + offsets
+    valid = (selected_leaf_ids.unsqueeze(-1) >= 0) & (token_ids < ends.unsqueeze(-1))
+    return token_ids.flatten(start_dim=2), valid.flatten(start_dim=2)
+
+
+def tree_candidate_ids(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    layer: int,
+    config: TreeMaskConfig,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch, attention_heads, query_count, _ = query_states.shape
+    _, kv_heads, key_count, _ = key_states.shape
+    if batch != 1:
+        raise ValueError("Tree sparse attention currently supports batch size 1.")
+    if layer not in config.layers or set(range(kv_heads)) - config.kv_heads:
+        raise RuntimeError("sparse_gather requires the current layer and all KV heads to be tree-masked.")
+
+    group_size = attention_heads // kv_heads
+    leaf_size = config.leaf_size if config.leaf_size > 0 else max(1, math.ceil(config.leaf_fraction * key_count))
+    layout = build_tree_layout(key_count, leaf_size, config.tree_fanout)
+
+    device = query_states.device
+    query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=device)
+    visible = query_tokens + 1
+    boundary_count = boundary_count_for_visible(visible, key_count)
+    max_boundary = int(boundary_count.max().item())
+    boundary_offsets = torch.arange(max_boundary, dtype=torch.long, device=device).view(1, -1)
+
+    prefix_ids = boundary_offsets.expand(query_count, -1)
+    prefix_valid = boundary_offsets < boundary_count.view(-1, 1)
+    recent_start = (visible - boundary_count).clamp_min(0)
+    recent_ids = recent_start.view(-1, 1) + boundary_offsets
+    recent_valid = (boundary_offsets < boundary_count.view(-1, 1)) & (recent_ids < visible.view(-1, 1))
+
+    per_head_ids: list[torch.Tensor] = []
+    per_head_valid: list[torch.Tensor] = []
+    for kv_head in range(kv_heads):
+        head_start = kv_head * group_size
+        head_end = min((kv_head + 1) * group_size, attention_heads)
+        if head_start >= head_end:
+            continue
+
+        queries = query_states[0, head_start:head_end].detach()
+        key_vectors = key_states[0, kv_head].detach()
+        selected_leaf_ids, leaf_ranges, middle_start, middle_end = select_tree_leaf_ids_for_kv_head(
+            queries,
+            key_vectors,
+            layout,
+            config,
+        )
+        leaf_ids, leaf_valid = leaf_token_ids_from_selection(
+            selected_leaf_ids,
+            leaf_ranges,
+            middle_start,
+            middle_end,
+            leaf_size,
+        )
+        head_count = head_end - head_start
+        if config.candidate_granularity == "kv_head_union":
+            leaf_ids = leaf_ids.transpose(0, 1).reshape(query_count, -1).unsqueeze(0).expand(head_count, -1, -1)
+            leaf_valid = leaf_valid.transpose(0, 1).reshape(query_count, -1).unsqueeze(0).expand(head_count, -1, -1)
+
+        head_prefix_ids = prefix_ids.unsqueeze(0).expand(head_count, -1, -1)
+        head_prefix_valid = prefix_valid.unsqueeze(0).expand(head_count, -1, -1)
+        head_recent_ids = recent_ids.unsqueeze(0).expand(head_count, -1, -1)
+        head_recent_valid = recent_valid.unsqueeze(0).expand(head_count, -1, -1)
+        ids = torch.cat([head_prefix_ids, head_recent_ids, leaf_ids], dim=-1)
+        valid = torch.cat([head_prefix_valid, head_recent_valid, leaf_valid], dim=-1)
+        per_head_ids.append(ids.masked_fill(~valid, 0))
+        per_head_valid.append(valid)
+
+    candidate_ids = torch.cat(per_head_ids, dim=0).unsqueeze(0)
+    candidate_valid = torch.cat(per_head_valid, dim=0).unsqueeze(0)
+    return candidate_ids, candidate_valid
+
+
+def reset_tree_candidate_stats(device: torch.device) -> None:
+    global _TREE_CANDIDATE_TOKEN_SUM, _TREE_CANDIDATE_OBS_COUNT
+    _TREE_CANDIDATE_TOKEN_SUM = torch.zeros((), dtype=torch.float64, device=device)
+    _TREE_CANDIDATE_OBS_COUNT = torch.zeros((), dtype=torch.float64, device=device)
+
+
+def record_tree_candidate_stats(candidate_valid: torch.Tensor) -> None:
+    if _TREE_CANDIDATE_TOKEN_SUM is None or _TREE_CANDIDATE_OBS_COUNT is None:
+        return
+    per_query_head = candidate_valid.sum(dim=-1, dtype=torch.float64)
+    _TREE_CANDIDATE_TOKEN_SUM.add_(per_query_head.sum())
+    _TREE_CANDIDATE_OBS_COUNT.add_(
+        torch.tensor(per_query_head.numel(), dtype=torch.float64, device=per_query_head.device)
+    )
+
+
+def read_tree_candidate_stats() -> dict[str, float]:
+    if _TREE_CANDIDATE_TOKEN_SUM is None or _TREE_CANDIDATE_OBS_COUNT is None:
+        return {}
+    count = float(_TREE_CANDIDATE_OBS_COUNT.item())
+    total = float(_TREE_CANDIDATE_TOKEN_SUM.item())
+    return {"avg_candidate_tokens": total / max(count, 1.0)}
+
+
+def clear_tree_candidate_stats() -> None:
+    global _TREE_CANDIDATE_TOKEN_SUM, _TREE_CANDIDATE_OBS_COUNT
+    _TREE_CANDIDATE_TOKEN_SUM = None
+    _TREE_CANDIDATE_OBS_COUNT = None
+
+
 def tree_keep_mask(
     query_states: torch.Tensor,
     key_states: torch.Tensor,
@@ -436,7 +569,7 @@ def tree_keep_mask(
     query_tokens = key_count - query_count + torch.arange(query_count, dtype=torch.long, device=scores.device)
     visible = query_tokens + 1
     causal_keep = token_positions.view(1, -1) < visible.view(-1, 1)
-    boundary_count = torch.ceil(config.boundary_fraction * visible.float()).long().clamp_min(1)
+    boundary_count = boundary_count_for_visible(visible, key_count)
     prefix_keep = token_positions.view(1, -1) < boundary_count.view(-1, 1)
     recent_start = (visible - boundary_count).clamp_min(0)
     recent_keep = (token_positions.view(1, -1) >= recent_start.view(-1, 1)) & causal_keep
@@ -468,7 +601,7 @@ def tree_keep_mask(
 
 
 def max_candidate_count(key_count: int, leaf_size: int, group_size: int, config: TreeMaskConfig) -> int:
-    boundary = max(1, math.ceil(config.boundary_fraction * key_count))
+    boundary = fixed_boundary_token_count(key_count)
     leaf_tokens = config.branch_counts[0] * config.branch_counts[1] * config.branch_counts[2] * leaf_size
     if config.candidate_granularity == "kv_head_union":
         leaf_tokens *= group_size
@@ -492,17 +625,9 @@ def sparse_tree_attention(
         raise RuntimeError("sparse_gather requires the current layer and all KV heads to be tree-masked.")
 
     group_size = attention_heads // kv_heads
-    leaf_size = config.leaf_size if config.leaf_size > 0 else max(1, math.ceil(config.leaf_fraction * key_count))
-    candidate_slots = max_candidate_count(key_count, leaf_size, group_size, config)
-    dummy_scores = torch.zeros(
-        (batch, attention_heads, query_count, key_count),
-        dtype=torch.float32,
-        device=query_states.device,
-    )
-    keep = tree_keep_mask(query_states, key_states, layer, dummy_scores, config)
-    candidate_values, candidate_ids = torch.topk(keep.to(torch.int8), k=candidate_slots, dim=-1, largest=True)
-    candidate_valid = candidate_values > 0
-    candidate_ids = candidate_ids.masked_fill(~candidate_valid, 0)
+    candidate_ids, candidate_valid = tree_candidate_ids(query_states, key_states, layer, config)
+    candidate_slots = candidate_ids.shape[-1]
+    record_tree_candidate_stats(candidate_valid)
 
     if key_states.shape[1] != attention_heads:
         key_states_for_attention = key_states.repeat_interleave(group_size, dim=1)
@@ -511,11 +636,10 @@ def sparse_tree_attention(
         key_states_for_attention = key_states
         value_states_for_attention = value_states
 
-    gather_index = candidate_ids.unsqueeze(-1).expand(batch, attention_heads, query_count, candidate_slots, head_dim)
-    expanded_keys = key_states_for_attention.unsqueeze(2).expand(batch, attention_heads, query_count, key_count, head_dim)
-    expanded_values = value_states_for_attention.unsqueeze(2).expand(batch, attention_heads, query_count, key_count, head_dim)
-    selected_keys = torch.gather(expanded_keys, dim=3, index=gather_index)
-    selected_values = torch.gather(expanded_values, dim=3, index=gather_index)
+    batch_index = torch.arange(batch, device=query_states.device).view(batch, 1, 1, 1)
+    head_index = torch.arange(attention_heads, device=query_states.device).view(1, attention_heads, 1, 1)
+    selected_keys = key_states_for_attention[batch_index, head_index, candidate_ids]
+    selected_values = value_states_for_attention[batch_index, head_index, candidate_ids]
 
     scores = (query_states.unsqueeze(3) * selected_keys).sum(dim=-1) * scaling
     if attention_mask is not None:
@@ -608,6 +732,7 @@ def compute_eval_loss(
     label = "tree" if use_tree_mask else "baseline"
     use_tree_prefill = use_tree_mask and tree_prefill
     timings: dict[str, float] = {}
+    clear_tree_candidate_stats()
     with timed_section(f"{label}_prefill", input_device, timings):
         with tree_mask_enabled(use_tree_prefill):
             past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
@@ -617,6 +742,8 @@ def compute_eval_loss(
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
     total_chunks = math.ceil(eval_tokens / chunk_size)
+    if use_tree_mask:
+        reset_tree_candidate_stats(input_device)
     with timed_section(f"{label}_eval", input_device, timings):
         for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, chunk_size), start=1):
             end = min(start + chunk_size, eval_end)
@@ -648,6 +775,8 @@ def compute_eval_loss(
             del outputs, chunk, logits, shifted_logits, loss
             if input_device.type == "cuda":
                 torch.cuda.empty_cache()
+    if use_tree_mask:
+        timings.update(read_tree_candidate_stats())
     mean_loss = total_loss / max(1, total_count)
     timings[f"{label}_total"] = timings.get(f"{label}_prefill", 0.0) + timings.get(f"{label}_eval", 0.0)
     print(
@@ -663,6 +792,7 @@ def tree_metadata_row(args: argparse.Namespace, layer_indices: list[int], kv_hea
         "layers": ",".join(str(index) for index in layer_indices),
         "kv_heads": ",".join(str(index) for index in kv_head_indices),
         "boundary_fraction": args.boundary_fraction,
+        "boundary_token_rule": "50 per side for <=10k key tokens; 500 per side for >10k key tokens",
         "leaf_fraction": args.leaf_fraction,
         "leaf_size": args.leaf_size,
         "tree_fanout": args.tree_fanout,
@@ -753,6 +883,7 @@ def main() -> None:
                 "eval_seconds": baseline_timings.get("baseline_eval", 0.0),
                 "total_seconds": baseline_timings.get("baseline_total", 0.0),
                 "tokens_per_second": baseline_count / max(baseline_timings.get("baseline_eval", 0.0), 1e-9),
+                "avg_candidate_tokens": "",
             }
         )
     if args.compute_tree_ppl:
@@ -767,6 +898,7 @@ def main() -> None:
                 "eval_seconds": tree_timings.get("tree_eval", 0.0),
                 "total_seconds": tree_timings.get("tree_total", 0.0),
                 "tokens_per_second": tree_count / max(tree_timings.get("tree_eval", 0.0), 1e-9),
+                "avg_candidate_tokens": tree_timings.get("avg_candidate_tokens", ""),
             }
         )
 
