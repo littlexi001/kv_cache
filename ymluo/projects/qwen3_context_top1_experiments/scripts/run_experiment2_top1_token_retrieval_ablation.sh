@@ -17,6 +17,7 @@ python "${PROJECT_DIR}/src/experiment2_top1_token_retrieval_ablation.py" \
   --output_dir "${OUTPUT_DIR}" \
   --max_samples "${MAX_SAMPLES:-16}" \
   --top_ratio "${TOP_RATIO:-0.01}" \
+  --dump_query_scope "${DUMP_QUERY_SCOPE:-answer}" \
   --dump_query_last_tokens "${DUMP_QUERY_LAST_TOKENS:-16}" \
   --max_context_chars "${MAX_CONTEXT_CHARS:-24000}" \
   --dtype "${DTYPE:-bfloat16}" \

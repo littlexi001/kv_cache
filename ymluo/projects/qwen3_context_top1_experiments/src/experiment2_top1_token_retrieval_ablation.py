@@ -46,10 +46,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_samples", type=int, default=16)
     parser.add_argument("--top_ratio", type=float, default=0.01)
     parser.add_argument(
+        "--dump_query_scope",
+        choices=["answer", "prompt_last", "all"],
+        default="answer",
+        help=(
+            "Which query rows to dump. 'answer' dumps rows that predict/consume the gold answer tokens; "
+            "'prompt_last' dumps the last N prompt rows; 'all' dumps every row and can be very large."
+        ),
+    )
+    parser.add_argument(
         "--dump_query_last_tokens",
         type=int,
         default=16,
-        help="Dump top key tokens for the last N prompt query positions. Pruning itself applies to all rows.",
+        help="Used only when --dump_query_scope prompt_last.",
     )
     parser.add_argument("--max_context_chars", type=int, default=24000)
     parser.add_argument("--dtype", choices=["auto", "bfloat16", "float16", "float32"], default="bfloat16")
@@ -122,6 +131,18 @@ def token_offsets(tokenizer: Any, prompt: str) -> tuple[list[int], list[tuple[in
         return_offsets_mapping=True,
     )
     return encoded.input_ids[0].tolist(), [(int(a), int(b)) for a, b in encoded.offset_mapping[0].tolist()]
+
+
+def prompt_answer_token_offsets(
+    tokenizer: Any,
+    prompt: str,
+    answer: str,
+) -> tuple[str, list[int], list[tuple[int, int]], int]:
+    answer_text = " " + answer
+    eval_text = prompt + answer_text
+    prompt_ids = tokenizer(prompt, return_tensors="pt", add_special_tokens=False).input_ids[0].tolist()
+    token_ids, offsets = token_offsets(tokenizer, eval_text)
+    return eval_text, token_ids, offsets, len(prompt_ids)
 
 
 def compact_piece(text: str) -> str:
@@ -259,7 +280,7 @@ def collect_full_attention_top_tokens(
     model: torch.nn.Module,
     input_ids: torch.Tensor,
     top_ratio: float,
-    dump_query_last_tokens: int,
+    query_indices: list[int],
     input_device: torch.device,
 ) -> dict[int, dict[int, list[tuple[int, int, float]]]]:
     input_ids = input_ids.to(input_device)
@@ -274,7 +295,6 @@ def collect_full_attention_top_tokens(
     if attentions is None:
         raise RuntimeError("Model did not return attentions. Use --attn_implementation eager.")
     total_tokens = int(input_ids.shape[1])
-    query_start = max(0, total_tokens - dump_query_last_tokens)
     layer_head_rows: dict[int, dict[int, list[tuple[int, int, float]]]] = {}
     for layer_idx, attn in enumerate(attentions):
         # attn: [batch, heads, query, key], post-softmax full attention.
@@ -282,7 +302,9 @@ def collect_full_attention_top_tokens(
         head_rows: dict[int, list[tuple[int, int, float]]] = {}
         for head_idx in range(attn.shape[0]):
             rows: list[tuple[int, int, float]] = []
-            for query_index in range(query_start, total_tokens):
+            for query_index in query_indices:
+                if query_index < 0 or query_index >= total_tokens:
+                    continue
                 current = attn[head_idx, query_index, : query_index + 1]
                 keep_count = max(1, math.ceil(top_ratio * current.numel()))
                 values, indices = torch.topk(current, k=keep_count, largest=True)
@@ -291,6 +313,23 @@ def collect_full_attention_top_tokens(
             head_rows[head_idx] = rows
         layer_head_rows[layer_idx] = head_rows
     return layer_head_rows
+
+
+def select_dump_query_indices(
+    scope: str,
+    prompt_token_count: int,
+    total_token_count: int,
+    dump_query_last_tokens: int,
+) -> list[int]:
+    if scope == "answer":
+        # These are the rows for gold answer tokens in the prompt+answer forward.
+        return list(range(prompt_token_count, total_token_count))
+    if scope == "prompt_last":
+        start = max(0, prompt_token_count - dump_query_last_tokens)
+        return list(range(start, prompt_token_count))
+    if scope == "all":
+        return list(range(total_token_count))
+    raise ValueError(f"Unsupported dump scope: {scope}")
 
 
 def dump_top_token_rows(
@@ -420,8 +459,10 @@ def main() -> None:
     with per_sample_path.open("w", encoding="utf-8") as result_handle:
         for sample in samples:
             prompt = build_prompt(sample)
-            token_ids, offsets = token_offsets(tokenizer, prompt)
-            input_ids = torch.tensor([token_ids], dtype=torch.long)
+            eval_text, eval_token_ids, eval_offsets, prompt_token_count = prompt_answer_token_offsets(
+                tokenizer, prompt, sample["answer"]
+            )
+            eval_input_ids = torch.tensor([eval_token_ids], dtype=torch.long)
 
             full_metrics = answer_nll(model, tokenizer, prompt, sample["answer"], input_device, None)
             pruned_metrics = answer_nll(model, tokenizer, prompt, sample["answer"], input_device, args.top_ratio)
@@ -441,13 +482,28 @@ def main() -> None:
                 result_handle.write(json.dumps(row, ensure_ascii=False) + "\n")
                 result_handle.flush()
 
-            layer_head_rows = collect_full_attention_top_tokens(
-                model, input_ids, args.top_ratio, args.dump_query_last_tokens, input_device
+            query_indices = select_dump_query_indices(
+                args.dump_query_scope,
+                prompt_token_count,
+                len(eval_token_ids),
+                args.dump_query_last_tokens,
             )
-            dump_top_token_rows(top_token_path, tokenizer, prompt, sample, token_ids, offsets, layer_head_rows)
+            layer_head_rows = collect_full_attention_top_tokens(
+                model, eval_input_ids, args.top_ratio, query_indices, input_device
+            )
+            dump_top_token_rows(
+                top_token_path,
+                tokenizer,
+                eval_text,
+                sample,
+                eval_token_ids,
+                eval_offsets,
+                layer_head_rows,
+            )
             print(
                 f"finished {sample['sample_id']}: full_loss={full_metrics['loss']:.4f}, "
-                f"top{args.top_ratio:g}_loss={pruned_metrics['loss']:.4f}",
+                f"top{args.top_ratio:g}_loss={pruned_metrics['loss']:.4f}, "
+                f"dumped_query_rows={len(query_indices)} ({args.dump_query_scope})",
                 flush=True,
             )
 
