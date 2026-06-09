@@ -14,6 +14,13 @@ import torch
 import torch.nn.functional as F
 
 try:
+    import triton
+    import triton.language as tl
+except ImportError:
+    triton = None
+    tl = None
+
+try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 except ImportError:
     from transformers import AutoModelWithLMHead as AutoModelForCausalLM
@@ -110,7 +117,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--candidate_granularity", choices=["attention_head", "kv_head_union"], default="attention_head")
     parser.add_argument(
         "--tree_attention_impl",
-        choices=["mask", "sparse_gather", "shared_matmul"],
+        choices=["mask", "sparse_gather", "shared_matmul", "triton_shared"],
         default="sparse_gather",
     )
     parser.add_argument(
@@ -908,6 +915,203 @@ def sparse_tree_attention(
     return attention_output, None
 
 
+if triton is not None:
+    @triton.jit
+    def _triton_shared_attention_kernel(
+        q_ptr,
+        k_ptr,
+        v_ptr,
+        candidate_ids_ptr,
+        candidate_valid_ptr,
+        out_ptr,
+        scaling: tl.constexpr,
+        key_count: tl.constexpr,
+        query_count: tl.constexpr,
+        head_dim: tl.constexpr,
+        candidate_count: tl.constexpr,
+        group_size: tl.constexpr,
+        stride_qb: tl.constexpr,
+        stride_qh: tl.constexpr,
+        stride_qq: tl.constexpr,
+        stride_qd: tl.constexpr,
+        stride_kb: tl.constexpr,
+        stride_kh: tl.constexpr,
+        stride_kk: tl.constexpr,
+        stride_kd: tl.constexpr,
+        stride_vb: tl.constexpr,
+        stride_vh: tl.constexpr,
+        stride_vk: tl.constexpr,
+        stride_vd: tl.constexpr,
+        stride_cb: tl.constexpr,
+        stride_ch: tl.constexpr,
+        stride_cc: tl.constexpr,
+        stride_vab: tl.constexpr,
+        stride_vah: tl.constexpr,
+        stride_vac: tl.constexpr,
+        stride_ob: tl.constexpr,
+        stride_oh: tl.constexpr,
+        stride_oq: tl.constexpr,
+        stride_od: tl.constexpr,
+        BLOCK_M: tl.constexpr,
+        BLOCK_N: tl.constexpr,
+        BLOCK_D: tl.constexpr,
+    ):
+        bh = tl.program_id(0)
+        q_block = tl.program_id(1)
+        batch = bh // tl.num_programs(0)
+        # The grid uses first dimension batch * attention_heads. Since batch is
+        # currently 1 in this experiment, bh is the attention-head index.
+        batch = 0
+        head = bh
+        kv_head = head // group_size
+
+        offs_m = q_block * BLOCK_M + tl.arange(0, BLOCK_M)
+        offs_d = tl.arange(0, BLOCK_D)
+        q_mask = (offs_m < query_count)[:, None] & (offs_d < head_dim)[None, :]
+        q = tl.load(
+            q_ptr + batch * stride_qb + head * stride_qh + offs_m[:, None] * stride_qq + offs_d[None, :] * stride_qd,
+            mask=q_mask,
+            other=0.0,
+        )
+
+        m_i = tl.full((BLOCK_M,), -float("inf"), tl.float32)
+        l_i = tl.zeros((BLOCK_M,), tl.float32)
+        acc = tl.zeros((BLOCK_M, BLOCK_D), tl.float32)
+        visible = key_count - query_count + offs_m + 1
+
+        for start_n in range(0, candidate_count, BLOCK_N):
+            offs_n = start_n + tl.arange(0, BLOCK_N)
+            n_mask = offs_n < candidate_count
+            candidate_ids = tl.load(
+                candidate_ids_ptr + batch * stride_cb + head * stride_ch + offs_n * stride_cc,
+                mask=n_mask,
+                other=0,
+            )
+            candidate_valid = tl.load(
+                candidate_valid_ptr + batch * stride_vab + head * stride_vah + offs_n * stride_vac,
+                mask=n_mask,
+                other=0,
+            ).to(tl.int1)
+            k = tl.load(
+                k_ptr
+                + batch * stride_kb
+                + kv_head * stride_kh
+                + candidate_ids[:, None] * stride_kk
+                + offs_d[None, :] * stride_kd,
+                mask=n_mask[:, None] & candidate_valid[:, None] & (offs_d[None, :] < head_dim),
+                other=0.0,
+            )
+            scores = tl.dot(q, tl.trans(k)) * scaling
+            causal = candidate_ids[None, :] < visible[:, None]
+            scores = tl.where(
+                (offs_m[:, None] < query_count) & n_mask[None, :] & candidate_valid[None, :] & causal,
+                scores,
+                -float("inf"),
+            )
+            m_new = tl.maximum(m_i, tl.max(scores, axis=1))
+            p = tl.exp(scores - m_new[:, None])
+            alpha = tl.exp(m_i - m_new)
+            l_i = l_i * alpha + tl.sum(p, axis=1)
+            v = tl.load(
+                v_ptr
+                + batch * stride_vb
+                + kv_head * stride_vh
+                + candidate_ids[:, None] * stride_vk
+                + offs_d[None, :] * stride_vd,
+                mask=n_mask[:, None] & candidate_valid[:, None] & (offs_d[None, :] < head_dim),
+                other=0.0,
+            )
+            acc = acc * alpha[:, None] + tl.dot(p.to(v.dtype), v)
+            m_i = m_new
+
+        out = acc / l_i[:, None]
+        tl.store(
+            out_ptr + batch * stride_ob + head * stride_oh + offs_m[:, None] * stride_oq + offs_d[None, :] * stride_od,
+            out,
+            mask=(offs_m[:, None] < query_count) & (offs_d[None, :] < head_dim),
+        )
+
+
+def triton_shared_tree_attention(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    layer: int,
+    config: TreeMaskConfig,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    if triton is None:
+        raise RuntimeError("tree_attention_impl=triton_shared requires the triton package.")
+    if attention_mask is not None:
+        # The kernel applies causal masking from candidate ids and cache position.
+        # The current PPL runs do not use padding, so the dense attention mask is
+        # intentionally not gathered here.
+        pass
+    batch, attention_heads, query_count, head_dim = query_states.shape
+    _, kv_heads, key_count, _ = key_states.shape
+    if batch != 1:
+        raise RuntimeError("triton_shared currently supports batch size 1.")
+    if head_dim > 128:
+        raise RuntimeError(f"triton_shared supports head_dim <= 128, got {head_dim}.")
+    if layer not in config.layers or set(range(kv_heads)) - config.kv_heads:
+        raise RuntimeError("triton_shared requires the current layer and all KV heads to be tree-masked.")
+
+    group_size = attention_heads // kv_heads
+    with profile_tree_stage("triton_shared/chunk_candidate_ids", query_states.device):
+        candidate_ids, candidate_valid = tree_candidate_ids_for_chunk(query_states, key_states, layer, config)
+    record_tree_candidate_stats(candidate_valid.unsqueeze(2).expand(-1, -1, query_count, -1))
+
+    out = torch.empty_like(query_states)
+    block_d = triton.next_power_of_2(head_dim)
+    block_m = 16
+    block_n = 64
+    grid = (batch * attention_heads, triton.cdiv(query_count, block_m))
+    with profile_tree_stage("triton_shared/fused_attention", query_states.device):
+        _triton_shared_attention_kernel[grid](
+            query_states,
+            key_states,
+            value_states,
+            candidate_ids,
+            candidate_valid,
+            out,
+            float(scaling),
+            key_count,
+            query_count,
+            head_dim,
+            candidate_ids.shape[-1],
+            group_size,
+            query_states.stride(0),
+            query_states.stride(1),
+            query_states.stride(2),
+            query_states.stride(3),
+            key_states.stride(0),
+            key_states.stride(1),
+            key_states.stride(2),
+            key_states.stride(3),
+            value_states.stride(0),
+            value_states.stride(1),
+            value_states.stride(2),
+            value_states.stride(3),
+            candidate_ids.stride(0),
+            candidate_ids.stride(1),
+            candidate_ids.stride(2),
+            candidate_valid.stride(0),
+            candidate_valid.stride(1),
+            candidate_valid.stride(2),
+            out.stride(0),
+            out.stride(1),
+            out.stride(2),
+            out.stride(3),
+            BLOCK_M=block_m,
+            BLOCK_N=block_n,
+            BLOCK_D=block_d,
+            num_warps=4,
+            num_stages=3,
+        )
+    return out.transpose(1, 2).contiguous(), None
+
+
 def shared_matmul_tree_attention(
     query_states: torch.Tensor,
     key_states: torch.Tensor,
@@ -978,6 +1182,8 @@ def _tree_eager_attention_forward(
         scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
     original_key_states = key_states
     layer = _MODULE_TO_LAYER.get(id(module), -1)
+    if _TREE_ENABLED and config is not None and config.attention_impl == "triton_shared":
+        return triton_shared_tree_attention(query_states, key_states, value_states, attention_mask, scaling, layer, config)
     if _TREE_ENABLED and config is not None and config.attention_impl == "shared_matmul":
         try:
             return shared_matmul_tree_attention(query_states, key_states, value_states, attention_mask, scaling, layer, config)
