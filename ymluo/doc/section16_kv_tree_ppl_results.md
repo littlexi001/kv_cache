@@ -313,3 +313,130 @@ tree_stage_profile.csv
 
 其中 `timing_by_mode.csv` 中的 `avg_candidate_tokens` 只对 tree 行有意义；
 baseline 行的 `tokens_per_second` 不是候选 token 数。
+
+### 7.6 layer_shared 版本实验结果与瓶颈分析
+
+在上一版 `attention_head` 粒度中，tree retrieval 仍然需要对每层、每个 KV head
+分别生成候选集合。profile 显示候选生成本身是主要瓶颈。为降低这部分开销，当前
+实现新增了更激进的候选共享策略：
+
+```text
+candidate_granularity = layer_shared
+tree_attention_impl = shared_matmul
+tree_branch_counts = 5,2,2
+tree_prefill = false
+```
+
+`layer_shared` 的含义是：每一层只生成一套候选 token id，并让该层所有
+attention heads 共享这套候选集合。具体做法是用当前 chunk 最后一个 token
+对应的所有 attention head query 均值作为 representative query，同时用所有
+KV head 的 key 均值作为检索 key 表示。这样可以把候选生成调用次数从
+`layers * kv_heads * eval_chunks` 降到 `layers * eval_chunks`，代价是候选集合
+不再 head-specific，PPL 可能变差。
+
+本次实验结果如下：
+
+PPL 结果：
+
+| mode | loss | PPL | token_count | candidate_granularity | tree_attention_impl |
+| --- | ---: | ---: | ---: | --- | --- |
+| baseline | 4.588919 | 98.3880 | 5000 | layer_shared | shared_matmul |
+| tree | 4.720535 | 112.2283 | 5000 | layer_shared | shared_matmul |
+
+速度结果：
+
+| mode | prefill_seconds | eval_seconds | total_seconds | tokens_per_second | avg_candidate_tokens |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline | 119.976 | 11.831 | 131.808 | 422.60 | - |
+| tree | 119.976 | 7.843 | 127.820 | 637.48 | 3035.93 |
+
+从 eval 阶段看，tree 版本从 `11.831s` 降到 `7.843s`：
+
+```text
+eval speedup = 11.831 / 7.843 = 1.51x
+```
+
+但总时间只从 `131.808s` 降到 `127.820s`，原因是当前评测已经共享 prefill，
+两条分支的 `prefill_seconds` 都是 `119.976s`。因此本实验主要衡量 eval
+阶段的注意力替换收益，而不是端到端 prefill 加速。
+
+质量上，tree 版本相比 baseline：
+
+```text
+delta loss = 4.720535 - 4.588919 = +0.1316
+PPL ratio = 112.2283 / 98.3880 = 1.141
+```
+
+也就是 PPL 增加约 `14.1%`。这说明 `layer_shared` 的速度收益是以更粗粒度
+候选集合为代价换来的。相比 per-head 检索，它减少了候选生成开销，但也损失了
+不同 head 的 query-dependent 选择能力。
+
+本次平均候选 token 数为：
+
+```text
+avg_candidate_tokens = 3035.93
+```
+
+如果上下文约为 200k token，这仍然约等于只使用 `1.5%` 的历史 token。注意，
+这个比例并不直接等价于理论加速比，因为当前实现仍然有候选生成、gather、
+mask、softmax 和 PyTorch kernel 调度等额外开销。
+
+profile 结果显示，当前主要瓶颈为：
+
+| stage | seconds | calls | seconds_per_call | percent_profiled |
+| --- | ---: | ---: | ---: | ---: |
+| shared_matmul/chunk_candidate_ids | 3.745 | 1120 | 0.003344 | 57.50% |
+| shared_matmul/mid_topk_fast | 0.510 | 1120 | 0.000455 | 7.82% |
+| shared_matmul/leaf_topk_fast | 0.385 | 1120 | 0.000344 | 5.92% |
+| shared_matmul/leaf_tokens_fast | 0.357 | 1120 | 0.000319 | 5.48% |
+| shared_matmul/select_kv | 0.252 | 1120 | 0.000225 | 3.86% |
+| shared_matmul/mask | 0.203 | 1120 | 0.000181 | 3.11% |
+| shared_matmul/qk_matmul | 0.093 | 1120 | 0.000083 | 1.43% |
+| shared_matmul/softmax | 0.160 | 1120 | 0.000143 | 2.45% |
+| shared_matmul/av_matmul | 0.091 | 1120 | 0.000081 | 1.40% |
+
+这组 profile 的关键结论是：当前慢的不是 `QK` 或 `AV` 矩阵乘法。`qk_matmul`
+和 `av_matmul` 合计只有约 `0.18s`，真正的大头仍然是
+`chunk_candidate_ids`，即树检索候选生成。
+
+期间也尝试过 `triton_shared`，即用 Triton 将候选集合上的
+`QK -> softmax -> AV` 融合成一个 kernel。但实验显示该方向更慢：
+
+```text
+triton_shared/chunk_candidate_ids = 13.012s
+triton_shared/fused_attention = 28.705s
+```
+
+原因是该 kernel 仍然需要根据随机 candidate id 访问 K/V，访存模式不如
+PyTorch `shared_matmul` 路径中的 batched matmul 友好。因此当前结论是：
+不应继续优先优化 attention matmul，而应优先优化候选生成。
+
+当前实现还去掉了 `shared_matmul` 中的 `repeat_kv`。原先为了 GQA 会执行：
+
+```text
+key_states.repeat_interleave(group_size, dim=1)
+value_states.repeat_interleave(group_size, dim=1)
+```
+
+这会把 KV heads 显式复制到 attention-head 维度，带来额外内存开销。现在改为
+直接用：
+
+```text
+kv_head_index = attention_head // group_size
+selected_keys = key_states[batch_index, kv_head_index, candidate_ids]
+selected_values = value_states[batch_index, kv_head_index, candidate_ids]
+```
+
+随机张量对比验证显示新旧 selected K/V 完全一致，因此这是等价优化。
+
+当前阶段的结论如下：
+
+1. `layer_shared` 明显降低了候选生成次数，使 tree eval 相比 baseline eval
+   达到约 `1.51x` 加速。
+2. 该加速仍远低于“只使用 1.5% token”对应的理论上限，因为候选生成和 gather
+   仍然是主要开销。
+3. `layer_shared` 带来约 `14.1%` PPL 增加，说明所有 head 共享候选集合过于粗糙，
+   但它是一个有用的速度上界实验。
+4. 下一步如果继续追求大幅速度提升，应优先把 `chunk_candidate_ids` 继续压低，
+   例如减少树层级 top-k 次数、复用 layer-level 候选、改成更粗的 block-level
+   检索，或者将候选生成本身写成 CUDA/Triton kernel。

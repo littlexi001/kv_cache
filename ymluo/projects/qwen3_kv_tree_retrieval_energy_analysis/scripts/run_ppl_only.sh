@@ -18,6 +18,8 @@ python "${PROJECT_DIR}/src/evaluate_qwen3_ppl_only.py" \
   --eval_tokens "${EVAL_TOKENS:-5000}" \
   --eval_last_tokens_only "${EVAL_LAST_TOKENS_ONLY:-false}" \
   --chunk_size "${CHUNK_SIZE:-128}" \
+  --prefill_chunk_size "${PREFILL_CHUNK_SIZE:-256}" \
+  --eval_chunk_size "${EVAL_CHUNK_SIZE:-1}" \
   --max_chars "${MAX_CHARS:-8000000}" \
   --add_special_tokens "${ADD_SPECIAL_TOKENS:-false}" \
   --append_eos "${APPEND_EOS:-false}" \

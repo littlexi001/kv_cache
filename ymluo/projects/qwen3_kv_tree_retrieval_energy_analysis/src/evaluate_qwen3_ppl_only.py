@@ -84,7 +84,24 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Use the whole tokenized text as context and evaluate only the last eval_tokens tokens.",
     )
-    parser.add_argument("--chunk_size", type=int, default=256)
+    parser.add_argument(
+        "--chunk_size",
+        type=int,
+        default=256,
+        help="Backward-compatible default chunk size used when prefill/eval chunk sizes are not set.",
+    )
+    parser.add_argument(
+        "--prefill_chunk_size",
+        type=int,
+        default=None,
+        help="Chunk size for prompt prefill. Defaults to chunk_size.",
+    )
+    parser.add_argument(
+        "--eval_chunk_size",
+        type=int,
+        default=None,
+        help="Chunk size for eval/decode. Use 1 to mimic real autoregressive decode.",
+    )
     parser.add_argument("--max_chars", type=int, default=8_000_000)
     parser.add_argument("--add_special_tokens", type=str2bool, default=False)
     parser.add_argument("--append_eos", type=str2bool, default=False)
@@ -130,7 +147,18 @@ def parse_args() -> argparse.Namespace:
         default=False,
         help="Synchronously profile tree attention stages. This adds overhead and should be used for diagnosis only.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.chunk_size <= 0:
+        raise ValueError("--chunk_size must be positive.")
+    if args.prefill_chunk_size is None:
+        args.prefill_chunk_size = args.chunk_size
+    if args.eval_chunk_size is None:
+        args.eval_chunk_size = args.chunk_size
+    if args.prefill_chunk_size <= 0:
+        raise ValueError("--prefill_chunk_size must be positive.")
+    if args.eval_chunk_size <= 0:
+        raise ValueError("--eval_chunk_size must be positive.")
+    return args
 
 
 def parse_index_spec(spec: str, max_count: int, name: str) -> list[int]:
@@ -253,6 +281,8 @@ def ppl_fields() -> list[str]:
         "candidate_granularity",
         "tree_attention_impl",
         "tree_prefill",
+        "prefill_chunk_size",
+        "eval_chunk_size",
     ]
 
 
@@ -1375,7 +1405,8 @@ def compute_eval_loss(
     input_ids: torch.Tensor,
     prefill_tokens: int,
     eval_tokens: int,
-    chunk_size: int,
+    prefill_chunk_size: int,
+    eval_chunk_size: int,
     input_device: torch.device,
     use_tree_mask: bool,
     tree_prefill: bool,
@@ -1385,7 +1416,13 @@ def compute_eval_loss(
     timings: dict[str, float] = {}
     with timed_section(f"{label}_prefill", input_device, timings):
         with tree_mask_enabled(use_tree_prefill):
-            past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
+            past_key_values, prev_logits = prefill_cache(
+                model,
+                input_ids,
+                prefill_tokens,
+                prefill_chunk_size,
+                input_device,
+            )
     if prev_logits is None:
         raise RuntimeError("Prefill did not return last logits.")
     loss, ppl, count, eval_timings, _ = compute_eval_loss_from_prefill(
@@ -1393,7 +1430,7 @@ def compute_eval_loss(
         input_ids,
         prefill_tokens,
         eval_tokens,
-        chunk_size,
+        eval_chunk_size,
         input_device,
         past_key_values,
         prev_logits,
@@ -1513,7 +1550,7 @@ def main() -> None:
                     model,
                     input_ids,
                     prefill_tokens,
-                    args.chunk_size,
+                    args.prefill_chunk_size,
                     input_device,
                 )
         if shared_prev_logits is None:
@@ -1524,7 +1561,7 @@ def main() -> None:
             input_ids,
             prefill_tokens,
             args.eval_tokens,
-            args.chunk_size,
+            args.eval_chunk_size,
             input_device,
             shared_past,
             shared_prev_logits,
@@ -1550,7 +1587,7 @@ def main() -> None:
             input_ids,
             prefill_tokens,
             args.eval_tokens,
-            args.chunk_size,
+            args.eval_chunk_size,
             input_device,
             shared_past,
             shared_prev_logits,
@@ -1571,7 +1608,15 @@ def main() -> None:
         )
     elif args.compute_baseline_ppl:
         baseline_loss, baseline_ppl, baseline_count, baseline_timings = compute_eval_loss(
-            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, False, args.tree_prefill
+            model,
+            input_ids,
+            prefill_tokens,
+            args.eval_tokens,
+            args.prefill_chunk_size,
+            args.eval_chunk_size,
+            input_device,
+            False,
+            args.tree_prefill,
         )
         rows.append({"mode": "baseline", "loss": baseline_loss, "ppl": baseline_ppl, "token_count": baseline_count, **metadata})
         timing_rows.append(
@@ -1586,7 +1631,15 @@ def main() -> None:
         )
     if not use_shared_prefill and args.compute_tree_ppl:
         tree_loss, tree_ppl, tree_count, tree_timings = compute_eval_loss(
-            model, input_ids, prefill_tokens, args.eval_tokens, args.chunk_size, input_device, True, args.tree_prefill
+            model,
+            input_ids,
+            prefill_tokens,
+            args.eval_tokens,
+            args.prefill_chunk_size,
+            args.eval_chunk_size,
+            input_device,
+            True,
+            args.tree_prefill,
         )
         rows.append({"mode": "tree", "loss": tree_loss, "ppl": tree_ppl, "token_count": tree_count, **metadata})
         timing_rows.append(
