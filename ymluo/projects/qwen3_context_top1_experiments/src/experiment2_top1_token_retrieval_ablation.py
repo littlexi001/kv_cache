@@ -405,23 +405,65 @@ def dump_simple_tail_top_tokens(
     prompt: str,
     sample: dict[str, Any],
     token_ids: list[int],
+    offsets: list[tuple[int, int]],
+    answer_token_indices: set[int],
+    top_ratio: float,
     layer_head_rows: dict[int, dict[int, list[tuple[int, int, float]]]],
-) -> None:
+) -> list[dict[str, Any]]:
     fields = [
         "sample_id",
         "layer",
         "head",
         "query_token_index",
         "query_token_text",
-        "rank",
-        "key_token_index",
-        "attention_weight",
-        "key_token_text",
+        "selected_count",
+        "selected_token_indices",
+        "selected_attention_weights",
+        "selected_token_texts",
+        "answer_span_count",
+        "front_1pct_count",
+        "tail_1pct_count",
+        "other_count",
+        "answer_span_pct",
+        "front_1pct_pct",
+        "tail_1pct_pct",
+        "other_pct",
     ]
     rows: list[dict[str, Any]] = []
     for layer, head_map in layer_head_rows.items():
         for head, triples in head_map.items():
+            by_query: dict[int, list[tuple[int, float]]] = {}
             for query_index, key_index, score in triples:
+                by_query.setdefault(query_index, []).append((key_index, score))
+            for query_index, pairs in by_query.items():
+                pairs = sorted(pairs, key=lambda item: item[1], reverse=True)
+                visible_count = query_index + 1
+                edge_count = max(1, math.ceil(top_ratio * visible_count))
+                category_counts = {
+                    "answer_span": 0,
+                    "front_1pct": 0,
+                    "tail_1pct": 0,
+                    "other": 0,
+                }
+                key_indices: list[int] = []
+                weights: list[float] = []
+                token_texts: list[str] = []
+                for key_index, score in pairs:
+                    key_indices.append(key_index)
+                    weights.append(score)
+                    token_texts.append(
+                        compact_piece(tokenizer.decode([token_ids[key_index]], skip_special_tokens=False))
+                    )
+                    if key_index in answer_token_indices:
+                        category_counts["answer_span"] += 1
+                    elif key_index < edge_count:
+                        category_counts["front_1pct"] += 1
+                    elif key_index >= visible_count - edge_count:
+                        category_counts["tail_1pct"] += 1
+                    else:
+                        category_counts["other"] += 1
+                selected_count = len(pairs)
+                denom = selected_count if selected_count else 1
                 rows.append(
                     {
                         "sample_id": sample["sample_id"],
@@ -431,12 +473,18 @@ def dump_simple_tail_top_tokens(
                         "query_token_text": compact_piece(
                             tokenizer.decode([token_ids[query_index]], skip_special_tokens=False)
                         ),
-                        "rank": 0,
-                        "key_token_index": key_index,
-                        "attention_weight": score,
-                        "key_token_text": compact_piece(
-                            tokenizer.decode([token_ids[key_index]], skip_special_tokens=False)
-                        ),
+                        "selected_count": selected_count,
+                        "selected_token_indices": " ".join(str(item) for item in key_indices),
+                        "selected_attention_weights": " ".join(f"{item:.8g}" for item in weights),
+                        "selected_token_texts": " ".join(token_texts),
+                        "answer_span_count": category_counts["answer_span"],
+                        "front_1pct_count": category_counts["front_1pct"],
+                        "tail_1pct_count": category_counts["tail_1pct"],
+                        "other_count": category_counts["other"],
+                        "answer_span_pct": category_counts["answer_span"] / denom,
+                        "front_1pct_pct": category_counts["front_1pct"] / denom,
+                        "tail_1pct_pct": category_counts["tail_1pct"] / denom,
+                        "other_pct": category_counts["other"] / denom,
                     }
                 )
 
@@ -446,31 +494,104 @@ def dump_simple_tail_top_tokens(
             int(row["layer"]),
             int(row["head"]),
             int(row["query_token_index"]),
-            -float(row["attention_weight"]),
-            int(row["key_token_index"]),
         )
     )
-    previous_key: tuple[str, int, int, int] | None = None
-    rank = 0
-    for row in rows:
-        current_key = (
-            str(row["sample_id"]),
-            int(row["layer"]),
-            int(row["head"]),
-            int(row["query_token_index"]),
-        )
-        if current_key != previous_key:
-            rank = 1
-            previous_key = current_key
-        else:
-            rank += 1
-        row["rank"] = rank
-
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         if handle.tell() == 0:
             writer.writeheader()
         writer.writerows(rows)
+    return rows
+
+
+def answer_span_token_indices(
+    prompt: str,
+    answer: str,
+    offsets: list[tuple[int, int]],
+    prompt_token_count: int,
+) -> set[int]:
+    indices: set[int] = set()
+    if not answer:
+        return indices
+    start = 0
+    while True:
+        char_start = prompt.find(answer, start)
+        if char_start < 0:
+            break
+        char_end = char_start + len(answer)
+        for token_index, (token_start, token_end) in enumerate(offsets[:prompt_token_count]):
+            if token_start < char_end and token_end > char_start:
+                indices.add(token_index)
+        start = char_end
+    return indices
+
+
+def write_tail_summaries(output_dir: Path, rows: list[dict[str, Any]]) -> None:
+    summary_fields = [
+        "scope",
+        "sample_id",
+        "layer",
+        "head",
+        "query_row_count",
+        "selected_token_count",
+        "answer_span_count",
+        "front_1pct_count",
+        "tail_1pct_count",
+        "other_count",
+        "answer_span_pct",
+        "front_1pct_pct",
+        "tail_1pct_pct",
+        "other_pct",
+    ]
+
+    def build_summary(group_rows: list[dict[str, Any]], scope: str, sample_id: str = "", layer: str = "", head: str = "") -> dict[str, Any]:
+        selected = sum(int(row["selected_count"]) for row in group_rows)
+        answer = sum(int(row["answer_span_count"]) for row in group_rows)
+        front = sum(int(row["front_1pct_count"]) for row in group_rows)
+        tail = sum(int(row["tail_1pct_count"]) for row in group_rows)
+        other = sum(int(row["other_count"]) for row in group_rows)
+        denom = selected if selected else 1
+        return {
+            "scope": scope,
+            "sample_id": sample_id,
+            "layer": layer,
+            "head": head,
+            "query_row_count": len(group_rows),
+            "selected_token_count": selected,
+            "answer_span_count": answer,
+            "front_1pct_count": front,
+            "tail_1pct_count": tail,
+            "other_count": other,
+            "answer_span_pct": answer / denom,
+            "front_1pct_pct": front / denom,
+            "tail_1pct_pct": tail / denom,
+            "other_pct": other / denom,
+        }
+
+    overall_rows = [build_summary(rows, "overall")]
+    with (output_dir / "tail10_position_overall_summary.csv").open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=summary_fields)
+        writer.writeheader()
+        writer.writerows(overall_rows)
+
+    sample_rows: list[dict[str, Any]] = []
+    for sample_id in sorted({str(row["sample_id"]) for row in rows}):
+        group = [row for row in rows if str(row["sample_id"]) == sample_id]
+        sample_rows.append(build_summary(group, "sample", sample_id=sample_id))
+    with (output_dir / "tail10_position_sample_summary.csv").open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=summary_fields)
+        writer.writeheader()
+        writer.writerows(sample_rows)
+
+    layer_head_rows: list[dict[str, Any]] = []
+    keys = sorted({(int(row["layer"]), int(row["head"])) for row in rows})
+    for layer, head in keys:
+        group = [row for row in rows if int(row["layer"]) == layer and int(row["head"]) == head]
+        layer_head_rows.append(build_summary(group, "layer_head", layer=str(layer), head=str(head)))
+    with (output_dir / "tail10_position_layer_head_summary.csv").open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=summary_fields)
+        writer.writeheader()
+        writer.writerows(layer_head_rows)
 
 
 def write_summary(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -533,11 +654,16 @@ def main() -> None:
     result_rows: list[dict[str, Any]] = []
     per_sample_path = output_dir / "attention_pruning_results.jsonl"
     top_token_path = output_dir / "layer_head_top1_tokens.csv"
-    simple_tail_path = output_dir / "tail10_top1_tokens_simple.csv"
+    simple_tail_path = output_dir / "tail10_top1_tokens_by_query.csv"
+    simple_tail_sample_dir = output_dir / "tail10_by_sample"
+    simple_tail_sample_dir.mkdir(parents=True, exist_ok=True)
     if top_token_path.exists():
         top_token_path.unlink()
     if simple_tail_path.exists():
         simple_tail_path.unlink()
+    for old_sample_file in simple_tail_sample_dir.glob("*.csv"):
+        old_sample_file.unlink()
+    all_simple_tail_rows: list[dict[str, Any]] = []
 
     with per_sample_path.open("w", encoding="utf-8") as result_handle:
         for sample in samples:
@@ -592,14 +718,36 @@ def main() -> None:
             simple_tail_rows = collect_full_attention_top_tokens(
                 model, eval_input_ids, args.top_ratio, simple_tail_query_indices, input_device
             )
+            answer_indices = answer_span_token_indices(
+                prompt,
+                sample["answer"],
+                eval_offsets,
+                prompt_token_count,
+            )
+            sample_simple_tail_path = simple_tail_sample_dir / f"{sample['sample_id']}_tail10_top1_tokens_by_query.csv"
+            sample_tail_rows = dump_simple_tail_top_tokens(
+                sample_simple_tail_path,
+                tokenizer,
+                eval_text,
+                sample,
+                eval_token_ids,
+                eval_offsets,
+                answer_indices,
+                args.top_ratio,
+                simple_tail_rows,
+            )
             dump_simple_tail_top_tokens(
                 simple_tail_path,
                 tokenizer,
                 eval_text,
                 sample,
                 eval_token_ids,
+                eval_offsets,
+                answer_indices,
+                args.top_ratio,
                 simple_tail_rows,
             )
+            all_simple_tail_rows.extend(sample_tail_rows)
             print(
                 f"finished {sample['sample_id']}: full_loss={full_metrics['loss']:.4f}, "
                 f"top{args.top_ratio:g}_loss={pruned_metrics['loss']:.4f}, "
@@ -609,11 +757,12 @@ def main() -> None:
             )
 
     write_summary(output_dir / "attention_pruning_summary.csv", result_rows)
+    write_tail_summaries(output_dir, all_simple_tail_rows)
     with (output_dir / "config.json").open("w", encoding="utf-8") as handle:
         json.dump(vars(args), handle, ensure_ascii=False, indent=2)
     print(
         f"wrote {per_sample_path}, {output_dir / 'attention_pruning_summary.csv'}, "
-        f"{top_token_path}, and {simple_tail_path}",
+        f"{top_token_path}, {simple_tail_path}, and tail10 summary files",
         flush=True,
     )
 
