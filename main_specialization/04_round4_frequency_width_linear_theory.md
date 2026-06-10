@@ -17,72 +17,71 @@
 
 ## 1. 一个最小模型
 
-考虑输入只有若干离散 feature。为了简化，令 feature `i` 的输入是 one-hot 向量：
+考虑输入只有若干离散 feature。为了简化，令 feature $i$ 的输入是 one-hot 向量：
 
-```text
-x_i = e_i,    i = 1, ..., d
-```
+$$
+x_i = e_i,\qquad i = 1,\ldots,d.
+$$
 
 训练数据不是均匀分布，而是：
 
-```text
-P(i) = p_i
-```
+$$
+P(i)=p_i.
+$$
 
-其中 head feature 的 `p_i` 大，tail feature 的 `p_i` 小。
+其中 head feature 的 $p_i$ 大，tail feature 的 $p_i$ 小。
 
 模型是两层线性网络：
 
-```text
-f(x) = a^T W x
-```
+$$
+f(x)=a^\top W x.
+$$
 
 其中：
 
-```text
-W in R^{m x d}
-a in R^m
-```
+$$
+W\in\mathbb{R}^{m\times d},\qquad a\in\mathbb{R}^m.
+$$
 
-`m` 是 hidden width。
+$m$ 是 hidden width。
 
-对 feature `i`：
+对 feature $i$：
 
-```text
-f_i = f(e_i) = a^T w_i
-```
+$$
+f_i=f(e_i)=a^\top w_i.
+$$
 
-其中 `w_i` 是 `W` 的第 `i` 列。
+其中 $w_i$ 是 $W$ 的第 $i$ 列。
 
 训练目标用平方损失：
 
-```text
-L = 1/2 * sum_i p_i (f_i - y_i)^2
-```
+$$
+L=\frac{1}{2}\sum_i p_i(f_i-y_i)^2.
+$$
 
 记误差：
 
-```text
-e_i = f_i - y_i
-```
+$$
+\varepsilon_i=f_i-y_i.
+$$
 
 ## 2. 宽度不改变函数类，但改变梯度几何
 
 这个模型的函数本身是线性的：
 
-```text
-f(x) = beta^T x,    beta = W^T a
-```
+$$
+f(x)=\beta^\top x,\qquad \beta=W^\top a.
+$$
 
-所以如果只看可表达函数类，只要 `m >= 1`，它已经能表达任意线性 `beta`。从这个角度看，宽度似乎不重要。
+所以如果只看可表达函数类，只要 $m\ge 1$，它已经能表达任意线性 $\beta$。从这个角度看，宽度似乎不重要。
 
-但训练不是直接优化 `beta`，而是优化参数 `(a, W)`。梯度下降看到的是参数空间中的梯度：
+但训练不是直接优化 $\beta$，而是优化参数 $(a,W)$。梯度下降看到的是参数空间中的梯度：
 
-```text
-grad_theta f_i
-```
+$$
+\nabla_\theta f_i.
+$$
 
-宽度 `m` 会改变不同 feature 的参数梯度是否互相重叠。
+宽度 $m$ 会改变不同 feature 的参数梯度是否互相重叠。
 
 这就是关键：
 
@@ -90,47 +89,49 @@ grad_theta f_i
 
 ## 3. 每个 feature 的梯度方向
 
-对 feature `i`：
+对 feature $i$：
 
-```text
-f_i = a^T w_i
-```
+$$
+f_i=a^\top w_i.
+$$
 
 对参数求梯度：
 
-```text
-∂f_i / ∂a = w_i
-∂f_i / ∂w_i = a
-∂f_i / ∂w_j = 0,  j != i
-```
+$$
+\frac{\partial f_i}{\partial a}=w_i,\qquad
+\frac{\partial f_i}{\partial w_i}=a,\qquad
+\frac{\partial f_i}{\partial w_j}=0\quad (j\ne i).
+$$
 
-所以 feature `i` 的参数梯度可以理解成两部分：
+所以 feature $i$ 的参数梯度可以理解成两部分：
 
-```text
-grad f_i = (w_i, 0, ..., a at column i, ..., 0)
-```
+$$
+\nabla_\theta f_i=(w_i,\;0,\ldots,\underset{\text{column }i}{a},\ldots,0).
+$$
 
-不同 feature `i` 和 `j` 的梯度内积是：
+不同 feature $i$ 和 $j$ 的梯度内积是：
 
-```text
-<grad f_i, grad f_j> = <w_i, w_j>
-```
+$$
+\langle \nabla_\theta f_i,\nabla_\theta f_j\rangle
+=\langle w_i,w_j\rangle.
+$$
 
-因为 `w_i` 和 `w_j` 的 column-specific 部分不同，`a` 那部分落在不同列上，彼此正交；它们唯一共享的交叉项来自 `a` 参数上的梯度 `w_i` 和 `w_j`。
+因为 $w_i$ 和 $w_j$ 的 column-specific 部分不同，$a$ 那部分落在不同列上，彼此正交；它们唯一共享的交叉项来自 $a$ 参数上的梯度 $w_i$ 和 $w_j$。
 
 而梯度范数是：
 
-```text
-||grad f_i||^2 = ||w_i||^2 + ||a||^2
-```
+$$
+\|\nabla_\theta f_i\|^2=\|w_i\|^2+\|a\|^2.
+$$
 
 因此 normalized gradient similarity 是：
 
-```text
-cos_ij =
-  <w_i, w_j> /
-  sqrt((||w_i||^2 + ||a||^2)(||w_j||^2 + ||a||^2))
-```
+$$
+\cos_{ij}
+=
+\frac{\langle w_i,w_j\rangle}
+{\sqrt{(\|w_i\|^2+\|a\|^2)(\|w_j\|^2+\|a\|^2)}}.
+$$
 
 这就是 feature-gradient interference 的最简单形式。
 
@@ -138,29 +139,32 @@ cos_ij =
 
 假设初始化为：
 
-```text
-a_r ~ N(0, sigma_a^2 / m)
-W_{r,i} ~ N(0, sigma_w^2 / m)
-```
+$$
+a_r\sim\mathcal{N}\left(0,\frac{\sigma_a^2}{m}\right),\qquad
+W_{r,i}\sim\mathcal{N}\left(0,\frac{\sigma_w^2}{m}\right).
+$$
 
 那么：
 
-```text
-E[||a||^2] = sigma_a^2
-E[||w_i||^2] = sigma_w^2
-E[<w_i, w_j>] = 0,  i != j
-Var(<w_i, w_j>) = sigma_w^4 / m
-```
+$$
+\mathbb{E}\|a\|^2=\sigma_a^2,\qquad
+\mathbb{E}\|w_i\|^2=\sigma_w^2,
+$$
 
-因此对 `i != j`：
+$$
+\mathbb{E}\langle w_i,w_j\rangle=0\quad (i\ne j),\qquad
+\operatorname{Var}(\langle w_i,w_j\rangle)=\frac{\sigma_w^4}{m}.
+$$
 
-```text
-cos_ij = O_p(1 / sqrt(m))
-```
+因此对 $i\ne j$：
+
+$$
+\cos_{ij}=O_p\left(\frac{1}{\sqrt{m}}\right).
+$$
 
 也就是说：
 
-> width 越大，不同 feature 的参数梯度越接近正交；交叉干扰项的随机幅度按 `1/sqrt(m)` 下降。
+> width 越大，不同 feature 的参数梯度越接近正交；交叉干扰项的随机幅度按 $1/\sqrt{m}$ 下降。
 
 这是一个非常核心的性质。
 
@@ -170,39 +174,44 @@ cos_ij = O_p(1 / sqrt(m))
 
 全量梯度为：
 
-```text
-g = sum_i p_i e_i grad f_i
-```
+$$
+g=\sum_i p_i\varepsilon_i\nabla_\theta f_i.
+$$
 
-对某个 tail feature `t`，一次梯度下降对它的预测值产生的函数空间变化为：
+对某个 tail feature $t$，一次梯度下降对它的预测值产生的函数空间变化为：
 
-```text
-Delta f_t ≈ -eta <grad f_t, g>
-```
+$$
+\Delta f_t\approx -\eta\langle \nabla_\theta f_t,g\rangle.
+$$
 
-代入 `g`：
+代入 $g$：
 
-```text
-Delta f_t
-≈ -eta sum_i p_i e_i <grad f_t, grad f_i>
-
-= -eta p_t e_t ||grad f_t||^2
-  -eta sum_{i != t} p_i e_i <grad f_t, grad f_i>
-```
+$$
+\begin{aligned}
+\Delta f_t
+&\approx -\eta\sum_i p_i\varepsilon_i
+\langle \nabla_\theta f_t,\nabla_\theta f_i\rangle \\
+&= -\eta p_t\varepsilon_t\|\nabla_\theta f_t\|^2
+-\eta\sum_{i\ne t}p_i\varepsilon_i
+\langle \nabla_\theta f_t,\nabla_\theta f_i\rangle.
+\end{aligned}
+$$
 
 第一项是 tail 自己的有效学习项：
 
-```text
-self term = p_t e_t ||grad f_t||^2
-```
+$$
+\text{self term}=p_t\varepsilon_t\|\nabla_\theta f_t\|^2.
+$$
 
 第二项是其他 feature 对 tail 的交叉影响：
 
-```text
-cross term = sum_{i != t} p_i e_i <grad f_t, grad f_i>
-```
+$$
+\text{cross term}
+=\sum_{i\ne t}p_i\varepsilon_i
+\langle \nabla_\theta f_t,\nabla_\theta f_i\rangle.
+$$
 
-对于 head feature `h`，`p_h` 很大；对于 tail feature `t`，`p_t` 很小。因此 tail 的 self term 天然弱，而 head 对 tail 的 cross term 可能很大。
+对于 head feature $h$，$p_h$ 很大；对于 tail feature $t$，$p_t$ 很小。因此 tail 的 self term 天然弱，而 head 对 tail 的 cross term 可能很大。
 
 这就是 Zipf 下 tail 难学的梯度动力学来源：
 
@@ -212,23 +221,19 @@ cross term = sum_{i != t} p_i e_i <grad f_t, grad f_i>
 
 根据上面的初始化结论：
 
-```text
-<grad f_t, grad f_h> / (||grad f_t|| ||grad f_h||) = O_p(1/sqrt(m))
-```
+$$
+\frac{\langle \nabla_\theta f_t,\nabla_\theta f_h\rangle}
+{\|\nabla_\theta f_t\|\,\|\nabla_\theta f_h\|}
+=O_p\left(\frac{1}{\sqrt{m}}\right).
+$$
 
-所以 width 增大后：
+所以 width 增大后，cross term 的相对幅度下降。tail 的更新更接近只由自己的 self term 决定：
 
-```text
-cross term 的相对幅度下降
-```
+$$
+\Delta f_t\approx -\eta p_t\varepsilon_t\|\nabla_\theta f_t\|^2.
+$$
 
-tail 的更新更接近只由自己的 self term 决定：
-
-```text
-Delta f_t ≈ -eta p_t e_t ||grad f_t||^2
-```
-
-虽然 `p_t` 仍然小，但至少它不再被大量高频 feature 的随机交叉项淹没。
+虽然 $p_t$ 仍然小，但至少它不再被大量高频 feature 的随机交叉项淹没。
 
 换句话说：
 
@@ -236,7 +241,7 @@ Delta f_t ≈ -eta p_t e_t ||grad f_t||^2
 
 这正对应实验中看到的现象：
 
-- reweight 能提高 tail 的有效 `p_t`，所以 tail 恢复；
+- reweight 能提高 tail 的有效 $p_t$，所以 tail 恢复；
 - uniform fine-tune 能提高 tail 的采样频率，所以 tail 恢复；
 - 加宽能降低 head/tail 梯度交叉干扰，所以 tail 的边际改善更大；
 - skew 越强，高频 cross term 越强，因此 width 的 tail-side value 越大。
@@ -245,56 +250,58 @@ Delta f_t ≈ -eta p_t e_t ||grad f_t||^2
 
 定义神经切线核：
 
-```text
-K_{ij} = <grad_theta f_i, grad_theta f_j>
-```
+$$
+K_{ij}=\langle \nabla_\theta f_i,\nabla_\theta f_j\rangle.
+$$
 
 在本模型中：
 
-```text
-K_{ii} = ||w_i||^2 + ||a||^2
-K_{ij} = <w_i, w_j>,  i != j
-```
+$$
+K_{ii}=\|w_i\|^2+\|a\|^2,\qquad
+K_{ij}=\langle w_i,w_j\rangle\quad (i\ne j).
+$$
 
 误差动力学近似为：
 
-```text
-dot e = -K P e
-```
+$$
+\dot{\varepsilon}=-KP\varepsilon.
+$$
 
 其中：
 
-```text
-P = diag(p_1, ..., p_d)
-```
+$$
+P=\operatorname{diag}(p_1,\ldots,p_d).
+$$
 
-如果 `K` 是完全对角的：
+如果 $K$ 是完全对角的：
 
-```text
-dot e_i = -K_{ii} p_i e_i
-```
+$$
+\dot{\varepsilon}_i=-K_{ii}p_i\varepsilon_i.
+$$
 
-每个 feature 独立学习。高频因为 `p_i` 大而学得快，低频因为 `p_i` 小而学得慢，但不会被其他 feature 干扰。
+每个 feature 独立学习。高频因为 $p_i$ 大而学得快，低频因为 $p_i$ 小而学得慢，但不会被其他 feature 干扰。
 
-如果 `K` 有较大 off-diagonal：
+如果 $K$ 有较大 off-diagonal：
 
-```text
-dot e_i = -K_{ii} p_i e_i - sum_{j != i} K_{ij} p_j e_j
-```
+$$
+\dot{\varepsilon}_i
+=-K_{ii}p_i\varepsilon_i
+-\sum_{j\ne i}K_{ij}p_j\varepsilon_j.
+$$
 
-tail feature `i=t` 会受到 head feature 的强交叉项影响：
+tail feature $i=t$ 会受到 head feature 的强交叉项影响：
 
-```text
-sum_{h in head} K_{t h} p_h e_h
-```
+$$
+\sum_{h\in\mathrm{head}}K_{th}p_h\varepsilon_h.
+$$
 
-因为 `p_h >> p_t`，即使 `K_{t h}` 不大，也可能主导 tail 的早期变化。
+因为 $p_h\gg p_t$，即使 $K_{th}$ 不大，也可能主导 tail 的早期变化。
 
 宽度的作用是让：
 
-```text
-K_{ij} / sqrt(K_{ii} K_{jj}) -> 0
-```
+$$
+\frac{K_{ij}}{\sqrt{K_{ii}K_{jj}}}\rightarrow 0.
+$$
 
 因此训练动力学更接近 feature-wise decoupled learning。
 
@@ -302,28 +309,26 @@ K_{ij} / sqrt(K_{ii} K_{jj}) -> 0
 
 这个模型也解释了为什么加宽更改善 tail，而不是均匀改善所有 feature。
 
-对 head feature `h`：
+对 head feature $h$：
 
-```text
-self term = p_h e_h K_{hh}
-```
+$$
+\text{self term}=p_h\varepsilon_hK_{hh}.
+$$
 
-因为 `p_h` 大，head 即使有一些 cross interference，自己的 self term 也足够强。它本来就能学得好。
+因为 $p_h$ 大，head 即使有一些 cross interference，自己的 self term 也足够强。它本来就能学得好。
 
-对 tail feature `t`：
+对 tail feature $t$：
 
-```text
-self term = p_t e_t K_{tt}
-```
+$$
+\text{self term}=p_t\varepsilon_tK_{tt}.
+$$
 
-因为 `p_t` 小，tail 的 self term 弱，所以它对 cross interference 更敏感。
+因为 $p_t$ 小，tail 的 self term 弱，所以它对 cross interference 更敏感。
 
 因此当 width 增大、off-diagonal interference 下降时，最受益的是 tail：
 
-```text
-head: self term strong, interference 相对不致命
-tail: self term weak, interference 一旦下降就明显改善
-```
+- head: self term strong，interference 相对不致命；
+- tail: self term weak，interference 一旦下降就明显改善。
 
 这给出一个简洁解释：
 
@@ -333,37 +338,38 @@ tail: self term weak, interference 一旦下降就明显改善
 
 ### 9.1 高频/低频效果差异由频率导致
 
-理论中学习速率含有 `p_i`：
+理论中学习速率含有 $p_i$：
 
-```text
-dot e_i ≈ -K_{ii} p_i e_i
-```
+$$
+\dot{\varepsilon}_i\approx -K_{ii}p_i\varepsilon_i.
+$$
 
-所以 `p_i` 越小，基础学习速度越慢。
+所以 $p_i$ 越小，基础学习速度越慢。
 
 ### 9.2 高频主导梯度
 
 全量梯度是：
 
-```text
-g = sum_i p_i e_i grad f_i
-```
+$$
+g=\sum_i p_i\varepsilon_i\nabla_\theta f_i.
+$$
 
-因此 head feature 由于 `p_i` 大，在 `g` 中权重更大。实验中的 positive alignment gap 正是这个式子的体现。
+因此 head feature 由于 $p_i$ 大，在 $g$ 中权重更大。实验中的 positive alignment gap 正是这个式子的体现。
 
 ### 9.3 Reweight / uniform fine-tune 可恢复
 
-Reweight 等价于把有效频率从 `p_i` 改成更平衡的 `q_i`：
+Reweight 等价于把有效频率从 $p_i$ 改成更平衡的 $q_i$：
 
-```text
-g_reweight = sum_i q_i e_i grad f_i
-```
+$$
+g_{\mathrm{reweight}}
+=\sum_i q_i\varepsilon_i\nabla_\theta f_i.
+$$
 
 Uniform fine-tune 等价于让：
 
-```text
-p_i = 1/d
-```
+$$
+p_i=\frac{1}{d}.
+$$
 
 因此 tail self term 变大，tail 可以快速恢复。
 
@@ -371,9 +377,10 @@ p_i = 1/d
 
 宽度让：
 
-```text
-off-diagonal K_{ij} / sqrt(K_{ii}K_{jj}) = O_p(1/sqrt(m))
-```
+$$
+\frac{K_{ij}}{\sqrt{K_{ii}K_{jj}}}
+=O_p\left(\frac{1}{\sqrt{m}}\right).
+$$
 
 tail 的 self term 小，所以最怕 off-diagonal 干扰；降低干扰后，tail 的有效更新改善最大。
 
@@ -395,7 +402,7 @@ tail 的 self term 小，所以最怕 off-diagonal 干扰；降低干扰后，ta
 
 由这个理论推出三个直接预测：
 
-1. 随 hidden width 增大，feature-gradient kernel 的 off-diagonal cosine 应下降，量级近似随 `1/sqrt(m)` 下降。
+1. 随 hidden width 增大，feature-gradient kernel 的 off-diagonal cosine 应下降，量级近似随 $1/\sqrt{m}$ 下降。
 2. Zipf alpha 越大，tail 对 off-diagonal interference 越敏感，因此 width 的 tail-side improvement 越大。
 3. Reweight 或 uniform fine-tune 会主要通过增大 tail self term 来恢复 tail，而不一定需要彻底改变 representation rank。
 

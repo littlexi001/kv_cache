@@ -2,21 +2,17 @@
 
 ## 问题与当前结论
 
-### 问题一：提升维度为什么能让 tail 数据学得更好？为什么初始化不好时又不行？
+### 问题一：提升维度为什么能让 tail 数据学得更好？
 
-**当前结论：提升维度提供的是潜在 residual 表征容量；初始化决定这些容量能否真的被 tail 使用。**
+**结论1：提升维度提供为 tail feature 提供潜在表征容量 (effective dimension)。** head feature 会优先占据其被初始化时的方向；tail feature 在 head feature 的 complement space 中竞争方向。
 
-初始化观察和梯度竞争理论可以统一起来：初始化决定竞争结构是否在训练早期出现；梯度干扰 / effective rank 理论解释这种竞争为什么会影响收敛后的表征空间和预测效果。
-
-所以，维度提升不是自动有效。只有当 tail 真正进入 common 主方向之外的 residual space，raw dimension 才会转化为 tail effective dimension，并改善 tail 学习。
+**结论2：初始化差时，即使提升维度，tail数据依旧学不好。** 若初始化时各 tail feature 未占据 tail feature 的完整 complement space，则它们最终也不会利用初始化时未被占据的维度。
 
 ### 问题二：tail 内部会不会继续出现 head-tail 竞争结构？
 
-**当前结论：会。**
+**当前结论：会。** 长尾学习困难不是简单的“head 学好、tail 学不好”。频率分布会在表征空间中形成层级化竞争：common 先塑造主空间，tail 在剩余空间里竞争；tail 内部如果仍然不均匀，就会继续出现次一级的方向分配和 margin 差异。
 
-长尾学习困难不是简单的“head 学好、tail 学不好”。频率分布会在表征空间中形成层级化竞争：common 先塑造主空间，tail 在剩余空间里竞争；tail 内部如果仍然不均匀，就会继续出现次一级的方向分配和 margin 差异。
-
-### 问题三：真实 Transformer 是否也符合这个图景？
+### 问题三：非线性模型，或真实 Transformer 也符合上述竞争 feature 方向的模型吗？
 
 **当前结论：大方向符合，但 Transformer 会弱化简单 toy MLP 中“初始化几何决定最终几何”的强说法。**
 
