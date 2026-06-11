@@ -2,24 +2,107 @@
 
 ## 0. 要回答的问题目录
 
-导师这轮组会强调：先把问题写清楚，再做实验。当前要回答的问题可以归纳为以下几类。
+> **Attention 实际需要读取的历史信息是否高度稀疏，这种稀疏性为什么存在，以及如何低成本预测这种稀疏性？**
 
-1. 为什么 full attention / 全量 context 不一定最优？
-2. 为什么只保留 attention 分数 top 1% token 能接近 full attention？
-3. top 1% token 到底包含什么信息？
-4. 浅层 top 1% 不包含答案，那浅层到底在做什么？
-5. top 1% 中 sequence-index 尾部 1% 占比较高，这些 tail token 有什么用？
-6. 分数最低的 tail 10% token 为什么会让 full attention 变差？
-7. tail 10% token 通过 softmax 权重和 V 向量如何影响最终输出方向？
-8. 97% 性能到底意味着什么？剩下 3% 损失在哪些任务上明显？
-9. 小模型为什么可以借助压缩处理更长 context？
-10. 小模型默认无法扩展 context 的根因是什么？
-11. 如何从 oracle top 1% 走向工程可行的近似 top 1%？
-12. MoE specialization / reverse index 是否能作为高效检索机制？
+```mermaid
+flowchart LR
+    ROOT["核心问题<br/>Attention 实际需要读取的<br/>历史信息是否高度稀疏？"]
 
-## 0.1 本轮组会的核心主线
+    subgraph WHAT["一、是否稀疏"]
+        direction TB
+        W1["top-1% score token 接近 full attention"]
+        W2["top-4% score token 好于 full attention"]
+        W1 --> W2
+    end
 
-这次组会最核心的内容可以压缩成四句话。
+    subgraph WHY["二、为什么稀疏性"]
+        direction TB
+        Y1["A. 数值原理：少量 token 的高分如何形成"]
+        Y2["B. 信息功能：top /tail score token 包含哪些信息"]
+        Y4["C. 适用边界：这套规律在什么条件下成立"]
+    end
+
+    subgraph HOW["三、如何预测稀疏集合"]
+        direction TB
+        H1["从 Oracle score top<br/>走向低成本近似 selector"]
+        H2["Graph / Tree / Reverse Index<br/>MoE / Learned Router"]
+        H1 --> H2
+    end
+
+    ROOT --> WHAT
+    WHAT --> WHY
+    WHY --> HOW
+
+    classDef root fill:#1f2937,color:#ffffff,stroke:#111827,stroke-width:2px;
+    classDef what fill:#e8f1fb,color:#172033,stroke:#4b78a8;
+    classDef why fill:#f7f0df,color:#332b1c,stroke:#a88332;
+    classDef how fill:#e7f4ea,color:#17331f,stroke:#4e8b5e;
+
+    class ROOT root;
+    class W1,W2,W3 what;
+    class Y1,Y2,Y3,Y4 why;
+    class H1,H2 how;
+```
+
+### 一、是什么：Attention 是否只需要少量（稀疏）历史信息？
+
+**是稀疏的，且具有以下特征：**
+1. score top 1% 已经基本接近 full attention；长文本检索更敏感，需要保留更高比例，但仍明显少于全量 context。
+2. score top 2%-20% 均略优于 full attention，其中 4% 最好。
+3. score top 1% 的位置和功能组成具有明显层间差异：浅层几乎不命中远程答案，中高层的答案命中上升，最后一层又明显偏向 position end；不能简单概括为“深层集中在 front/end”。
+
+### 二、为什么：Attention Selectivity 为什么是稀疏的？
+
+#### A. 数值原理：为什么只有少量 token 获得高分？
+
+| 问题 | 当前一句话回答 |
+|---|---|
+| 1. QK score 是否长尾、有间隔或极值？ | 整体分布不算强长尾，但存在少数显著高分极值，且深层更明显。 |
+| 2. Score top/tail 覆盖多少 softmax mass？ | score top 1% 平均覆盖 83.7% mass，而 score tail 1% 的 mass 几乎为零。 |
+| 3. Score top/tail 是否位于不同奇异子空间？ | 差异很弱，SVD 主子空间不能充分解释 score selectivity。 |
+| 4. Score top/tail 的 V 如何影响输出？ | score top 1% 基本恢复 full output；score tail 的方向不同且更易抵消，但实际 mass 极小。 |
+
+#### B. 信息功能：Top/Tail Score Token 分别包含哪些信息，导致他们有用/有害？
+
+| 问题 | 当前一句话回答 |
+|---|---|
+| 1. score top 1% token 中分别包含多少远程答案、position front、position end 和其他上下文信息？ | score top 1% 是功能混合集合：按 token 数量约含 `1.6% answer / 12.0% front / 36.2% end / 50.2% other`，但 mass 主要集中于 front 和 end；answer 虽少，进入 top 1% 的概率约为随机基线的 `5×`，并对正确回答具有决定性作用。 |
+| 2. 浅层几乎不命中远程答案时，它保留的 token 在承担什么功能？ | 浅层主要利用 position end 维持当前问题、局部上下文和生成轨迹；front 虽承载约 `46.3%` mass，却不是该样本正确回答所必需，说明高 attention mass 不等同于高任务信息价值。 |
+
+当前关键实验结论：
+
+| 实验条件 | 结果 | 对信息功能的解释 |
+|---|---|---|
+| Full attention 屏蔽 exact answer（9 tokens） | Answer PPL 从 `4.21` 升至 `182.30`，生成由正确答案变为错误答案 | answer 平均 mass 很低，但属于少量且不可替代的事实信息。 |
+| Full attention 屏蔽 position front（28 tokens） | Answer PPL 降至 `2.20`，仍能正确生成答案 | front 的高 mass 更可能包含 attention sink、公共基线或格式控制，不能直接视为任务价值。 |
+| Full attention 屏蔽 position end（28 tokens） | 自由生成失败 | end 包含当前 question 和 `Answer:` 提示，对确定任务和生成起点至关重要。 |
+| 每层、每个 head、每个 query 仅保留 oracle score top 1% | Teacher-forced Answer PPL 为 `1.95`，但自由生成错误 | top 1% 可以近似单步表征和条件预测，却不足以保证自回归生成轨迹稳定。 |
+| score top 1% 内进一步移除 answer | Answer PPL 升至 `103.69`，token accuracy 降至 `11.1%` | 在稀疏集合内部，answer 是最明确、最不可替代的任务信息。 |
+| score top 1% 内进一步移除 front | Answer PPL 为 `3.09`，teacher-forced accuracy 保持 `88.9%`，但自由生成仍错误 | front 不是答案内容的核心载体；当前生成失败首先来自 top 1% 本身不稳定，不能归因于缺少 front。 |
+
+因此，B 部分目前最重要的方法论修正是：
+
+> **不能只用 token 数量、attention mass、局部 output cosine 或全局 perplexity 定义 token 是否重要；必须同时考察类别进入 score top 的富集程度，以及移除该类别后任务答案是否发生因果性错误。**
+
+#### C. 适用边界：稀疏性在什么条件下成立？
+
+子问题：
+1. 97% 性能意味着什么，剩余 3% 损失集中在哪些任务、样本和 token 上？
+2. 普通生成、长程检索、多跳推理、代码和数学任务需要的有效 token budget 是否不同？
+3. 不同 layer/head 的最优保留比例是否不同？是否存在不能稀疏化的层或 head？
+
+### 三、怎么办：如何提前预测出所需的稀疏 kv token？
+
+1.  如何从 oracle score top 1% 走向工程可行的近似 score top 1%？
+2.  MoE specialization / reverse index 是否能作为高效检索机制？
+
+## 本轮组会的核心主线
+
+这次组会最核心的研究逻辑是：
+
+> **先确认 Attention 所需历史信息是否高度稀疏，再解释这种稀疏性为什么存在，最后才设计如何低成本预测稀疏集合。**
+
+目前 oracle pruning 已经为“是否稀疏”提供了初步正向证据。因此，当前工作的重心是第二步“为什么稀疏”，而不是直接跳到某个 solution。
 
 第一，如果 `90%` 比 `100%` 好，就必须回答：
 
@@ -39,13 +122,15 @@ QK similarity -> softmax weight -> weighted V -> output direction
 
 第三，top 1% 保留的信息到底是什么，不能只给观察比例，要验证这些信息类型的作用。
 
-第四，这个问题背后还有一个更大的问题：
+第四，还要明确这种稀疏性的能力边界和模型规模效应：
 
 > 小模型为什么学不过大模型？是否是 hidden dimension / head dimension 不够导致长尾信息在表征空间里混淆？
 
 如果这个方向成立，那么目标不仅是 KV 压缩，而是：
 
 > 能不能训练一个小模型，让它学会聪明地筛选、压缩和检索长 context 中真正有用的信息。
+
+当上述机制得到解释后，第三步才是把 oracle top 1% 转化为可实现的 selector：用 graph、tree、reverse index、MoE specialization 或 learned router，在不计算 full attention 的情况下预测真正需要读取的历史 token。
 
 ## 1. 背景依据
 
@@ -173,18 +258,18 @@ r = 1%, 2%, 3%, 4%, 5%, 6%
 
 目前已有观察：
 
-- top 1% 可以拆为 `answer_span / front_1pct / tail_1pct / other`。
+- score top 1% 可以按位置与功能拆为 `answer_span / position_front_1pct / position_end_1pct / other`。
 - 浅层 top 1% 基本不包含 answer token。
 - 中高层更多包含 answer token。
-- 浅层主要落在 sequence-index tail 1% 和 other。
+- 浅层主要落在 position end 1% 和 other。
 
 导师指出：这些只是观察，不是结论。
 
 接下来必须回答：
 
 - 浅层不包含 answer，那浅层 top 1% 到底在做什么？
-- tail 1% 为什么重要？
-- tail 1% 是否提供语法、格式、局部结构、当前位置预测信息？
+- position end 1% 为什么重要？
+- position end 1% 是否提供语法、格式、局部结构、当前位置预测信息？
 - other 里到底是什么？是噪声，还是语义桥？
 - 中高层 answer_span 命中更高，是否说明中高层承担长程检索？
 
@@ -195,16 +280,16 @@ r = 1%, 2%, 3%, 4%, 5%, 6%
 - 某类 token 在某些层/head 中是否稳定出现？
 - 它们在 K/V/hidden 表征空间中是否有可解释的分布？
 
-## 5. 问题四：sequence-index tail 1% 有什么用？
+## 5. 问题四：position end 1% 有什么用？
 
 需要明确区分两个概念：
 
 - `score_top_1pct`：attention/QK 分数最高的 1% token。
-- `index_tail_1pct`：序列位置最靠后的 1% token。
+- `position_end_1pct`：序列位置最后面的 1% token。
 
 已有观察是：
 
-> score top 1% 中有相当比例落在 index tail 1%。
+> score top 1% 中有相当比例落在 position end 1%。
 
 这引出一个新问题：
 
@@ -219,8 +304,8 @@ r = 1%, 2%, 3%, 4%, 5%, 6%
 
 ```text
 top1_all
-top1_without_index_tail1
-only_index_tail1_in_top1
+top1_without_position_end1
+only_position_end1_in_top1
 top1_without_answer_span
 only_answer_span_in_top1
 ```
@@ -250,14 +335,14 @@ only_answer_span_in_top1
 
 - top 1% 是否集中在某些方向；
 - score-tail 10% 是否更分散、更低范数，或者落在不同子空间；
-- answer_span、index_tail1、other 是否在投影空间中可分；
+- answer_span、position_end_1pct、other 是否在投影空间中可分；
 - score-tail 10% 是否在 V 空间中形成扰动方向。
 
 ### 6.2 SVD 表征基分析方案
 
 目前和师兄讨论出的具体做法是：
 
-1. 采样一批输出位置，例如普通续写 token、长文本检索答案 token、问题末尾 tail token。
+1. 采样一批输出位置，例如普通续写 token、长文本检索答案 token、问题末尾的 end token。
 2. 对这些位置收集对应层/head 的表征，形成一个表征矩阵：
 
 ```text
@@ -289,7 +374,7 @@ projection(x) = x @ V_k
 
 - `score_top_1pct` token；
 - `score_tail_10pct` token；
-- `index_tail_1pct_in_top1` token；
+- `position_end_1pct_in_top1` token；
 - `answer_span_in_top1` token；
 - `other_in_top1` token。
 
@@ -300,7 +385,7 @@ projection(x) = x @ V_k
 - top 1% 是否主要集中在少数主方向上？
 - score-tail 10% 是否更分散，或者更多落在低能量方向上？
 - answer span token 是否在某些主方向上更突出？
-- index tail 1% token 是否形成局部结构/格式相关的方向？
+- position end 1% token 是否形成局部结构/格式相关的方向？
 - score-tail 10% 是否和 top 1% 在表征空间中方向接近，还是近似正交？
 - score-tail 10% 的 V 投影是否会对 top 1% 的 weighted V output 方向产生扰动？
 
@@ -603,7 +688,7 @@ MoE specialization / reverse index 的作用不是简单加速，而是：
 
 > 解释 full attention 中低分 token 为什么可能让结果变差。
 
-### 11.4 Index-tail 1% ablation
+### 11.4 Position-end 1% ablation
 
 分析 top 1% 中位于序列尾部 1% 的 token：
 
@@ -613,7 +698,7 @@ MoE specialization / reverse index 的作用不是简单加速，而是：
 
 目的：
 
-> 验证 tail token 是否承担局部结构和生成稳定性。
+> 验证 position end token 是否承担局部结构和生成稳定性。
 
 ### 11.5 Top 1% 信息类型 ablation
 
@@ -621,8 +706,8 @@ MoE specialization / reverse index 的作用不是简单加速，而是：
 
 ```text
 answer_span
-front_1pct
-index_tail_1pct
+position_front_1pct
+position_end_1pct
 other
 ```
 
