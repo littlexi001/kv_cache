@@ -6,6 +6,7 @@ import json
 import math
 from contextlib import contextmanager
 from dataclasses import dataclass
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -27,119 +28,107 @@ _MODULE_TO_LAYER: dict[int, int] = {}
 _ACTIVE_CONTEXT: AnalysisContext | None = None
 
 
+@dataclass(frozen=True)
+class VectorSpec:
+    name: str
+    side: str
+    value: float
+
+
 @dataclass
 class AnalysisConfig:
     layers: set[int]
     heads: set[int]
-    top_mass: float
+    split_mode: str
+    vector_specs: list[VectorSpec]
     collect_vectors: bool
     attention_output_mode: str
     ppl_renormalize_selected: bool
 
 
-class HeadStats:
+class VectorAccumulator:
     def __init__(self) -> None:
         self.count = 0
-        self.full_norm_sum = 0.0
-        self.top_norm_sum = 0.0
-        self.tail_norm_sum = 0.0
-        self.top_cond_norm_sum = 0.0
-        self.tail_cond_norm_sum = 0.0
-        self.top_mass_sum = 0.0
-        self.tail_mass_sum = 0.0
-        self.top_token_count_sum = 0.0
-        self.tail_token_count_sum = 0.0
-        self.cos_full_top_sum = 0.0
-        self.cos_full_tail_sum = 0.0
-        self.cos_top_tail_sum = 0.0
-        self.cos_full_top_cond_sum = 0.0
-        self.cos_full_tail_cond_sum = 0.0
-        self.cos_top_cond_tail_cond_sum = 0.0
-        self.l2_full_top_sum = 0.0
-        self.l2_full_tail_sum = 0.0
-        self.reconstruction_error_sum = 0.0
+        self.norm_sum = 0.0
+        self.mass_sum = 0.0
+        self.token_count_sum = 0.0
 
-    def update(
-        self,
-        full_output: torch.Tensor,
-        top_output: torch.Tensor,
-        tail_output: torch.Tensor,
-        top_cond_output: torch.Tensor,
-        tail_cond_output: torch.Tensor,
-        top_mass: torch.Tensor,
-        tail_mass: torch.Tensor,
-        top_count: torch.Tensor,
-        tail_count: torch.Tensor,
-    ) -> None:
-        count = int(full_output.shape[0])
-        self.count += count
-        self.full_norm_sum += float(torch.linalg.vector_norm(full_output.float(), dim=-1).sum())
-        self.top_norm_sum += float(torch.linalg.vector_norm(top_output.float(), dim=-1).sum())
-        self.tail_norm_sum += float(torch.linalg.vector_norm(tail_output.float(), dim=-1).sum())
-        self.top_cond_norm_sum += float(torch.linalg.vector_norm(top_cond_output.float(), dim=-1).sum())
-        self.tail_cond_norm_sum += float(torch.linalg.vector_norm(tail_cond_output.float(), dim=-1).sum())
-        self.top_mass_sum += float(top_mass.float().sum())
-        self.tail_mass_sum += float(tail_mass.float().sum())
-        self.top_token_count_sum += float(top_count.float().sum())
-        self.tail_token_count_sum += float(tail_count.float().sum())
-        self.cos_full_top_sum += float(F.cosine_similarity(full_output.float(), top_output.float(), dim=-1, eps=1e-8).sum())
-        self.cos_full_tail_sum += float(F.cosine_similarity(full_output.float(), tail_output.float(), dim=-1, eps=1e-8).sum())
-        self.cos_top_tail_sum += float(F.cosine_similarity(top_output.float(), tail_output.float(), dim=-1, eps=1e-8).sum())
-        self.cos_full_top_cond_sum += float(
-            F.cosine_similarity(full_output.float(), top_cond_output.float(), dim=-1, eps=1e-8).sum()
-        )
-        self.cos_full_tail_cond_sum += float(
-            F.cosine_similarity(full_output.float(), tail_cond_output.float(), dim=-1, eps=1e-8).sum()
-        )
-        self.cos_top_cond_tail_cond_sum += float(
-            F.cosine_similarity(top_cond_output.float(), tail_cond_output.float(), dim=-1, eps=1e-8).sum()
-        )
-        self.l2_full_top_sum += float(torch.linalg.vector_norm((full_output - top_output).float(), dim=-1).sum())
-        self.l2_full_tail_sum += float(torch.linalg.vector_norm((full_output - tail_output).float(), dim=-1).sum())
-        self.reconstruction_error_sum += float(
-            torch.linalg.vector_norm((full_output - top_output - tail_output).float(), dim=-1).sum()
-        )
+    def update(self, vectors: torch.Tensor, mass: torch.Tensor, token_count: torch.Tensor) -> None:
+        flat = vectors.float().reshape(-1, vectors.shape[-1])
+        self.count += int(flat.shape[0])
+        self.norm_sum += float(torch.linalg.vector_norm(flat, dim=-1).sum())
+        self.mass_sum += float(mass.float().reshape(-1).sum())
+        self.token_count_sum += float(token_count.float().reshape(-1).sum())
 
-    def row(self, layer: int, head: int) -> dict[str, Any]:
+    def row(self, layer: int, head: int, name: str) -> dict[str, Any]:
         denom = max(self.count, 1)
         return {
             "layer": layer,
             "head": head,
+            "vector": name,
             "query_count": self.count,
-            "mean_full_norm": self.full_norm_sum / denom,
-            "mean_top90_norm": self.top_norm_sum / denom,
-            "mean_tail10_norm": self.tail_norm_sum / denom,
-            "mean_top90_cond_norm": self.top_cond_norm_sum / denom,
-            "mean_tail10_cond_norm": self.tail_cond_norm_sum / denom,
-            "mean_top90_mass": self.top_mass_sum / denom,
-            "mean_tail10_mass": self.tail_mass_sum / denom,
-            "mean_top90_token_count": self.top_token_count_sum / denom,
-            "mean_tail10_token_count": self.tail_token_count_sum / denom,
-            "cos_full_top90": self.cos_full_top_sum / denom,
-            "cos_full_tail10": self.cos_full_tail_sum / denom,
-            "cos_top90_tail10": self.cos_top_tail_sum / denom,
-            "cos_full_top90_cond": self.cos_full_top_cond_sum / denom,
-            "cos_full_tail10_cond": self.cos_full_tail_cond_sum / denom,
-            "cos_top90_cond_tail10_cond": self.cos_top_cond_tail_cond_sum / denom,
-            "mean_l2_full_minus_top90": self.l2_full_top_sum / denom,
-            "mean_l2_full_minus_tail10": self.l2_full_tail_sum / denom,
-            "mean_reconstruction_error": self.reconstruction_error_sum / denom,
+            "mean_norm": self.norm_sum / denom,
+            "mean_attention_mass": self.mass_sum / denom,
+            "mean_token_count": self.token_count_sum / denom,
+        }
+
+
+class PairAccumulator:
+    def __init__(self) -> None:
+        self.count = 0
+        self.cos_sum = 0.0
+        self.l2_sum = 0.0
+
+    def update(self, left: torch.Tensor, right: torch.Tensor) -> None:
+        left_flat = left.float().reshape(-1, left.shape[-1])
+        right_flat = right.float().reshape(-1, right.shape[-1])
+        self.count += int(left_flat.shape[0])
+        self.cos_sum += float(F.cosine_similarity(left_flat, right_flat, dim=-1, eps=1e-8).sum())
+        self.l2_sum += float(torch.linalg.vector_norm(left_flat - right_flat, dim=-1).sum())
+
+    def row(self, layer: int, head: int, left: str, right: str) -> dict[str, Any]:
+        denom = max(self.count, 1)
+        return {
+            "layer": layer,
+            "head": head,
+            "left": left,
+            "right": right,
+            "query_count": self.count,
+            "mean_cosine": self.cos_sum / denom,
+            "mean_l2": self.l2_sum / denom,
         }
 
 
 class AnalysisContext:
     def __init__(self, config: AnalysisConfig) -> None:
         self.config = config
-        self.stats: dict[tuple[int, int], HeadStats] = {}
+        self.vector_stats: dict[tuple[int, int, str], VectorAccumulator] = {}
+        self.pair_stats: dict[tuple[int, int, str, str], PairAccumulator] = {}
 
-    def get_stats(self, layer: int, head: int) -> HeadStats:
-        key = (layer, head)
-        if key not in self.stats:
-            self.stats[key] = HeadStats()
-        return self.stats[key]
+    def vector_acc(self, layer: int, head: int, name: str) -> VectorAccumulator:
+        key = (layer, head, name)
+        if key not in self.vector_stats:
+            self.vector_stats[key] = VectorAccumulator()
+        return self.vector_stats[key]
 
-    def rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
-        return [self.get_stats(layer, head).row(layer, head) for layer in layers for head in heads]
+    def pair_acc(self, layer: int, head: int, left: str, right: str) -> PairAccumulator:
+        key = (layer, head, left, right)
+        if key not in self.pair_stats:
+            self.pair_stats[key] = PairAccumulator()
+        return self.pair_stats[key]
+
+    def vector_rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
+        names = ["full"] + [spec.name for spec in self.config.vector_specs]
+        return [self.vector_acc(layer, head, name).row(layer, head, name) for layer in layers for head in heads for name in names]
+
+    def pair_rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
+        names = ["full"] + [spec.name for spec in self.config.vector_specs]
+        rows: list[dict[str, Any]] = []
+        for layer in layers:
+            for head in heads:
+                for left, right in combinations(names, 2):
+                    rows.append(self.pair_acc(layer, head, left, right).row(layer, head, left, right))
+        return rows
 
 
 def str2bool(value: str | bool) -> bool:
@@ -148,8 +137,28 @@ def str2bool(value: str | bool) -> bool:
     return str(value).lower() in {"1", "true", "yes", "y"}
 
 
+def parse_float_list(spec: str) -> list[float]:
+    values = [float(part.strip()) for part in spec.split(",") if part.strip()]
+    if any(value <= 0.0 or value >= 1.0 for value in values):
+        raise ValueError("split values must be in (0, 1).")
+    return values
+
+
+def format_value(value: float) -> str:
+    return f"{value:g}".replace(".", "p")
+
+
+def build_vector_specs(top_values: list[float], tail_values: list[float]) -> list[VectorSpec]:
+    specs: list[VectorSpec] = []
+    for value in top_values:
+        specs.append(VectorSpec(f"top{format_value(value)}", "top", value))
+    for value in tail_values:
+        specs.append(VectorSpec(f"tail{format_value(value)}", "tail", value))
+    return specs
+
+
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Analyze top90/tail10/full attention-weighted V outputs by layer/head.")
+    parser = argparse.ArgumentParser(description="Analyze full/top/tail attention-weighted V outputs by layer/head.")
     parser.add_argument("--model_name_or_path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--text_path", default=DEFAULT_TEXT_PATH)
     parser.add_argument("--output_dir", default="outputs/attention_value_decomposition")
@@ -166,10 +175,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument("--layers", default="all")
     parser.add_argument("--heads", default="all")
-    parser.add_argument("--top_mass", type=float, default=0.90)
+    parser.add_argument("--split_mode", choices=["mass", "token_fraction"], default="mass")
+    parser.add_argument("--top_values", default="0.9", help="Comma-separated top mass/fraction values, e.g. 0.5,0.9,0.99.")
+    parser.add_argument("--tail_values", default="0.1", help="Comma-separated tail mass/fraction values, e.g. 0.01,0.1.")
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
     parser.add_argument("--compute_ppl", type=str2bool, default=True)
-    parser.add_argument("--ppl_modes", default="full,top90,tail10")
+    parser.add_argument("--ppl_modes", default="full,top0p9,tail0p1")
     parser.add_argument(
         "--ppl_renormalize_selected",
         type=str2bool,
@@ -179,8 +190,9 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.chunk_size <= 0:
         raise ValueError("--chunk_size must be positive.")
-    if not (0.0 < args.top_mass < 1.0):
-        raise ValueError("--top_mass must be in (0, 1).")
+    args.top_value_list = parse_float_list(args.top_values)
+    args.tail_value_list = parse_float_list(args.tail_values)
+    args.vector_specs = build_vector_specs(args.top_value_list, args.tail_value_list)
     return args
 
 
@@ -204,9 +216,18 @@ def parse_index_spec(spec: str, max_count: int, name: str) -> list[int]:
     return sorted(selected)
 
 
-def parse_modes(spec: str) -> list[str]:
-    modes = [part.strip().lower() for part in spec.split(",") if part.strip()]
-    valid = {"full", "top90", "tail10"}
+def normalize_mode_name(mode: str) -> str:
+    mode = mode.strip().lower()
+    if mode == "top90":
+        return "top0p9"
+    if mode == "tail10":
+        return "tail0p1"
+    return mode
+
+
+def parse_modes(spec: str, vector_specs: list[VectorSpec]) -> list[str]:
+    modes = [normalize_mode_name(part) for part in spec.split(",") if part.strip()]
+    valid = {"full"} | {vector_spec.name for vector_spec in vector_specs}
     invalid = [mode for mode in modes if mode not in valid]
     if invalid:
         raise ValueError(f"Invalid --ppl_modes: {invalid}. Valid modes: {sorted(valid)}")
@@ -282,53 +303,58 @@ def repeat_kv_for_attention(value_states: torch.Tensor, attention_heads: int) ->
     return value_states.repeat_interleave(group_size, dim=1)
 
 
-def top_tail_outputs(
+def selection_mask(attention_weights: torch.Tensor, spec: VectorSpec, split_mode: str) -> torch.Tensor:
+    weights = attention_weights.float()
+    descending = spec.side == "top"
+    sorted_weights, sorted_indices = torch.sort(weights, dim=-1, descending=descending)
+    valid_sorted = sorted_weights > 0
+    rank = torch.arange(weights.shape[-1], device=weights.device).view(1, 1, 1, -1)
+    valid_counts = valid_sorted.sum(dim=-1, keepdim=True).clamp_min(1)
+    if split_mode == "mass":
+        cumulative = torch.cumsum(sorted_weights, dim=-1)
+        first_crossing = (cumulative >= spec.value).float().argmax(dim=-1, keepdim=True)
+        sorted_mask = (rank <= first_crossing) & valid_sorted
+    elif split_mode == "token_fraction":
+        keep = torch.ceil(valid_counts.float() * spec.value).long().clamp_min(1)
+        sorted_mask = (rank < keep) & valid_sorted
+    else:
+        raise ValueError(f"Unsupported split_mode: {split_mode}")
+    return torch.zeros_like(sorted_mask, dtype=torch.bool).scatter(dim=-1, index=sorted_indices, src=sorted_mask)
+
+
+def vector_outputs(
     attention_weights: torch.Tensor,
     value_states_for_attention: torch.Tensor,
-    top_mass_threshold: float,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    # attention_weights: [batch, heads, query, key]
-    # value_states_for_attention: [batch, heads, key, head_dim]
-    sorted_weights, sorted_indices = torch.sort(attention_weights.float(), dim=-1, descending=True)
-    valid_sorted = sorted_weights > 0
-    cumulative = torch.cumsum(sorted_weights, dim=-1)
-    rank = torch.arange(attention_weights.shape[-1], device=attention_weights.device).view(1, 1, 1, -1)
-    first_crossing = (cumulative >= top_mass_threshold).float().argmax(dim=-1, keepdim=True)
-    top_sorted_mask = (rank <= first_crossing) & valid_sorted
-    top_mask = torch.zeros_like(top_sorted_mask, dtype=torch.bool).scatter(dim=-1, index=sorted_indices, src=top_sorted_mask)
-    valid_mask = attention_weights > 0
-    tail_mask = valid_mask & ~top_mask
-    top_weights = attention_weights.float().masked_fill(~top_mask, 0.0)
-    tail_weights = attention_weights.float().masked_fill(~tail_mask, 0.0)
-    full_output = torch.matmul(attention_weights.float(), value_states_for_attention.float())
-    top_output = torch.matmul(top_weights, value_states_for_attention.float())
-    tail_output = torch.matmul(tail_weights, value_states_for_attention.float())
-    top_mass = top_weights.sum(dim=-1)
-    tail_mass = tail_weights.sum(dim=-1)
-    top_cond_output = top_output / top_mass.clamp_min(1e-12).unsqueeze(-1)
-    tail_cond_output = tail_output / tail_mass.clamp_min(1e-12).unsqueeze(-1)
-    return full_output, top_output, tail_output, top_cond_output, tail_cond_output, top_mass, tail_mass
+    specs: list[VectorSpec],
+    split_mode: str,
+) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor], dict[str, torch.Tensor]]:
+    weights = attention_weights.float()
+    values = value_states_for_attention.float()
+    outputs = {"full": torch.matmul(weights, values)}
+    masses = {"full": weights.sum(dim=-1)}
+    counts = {"full": (weights > 0).sum(dim=-1).float()}
+    for spec in specs:
+        mask = selection_mask(weights, spec, split_mode)
+        selected_weights = weights.masked_fill(~mask, 0.0)
+        outputs[spec.name] = torch.matmul(selected_weights, values)
+        masses[spec.name] = selected_weights.sum(dim=-1)
+        counts[spec.name] = mask.sum(dim=-1).float()
+    return outputs, masses, counts
 
 
 def selected_attention_output(
     attention_weights: torch.Tensor,
     value_states_for_attention: torch.Tensor,
     mode: str,
-    top_mass_threshold: float,
-    renormalize: bool,
+    config: AnalysisConfig,
 ) -> torch.Tensor:
-    if mode == "full":
-        return torch.matmul(attention_weights, value_states_for_attention)
-    _, top_output, tail_output, _, _, top_mass, tail_mass = top_tail_outputs(
-        attention_weights,
-        value_states_for_attention,
-        top_mass_threshold,
-    )
-    if mode == "top90":
-        return top_output / top_mass.clamp_min(1e-12).unsqueeze(-1) if renormalize else top_output
-    if mode == "tail10":
-        return tail_output / tail_mass.clamp_min(1e-12).unsqueeze(-1) if renormalize else tail_output
-    raise ValueError(f"Unsupported attention output mode: {mode}")
+    outputs, masses, _ = vector_outputs(attention_weights, value_states_for_attention, config.vector_specs, config.split_mode)
+    if mode not in outputs:
+        raise ValueError(f"Unsupported attention output mode: {mode}")
+    output = outputs[mode]
+    if config.ppl_renormalize_selected and mode != "full":
+        output = output / masses[mode].clamp_min(1e-12).unsqueeze(-1)
+    return output
 
 
 def crop_past_key_values(past_key_values: Any, max_length: int) -> Any:
@@ -338,21 +364,15 @@ def crop_past_key_values(past_key_values: Any, max_length: int) -> Any:
         result = past_key_values.crop(max_length)
         return past_key_values if result is None else result
     if isinstance(past_key_values, tuple):
-        cropped_layers = []
-        for layer_cache in past_key_values:
-            if isinstance(layer_cache, tuple):
-                cropped_layers.append(tuple(tensor[..., :max_length, :] for tensor in layer_cache))
-            else:
-                cropped_layers.append(layer_cache)
-        return tuple(cropped_layers)
+        return tuple(
+            tuple(tensor[..., :max_length, :] for tensor in layer_cache) if isinstance(layer_cache, tuple) else layer_cache
+            for layer_cache in past_key_values
+        )
     if isinstance(past_key_values, list):
-        cropped_layers = []
-        for layer_cache in past_key_values:
-            if isinstance(layer_cache, tuple):
-                cropped_layers.append(tuple(tensor[..., :max_length, :] for tensor in layer_cache))
-            else:
-                cropped_layers.append(layer_cache)
-        return cropped_layers
+        return [
+            tuple(tensor[..., :max_length, :] for tensor in layer_cache) if isinstance(layer_cache, tuple) else layer_cache
+            for layer_cache in past_key_values
+        ]
     raise TypeError(f"Unsupported past_key_values type: {type(past_key_values)!r}")
 
 
@@ -365,34 +385,22 @@ def update_vector_stats(
     config = context.config
     if layer not in config.layers:
         return
-    full, top, tail, top_cond, tail_cond, top_mass, tail_mass = top_tail_outputs(
-        attention_weights,
-        value_states_for_attention,
-        config.top_mass,
-    )
-    top_count = (top_mass > 0).new_zeros(top_mass.shape, dtype=torch.float32)
-    tail_count = (tail_mass > 0).new_zeros(tail_mass.shape, dtype=torch.float32)
-    sorted_weights, _ = torch.sort(attention_weights.float(), dim=-1, descending=True)
-    valid_sorted = sorted_weights > 0
-    cumulative = torch.cumsum(sorted_weights, dim=-1)
-    rank = torch.arange(attention_weights.shape[-1], device=attention_weights.device).view(1, 1, 1, -1)
-    first_crossing = (cumulative >= config.top_mass).float().argmax(dim=-1, keepdim=True)
-    top_count = ((rank <= first_crossing) & valid_sorted).sum(dim=-1).float()
-    tail_count = valid_sorted.sum(dim=-1).float() - top_count
+    outputs, masses, counts = vector_outputs(attention_weights, value_states_for_attention, config.vector_specs, config.split_mode)
+    names = list(outputs.keys())
     for head in sorted(config.heads):
         if head >= attention_weights.shape[1]:
             continue
-        context.get_stats(layer, head).update(
-            full[:, head].reshape(-1, full.shape[-1]).detach().cpu(),
-            top[:, head].reshape(-1, top.shape[-1]).detach().cpu(),
-            tail[:, head].reshape(-1, tail.shape[-1]).detach().cpu(),
-            top_cond[:, head].reshape(-1, top_cond.shape[-1]).detach().cpu(),
-            tail_cond[:, head].reshape(-1, tail_cond.shape[-1]).detach().cpu(),
-            top_mass[:, head].reshape(-1).detach().cpu(),
-            tail_mass[:, head].reshape(-1).detach().cpu(),
-            top_count[:, head].reshape(-1).detach().cpu(),
-            tail_count[:, head].reshape(-1).detach().cpu(),
-        )
+        for name in names:
+            context.vector_acc(layer, head, name).update(
+                outputs[name][:, head].detach().cpu(),
+                masses[name][:, head].detach().cpu(),
+                counts[name][:, head].detach().cpu(),
+            )
+        for left, right in combinations(names, 2):
+            context.pair_acc(layer, head, left, right).update(
+                outputs[left][:, head].detach().cpu(),
+                outputs[right][:, head].detach().cpu(),
+            )
 
 
 def patched_eager_attention_forward(
@@ -422,13 +430,7 @@ def patched_eager_attention_forward(
         update_vector_stats(context, layer, attention_weights, value_states_for_attention)
     attention_output = torch.matmul(attention_weights, value_states_for_attention)
     if context is not None and context.config.attention_output_mode != "full" and layer in context.config.layers:
-        selected_output = selected_attention_output(
-            attention_weights,
-            value_states_for_attention,
-            context.config.attention_output_mode,
-            context.config.top_mass,
-            context.config.ppl_renormalize_selected,
-        )
+        selected_output = selected_attention_output(attention_weights, value_states_for_attention, context.config.attention_output_mode, context.config)
         active_heads = [head for head in context.config.heads if 0 <= head < attention_output.shape[1]]
         if active_heads:
             head_index = torch.tensor(active_heads, dtype=torch.long, device=attention_output.device)
@@ -530,11 +532,7 @@ def run_eval(
             outputs = model_forward(model, kwargs)
             logits = outputs.logits
             shifted_logits = torch.cat([prev_logits.unsqueeze(1), logits[:, :-1, :]], dim=1)
-            loss = F.cross_entropy(
-                shifted_logits.reshape(-1, shifted_logits.shape[-1]).float(),
-                chunk.reshape(-1),
-                reduction="sum",
-            )
+            loss = F.cross_entropy(shifted_logits.reshape(-1, shifted_logits.shape[-1]).float(), chunk.reshape(-1), reduction="sum")
             total_loss += float(loss)
             total_count += int(chunk.numel())
             prev_logits = logits[:, -1, :].detach()
@@ -577,11 +575,13 @@ def main() -> None:
     head_count = int(getattr(model.config, "num_attention_heads"))
     layers = parse_index_spec(args.layers, layer_count, "layers")
     heads = parse_index_spec(args.heads, head_count, "heads")
+    ppl_modes = parse_modes(args.ppl_modes, args.vector_specs)
 
     base_config = AnalysisConfig(
         layers=set(layers),
         heads=set(heads),
-        top_mass=args.top_mass,
+        split_mode=args.split_mode,
+        vector_specs=args.vector_specs,
         collect_vectors=False,
         attention_output_mode="full",
         ppl_renormalize_selected=args.ppl_renormalize_selected,
@@ -596,72 +596,32 @@ def main() -> None:
         print("collecting vector stats on full attention eval", flush=True)
         past_key_values = crop_past_key_values(past_key_values, args.prefill_tokens)
         loss, ppl, count, past_key_values = run_eval(
-            model,
-            input_ids,
-            args.prefill_tokens,
-            args.eval_tokens,
-            args.chunk_size,
-            input_device,
-            past_key_values,
-            prev_logits,
-            stats_context,
+            model, input_ids, args.prefill_tokens, args.eval_tokens, args.chunk_size, input_device, past_key_values, prev_logits, stats_context
         )
         past_key_values = crop_past_key_values(past_key_values, args.prefill_tokens)
         write_csv(
-            output_dir / "value_decomposition_by_head.csv",
-            stats_context.rows(layers, heads),
-            [
-                "layer",
-                "head",
-                "query_count",
-                "mean_full_norm",
-                "mean_top90_norm",
-                "mean_tail10_norm",
-                "mean_top90_cond_norm",
-                "mean_tail10_cond_norm",
-                "mean_top90_mass",
-                "mean_tail10_mass",
-                "mean_top90_token_count",
-                "mean_tail10_token_count",
-                "cos_full_top90",
-                "cos_full_tail10",
-                "cos_top90_tail10",
-                "cos_full_top90_cond",
-                "cos_full_tail10_cond",
-                "cos_top90_cond_tail10_cond",
-                "mean_l2_full_minus_top90",
-                "mean_l2_full_minus_tail10",
-                "mean_reconstruction_error",
-            ],
+            output_dir / "value_vectors_by_head.csv",
+            stats_context.vector_rows(layers, heads),
+            ["layer", "head", "vector", "query_count", "mean_norm", "mean_attention_mass", "mean_token_count"],
         )
-        if args.compute_ppl and "full" in parse_modes(args.ppl_modes):
+        write_csv(
+            output_dir / "value_pairwise_by_head.csv",
+            stats_context.pair_rows(layers, heads),
+            ["layer", "head", "left", "right", "query_count", "mean_cosine", "mean_l2"],
+        )
+        if args.compute_ppl and "full" in ppl_modes:
             ppl_rows.append({"mode": "full", "loss": loss, "ppl": ppl, "token_count": count})
 
     if args.compute_ppl:
         existing_modes = {row["mode"] for row in ppl_rows}
-        for mode in parse_modes(args.ppl_modes):
+        for mode in ppl_modes:
             if mode in existing_modes:
                 continue
             print(f"running PPL mode={mode}", flush=True)
-            mode_config = AnalysisConfig(
-                layers=set(layers),
-                heads=set(heads),
-                top_mass=args.top_mass,
-                collect_vectors=False,
-                attention_output_mode=mode,
-                ppl_renormalize_selected=args.ppl_renormalize_selected,
-            )
+            mode_config = AnalysisConfig(**{**base_config.__dict__, "attention_output_mode": mode})
             past_key_values = crop_past_key_values(past_key_values, args.prefill_tokens)
             loss, ppl, count, past_key_values = run_eval(
-                model,
-                input_ids,
-                args.prefill_tokens,
-                args.eval_tokens,
-                args.chunk_size,
-                input_device,
-                past_key_values,
-                prev_logits,
-                AnalysisContext(mode_config),
+                model, input_ids, args.prefill_tokens, args.eval_tokens, args.chunk_size, input_device, past_key_values, prev_logits, AnalysisContext(mode_config)
             )
             past_key_values = crop_past_key_values(past_key_values, args.prefill_tokens)
             ppl_rows.append({"mode": mode, "loss": loss, "ppl": ppl, "token_count": count})
@@ -675,10 +635,14 @@ def main() -> None:
         "chunk_size": args.chunk_size,
         "layers": layers,
         "heads": heads,
-        "top_mass": args.top_mass,
+        "split_mode": args.split_mode,
+        "top_values": args.top_value_list,
+        "tail_values": args.tail_value_list,
+        "ppl_modes": ppl_modes,
         "ppl_renormalize_selected": args.ppl_renormalize_selected,
         "outputs": {
-            "value_decomposition_by_head": str(output_dir / "value_decomposition_by_head.csv"),
+            "value_vectors_by_head": str(output_dir / "value_vectors_by_head.csv"),
+            "value_pairwise_by_head": str(output_dir / "value_pairwise_by_head.csv"),
             "ppl_by_attention_value_mode": str(output_dir / "ppl_by_attention_value_mode.csv"),
         },
     }

@@ -27,8 +27,10 @@ python "${PROJECT_DIR}/src/analyze_qwen3_attention_value_decomposition.py" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --layers "${LAYERS:-all}" \
   --heads "${HEADS:-all}" \
-  --top_mass "${TOP_MASS:-0.90}" \
+  --split_mode "${SPLIT_MODE:-mass}" \
+  --top_values "${TOP_VALUES:-0.9}" \
+  --tail_values "${TAIL_VALUES:-0.1}" \
   --compute_vector_stats "${COMPUTE_VECTOR_STATS:-true}" \
   --compute_ppl "${COMPUTE_PPL:-true}" \
-  --ppl_modes "${PPL_MODES:-full,top90,tail10}" \
+  --ppl_modes "${PPL_MODES:-full,top0p9,tail0p1}" \
   --ppl_renormalize_selected "${PPL_RENORMALIZE_SELECTED:-false}"

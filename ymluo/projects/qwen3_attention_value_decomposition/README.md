@@ -1,29 +1,35 @@
 # Qwen3 Attention Value Decomposition
 
-This project studies the output vectors produced by different parts of the
-attention distribution.
+This project studies attention-weighted value outputs under different attention
+splits.
 
-For each selected layer/head/query token, the script computes three vectors:
-
-```text
-full_output   = sum(all attention weights * V)
-top90_output  = sum(top attention-mass weights * V)
-tail10_output = sum(remaining attention weights * V)
-```
-
-`top90` is defined by sorting attention weights from high to low and taking the
-smallest prefix whose cumulative attention mass reaches `TOP_MASS=0.90`.
-`tail10` is the remaining valid attention mass.
-
-By default, top/tail vectors use the original attention weights and are not
-renormalized. Therefore:
+For each selected layer/head/query token, the script computes:
 
 ```text
-top90_output + tail10_output ~= full_output
+full = sum(all attention weights * V)
+topX = sum(selected high-attention weights * V)
+tailY = sum(selected low-attention weights * V)
 ```
 
-This is useful for analyzing how much of the final attention output is carried
-by high-attention tokens versus low-attention tail tokens.
+The split is configurable.
+
+```text
+SPLIT_MODE=mass
+```
+
+means `top0p9` selects the smallest high-attention token set whose cumulative
+attention mass reaches `0.9`; `tail0p1` selects the lowest-attention token set
+whose cumulative attention mass reaches `0.1`.
+
+```text
+SPLIT_MODE=token_fraction
+```
+
+means `top0p9` selects the top 90% tokens by attention weight; `tail0p1` selects
+the bottom 10% tokens by attention weight.
+
+By default selected vectors are not renormalized, so in mass mode
+`top0p9 + tail0p1` is close to `full` when the values are complementary.
 
 ## Outputs
 
@@ -35,29 +41,41 @@ ymluo/projects/qwen3_attention_value_decomposition/outputs/attention_value_decom
 
 Main files:
 
-- `value_decomposition_by_head.csv`
+- `value_vectors_by_head.csv`
+- `value_pairwise_by_head.csv`
 - `ppl_by_attention_value_mode.csv`
 - `summary.json`
 
-`value_decomposition_by_head.csv` contains per-layer/per-head means:
+`value_vectors_by_head.csv` contains one row per `(layer, head, vector)`:
 
-- full/top90/tail10 output norms
-- conditional top90/tail10 norms after renormalizing each selected part
-- top/tail attention mass
-- top/tail selected token counts
-- cosine similarities between full, top90, and tail10 outputs
-- L2 distances
-- reconstruction error of `full - top90 - tail10`
+- mean vector norm
+- mean selected attention mass
+- mean selected token count
+
+`value_pairwise_by_head.csv` contains all pairwise comparisons within each
+`(layer, head)`:
+
+- `mean_cosine`
+- `mean_l2`
+
+For example, with `TOP_VALUES=0.5,0.9` and `TAIL_VALUES=0.01,0.1`, the table
+compares:
+
+```text
+full, top0p5, top0p9, tail0p01, tail0p1
+```
+
+against each other horizontally.
 
 `ppl_by_attention_value_mode.csv` evaluates behavior when selected layers/heads
-use:
+use a chosen vector mode instead of full attention output. By default:
 
-- `full`: normal attention output
-- `top90`: only the top attention-mass contribution
-- `tail10`: only the tail contribution
+```text
+PPL_MODES=full,top0p9,tail0p1
+```
 
-By default PPL modes also use unnormalized selected weights. Set
-`PPL_RENORMALIZE_SELECTED=true` to test conditional top/tail attention outputs.
+Set `PPL_RENORMALIZE_SELECTED=true` to renormalize selected top/tail weights
+before computing `attn @ V`.
 
 ## Run
 
@@ -72,17 +90,28 @@ PREFILL_TOKENS=128 EVAL_TOKENS=64 CHUNK_SIZE=32 LAYERS=0 HEADS=0 \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
 ```
 
+Multiple top/tail splits:
+
+```bash
+TOP_VALUES=0.5,0.9,0.99 \
+TAIL_VALUES=0.01,0.05,0.1 \
+PPL_MODES=full,top0p9,tail0p1 \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
+Token-count split instead of attention-mass split:
+
+```bash
+SPLIT_MODE=token_fraction \
+TOP_VALUES=0.1,0.5,0.9 \
+TAIL_VALUES=0.1 \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
 Vector analysis only:
 
 ```bash
 COMPUTE_PPL=false \
-bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
-```
-
-PPL only:
-
-```bash
-COMPUTE_VECTOR_STATS=false PPL_MODES=full,top90,tail10 \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
 ```
 
@@ -94,6 +123,9 @@ EVAL_TOKENS=5000
 CHUNK_SIZE=128
 LAYERS=all
 HEADS=all
-TOP_MASS=0.90
+SPLIT_MODE=mass
+TOP_VALUES=0.9
+TAIL_VALUES=0.1
+PPL_MODES=full,top0p9,tail0p1
 PPL_RENORMALIZE_SELECTED=false
 ```
