@@ -25,8 +25,36 @@ def mean(values: list[float]) -> float:
     return sum(values) / max(len(values), 1)
 
 
+def display_name(name: str) -> str:
+    if name.startswith("top"):
+        return "top" + name[3:].replace("p", ".")
+    if name.startswith("tail"):
+        return "tail" + name[4:].replace("p", ".")
+    return name
+
+
 def pair_label(left: str, right: str) -> str:
-    return f"{left} vs {right}"
+    return f"{display_name(left)} vs {display_name(right)}"
+
+
+def vector_sort_key(name: str) -> tuple[int, float, str]:
+    if name == "full":
+        return (0, 0.0, name)
+    if name.startswith("top"):
+        try:
+            return (1, float(display_name(name[3:])), name)
+        except ValueError:
+            return (1, 0.0, name)
+    if name.startswith("tail"):
+        try:
+            return (2, float(display_name(name[4:])), name)
+        except ValueError:
+            return (2, 0.0, name)
+    return (3, 0.0, name)
+
+
+def sort_vector_order(vector_order: list[str]) -> list[str]:
+    return sorted(vector_order, key=vector_sort_key)
 
 
 def aggregate_pair_cos(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str], dict[tuple[str, str], float]]:
@@ -55,6 +83,8 @@ def aggregate_pair_cos(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
             {
                 "left": left,
                 "right": right,
+                "left_display": display_name(left),
+                "right_display": display_name(right),
                 "pair": pair_label(left, right),
                 "mean_cosine": value,
                 "min_head_cosine": min(values),
@@ -63,7 +93,7 @@ def aggregate_pair_cos(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]]
             }
         )
     summary_rows.sort(key=lambda row: row["mean_cosine"], reverse=True)
-    return summary_rows, vector_order, pair_mean
+    return summary_rows, sort_vector_order(vector_order), pair_mean
 
 
 def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
@@ -113,8 +143,9 @@ def plot_heatmap(vector_order: list[str], pair_mean: dict[tuple[str, str], float
     image = ax.imshow(matrix, vmin=-1.0, vmax=1.0, cmap="coolwarm")
     ax.set_xticks(range(n))
     ax.set_yticks(range(n))
-    ax.set_xticklabels(vector_order, rotation=45, ha="right")
-    ax.set_yticklabels(vector_order)
+    display_order = [display_name(name) for name in vector_order]
+    ax.set_xticklabels(display_order, rotation=45, ha="right")
+    ax.set_yticklabels(display_order)
     ax.set_title("Mean pairwise cosine heatmap")
     for i in range(n):
         for j in range(n):
@@ -143,7 +174,17 @@ def main() -> None:
     write_csv(
         summary_csv,
         summary_rows,
-        ["left", "right", "pair", "mean_cosine", "min_head_cosine", "max_head_cosine", "head_pair_count"],
+        [
+            "left",
+            "right",
+            "left_display",
+            "right_display",
+            "pair",
+            "mean_cosine",
+            "min_head_cosine",
+            "max_head_cosine",
+            "head_pair_count",
+        ],
     )
     bar_path = output_dir / "pairwise_mean_cosine_bar.png"
     heatmap_path = output_dir / "pairwise_mean_cosine_heatmap.png"
@@ -158,6 +199,7 @@ def main() -> None:
         "heatmap": str(heatmap_path),
         "pair_count": len(summary_rows),
         "vectors": vector_order,
+        "vectors_display": [display_name(name) for name in vector_order],
     }
     (output_dir / "plot_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)

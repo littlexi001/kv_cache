@@ -1,0 +1,26 @@
+{
+  "input_csv": "tmp_pairwise_test.csv",
+  "output_dir": "tmp_pairwise_plot",
+  "summary_csv": "tmp_pairwise_plot\\pairwise_mean_cosine_summary.csv",
+  "bar_plot": "tmp_pairwise_plot\\pairwise_mean_cosine_bar.png",
+  "heatmap": "tmp_pairwise_plot\\pairwise_mean_cosine_heatmap.png",
+  "pair_count": 21,
+  "vectors": [
+    "full",
+    "top0p1",
+    "top0p5",
+    "top0p9",
+    "tail0p1",
+    "tail0p5",
+    "tail0p9"
+  ],
+  "vectors_display": [
+    "full",
+    "top0.1",
+    "top0.5",
+    "top0.9",
+    "tail0.1",
+    "tail0.5",
+    "tail0.9"
+  ]
+}

@@ -1,0 +1,22 @@
+left,right,left_display,right_display,pair,mean_cosine,min_head_cosine,max_head_cosine,head_pair_count
+full,top0p1,full,top0.1,full vs top0.1,0.5,0.5,0.5,1
+full,top0p5,full,top0.5,full vs top0.5,0.5,0.5,0.5,1
+full,top0p9,full,top0.9,full vs top0.9,0.5,0.5,0.5,1
+full,tail0p9,full,tail0.9,full vs tail0.9,0.5,0.5,0.5,1
+full,tail0p5,full,tail0.5,full vs tail0.5,0.5,0.5,0.5,1
+full,tail0p1,full,tail0.1,full vs tail0.1,0.5,0.5,0.5,1
+top0p1,top0p5,top0.1,top0.5,top0.1 vs top0.5,0.5,0.5,0.5,1
+top0p1,top0p9,top0.1,top0.9,top0.1 vs top0.9,0.5,0.5,0.5,1
+top0p1,tail0p9,top0.1,tail0.9,top0.1 vs tail0.9,0.5,0.5,0.5,1
+top0p1,tail0p5,top0.1,tail0.5,top0.1 vs tail0.5,0.5,0.5,0.5,1
+top0p1,tail0p1,top0.1,tail0.1,top0.1 vs tail0.1,0.5,0.5,0.5,1
+top0p5,top0p9,top0.5,top0.9,top0.5 vs top0.9,0.5,0.5,0.5,1
+top0p5,tail0p9,top0.5,tail0.9,top0.5 vs tail0.9,0.5,0.5,0.5,1
+top0p5,tail0p5,top0.5,tail0.5,top0.5 vs tail0.5,0.5,0.5,0.5,1
+top0p5,tail0p1,top0.5,tail0.1,top0.5 vs tail0.1,0.5,0.5,0.5,1
+top0p9,tail0p9,top0.9,tail0.9,top0.9 vs tail0.9,0.5,0.5,0.5,1
+top0p9,tail0p5,top0.9,tail0.5,top0.9 vs tail0.5,0.5,0.5,0.5,1
+top0p9,tail0p1,top0.9,tail0.1,top0.9 vs tail0.1,0.5,0.5,0.5,1
+tail0p9,tail0p5,tail0.9,tail0.5,tail0.9 vs tail0.5,0.5,0.5,0.5,1
+tail0p9,tail0p1,tail0.9,tail0.1,tail0.9 vs tail0.1,0.5,0.5,0.5,1
+tail0p5,tail0p1,tail0.5,tail0.1,tail0.5 vs tail0.1,0.5,0.5,0.5,1
