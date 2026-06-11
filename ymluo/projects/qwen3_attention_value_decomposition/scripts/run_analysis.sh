@@ -27,10 +27,11 @@ python "${PROJECT_DIR}/src/analyze_qwen3_attention_value_decomposition.py" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --layers "${LAYERS:-all}" \
   --heads "${HEADS:-all}" \
-  --split_mode "${SPLIT_MODE:-mass}" \
-  --top_values "${TOP_VALUES:-0.9}" \
-  --tail_values "${TAIL_VALUES:-0.1}" \
+  --split_mode "${SPLIT_MODE:-token_fraction}" \
+  --top_values "${TOP_VALUES:-0.01,0.02,0.04,0.06,0.08,0.1,0.2,0.4,0.5,0.7,0.9,0.95,0.99}" \
+  --tail_values "${TAIL_VALUES:-0.01,0.02,0.04,0.06,0.08,0.1,0.2,0.4,0.5,0.7,0.9,0.95,0.99}" \
   --compute_vector_stats "${COMPUTE_VECTOR_STATS:-true}" \
-  --compute_ppl "${COMPUTE_PPL:-true}" \
-  --ppl_modes "${PPL_MODES:-full,top0p9,tail0p1}" \
+  --save_pairwise_per_token "${SAVE_PAIRWISE_PER_TOKEN:-false}" \
+  --compute_ppl "${COMPUTE_PPL:-false}" \
+  --ppl_modes "${PPL_MODES:-full,top0p5,top0p7,top0p9,top0p95,top0p99,tail0p2,tail0p5,tail0p1}" \
   --ppl_renormalize_selected "${PPL_RENORMALIZE_SELECTED:-false}"

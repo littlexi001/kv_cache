@@ -58,6 +58,10 @@ Main files:
 - `mean_cosine`
 - `mean_l2`
 
+Set `SAVE_PAIRWISE_PER_TOKEN=true` to also write `value_pairwise_per_token.csv`.
+That file keeps one row per `(layer, head, query token, vector pair)` and is used
+for histogram/frequency plots over the 5k evaluation tokens.
+
 For example, with `TOP_VALUES=0.5,0.9` and `TAIL_VALUES=0.01,0.1`, the table
 compares:
 
@@ -101,6 +105,39 @@ plots/pairwise_cos/
   pairwise_mean_cosine_bar.png
   pairwise_mean_cosine_heatmap.png
   plot_summary.json
+```
+
+To plot token-level cosine frequency histograms, first rerun analysis with
+per-token rows enabled:
+
+```bash
+SAVE_PAIRWISE_PER_TOKEN=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
+Then plot histograms:
+
+```bash
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_token_hist.sh
+```
+
+For a focused pair/layer/head subset:
+
+```bash
+PAIRS=full\|top0p9 LAYERS=0,1 HEADS=0,4 \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_token_hist.sh
+```
+
+This writes:
+
+```text
+plots/pairwise_token_hist/
+  pairwise_token_hist_summary.csv
+  <pair>/
+    all_layers_heads.png
+    layer_00_head_00.png
+    ...
 ```
 
 ## Run

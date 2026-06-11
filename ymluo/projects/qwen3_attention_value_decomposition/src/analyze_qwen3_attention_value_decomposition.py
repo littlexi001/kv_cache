@@ -44,6 +44,8 @@ class AnalysisConfig:
     collect_vectors: bool
     attention_output_mode: str
     ppl_renormalize_selected: bool
+    save_pairwise_per_token: bool
+    query_offset: int = 0
 
 
 class VectorAccumulator:
@@ -104,6 +106,7 @@ class AnalysisContext:
         self.config = config
         self.vector_stats: dict[tuple[int, int, str], VectorAccumulator] = {}
         self.pair_stats: dict[tuple[int, int, str, str], PairAccumulator] = {}
+        self.pair_token_rows: list[dict[str, Any]] = []
 
     def vector_acc(self, layer: int, head: int, name: str) -> VectorAccumulator:
         key = (layer, head, name)
@@ -179,6 +182,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_values", default="0.9", help="Comma-separated top mass/fraction values, e.g. 0.5,0.9,0.99.")
     parser.add_argument("--tail_values", default="0.1", help="Comma-separated tail mass/fraction values, e.g. 0.01,0.1.")
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
+    parser.add_argument("--save_pairwise_per_token", type=str2bool, default=False)
     parser.add_argument("--compute_ppl", type=str2bool, default=True)
     parser.add_argument("--ppl_modes", default="full,top0p9,tail0p1")
     parser.add_argument(
@@ -397,10 +401,29 @@ def update_vector_stats(
                 counts[name][:, head].detach().cpu(),
             )
         for left, right in combinations(names, 2):
+            left_values = outputs[left][:, head].detach().cpu()
+            right_values = outputs[right][:, head].detach().cpu()
             context.pair_acc(layer, head, left, right).update(
-                outputs[left][:, head].detach().cpu(),
-                outputs[right][:, head].detach().cpu(),
+                left_values,
+                right_values,
             )
+            if config.save_pairwise_per_token:
+                left_flat = left_values.float().reshape(-1, left_values.shape[-1])
+                right_flat = right_values.float().reshape(-1, right_values.shape[-1])
+                cos_values = F.cosine_similarity(left_flat, right_flat, dim=-1, eps=1e-8)
+                l2_values = torch.linalg.vector_norm(left_flat - right_flat, dim=-1)
+                for local_query, (cos_value, l2_value) in enumerate(zip(cos_values.tolist(), l2_values.tolist())):
+                    context.pair_token_rows.append(
+                        {
+                            "layer": layer,
+                            "head": head,
+                            "query_index": config.query_offset + local_query,
+                            "left": left,
+                            "right": right,
+                            "cosine": cos_value,
+                            "l2": l2_value,
+                        }
+                    )
 
 
 def patched_eager_attention_forward(
@@ -529,6 +552,8 @@ def run_eval(
             if past_key_values is not None:
                 kwargs["past_key_values"] = past_key_values
             print(f"eval chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
+            if context is not None:
+                context.config.query_offset = start - prefill_tokens
             outputs = model_forward(model, kwargs)
             logits = outputs.logits
             shifted_logits = torch.cat([prev_logits.unsqueeze(1), logits[:, :-1, :]], dim=1)
@@ -585,6 +610,7 @@ def main() -> None:
         collect_vectors=False,
         attention_output_mode="full",
         ppl_renormalize_selected=args.ppl_renormalize_selected,
+        save_pairwise_per_token=args.save_pairwise_per_token,
     )
     print("running shared full-attention prefill", flush=True)
     past_key_values, prev_logits = run_prefill(model, input_ids, args.prefill_tokens, args.chunk_size, input_device)
@@ -609,6 +635,12 @@ def main() -> None:
             stats_context.pair_rows(layers, heads),
             ["layer", "head", "left", "right", "query_count", "mean_cosine", "mean_l2"],
         )
+        if args.save_pairwise_per_token:
+            write_csv(
+                output_dir / "value_pairwise_per_token.csv",
+                stats_context.pair_token_rows,
+                ["layer", "head", "query_index", "left", "right", "cosine", "l2"],
+            )
         if args.compute_ppl and "full" in ppl_modes:
             ppl_rows.append({"mode": "full", "loss": loss, "ppl": ppl, "token_count": count})
 
@@ -640,9 +672,11 @@ def main() -> None:
         "tail_values": args.tail_value_list,
         "ppl_modes": ppl_modes,
         "ppl_renormalize_selected": args.ppl_renormalize_selected,
+        "save_pairwise_per_token": args.save_pairwise_per_token,
         "outputs": {
             "value_vectors_by_head": str(output_dir / "value_vectors_by_head.csv"),
             "value_pairwise_by_head": str(output_dir / "value_pairwise_by_head.csv"),
+            "value_pairwise_per_token": str(output_dir / "value_pairwise_per_token.csv") if args.save_pairwise_per_token else None,
             "ppl_by_attention_value_mode": str(output_dir / "ppl_by_attention_value_mode.csv"),
         },
     }

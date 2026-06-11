@@ -128,10 +128,16 @@ class AnalysisContext:
         self.query_counts[key] = seen + 1
         return True
 
-    def projection_accumulator(self, layer: int, head: int, selection: str) -> ProjectionAccumulator:
+    def projection_accumulator(
+        self,
+        layer: int,
+        head: int,
+        selection: str,
+        component_count: int | None = None,
+    ) -> ProjectionAccumulator:
         key = (layer, head, selection)
         if key not in self.projections:
-            self.projections[key] = ProjectionAccumulator(self.config.svd_components)
+            self.projections[key] = ProjectionAccumulator(component_count or self.config.svd_components)
         return self.projections[key]
 
 
@@ -376,13 +382,13 @@ def project_selected_outputs(
                 label = ratio_label("top", ratio)
                 output = masked_weighted_output(row_scores, row_values, order_desc[:count])
                 coords = (output - mean) @ basis
-                context.projection_accumulator(layer, head, label).update(coords, output)
+                context.projection_accumulator(layer, head, label, int(basis.shape[1])).update(coords, output)
             for ratio in config.tail_ratios:
                 count = max(1, math.ceil(valid_count * ratio))
                 label = ratio_label("tail", ratio)
                 output = masked_weighted_output(row_scores, row_values, order_desc[-count:])
                 coords = (output - mean) @ basis
-                context.projection_accumulator(layer, head, label).update(coords, output)
+                context.projection_accumulator(layer, head, label, int(basis.shape[1])).update(coords, output)
 
 
 def patched_eager_attention_forward(
@@ -527,7 +533,7 @@ def projection_rows(
                 accumulator = context.projections.get((layer, head, selection))
                 if accumulator is None:
                     continue
-                for component in range(1, context.config.svd_components + 1):
+                for component in range(1, accumulator.component_count + 1):
                     rows.append(accumulator.row(layer, head, selection, component))
     return rows
 
