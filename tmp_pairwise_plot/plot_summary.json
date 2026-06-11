@@ -10,17 +10,17 @@
     "top0p1",
     "top0p5",
     "top0p9",
-    "tail0p1",
+    "tail0p9",
     "tail0p5",
-    "tail0p9"
+    "tail0p1"
   ],
   "vectors_display": [
     "full",
     "top0.1",
     "top0.5",
     "top0.9",
-    "tail0.1",
+    "tail0.9",
     "tail0.5",
-    "tail0.9"
+    "tail0.1"
   ]
 }

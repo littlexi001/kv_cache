@@ -33,6 +33,10 @@ def display_name(name: str) -> str:
     return name
 
 
+def parse_value(value: str) -> float:
+    return float(value.replace("p", "."))
+
+
 def pair_label(left: str, right: str) -> str:
     return f"{display_name(left)} vs {display_name(right)}"
 
@@ -42,12 +46,12 @@ def vector_sort_key(name: str) -> tuple[int, float, str]:
         return (0, 0.0, name)
     if name.startswith("top"):
         try:
-            return (1, float(display_name(name[3:])), name)
+            return (1, parse_value(name[3:]), name)
         except ValueError:
             return (1, 0.0, name)
     if name.startswith("tail"):
         try:
-            return (2, float(display_name(name[4:])), name)
+            return (2, -parse_value(name[4:]), name)
         except ValueError:
             return (2, 0.0, name)
     return (3, 0.0, name)
