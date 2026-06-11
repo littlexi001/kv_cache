@@ -41,15 +41,17 @@ def safe_name(name: str) -> str:
 
 
 def parse_int_filter(spec: str) -> set[int] | None:
-    if not spec.strip():
+    normalized = spec.strip().lower()
+    if not normalized or normalized == "all":
         return None
-    return {int(part.strip()) for part in spec.split(",") if part.strip()}
+    return {int(part.strip()) for part in normalized.split(",") if part.strip()}
 
 
 def parse_pair_filter(spec: str) -> set[str] | None:
-    if not spec.strip():
+    normalized = spec.strip()
+    if not normalized or normalized.lower() == "all":
         return None
-    return {part.strip() for part in spec.split(",") if part.strip()}
+    return {part.strip() for part in normalized.split(",") if part.strip()}
 
 
 def read_hist_rows(path: Path, pair_filter: set[str] | None, layer_filter: set[int] | None, head_filter: set[int] | None):
