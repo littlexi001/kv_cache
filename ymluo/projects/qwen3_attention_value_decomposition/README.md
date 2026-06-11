@@ -144,6 +144,26 @@ plots/pairwise_cos/
   plot_summary.json
 ```
 
+To compare the distribution of vector-level metrics in
+`value_vectors_by_head.csv`, use:
+
+```bash
+INPUT_CSV=/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_attention_value_decomposition/outputs/attention_value_decomposition_v3/value_vectors_by_head.csv \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_vector_frequency.sh
+```
+
+This groups by `vector` mode and plots frequency comparisons for:
+
+```text
+mean_norm
+mean_attention_mass
+mean_token_count
+```
+
+Each vector mode contributes one sample per selected layer/head. For example,
+if the run selected 28 layers and 8 heads, each mode has `28 * 8 = 224`
+samples.
+
 To plot token-level cosine frequency histograms, first rerun analysis with
 per-token rows enabled:
 
