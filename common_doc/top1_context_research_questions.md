@@ -69,21 +69,6 @@ flowchart LR
 | 1. score top 1% token 中分别包含多少远程答案、position front、position end 和其他上下文信息？ | score top 1% 是功能混合集合：按 token 数量约含 `1.6% answer / 12.0% front / 36.2% end / 50.2% other`，但 mass 主要集中于 front 和 end；answer 虽少，进入 top 1% 的概率约为随机基线的 `5×`，并对正确回答具有决定性作用。 |
 | 2. 浅层几乎不命中远程答案时，它保留的 token 在承担什么功能？ | 浅层主要利用 position end 维持当前问题、局部上下文和生成轨迹；front 虽承载约 `46.3%` mass，却不是该样本正确回答所必需，说明高 attention mass 不等同于高任务信息价值。 |
 
-当前关键实验结论：
-
-| 实验条件 | 结果 | 对信息功能的解释 |
-|---|---|---|
-| Full attention 屏蔽 exact answer（9 tokens） | Answer PPL 从 `4.21` 升至 `182.30`，生成由正确答案变为错误答案 | answer 平均 mass 很低，但属于少量且不可替代的事实信息。 |
-| Full attention 屏蔽 position front（28 tokens） | Answer PPL 降至 `2.20`，仍能正确生成答案 | front 的高 mass 更可能包含 attention sink、公共基线或格式控制，不能直接视为任务价值。 |
-| Full attention 屏蔽 position end（28 tokens） | 自由生成失败 | end 包含当前 question 和 `Answer:` 提示，对确定任务和生成起点至关重要。 |
-| 每层、每个 head、每个 query 仅保留 oracle score top 1% | Teacher-forced Answer PPL 为 `1.95`，但自由生成错误 | top 1% 可以近似单步表征和条件预测，却不足以保证自回归生成轨迹稳定。 |
-| score top 1% 内进一步移除 answer | Answer PPL 升至 `103.69`，token accuracy 降至 `11.1%` | 在稀疏集合内部，answer 是最明确、最不可替代的任务信息。 |
-| score top 1% 内进一步移除 front | Answer PPL 为 `3.09`，teacher-forced accuracy 保持 `88.9%`，但自由生成仍错误 | front 不是答案内容的核心载体；当前生成失败首先来自 top 1% 本身不稳定，不能归因于缺少 front。 |
-
-因此，B 部分目前最重要的方法论修正是：
-
-> **不能只用 token 数量、attention mass、局部 output cosine 或全局 perplexity 定义 token 是否重要；必须同时考察类别进入 score top 的富集程度，以及移除该类别后任务答案是否发生因果性错误。**
-
 #### C. 适用边界：稀疏性在什么条件下成立？
 
 子问题：
