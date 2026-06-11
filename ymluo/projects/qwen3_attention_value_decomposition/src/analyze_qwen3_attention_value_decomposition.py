@@ -432,7 +432,7 @@ def patched_eager_attention_forward(
         active_heads = [head for head in context.config.heads if 0 <= head < attention_output.shape[1]]
         if active_heads:
             head_index = torch.tensor(active_heads, dtype=torch.long, device=attention_output.device)
-            attention_output[:, head_index] = selected_output[:, head_index]
+            attention_output[:, head_index] = selected_output[:, head_index].to(attention_output.dtype)
     attention_output = attention_output.transpose(1, 2).contiguous()
     return attention_output, attention_weights
 
