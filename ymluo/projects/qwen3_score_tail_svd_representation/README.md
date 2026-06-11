@@ -15,13 +15,18 @@ This project uses a two-stage design.
 
 ### 1. Build the V Basis
 
-Sample V vectors from ordinary forward passes. For each `(layer, head)`, build:
+Sample V vectors from ordinary forward passes. `BASIS_TOKENS` is the source
+token pool size, and `MAX_BASIS_VECTORS_PER_LAYER_HEAD` is the number of V
+vectors sampled per layer/head from that pool.
+
+For each `(layer, head)`, build:
 
 ```text
 M = [v_1; v_2; ...; v_n]
 ```
 
-By default `n=5000` per layer/head when enough tokens are available. Then compute:
+By default the script samples up to `n=5000` V vectors per layer/head. Sampling
+is random over the whole source token pool, not a contiguous chunk. Then compute:
 
 ```text
 M_centered = U S V^T
@@ -104,6 +109,8 @@ Useful parameters:
 
 ```text
 BASIS_TOKENS=5000
+BASIS_SAMPLE_MODE=random
+BASIS_SAMPLE_SEED=0
 PREFILL_TOKENS=5000
 EVAL_TOKENS=1024
 CHUNK_SIZE=128
@@ -117,4 +124,12 @@ TOP_RATIOS=0.01,0.02,0.04,0.08,0.16,0.30,0.50,0.90
 TAIL_RATIOS=0.10,0.30,0.50
 MAKE_PLOTS=true
 MAKE_HEAD_PLOTS=true
+```
+
+For a more stable high-dimensional basis, use a larger source token pool than
+the final sample count, for example:
+
+```bash
+BASIS_TOKENS=64000 MAX_BASIS_VECTORS_PER_LAYER_HEAD=5000 SVD_COMPONENTS=128 \
+bash ymluo/projects/qwen3_score_tail_svd_representation/scripts/run_analysis.sh
 ```

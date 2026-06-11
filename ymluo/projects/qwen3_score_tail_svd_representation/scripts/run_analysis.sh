@@ -15,6 +15,8 @@ python "${PROJECT_DIR}/src/analyze_qwen3_v_basis_projection.py" \
   --text_path "${TEXT_PATH}" \
   --output_dir "${OUTPUT_DIR}" \
   --basis_tokens "${BASIS_TOKENS:-5000}" \
+  --basis_sample_mode "${BASIS_SAMPLE_MODE:-random}" \
+  --basis_sample_seed "${BASIS_SAMPLE_SEED:-0}" \
   --prefill_tokens "${PREFILL_TOKENS:-5000}" \
   --eval_tokens "${EVAL_TOKENS:-1024}" \
   --chunk_size "${CHUNK_SIZE:-128}" \

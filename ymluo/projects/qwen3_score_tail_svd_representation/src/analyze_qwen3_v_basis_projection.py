@@ -32,6 +32,9 @@ class AnalysisConfig:
     mode: str
     layers: set[int]
     heads: set[int]
+    basis_source_tokens: int
+    basis_sample_mode: str
+    basis_sample_seed: int
     svd_components: int
     query_stride: int
     max_query_rows_per_layer_head: int
@@ -146,6 +149,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--text_path", default=DEFAULT_TEXT_PATH)
     parser.add_argument("--output_dir", default="outputs/score_tail_svd_representation")
     parser.add_argument("--basis_tokens", type=int, default=5000)
+    parser.add_argument(
+        "--basis_sample_mode",
+        choices=["random", "even"],
+        default="random",
+        help="Sample V basis vectors randomly or at evenly spaced positions from the basis token pool.",
+    )
+    parser.add_argument("--basis_sample_seed", type=int, default=0)
     parser.add_argument("--prefill_tokens", type=int, default=5000)
     parser.add_argument("--eval_tokens", type=int, default=1024)
     parser.add_argument("--chunk_size", type=int, default=128)
@@ -288,21 +298,37 @@ def repeat_kv_for_attention(states: torch.Tensor, attention_heads: int) -> torch
     return states.repeat_interleave(group_size, dim=1)
 
 
+def basis_sample_indices(
+    key_count: int,
+    sample_count: int,
+    layer: int,
+    head: int,
+    config: AnalysisConfig,
+    device: torch.device,
+) -> torch.Tensor:
+    if config.basis_sample_mode == "even":
+        return torch.linspace(0, key_count - 1, steps=sample_count, device=device).round().long()
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(config.basis_sample_seed + layer * 1009 + head * 9176)
+    indices = torch.randperm(key_count, generator=generator)[:sample_count].sort().values
+    return indices.to(device=device)
+
+
 def collect_basis_vectors(context: AnalysisContext, layer: int, value_states: torch.Tensor) -> None:
     config = context.config
     if layer not in config.layers:
         return
     _, head_count, key_count, _ = value_states.shape
+    if key_count < config.basis_source_tokens:
+        return
     for head in sorted(config.heads):
         if head >= head_count:
             continue
         store = context.vector_store(layer, head)
-        remaining = config.max_basis_vectors_per_layer_head - store.stored
-        if remaining <= 0:
+        if store.stored > 0:
             continue
-        take = min(remaining, key_count)
-        # Evenly spaced samples keep the basis from being dominated by the first tokens in a long cached prefix.
-        indices = torch.linspace(0, key_count - 1, steps=take, device=value_states.device).round().long()
+        take = min(config.max_basis_vectors_per_layer_head, key_count)
+        indices = basis_sample_indices(key_count, take, layer, head, config, value_states.device)
         store.add(value_states[0, head, indices])
 
 
@@ -706,6 +732,9 @@ def main() -> None:
         mode="basis",
         layers=set(layers),
         heads=set(heads),
+        basis_source_tokens=args.basis_tokens,
+        basis_sample_mode=args.basis_sample_mode,
+        basis_sample_seed=args.basis_sample_seed,
         svd_components=args.svd_components,
         query_stride=args.query_stride,
         max_query_rows_per_layer_head=args.max_query_rows_per_layer_head,
@@ -762,6 +791,8 @@ def main() -> None:
         "model_name_or_path": args.model_name_or_path,
         "text_path": args.text_path,
         "basis_tokens": args.basis_tokens,
+        "basis_sample_mode": args.basis_sample_mode,
+        "basis_sample_seed": args.basis_sample_seed,
         "prefill_tokens": args.prefill_tokens,
         "eval_tokens": args.eval_tokens,
         "chunk_size": args.chunk_size,
