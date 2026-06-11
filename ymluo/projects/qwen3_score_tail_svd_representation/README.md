@@ -1,4 +1,4 @@
-# Qwen3 Score-Tail SVD Representation Analysis
+# Qwen3 V-Basis Projection Analysis
 
 This project implements the section 6.2 SVD representation-basis analysis from:
 
@@ -6,33 +6,53 @@ This project implements the section 6.2 SVD representation-basis analysis from:
 common_doc/top1_context_research_questions.md
 ```
 
-The goal is to compare where different score-ranked token groups live in
-K/V/weighted-V representation space.
+The goal is to first build a fixed V representation basis, then project
+attention outputs from different score-ranked token selections onto that basis.
 
-## Token Groups
+## Method
 
-For each layer, head, and query row, valid key tokens are sorted by raw masked
-QK score.
+This project uses a two-stage design.
 
-- `score_top_1pct`: highest 1% by raw QK score.
-- `score_top_90pct`: highest 90% by raw QK score.
-- `score_tail_10pct`: lowest 10% by raw QK score.
+### 1. Build the V Basis
 
-`score_top_90pct` is score-rank based. It is not the same as the attention-mass
-`top90` used by `qwen3_attention_value_decomposition`.
+Sample V vectors from ordinary forward passes. For each `(layer, head)`, build:
 
-## Representations
+```text
+M = [v_1; v_2; ...; v_n]
+```
 
-Default representation types:
+By default `n=5000` per layer/head when enough tokens are available. Then compute:
 
-- `key`: selected key vectors.
-- `value`: selected value vectors after KV heads are repeated to attention heads.
-- `weighted_value`: selected value vectors multiplied by their full-attention
-  softmax weight for that query row.
+```text
+M_centered = U S V^T
+```
 
-The script builds an SVD basis per `(layer, head, representation)` from sampled
-vectors across the three groups, then projects each group onto the first `k`
-singular directions.
+The rows of `V^T` are saved as the fixed V representation basis for that
+layer/head.
+
+### 2. Project Score-Selected Attention Outputs
+
+During a normal forward pass, each query row sorts valid keys by raw masked QK
+score. The script selects:
+
+```text
+top1, top2, top4, top8, top16, top30, top50, top90
+tail10, tail30, tail50
+```
+
+For each selection, it recomputes a conditional softmax over only the selected
+scores and forms a weighted V output:
+
+```text
+v_top1 = softmax(scores[top1]) @ V[top1]
+```
+
+Then it projects that output onto the saved V basis:
+
+```text
+projection = (v_top1 - mean_V) @ V_basis
+energy_i = projection_i^2 / sum_j projection_j^2
+```
 
 ## Outputs
 
@@ -44,15 +64,27 @@ ymluo/projects/qwen3_score_tail_svd_representation/outputs/score_tail_svd_repres
 
 Main files:
 
-- `svd_projection_by_group.csv`
-- `centroid_similarity_by_group.csv`
-- `score_distribution_by_group.csv`
-- `score_top_90pct_distribution.csv`
+- `svd_basis.pt`
 - `singular_value_energy.csv`
+- `projection_energy_by_layer_head.csv`
+- `projection_energy_by_layer.csv`
+- `projection_energy_global.csv`
+- `plots/`
 - `summary.json`
 
-`score_top_90pct_distribution.csv` is the dedicated distribution requested for
-the top 90% score-ranked token set.
+Plots include:
+
+- Per-layer/per-head projection energy curves.
+- Per-layer summary curves averaged over heads.
+- Global summary curves averaged over all layers/heads.
+- Singular-value energy distribution plots.
+- Curve subset plots:
+  - `all`
+  - `top_sparse`: `top1/top4/top16/top50/top90`
+  - `top_low`: `top1/top2/top4/top8/top16`
+  - `tail_only`: `tail10/tail30/tail50`
+
+Top-ratio curves use a blue gradient. Tail-ratio curves use a red gradient.
 
 ## Run
 
@@ -64,21 +96,25 @@ Smoke test:
 
 ```bash
 PREFILL_TOKENS=128 EVAL_TOKENS=32 CHUNK_SIZE=16 LAYERS=0 HEADS=0 \
-MAX_QUERY_ROWS_PER_LAYER_HEAD=32 MAX_VECTORS_PER_GROUP=256 \
+MAX_QUERY_ROWS_PER_LAYER_HEAD=32 MAX_BASIS_VECTORS_PER_LAYER_HEAD=256 \
 bash ymluo/projects/qwen3_score_tail_svd_representation/scripts/run_analysis.sh
 ```
 
 Useful parameters:
 
 ```text
+BASIS_TOKENS=5000
 PREFILL_TOKENS=5000
 EVAL_TOKENS=1024
 CHUNK_SIZE=128
 LAYERS=all
 HEADS=all
-SVD_COMPONENTS=8
+SVD_COMPONENTS=16
 QUERY_STRIDE=8
 MAX_QUERY_ROWS_PER_LAYER_HEAD=512
-MAX_VECTORS_PER_GROUP=4096
-REPRESENTATIONS=key,value,weighted_value
+MAX_BASIS_VECTORS_PER_LAYER_HEAD=5000
+TOP_RATIOS=0.01,0.02,0.04,0.08,0.16,0.30,0.50,0.90
+TAIL_RATIOS=0.10,0.30,0.50
+MAKE_PLOTS=true
+MAKE_HEAD_PLOTS=true
 ```

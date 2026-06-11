@@ -77,6 +77,32 @@ PPL_MODES=full,top0p9,tail0p1
 Set `PPL_RENORMALIZE_SELECTED=true` to renormalize selected top/tail weights
 before computing `attn @ V`.
 
+## Plot Pairwise Cosine
+
+After `value_pairwise_by_head.csv` is generated, plot the mean cosine for every
+vector pair:
+
+```bash
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_cos.sh
+```
+
+If the CSV is in a custom path:
+
+```bash
+INPUT_CSV=/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_attention_value_decomposition/outputs/attention_value_decomposition/value_pairwise_by_head.csv \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_cos.sh
+```
+
+This writes:
+
+```text
+plots/pairwise_cos/
+  pairwise_mean_cosine_summary.csv
+  pairwise_mean_cosine_bar.png
+  pairwise_mean_cosine_heatmap.png
+  plot_summary.json
+```
+
 ## Run
 
 ```bash
