@@ -236,9 +236,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
     parser.add_argument(
         "--pairwise_mode",
-        choices=["full_vs_all", "all", "custom"],
+        choices=["full_vs_all", "top_tail_cross", "all", "custom"],
         default="full_vs_all",
-        help="Which vector pairs to aggregate. full_vs_all is much faster than all.",
+        help="Which vector pairs to aggregate. top_tail_cross compares every top value with every tail value.",
     )
     parser.add_argument(
         "--pairwise_pairs",
@@ -273,6 +273,10 @@ def build_pair_specs(vector_specs: list[VectorSpec], pairwise_mode: str, pairwis
     valid = set(names)
     if pairwise_mode == "full_vs_all":
         return [("full", name) for name in names if name != "full"]
+    if pairwise_mode == "top_tail_cross":
+        top_names = [spec.name for spec in vector_specs if spec.side == "top"]
+        tail_names = [spec.name for spec in vector_specs if spec.side == "tail"]
+        return [(top_name, tail_name) for top_name in top_names for tail_name in tail_names]
     if pairwise_mode == "all":
         return list(combinations(names, 2))
     pairs: list[tuple[str, str]] = []

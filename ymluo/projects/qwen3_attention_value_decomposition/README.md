@@ -63,6 +63,16 @@ configured top/tail vector. Set `PAIRWISE_MODE=all` only when the number of
 vectors is small; with many `TOP_VALUES` and `TAIL_VALUES`, all-pair comparison
 can be much slower.
 
+Use `PAIRWISE_MODE=top_tail_cross` to compare every top value with every tail
+value:
+
+```bash
+PAIRWISE_MODE=top_tail_cross \
+SAVE_PAIRWISE_HIST=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
 Set `SAVE_PAIRWISE_PER_TOKEN=true` to also write `value_pairwise_per_token.csv`.
 That file keeps one row per `(layer, head, query token, vector pair)` and is used
 for histogram/frequency plots over the 5k evaluation tokens.
