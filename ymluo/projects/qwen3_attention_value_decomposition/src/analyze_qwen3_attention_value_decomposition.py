@@ -45,6 +45,9 @@ class AnalysisConfig:
     attention_output_mode: str
     ppl_renormalize_selected: bool
     save_pairwise_per_token: bool
+    save_pairwise_hist: bool
+    hist_bins: int
+    pair_specs: list[tuple[str, str]]
     query_offset: int = 0
 
 
@@ -101,11 +104,47 @@ class PairAccumulator:
         }
 
 
+class HistogramAccumulator:
+    def __init__(self, bins: int) -> None:
+        self.bins = bins
+        self.counts = [0] * bins
+
+    def update(self, values: torch.Tensor) -> None:
+        hist = torch.histc(values.float().clamp(-1.0, 1.0), bins=self.bins, min=-1.0, max=1.0)
+        hist_cpu = hist.detach().cpu().to(torch.long).tolist()
+        for index, count in enumerate(hist_cpu):
+            self.counts[index] += int(count)
+
+    def rows(self, layer: int, head: int, left: str, right: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        width = 2.0 / self.bins
+        total = sum(self.counts)
+        for index, count in enumerate(self.counts):
+            bin_left = -1.0 + index * width
+            bin_right = bin_left + width
+            rows.append(
+                {
+                    "layer": layer,
+                    "head": head,
+                    "left": left,
+                    "right": right,
+                    "bin_index": index,
+                    "bin_left": bin_left,
+                    "bin_right": bin_right,
+                    "bin_center": (bin_left + bin_right) / 2.0,
+                    "count": count,
+                    "frequency": count / total if total else 0.0,
+                }
+            )
+        return rows
+
+
 class AnalysisContext:
     def __init__(self, config: AnalysisConfig) -> None:
         self.config = config
         self.vector_stats: dict[tuple[int, int, str], VectorAccumulator] = {}
         self.pair_stats: dict[tuple[int, int, str, str], PairAccumulator] = {}
+        self.hist_stats: dict[tuple[int, int, str, str], HistogramAccumulator] = {}
         self.pair_token_rows: list[dict[str, Any]] = []
 
     def vector_acc(self, layer: int, head: int, name: str) -> VectorAccumulator:
@@ -120,17 +159,30 @@ class AnalysisContext:
             self.pair_stats[key] = PairAccumulator()
         return self.pair_stats[key]
 
+    def hist_acc(self, layer: int, head: int, left: str, right: str) -> HistogramAccumulator:
+        key = (layer, head, left, right)
+        if key not in self.hist_stats:
+            self.hist_stats[key] = HistogramAccumulator(self.config.hist_bins)
+        return self.hist_stats[key]
+
     def vector_rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
         names = ["full"] + [spec.name for spec in self.config.vector_specs]
         return [self.vector_acc(layer, head, name).row(layer, head, name) for layer in layers for head in heads for name in names]
 
     def pair_rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
-        names = ["full"] + [spec.name for spec in self.config.vector_specs]
         rows: list[dict[str, Any]] = []
         for layer in layers:
             for head in heads:
-                for left, right in combinations(names, 2):
+                for left, right in self.config.pair_specs:
                     rows.append(self.pair_acc(layer, head, left, right).row(layer, head, left, right))
+        return rows
+
+    def hist_rows(self, layers: list[int], heads: list[int]) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for layer in layers:
+            for head in heads:
+                for left, right in self.config.pair_specs:
+                    rows.extend(self.hist_acc(layer, head, left, right).rows(layer, head, left, right))
         return rows
 
 
@@ -182,7 +234,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_values", default="0.9", help="Comma-separated top mass/fraction values, e.g. 0.5,0.9,0.99.")
     parser.add_argument("--tail_values", default="0.1", help="Comma-separated tail mass/fraction values, e.g. 0.01,0.1.")
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
+    parser.add_argument(
+        "--pairwise_mode",
+        choices=["full_vs_all", "all", "custom"],
+        default="full_vs_all",
+        help="Which vector pairs to aggregate. full_vs_all is much faster than all.",
+    )
+    parser.add_argument(
+        "--pairwise_pairs",
+        default="",
+        help="For pairwise_mode=custom, comma-separated pairs like full|top0p9,top0p9|tail0p1.",
+    )
     parser.add_argument("--save_pairwise_per_token", type=str2bool, default=False)
+    parser.add_argument("--save_pairwise_hist", type=str2bool, default=False)
+    parser.add_argument("--hist_bins", type=int, default=60)
     parser.add_argument("--compute_ppl", type=str2bool, default=True)
     parser.add_argument("--ppl_modes", default="full,top0p9,tail0p1")
     parser.add_argument(
@@ -194,10 +259,40 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.chunk_size <= 0:
         raise ValueError("--chunk_size must be positive.")
+    if args.hist_bins <= 0:
+        raise ValueError("--hist_bins must be positive.")
     args.top_value_list = parse_float_list(args.top_values)
     args.tail_value_list = parse_float_list(args.tail_values)
     args.vector_specs = build_vector_specs(args.top_value_list, args.tail_value_list)
+    args.pair_specs = build_pair_specs(args.vector_specs, args.pairwise_mode, args.pairwise_pairs)
     return args
+
+
+def build_pair_specs(vector_specs: list[VectorSpec], pairwise_mode: str, pairwise_pairs: str) -> list[tuple[str, str]]:
+    names = ["full"] + [spec.name for spec in vector_specs]
+    valid = set(names)
+    if pairwise_mode == "full_vs_all":
+        return [("full", name) for name in names if name != "full"]
+    if pairwise_mode == "all":
+        return list(combinations(names, 2))
+    pairs: list[tuple[str, str]] = []
+    for raw_pair in pairwise_pairs.split(","):
+        raw_pair = raw_pair.strip()
+        if not raw_pair:
+            continue
+        if "|" not in raw_pair:
+            raise ValueError(f"Invalid pair spec `{raw_pair}`. Expected left|right.")
+        left, right = [part.strip() for part in raw_pair.split("|", 1)]
+        left = normalize_mode_name(left)
+        right = normalize_mode_name(right)
+        if left not in valid or right not in valid:
+            raise ValueError(f"Invalid pair `{raw_pair}`. Valid vectors: {sorted(valid)}")
+        if left == right:
+            raise ValueError(f"Invalid pair `{raw_pair}`: left and right are identical.")
+        pairs.append((left, right))
+    if not pairs:
+        raise ValueError("--pairwise_mode=custom requires --pairwise_pairs.")
+    return pairs
 
 
 def parse_index_spec(spec: str, max_count: int, name: str) -> list[int]:
@@ -396,23 +491,34 @@ def update_vector_stats(
             continue
         for name in names:
             context.vector_acc(layer, head, name).update(
-                outputs[name][:, head].detach().cpu(),
-                masses[name][:, head].detach().cpu(),
-                counts[name][:, head].detach().cpu(),
+                outputs[name][:, head].detach(),
+                masses[name][:, head].detach(),
+                counts[name][:, head].detach(),
             )
-        for left, right in combinations(names, 2):
-            left_values = outputs[left][:, head].detach().cpu()
-            right_values = outputs[right][:, head].detach().cpu()
+        for left, right in config.pair_specs:
+            left_values = outputs[left][:, head].detach()
+            right_values = outputs[right][:, head].detach()
             context.pair_acc(layer, head, left, right).update(
                 left_values,
                 right_values,
             )
-            if config.save_pairwise_per_token:
+            left_flat = None
+            right_flat = None
+            cos_values = None
+            if config.save_pairwise_hist or config.save_pairwise_per_token:
                 left_flat = left_values.float().reshape(-1, left_values.shape[-1])
                 right_flat = right_values.float().reshape(-1, right_values.shape[-1])
                 cos_values = F.cosine_similarity(left_flat, right_flat, dim=-1, eps=1e-8)
-                l2_values = torch.linalg.vector_norm(left_flat - right_flat, dim=-1)
-                for local_query, (cos_value, l2_value) in enumerate(zip(cos_values.tolist(), l2_values.tolist())):
+            if config.save_pairwise_hist and cos_values is not None:
+                context.hist_acc(layer, head, left, right).update(cos_values)
+            if config.save_pairwise_per_token:
+                if left_flat is None or right_flat is None or cos_values is None:
+                    left_flat = left_values.float().reshape(-1, left_values.shape[-1])
+                    right_flat = right_values.float().reshape(-1, right_values.shape[-1])
+                    cos_values = F.cosine_similarity(left_flat, right_flat, dim=-1, eps=1e-8)
+                cos_values_cpu = cos_values.detach().cpu()
+                l2_values = torch.linalg.vector_norm(left_flat - right_flat, dim=-1).detach().cpu()
+                for local_query, (cos_value, l2_value) in enumerate(zip(cos_values_cpu.tolist(), l2_values.tolist())):
                     context.pair_token_rows.append(
                         {
                             "layer": layer,
@@ -611,6 +717,9 @@ def main() -> None:
         attention_output_mode="full",
         ppl_renormalize_selected=args.ppl_renormalize_selected,
         save_pairwise_per_token=args.save_pairwise_per_token,
+        save_pairwise_hist=args.save_pairwise_hist,
+        hist_bins=args.hist_bins,
+        pair_specs=args.pair_specs,
     )
     print("running shared full-attention prefill", flush=True)
     past_key_values, prev_logits = run_prefill(model, input_ids, args.prefill_tokens, args.chunk_size, input_device)
@@ -640,6 +749,12 @@ def main() -> None:
                 output_dir / "value_pairwise_per_token.csv",
                 stats_context.pair_token_rows,
                 ["layer", "head", "query_index", "left", "right", "cosine", "l2"],
+            )
+        if args.save_pairwise_hist:
+            write_csv(
+                output_dir / "value_pairwise_hist_by_head.csv",
+                stats_context.hist_rows(layers, heads),
+                ["layer", "head", "left", "right", "bin_index", "bin_left", "bin_right", "bin_center", "count", "frequency"],
             )
         if args.compute_ppl and "full" in ppl_modes:
             ppl_rows.append({"mode": "full", "loss": loss, "ppl": ppl, "token_count": count})
@@ -671,12 +786,17 @@ def main() -> None:
         "top_values": args.top_value_list,
         "tail_values": args.tail_value_list,
         "ppl_modes": ppl_modes,
+        "pairwise_mode": args.pairwise_mode,
+        "pairwise_pairs": args.pair_specs,
         "ppl_renormalize_selected": args.ppl_renormalize_selected,
         "save_pairwise_per_token": args.save_pairwise_per_token,
+        "save_pairwise_hist": args.save_pairwise_hist,
+        "hist_bins": args.hist_bins,
         "outputs": {
             "value_vectors_by_head": str(output_dir / "value_vectors_by_head.csv"),
             "value_pairwise_by_head": str(output_dir / "value_pairwise_by_head.csv"),
             "value_pairwise_per_token": str(output_dir / "value_pairwise_per_token.csv") if args.save_pairwise_per_token else None,
+            "value_pairwise_hist_by_head": str(output_dir / "value_pairwise_hist_by_head.csv") if args.save_pairwise_hist else None,
             "ppl_by_attention_value_mode": str(output_dir / "ppl_by_attention_value_mode.csv"),
         },
     }

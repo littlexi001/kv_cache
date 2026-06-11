@@ -1,0 +1,6 @@
+pair,pair_display,layer,head,count,mean_from_bins
+top0p01|tail0p1,top0.01 vs tail0.1,0,0,55,0.3
+top0p01|tail0p1,top0.01 vs tail0.1,0,1,65,0.2538461538461539
+top0p01|tail0p1,top0.01 vs tail0.1,1,0,65,0.2538461538461539
+top0p01|tail0p1,top0.01 vs tail0.1,1,1,75,0.22000000000000008
+top0p01|tail0p1,top0.01 vs tail0.1,all,all,260,0.2538461538461539

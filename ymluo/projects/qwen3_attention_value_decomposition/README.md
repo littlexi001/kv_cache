@@ -58,9 +58,36 @@ Main files:
 - `mean_cosine`
 - `mean_l2`
 
+By default `PAIRWISE_MODE=full_vs_all`, which compares `full` against every
+configured top/tail vector. Set `PAIRWISE_MODE=all` only when the number of
+vectors is small; with many `TOP_VALUES` and `TAIL_VALUES`, all-pair comparison
+can be much slower.
+
 Set `SAVE_PAIRWISE_PER_TOKEN=true` to also write `value_pairwise_per_token.csv`.
 That file keeps one row per `(layer, head, query token, vector pair)` and is used
 for histogram/frequency plots over the 5k evaluation tokens.
+For large sweeps, prefer `PAIRWISE_MODE=custom` to avoid huge per-token CSVs:
+
+```bash
+PAIRWISE_MODE=custom \
+PAIRWISE_PAIRS=full\|top0p9,full\|tail0p1 \
+SAVE_PAIRWISE_PER_TOKEN=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
+For histogram/frequency plots, the preferred compact path is
+`SAVE_PAIRWISE_HIST=true`, which stores binned counts instead of every token row:
+
+```bash
+PAIRWISE_MODE=custom \
+PAIRWISE_PAIRS=top0p01\|tail0p1 \
+SAVE_PAIRWISE_HIST=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_hist_bins.sh
+```
 
 For example, with `TOP_VALUES=0.5,0.9` and `TAIL_VALUES=0.01,0.1`, the table
 compares:
