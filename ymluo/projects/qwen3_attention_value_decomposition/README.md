@@ -144,38 +144,54 @@ plots/pairwise_cos/
   plot_summary.json
 ```
 
-To compare the distribution of vector-level metrics in
-`value_vectors_by_head.csv`, use:
+To plot token-level cosine frequency histograms by layer/head, first rerun
+analysis with compact histograms enabled:
 
 ```bash
-INPUT_CSV=/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_attention_value_decomposition/outputs/attention_value_decomposition_v3/value_vectors_by_head.csv \
-bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_vector_frequency.sh
+PAIRWISE_MODE=custom \
+PAIRWISE_PAIRS='top0p01|tail0p1' \
+SAVE_PAIRWISE_HIST=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
 ```
 
-This groups by `vector` mode and plots frequency comparisons for:
+Then draw one grid per vector pair. Each grid has one panel per
+`(layer, head)`, so a 28-layer, 8-head run produces `28 * 8 = 224` histograms
+inside the image:
+
+```bash
+PAIRS='top0p01|tail0p1' \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_cos_frequency_grid.sh
+```
+
+This reads `value_pairwise_hist_by_head.csv` and writes:
 
 ```text
-mean_norm
-mean_attention_mass
-mean_token_count
+plots/pairwise_cos_frequency_grid/
+  top0p01_vs_tail0p1_layer_head_grid.png
+  plot_summary.json
 ```
 
-Each vector mode contributes one sample per selected layer/head. For example,
-if the run selected 28 layers and 8 heads, each mode has `28 * 8 = 224`
-samples.
+To compare multiple pairs in one run:
 
-To plot token-level cosine frequency histograms, first rerun analysis with
-per-token rows enabled:
+```bash
+PAIRS='top0p01|tail0p1,top0p1|tail0p1,top0p9|tail0p1' \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_cos_frequency_grid.sh
+```
+
+`plot_vector_frequency.sh` is different: it reads `value_vectors_by_head.csv`
+and compares vector-level summary metrics such as `mean_norm`,
+`mean_attention_mass`, and `mean_token_count`. It does not plot pairwise cosine
+over evaluation tokens.
+
+If exact per-token cosine rows are needed instead of compact binned counts,
+enable per-token output:
 
 ```bash
 SAVE_PAIRWISE_PER_TOKEN=true \
 COMPUTE_PPL=false \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
-```
 
-Then plot histograms:
-
-```bash
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/plot_pairwise_token_hist.sh
 ```
 
