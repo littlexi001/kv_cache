@@ -57,7 +57,16 @@ def parse_pair_filter(spec: str) -> set[str] | None:
     normalized = spec.strip()
     if not normalized or normalized.lower() == "all":
         return None
-    return {part.strip() for part in normalized.split(",") if part.strip()}
+    pairs: set[str] = set()
+    for part in normalized.split(","):
+        pair = part.strip()
+        if not pair:
+            continue
+        pairs.add(pair)
+        if "|" in pair:
+            left, right = pair.split("|", 1)
+            pairs.add(f"{right}|{left}")
+    return pairs
 
 
 def pair_key(row: dict[str, str]) -> str:

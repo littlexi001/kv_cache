@@ -236,9 +236,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
     parser.add_argument(
         "--pairwise_mode",
-        choices=["full_vs_all", "top_tail_cross", "all", "custom"],
+        choices=["full_vs_all", "top_tail_cross", "top_top", "tail_tail", "same_side", "nonfull_all", "all", "custom"],
         default="full_vs_all",
-        help="Which vector pairs to aggregate. top_tail_cross compares every top value with every tail value.",
+        help=(
+            "Which vector pairs to aggregate. top_tail_cross compares every top value with every tail value; "
+            "same_side compares top-top and tail-tail; nonfull_all compares every top/tail pair without full."
+        ),
     )
     parser.add_argument(
         "--pairwise_pairs",
@@ -271,12 +274,20 @@ def parse_args() -> argparse.Namespace:
 def build_pair_specs(vector_specs: list[VectorSpec], pairwise_mode: str, pairwise_pairs: str) -> list[tuple[str, str]]:
     names = ["full"] + [spec.name for spec in vector_specs]
     valid = set(names)
+    top_names = [spec.name for spec in vector_specs if spec.side == "top"]
+    tail_names = [spec.name for spec in vector_specs if spec.side == "tail"]
     if pairwise_mode == "full_vs_all":
         return [("full", name) for name in names if name != "full"]
     if pairwise_mode == "top_tail_cross":
-        top_names = [spec.name for spec in vector_specs if spec.side == "top"]
-        tail_names = [spec.name for spec in vector_specs if spec.side == "tail"]
         return [(top_name, tail_name) for top_name in top_names for tail_name in tail_names]
+    if pairwise_mode == "top_top":
+        return list(combinations(top_names, 2))
+    if pairwise_mode == "tail_tail":
+        return list(combinations(tail_names, 2))
+    if pairwise_mode == "same_side":
+        return list(combinations(top_names, 2)) + list(combinations(tail_names, 2))
+    if pairwise_mode == "nonfull_all":
+        return list(combinations(top_names + tail_names, 2))
     if pairwise_mode == "all":
         return list(combinations(names, 2))
     pairs: list[tuple[str, str]] = []

@@ -73,6 +73,26 @@ COMPUTE_PPL=false \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
 ```
 
+Use `PAIRWISE_MODE=same_side` to compare top-top and tail-tail pairs:
+
+```bash
+PAIRWISE_MODE=same_side \
+SAVE_PAIRWISE_HIST=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
+Available pair modes:
+
+- `full_vs_all`: `full` against every top/tail vector.
+- `top_tail_cross`: every top value against every tail value.
+- `top_top`: every top value against every other top value.
+- `tail_tail`: every tail value against every other tail value.
+- `same_side`: `top_top + tail_tail`.
+- `nonfull_all`: every pair among top/tail vectors, excluding `full`.
+- `all`: every pair including `full`.
+- `custom`: only pairs listed in `PAIRWISE_PAIRS`.
+
 Set `SAVE_PAIRWISE_PER_TOKEN=true` to also write `value_pairwise_per_token.csv`.
 That file keeps one row per `(layer, head, query token, vector pair)` and is used
 for histogram/frequency plots over the 5k evaluation tokens.
