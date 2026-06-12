@@ -41,6 +41,7 @@ class AnalysisConfig:
     heads: set[int]
     split_mode: str
     vector_specs: list[VectorSpec]
+    random_seed: int
     collect_vectors: bool
     attention_output_mode: str
     ppl_renormalize_selected: bool
@@ -203,12 +204,14 @@ def format_value(value: float) -> str:
     return f"{value:g}".replace(".", "p")
 
 
-def build_vector_specs(top_values: list[float], tail_values: list[float]) -> list[VectorSpec]:
+def build_vector_specs(top_values: list[float], tail_values: list[float], random_values: list[float]) -> list[VectorSpec]:
     specs: list[VectorSpec] = []
     for value in top_values:
         specs.append(VectorSpec(f"top{format_value(value)}", "top", value))
     for value in tail_values:
         specs.append(VectorSpec(f"tail{format_value(value)}", "tail", value))
+    for value in random_values:
+        specs.append(VectorSpec(f"random{format_value(value)}", "random", value))
     return specs
 
 
@@ -233,14 +236,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--split_mode", choices=["mass", "token_fraction"], default="mass")
     parser.add_argument("--top_values", default="0.9", help="Comma-separated top mass/fraction values, e.g. 0.5,0.9,0.99.")
     parser.add_argument("--tail_values", default="0.1", help="Comma-separated tail mass/fraction values, e.g. 0.01,0.1.")
+    parser.add_argument("--random_values", default="", help="Comma-separated random token fractions, e.g. 0.1.")
+    parser.add_argument("--random_seed", type=int, default=0)
     parser.add_argument("--compute_vector_stats", type=str2bool, default=True)
     parser.add_argument(
         "--pairwise_mode",
-        choices=["full_vs_all", "top_tail_cross", "top_top", "tail_tail", "same_side", "nonfull_all", "all", "custom"],
+        choices=[
+            "full_vs_all",
+            "top_tail_cross",
+            "top_random_cross",
+            "tail_random_cross",
+            "top_tail_random_cross",
+            "top_top",
+            "tail_tail",
+            "random_random",
+            "same_side",
+            "nonfull_all",
+            "all",
+            "custom",
+        ],
         default="full_vs_all",
         help=(
             "Which vector pairs to aggregate. top_tail_cross compares every top value with every tail value; "
-            "same_side compares top-top and tail-tail; nonfull_all compares every top/tail pair without full."
+            "top_random_cross compares every top value with every random value; "
+            "same_side compares top-top, tail-tail, and random-random; nonfull_all compares every non-full pair."
         ),
     )
     parser.add_argument(
@@ -266,7 +285,8 @@ def parse_args() -> argparse.Namespace:
         raise ValueError("--hist_bins must be positive.")
     args.top_value_list = parse_float_list(args.top_values)
     args.tail_value_list = parse_float_list(args.tail_values)
-    args.vector_specs = build_vector_specs(args.top_value_list, args.tail_value_list)
+    args.random_value_list = parse_float_list(args.random_values) if args.random_values.strip() else []
+    args.vector_specs = build_vector_specs(args.top_value_list, args.tail_value_list, args.random_value_list)
     args.pair_specs = build_pair_specs(args.vector_specs, args.pairwise_mode, args.pairwise_pairs)
     return args
 
@@ -276,18 +296,30 @@ def build_pair_specs(vector_specs: list[VectorSpec], pairwise_mode: str, pairwis
     valid = set(names)
     top_names = [spec.name for spec in vector_specs if spec.side == "top"]
     tail_names = [spec.name for spec in vector_specs if spec.side == "tail"]
+    random_names = [spec.name for spec in vector_specs if spec.side == "random"]
     if pairwise_mode == "full_vs_all":
         return [("full", name) for name in names if name != "full"]
     if pairwise_mode == "top_tail_cross":
         return [(top_name, tail_name) for top_name in top_names for tail_name in tail_names]
+    if pairwise_mode == "top_random_cross":
+        return [(top_name, random_name) for top_name in top_names for random_name in random_names]
+    if pairwise_mode == "tail_random_cross":
+        return [(tail_name, random_name) for tail_name in tail_names for random_name in random_names]
+    if pairwise_mode == "top_tail_random_cross":
+        return (
+            [(top_name, tail_name) for top_name in top_names for tail_name in tail_names]
+            + [(top_name, random_name) for top_name in top_names for random_name in random_names]
+        )
     if pairwise_mode == "top_top":
         return list(combinations(top_names, 2))
     if pairwise_mode == "tail_tail":
         return list(combinations(tail_names, 2))
+    if pairwise_mode == "random_random":
+        return list(combinations(random_names, 2))
     if pairwise_mode == "same_side":
-        return list(combinations(top_names, 2)) + list(combinations(tail_names, 2))
+        return list(combinations(top_names, 2)) + list(combinations(tail_names, 2)) + list(combinations(random_names, 2))
     if pairwise_mode == "nonfull_all":
-        return list(combinations(top_names + tail_names, 2))
+        return list(combinations(top_names + tail_names + random_names, 2))
     if pairwise_mode == "all":
         return list(combinations(names, 2))
     pairs: list[tuple[str, str]] = []
@@ -419,6 +451,16 @@ def repeat_kv_for_attention(value_states: torch.Tensor, attention_heads: int) ->
 
 def selection_mask(attention_weights: torch.Tensor, spec: VectorSpec, split_mode: str) -> torch.Tensor:
     weights = attention_weights.float()
+    valid_mask = weights > 0
+    if spec.side == "random":
+        valid_counts = valid_mask.sum(dim=-1, keepdim=True).clamp_min(1)
+        keep = torch.ceil(valid_counts.float() * spec.value).long().clamp_min(1)
+        random_scores = torch.rand(weights.shape, device=weights.device, dtype=torch.float32)
+        random_scores = random_scores.masked_fill(~valid_mask, -1.0)
+        sorted_scores, sorted_indices = torch.sort(random_scores, dim=-1, descending=True)
+        rank = torch.arange(weights.shape[-1], device=weights.device).view(1, 1, 1, -1)
+        sorted_mask = (rank < keep) & (sorted_scores >= 0.0)
+        return torch.zeros_like(sorted_mask, dtype=torch.bool).scatter(dim=-1, index=sorted_indices, src=sorted_mask)
     descending = spec.side == "top"
     sorted_weights, sorted_indices = torch.sort(weights, dim=-1, descending=descending)
     valid_sorted = sorted_weights > 0
@@ -713,6 +755,9 @@ def main() -> None:
         model = model.to(requested_device)
     model.eval()
     model.config.use_cache = True
+    torch.manual_seed(args.random_seed)
+    if requested_device.type == "cuda":
+        torch.cuda.manual_seed_all(args.random_seed)
     input_device = pick_input_device(model, requested_device)
 
     register_attention_layers(model)
@@ -728,6 +773,7 @@ def main() -> None:
         heads=set(heads),
         split_mode=args.split_mode,
         vector_specs=args.vector_specs,
+        random_seed=args.random_seed,
         collect_vectors=False,
         attention_output_mode="full",
         ppl_renormalize_selected=args.ppl_renormalize_selected,
@@ -800,6 +846,8 @@ def main() -> None:
         "split_mode": args.split_mode,
         "top_values": args.top_value_list,
         "tail_values": args.tail_value_list,
+        "random_values": args.random_value_list,
+        "random_seed": args.random_seed,
         "ppl_modes": ppl_modes,
         "pairwise_mode": args.pairwise_mode,
         "pairwise_pairs": args.pair_specs,

@@ -9,6 +9,7 @@ For each selected layer/head/query token, the script computes:
 full = sum(all attention weights * V)
 topX = sum(selected high-attention weights * V)
 tailY = sum(selected low-attention weights * V)
+randomZ = sum(randomly sampled token attention weights * V)
 ```
 
 The split is configurable.
@@ -73,7 +74,7 @@ COMPUTE_PPL=false \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
 ```
 
-Use `PAIRWISE_MODE=same_side` to compare top-top and tail-tail pairs:
+Use `PAIRWISE_MODE=same_side` to compare same-family pairs:
 
 ```bash
 PAIRWISE_MODE=same_side \
@@ -86,8 +87,12 @@ Available pair modes:
 
 - `full_vs_all`: `full` against every top/tail vector.
 - `top_tail_cross`: every top value against every tail value.
+- `top_random_cross`: every top value against every random sample value.
+- `tail_random_cross`: every tail value against every random sample value.
+- `top_tail_random_cross`: `top_tail_cross + top_random_cross`.
 - `top_top`: every top value against every other top value.
 - `tail_tail`: every tail value against every other tail value.
+- `random_random`: every random sample value against every other random sample value.
 - `same_side`: `top_top + tail_tail`.
 - `nonfull_all`: every pair among top/tail vectors, excluding `full`.
 - `all`: every pair including `full`.
@@ -170,6 +175,16 @@ analysis with compact histograms enabled:
 ```bash
 PAIRWISE_MODE=custom \
 PAIRWISE_PAIRS='top0p01|tail0p1' \
+SAVE_PAIRWISE_HIST=true \
+COMPUTE_PPL=false \
+bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh
+```
+
+To include a random 10% token sample and compare it against the top selections:
+
+```bash
+RANDOM_VALUES=0.1 \
+PAIRWISE_MODE=top_random_cross \
 SAVE_PAIRWISE_HIST=true \
 COMPUTE_PPL=false \
 bash ymluo/projects/qwen3_attention_value_decomposition/scripts/run_analysis.sh

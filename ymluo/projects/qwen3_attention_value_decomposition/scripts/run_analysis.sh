@@ -8,7 +8,7 @@ export TOKENIZERS_PARALLELISM=false
 
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-0.6B}"
 TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
-OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/attention_value_decomposition}"
+OUTPUT_DIR="${OUTPUT_DIR:-${PROJECT_DIR}/outputs/attention_value_decomposition_v5}"
 
 python "${PROJECT_DIR}/src/analyze_qwen3_attention_value_decomposition.py" \
   --model_name_or_path "${MODEL_PATH}" \
@@ -30,11 +30,13 @@ python "${PROJECT_DIR}/src/analyze_qwen3_attention_value_decomposition.py" \
   --split_mode "${SPLIT_MODE:-token_fraction}" \
   --top_values "${TOP_VALUES:-0.01,0.02,0.04,0.06,0.08,0.1,0.2,0.4,0.5,0.7,0.9,0.95,0.99}" \
   --tail_values "${TAIL_VALUES:-0.01,0.02,0.04,0.06,0.08,0.1,0.2,0.4,0.5,0.7,0.9,0.95,0.99}" \
+  --random_values "${RANDOM_VALUES:-0.1}" \
+  --random_seed "${RANDOM_SEED:-0}" \
   --compute_vector_stats "${COMPUTE_VECTOR_STATS:-true}" \
-  --pairwise_mode "${PAIRWISE_MODE:-full_vs_all}" \
+  --pairwise_mode "${PAIRWISE_MODE:-top_tail_random_cross}" \
   --pairwise_pairs "${PAIRWISE_PAIRS:-}" \
   --save_pairwise_per_token "${SAVE_PAIRWISE_PER_TOKEN:-false}" \
-  --save_pairwise_hist "${SAVE_PAIRWISE_HIST:-false}" \
+  --save_pairwise_hist "${SAVE_PAIRWISE_HIST:-true}" \
   --hist_bins "${HIST_BINS:-60}" \
   --compute_ppl "${COMPUTE_PPL:-false}" \
   --ppl_modes "${PPL_MODES:-full,top0p5,top0p7,top0p9,top0p95,top0p99,tail0p2,tail0p5,tail0p1}" \
