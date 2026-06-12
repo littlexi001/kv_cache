@@ -44,35 +44,44 @@ flowchart LR
     class H1,H2 how;
 ```
 
-### 一、是什么：Attention 是否只需要少量（稀疏）历史信息？
+### 一、Attention 是否只需要少量（稀疏）历史信息？
 
 **是稀疏的，且具有以下特征：**
 1. score top 1% 已经基本接近 full attention；长文本检索更敏感，需要保留更高比例，但仍明显少于全量 context。
 2. score top 2%-20% 均略优于 full attention，其中 4% 最好。
 3. score top 1% 的位置和功能组成具有明显层间差异：浅层几乎不命中远程答案，中高层的答案命中上升，最后一层又明显偏向 position end；不能简单概括为“深层集中在 front/end”。
 
-### 二、为什么：Attention Selectivity 为什么是稀疏的？
+### 二、为什么 top-2% 的 token 就足够模型正确回答问题？为什么 tail-10% 的 token 对 perplexity 有害？
 
-#### A. 数值原理：为什么只有少量 token 获得高分？
+我们把 token 按不同标准分类：
+- Score： top / tail；
+- Function： front / end / answer / others
 
-| 问题 | 当前一句话回答 |
-|---|---|
-| 1. QK score 是否长尾、有间隔或极值？ | 整体分布不算强长尾，但存在少数显著高分极值，且深层更明显。 |
-| 2. Score top/tail 覆盖多少 softmax mass？ | score top 1% 平均覆盖 83.7% mass，而 score tail 1% 的 mass 几乎为零。 |
-| 3. Score top/tail 是否位于不同奇异子空间？ | 差异很弱，SVD 主子空间不能充分解释 score selectivity。 |
-| 4. Score top/tail 的 V 如何影响输出？ | score top 1% 基本恢复 full output；score tail 的方向不同且更易抵消，但实际 mass 极小。 |
+从数值和功能上比较它们的区别：
 
-#### B. 信息功能：Top/Tail Score Token 分别包含哪些信息，导致他们有用/有害？
+#### A. 数值
+1. Top/tail 覆盖多少 attention score mass？
+- Top-1% 平均覆盖 85%~90% mass，而 Tail 10% 的 mass 几乎为零。
+2. Top/tail, front/end/answer/other 是否位于不同奇异子空间？
+- 不同种类 token 所使用的 SVD 子空间差异很小；
+- 30% 的 tail token 于 top token 的方向相反。
 
-| 问题 | 当前一句话回答 |
-|---|---|
-| 1. score top 1% token 中分别包含多少远程答案、position front、position end 和其他上下文信息？ | score top 1% 是功能混合集合：按 token 数量约含 `1.6% answer / 12.0% front / 36.2% end / 50.2% other`，但 mass 主要集中于 front 和 end；answer 虽少，进入 top 1% 的概率约为随机基线的 `5×`，并对正确回答具有决定性作用。 |
-| 2. 浅层几乎不命中远程答案时，它保留的 token 在承担什么功能？ | 浅层主要利用 position end 维持当前问题、局部上下文和生成轨迹；front 虽承载约 `46.3%` mass，却不是该样本正确回答所必需，说明高 attention mass 不等同于高任务信息价值。 |
+#### B. 信息功能
+1. Top 1% token 覆盖哪些信息？
+- top 1% 按 token 数量约含 `1.6% answer / 12.0% front / 36.2% end / 50.2% other`，但 score mass 主要集中于 front 和 end。
+2. Front/end/answer/other 的重要性如何？
+- answer 与 end 最重要，mask 后模型无法正确回答；
+- front 最不重要，mask 后虽然 perplexity 升高，但依旧能答对问题；
+- other mask 掉，模型也无法正确回答问题，还不知道如何解释。
+3. 其他现象：
+- 所有 answer token 中，只有约 10% 被 top-2% 选中，且足以正确回答问题；
+- 模型中间层更关注 answer，模型浅层和最深层几乎不关注 answer，且 score 分布更 uniform；
+- 每个 head 只关注 2% 的 token，但一层内所有 head 总共关注了 15% 的 token。
+
+**结论：模型自发将关键信息压缩到少数 token(head) 中，但现有的模型结构没能利用这一点，导致有用的信息分散在不同 token、不同 head 上。**
 
 #### C. 适用边界：稀疏性在什么条件下成立？
-
-子问题：
-1. 97% 性能意味着什么，剩余 3% 损失集中在哪些任务、样本和 token 上？
+1. 哪些任务、样本和 token 上不存在 attention 稀疏性？
 2. 普通生成、长程检索、多跳推理、代码和数学任务需要的有效 token budget 是否不同？
 3. 不同 layer/head 的最优保留比例是否不同？是否存在不能稀疏化的层或 head？
 
