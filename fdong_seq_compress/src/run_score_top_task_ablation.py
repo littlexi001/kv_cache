@@ -31,6 +31,14 @@ from run_top_token_category_ablation import build_prompt, load_sample  # noqa: E
 CATEGORIES = ("answer", "front", "end", "other")
 
 
+def parse_categories(value: str) -> List[str]:
+    categories = [item.strip() for item in value.split(",") if item.strip()]
+    invalid = sorted(set(categories) - set(CATEGORIES))
+    if invalid:
+        raise ValueError(f"Unsupported categories: {invalid}; choose from {CATEGORIES}")
+    return categories
+
+
 class OracleTopAttention:
     def __init__(self, ratio: float, category_indices: Dict[str, List[int]]) -> None:
         self.ratio = ratio
@@ -40,6 +48,12 @@ class OracleTopAttention:
         self.selected_count = 0
         self.valid_count = 0
         self.call_count = 0
+        self.record_union_stats = False
+        self.phase = ""
+        self.decode_step = -1
+        self.union_rows: List[Dict] = []
+        self.cumulative_layer_unions: Dict[int, set[int]] = {}
+        self.cumulative_kv_unions: Dict[Tuple[int, int], set[int]] = {}
 
     def reset(self, enabled: bool, excluded_category: str | None) -> None:
         self.enabled = enabled
@@ -47,6 +61,70 @@ class OracleTopAttention:
         self.selected_count = 0
         self.valid_count = 0
         self.call_count = 0
+        self.record_union_stats = False
+        self.phase = ""
+        self.decode_step = -1
+        self.union_rows = []
+        self.cumulative_layer_unions = {}
+        self.cumulative_kv_unions = {}
+
+    def set_recording(self, enabled: bool, phase: str = "", decode_step: int = -1) -> None:
+        self.record_union_stats = enabled
+        self.phase = phase
+        self.decode_step = decode_step
+
+    def record_selected_unions(self, module, selected: torch.Tensor, valid: torch.Tensor) -> None:
+        # Record the current query only: prompt's final query or one decode query.
+        selected_now = selected[0, :, -1].detach().cpu()
+        valid_now = valid[0, :, -1].detach().cpu()
+        visible_count = int(valid_now[0].sum().item())
+        if visible_count <= 0:
+            return
+
+        num_q_heads = int(selected_now.shape[0])
+        num_groups = int(module.num_key_value_groups)
+        num_kv_heads = num_q_heads // num_groups
+        q_head_counts = selected_now.sum(dim=-1).float()
+        kv_union_counts: List[int] = []
+        layer_idx = int(module.layer_idx)
+        for kv_head_idx in range(num_kv_heads):
+            start = kv_head_idx * num_groups
+            end = start + num_groups
+            union_mask = selected_now[start:end].any(dim=0)
+            union_indices = set(torch.nonzero(union_mask, as_tuple=False).flatten().tolist())
+            kv_union_counts.append(len(union_indices))
+            self.cumulative_kv_unions.setdefault((layer_idx, kv_head_idx), set()).update(union_indices)
+
+        layer_union_mask = selected_now.any(dim=0)
+        layer_union_indices = set(torch.nonzero(layer_union_mask, as_tuple=False).flatten().tolist())
+        self.cumulative_layer_unions.setdefault(layer_idx, set()).update(layer_union_indices)
+        cumulative_kv_counts = [
+            len(self.cumulative_kv_unions[(layer_idx, kv_head_idx)])
+            for kv_head_idx in range(num_kv_heads)
+        ]
+        self.union_rows.append(
+            {
+                "phase": self.phase,
+                "decode_step": self.decode_step,
+                "layer": layer_idx,
+                "key_length": int(selected_now.shape[-1]),
+                "visible_count": visible_count,
+                "q_head_selected_fraction_mean": float((q_head_counts / visible_count).mean().item()),
+                "q_head_selected_count_mean": float(q_head_counts.mean().item()),
+                "kv_head_union_fraction_mean": sum(kv_union_counts) / (num_kv_heads * visible_count),
+                "kv_head_union_count_mean": sum(kv_union_counts) / num_kv_heads,
+                "kv_head_union_count_min": min(kv_union_counts),
+                "kv_head_union_count_max": max(kv_union_counts),
+                "layer_shared_mask_union_fraction": len(layer_union_indices) / visible_count,
+                "layer_shared_mask_union_count": len(layer_union_indices),
+                "cumulative_kv_head_union_fraction_mean": (
+                    sum(cumulative_kv_counts) / (num_kv_heads * visible_count)
+                ),
+                "cumulative_layer_union_fraction": (
+                    len(self.cumulative_layer_unions[layer_idx]) / visible_count
+                ),
+            }
+        )
 
     def forward(
         self,
@@ -106,6 +184,8 @@ class OracleTopAttention:
             self.selected_count += int(selected.sum().item())
             self.valid_count += int(valid.sum().item())
             self.call_count += 1
+            if self.record_union_stats:
+                self.record_selected_unions(module, selected, valid)
 
         weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query.dtype)
         weights = F.dropout(weights, p=dropout, training=module.training)
@@ -140,18 +220,27 @@ def answer_metrics(model, tokenizer, prompt: str, answer: str, device: torch.dev
     }
 
 
-def greedy_generate(model, tokenizer, prompt_ids: torch.Tensor, device: torch.device, max_new_tokens: int) -> str:
+def greedy_generate(
+    model,
+    tokenizer,
+    prompt_ids: torch.Tensor,
+    device: torch.device,
+    max_new_tokens: int,
+    controller: OracleTopAttention,
+) -> str:
     ids = prompt_ids.to(device)
     generated: List[int] = []
     eos_id = tokenizer.eos_token_id
+    controller.set_recording(controller.enabled, phase="prompt_last_query", decode_step=-1)
     with torch.no_grad():
         outputs = model(input_ids=ids, use_cache=True)
-    for _ in range(max_new_tokens):
+    for step in range(max_new_tokens):
         next_id = int(outputs.logits[0, -1].argmax().item())
         generated.append(next_id)
         if eos_id is not None and next_id == eos_id:
             break
         next_input = torch.tensor([[next_id]], dtype=ids.dtype, device=device)
+        controller.set_recording(controller.enabled, phase="decode", decode_step=step)
         with torch.no_grad():
             outputs = model(
                 input_ids=next_input,
@@ -174,11 +263,13 @@ def main() -> None:
     parser.add_argument("--dtype", default="auto")
     parser.add_argument("--score-ratio", type=float, default=0.01)
     parser.add_argument("--position-ratio", type=float, default=0.01)
+    parser.add_argument("--excluded-categories", default="answer,front,end,other")
     parser.add_argument("--max-new-tokens", type=int, default=32)
     args = parser.parse_args()
     if not 0 < args.score_ratio <= 1:
         raise ValueError("--score-ratio must be in (0, 1].")
 
+    excluded_categories = parse_categories(args.excluded_categories)
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_dir = Path(args.output_dir or f"fdong_seq_compress/outputs/score_top_task_ablation_{timestamp}")
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -201,14 +292,17 @@ def main() -> None:
     conditions: List[Tuple[str, bool, str | None]] = [
         ("full", False, None),
         ("score_top_all", True, None),
-        *[(f"score_top_without_{category}", True, category) for category in CATEGORIES],
+        *[(f"score_top_without_{category}", True, category) for category in excluded_categories],
     ]
     try:
         for condition, enabled, excluded in conditions:
             controller.reset(enabled, excluded)
             started = time.perf_counter()
+            controller.set_recording(False)
             metrics = answer_metrics(model, tokenizer, prompt, answer, device)
-            generated = greedy_generate(model, tokenizer, prompt_ids, device, args.max_new_tokens)
+            generated = greedy_generate(
+                model, tokenizer, prompt_ids, device, args.max_new_tokens, controller
+            )
             expected_norm = normalize_text(answer)
             generated_norm = normalize_text(generated)
             row = {
@@ -227,6 +321,8 @@ def main() -> None:
             }
             rows.append(row)
             print(json.dumps(row, ensure_ascii=False), flush=True)
+            if enabled:
+                write_csv(output_dir / f"head_union_stats_{condition}.csv", controller.union_rows)
     finally:
         modeling_qwen3.eager_attention_forward = original_forward
 
@@ -239,6 +335,7 @@ def main() -> None:
         "prompt_token_count": int(prompt_ids.shape[1]),
         "score_ratio": args.score_ratio,
         "position_ratio": args.position_ratio,
+        "excluded_categories": excluded_categories,
         "category_token_counts": {key: len(value) for key, value in category_indices.items()},
         "expected_answer": answer,
         "definition": "Each layer/head/query keeps its oracle score-top ratio, then optionally removes one positional/semantic category.",

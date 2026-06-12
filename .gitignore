@@ -35,6 +35,8 @@ logs/
 # Analysis outputs
 ymluo/projects/*/outputs/
 fdong_embedding_dim/outputs/
+# fdong_seq_compress/outputs and artifacts use local .gitignore files so their
+# directory structure remains available without committing generated results.
 
 # Training artifacts
 fdong/checkpoints/

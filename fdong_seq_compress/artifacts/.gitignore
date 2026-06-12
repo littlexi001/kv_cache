@@ -1,0 +1,4 @@
+# Reproducible local caches such as sampled hidden states and SVD bases.
+*
+!.gitignore
+!.gitkeep
