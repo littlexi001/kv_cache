@@ -2,13 +2,14 @@
 
 Date: 2026-06-12
 
-## 0. 三个核心问题与回答
+## 0. 核心问题与回答
 
 |核心问题|一句话回答|
 |---|---|
-|Final (X) 的不同 SVD feature directions 对最终 loss 有何不同作用？|Top singular subspace 构成预测骨架，而其余方向的能量与 loss 敏感性并不一致，删除不同方向可能使 loss 上升，也可能使 loss 下降。|
-|为什么只保留 attention score-top 2% token 反而可能降低 loss？|Score-top pruning 主要压低了大量错误 vocabulary logits，使 softmax 中正确 token 的相对概率上升，表现为一种输出端去噪。|
-|Attention score-tail token 与 final (X) 的 SVD directions 是什么关系？|Attention mask 并非定向删除某组有害奇异方向，而是引起全谱表征重组；当降低 loss 的方向贡献占优时，最终 loss 才会净下降。|
+|Final (X) 的不同 SVD feature directions 对最终 loss 的敏感性有何不同？|Top-1% singular subspace 对 loss 的贡献均为正面（降低 loss）；其余方向对 loss 的贡献有正有负，敏感性有高有低，无显著规律。|
+|为什么 Top-2% tokens only attention 会降低 loss？|Top-2% tokens only 主要压低了错误 token 的 logits，使 softmax 后正确 token 的相对概率上升，并非直接提升正确 token 的得分。（类似一种输出端去噪。）|
+|Top-2% tokens only attention 是否通过压低对 loss 负贡献的 final(X) SVD directions 来降低 loss？|否。 Top-2% only 并非定向删除某组有害奇异方向，而是对全谱空间均有影响，overall 降低了 loss。|
+|Top tokens 与 tail tokens 的 feature 有何关系？| 存在部分（~30%） tail tokens 与 top tokens 的 feature 相同、方向相反。|
 
 本轮从模型输出端沿以下链条理解 attention pruning：
 
