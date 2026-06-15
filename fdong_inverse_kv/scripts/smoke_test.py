@@ -62,6 +62,23 @@ def main():
     required = {"candidate_ratio", "router_load_entropy", "effective_experts", "router_margin"}
     if not required.issubset(metrics):
         raise AssertionError(f"Missing metrics: {required - set(metrics)}")
+
+    # CPU autocast reproduces the mixed float32/bfloat16 aggregation used by
+    # CUDA BF16 training. Test both decoder branches because each dispatches
+    # expert outputs into a preallocated tensor.
+    for architecture in ("ordinary_moe", "shared_bucket"):
+        config.inverse_kv_architecture = architecture
+        autocast_model = MyQwen3ForCausalLM(config)
+        with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
+            autocast_logits = autocast_model(
+                input_ids=input_ids,
+                attention_mask=torch.ones_like(input_ids),
+                use_cache=False,
+            ).logits
+            autocast_loss = autocast_logits.float().square().mean()
+        autocast_loss.backward()
+        if not torch.isfinite(autocast_loss):
+            raise AssertionError(f"{architecture} BF16 autocast produced a non-finite loss")
     print({"loss": float(loss.detach()), "router_grad_l1": router_grad, **metrics})
 
 

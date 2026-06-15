@@ -138,7 +138,8 @@ class HeadBucketExperts(nn.Module):
                 expert_output = self._expert(head_idx, expert_idx)(expert_input)
                 selected_probability = head_probabilities[..., expert_idx][selected]
                 straight_through_scale = 1.0 + selected_probability - selected_probability.detach()
-                head_output[selected] = expert_output * straight_through_scale.unsqueeze(-1)
+                routed_output = expert_output * straight_through_scale.unsqueeze(-1)
+                head_output[selected] = routed_output.to(head_output.dtype)
             output[:, :, head_idx, :] = head_output
 
         return output.reshape(batch_size, sequence_length, self.hidden_size)
@@ -202,7 +203,8 @@ class OrdinaryTop1MoE(nn.Module):
             expert_output = expert(hidden_states[selected])
             selected_probability = probabilities[..., expert_idx][selected]
             straight_through_scale = 1.0 + selected_probability - selected_probability.detach()
-            output[selected] = expert_output * straight_through_scale.unsqueeze(-1)
+            routed_output = expert_output * straight_through_scale.unsqueeze(-1)
+            output[selected] = routed_output.to(output.dtype)
 
         self._record_metrics(routing)
         return output
