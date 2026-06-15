@@ -44,7 +44,7 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--global_batch_size", type=int, default=128)
     parser.add_argument("--total_training_steps", type=int, default=100000)
     parser.add_argument("--save_interval", type=int, default=2000)
-    parser.add_argument("--log_interval", type=int, default=1)
+    parser.add_argument("--log_interval", type=int, default=10)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0.01)
