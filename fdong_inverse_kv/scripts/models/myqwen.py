@@ -72,11 +72,18 @@ class HeadBucketRouter(nn.Module):
 
 
 class HeadExpertMLP(nn.Module):
-    def __init__(self, hidden_size: int, intermediate_size: int, activation: str):
+    def __init__(
+        self,
+        input_size: int,
+        intermediate_size: int,
+        activation: str,
+        output_size: Optional[int] = None,
+    ):
         super().__init__()
-        self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
-        self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
+        output_size = input_size if output_size is None else output_size
+        self.gate_proj = nn.Linear(input_size, intermediate_size, bias=False)
+        self.up_proj = nn.Linear(input_size, intermediate_size, bias=False)
+        self.down_proj = nn.Linear(intermediate_size, output_size, bias=False)
         self.activation = ACT2FN[activation]
 
     def forward(self, states: torch.Tensor) -> torch.Tensor:
@@ -89,7 +96,9 @@ class HeadBucketExperts(nn.Module):
     Qwen3-0.6B uses attention head dimension 128 but hidden_size / heads = 64.
     The attention bucket is defined by the attention head. The corresponding
     expert consumes the same-index 64-dimensional slice of the normalized
-    residual stream. This keeps the FFN input/output width equal to hidden_size.
+    residual stream, maps it into the full residual space, and all head outputs
+    are summed. This is the distributed form of concatenation followed by a
+    linear output projection.
     """
 
     def __init__(self, config: Qwen3Config):
@@ -100,13 +109,28 @@ class HeadBucketExperts(nn.Module):
         if self.hidden_size % self.num_heads != 0:
             raise ValueError("hidden_size must be divisible by num_attention_heads")
         self.head_hidden_size = self.hidden_size // self.num_heads
-        intermediate_size = int(config.inverse_kv_expert_intermediate_size)
+        reference_intermediate_size = int(config.inverse_kv_expert_intermediate_size)
+        derived_intermediate_size = 3 * reference_intermediate_size / (self.num_heads + 2)
+        if not derived_intermediate_size.is_integer():
+            raise ValueError(
+                "The equal-parameter head expert width must be integral: "
+                f"3 * {reference_intermediate_size} / ({self.num_heads} + 2) "
+                f"= {derived_intermediate_size}."
+            )
+        self.intermediate_size = int(derived_intermediate_size)
+        config.inverse_kv_head_expert_intermediate_size = self.intermediate_size
         self.experts = nn.ModuleList(
             [
-                HeadExpertMLP(self.head_hidden_size, intermediate_size, config.hidden_act)
+                HeadExpertMLP(
+                    input_size=self.head_hidden_size,
+                    intermediate_size=self.intermediate_size,
+                    activation=config.hidden_act,
+                    output_size=self.hidden_size,
+                )
                 for _ in range(self.num_heads * self.num_experts)
             ]
         )
+        self.output_scale = self.num_heads**-0.5
 
     def _expert(self, head_idx: int, expert_idx: int) -> HeadExpertMLP:
         return self.experts[head_idx * self.num_experts + expert_idx]
@@ -120,7 +144,7 @@ class HeadBucketExperts(nn.Module):
         head_states = hidden_states.view(
             batch_size, sequence_length, self.num_heads, self.head_hidden_size
         )
-        output = torch.zeros_like(head_states)
+        output = hidden_states.new_zeros(batch_size * sequence_length, self.hidden_size)
 
         # Hard expert execution in the forward pass. The selected probability
         # has value one through the straight-through scale, but supplies a
@@ -129,7 +153,6 @@ class HeadBucketExperts(nn.Module):
             head_input = head_states[:, :, head_idx, :]
             head_bucket = routing.bucket_ids[:, head_idx, :]
             head_probabilities = routing.probabilities[:, head_idx, :, :]
-            head_output = torch.zeros_like(head_input)
             for expert_idx in range(self.num_experts):
                 selected = head_bucket == expert_idx
                 if not torch.any(selected):
@@ -139,10 +162,11 @@ class HeadBucketExperts(nn.Module):
                 selected_probability = head_probabilities[..., expert_idx][selected]
                 straight_through_scale = 1.0 + selected_probability - selected_probability.detach()
                 routed_output = expert_output * straight_through_scale.unsqueeze(-1)
-                head_output[selected] = routed_output.to(head_output.dtype)
-            output[:, :, head_idx, :] = head_output
+                token_indices = selected.reshape(-1).nonzero(as_tuple=False).squeeze(-1)
+                output.index_add_(0, token_indices, routed_output.to(output.dtype))
 
-        return output.reshape(batch_size, sequence_length, self.hidden_size)
+        output = output.reshape(batch_size, sequence_length, self.hidden_size)
+        return output * self.output_scale
 
 
 class OrdinaryTop1MoE(nn.Module):

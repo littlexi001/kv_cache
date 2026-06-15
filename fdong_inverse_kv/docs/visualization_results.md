@@ -28,7 +28,7 @@ For a two-layer, four-head debug model:
 
 The random-initialized debug model produced a candidate ratio around `0.64` with local window 4, one sink token, and four buckets. This number is only a mask sanity check; it is not evidence of useful retrieval.
 
-For the full Qwen3-0.6B architecture:
+The following table records the old concatenated-head implementation:
 
 | Expert width | Total parameters |
 |---:|---:|
@@ -36,7 +36,14 @@ For the full Qwen3-0.6B architecture:
 | 1024 | 0.684B |
 | 3072 | 1.389B |
 
-The formal training default is width 3072 because it matches the active FFN parameter count of the original dense FFN while remaining below 2B.
+These downloaded runs used the old `64 -> 3072 -> 64` expert and are historical evidence only. The current implementation uses `64 -> 512 -> 1024`, sums the 16 head outputs with `1/sqrt(16)` scaling, and still has about `1.389B` total parameters. New training results have not yet been collected, so the research state for the revised structure is incomplete.
+
+Current equal-budget parameter check:
+
+| Current architecture | Total parameters |
+|---|---:|
+| ordinary top-1 MoE, `1024 -> 3072 -> 1024` | 1.388888B |
+| shared full-output head MoE, `64 -> 512 -> 1024` | 1.389003B |
 
 ## 3. What This Proves
 

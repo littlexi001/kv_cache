@@ -70,7 +70,15 @@ def add_training_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--router_normalization", choices=["none", "l2"], default="l2")
     parser.add_argument("--router_bias", type=str_to_bool, default=False)
     parser.add_argument("--num_experts", type=int, default=4)
-    parser.add_argument("--expert_intermediate_size", type=int, default=3072)
+    parser.add_argument(
+        "--expert_intermediate_size",
+        type=int,
+        default=3072,
+        help=(
+            "Ordinary-MoE expert width. Shared head experts derive the equal-parameter width "
+            "as 3 * expert_intermediate_size / (num_attention_heads + 2)."
+        ),
+    )
     parser.add_argument("--local_window", type=int, default=32)
     parser.add_argument("--sink_tokens", type=int, default=4)
 
@@ -148,6 +156,9 @@ def runtime_config(args, config, parameters) -> Dict:
     )
     return {
         "architecture": args.architecture,
+        "architecture_version": (
+            "shared_full_output_v2" if args.architecture == "shared_bucket" else "ordinary_top1_v1"
+        ),
         "transformers_version_required": "4.51.x",
         "config_dir": args.config_dir,
         "data_dir": args.data_dir,
@@ -162,6 +173,17 @@ def runtime_config(args, config, parameters) -> Dict:
         "router_bias": args.router_bias,
         "num_experts": args.num_experts,
         "expert_intermediate_size": args.expert_intermediate_size,
+        "head_expert_intermediate_size": getattr(
+            config,
+            "inverse_kv_head_expert_intermediate_size",
+            None,
+        ),
+        "head_expert_output_size": (
+            config.hidden_size if args.architecture == "shared_bucket" else None
+        ),
+        "head_expert_aggregation": (
+            "sum_div_sqrt_num_heads" if args.architecture == "shared_bucket" else None
+        ),
         "local_window": args.local_window,
         "sink_tokens": args.sink_tokens,
         "model_config": config.to_dict(),

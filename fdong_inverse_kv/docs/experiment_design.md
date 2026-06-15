@@ -18,7 +18,8 @@
 | base config | Qwen3-0.6B | fits below the 2B limit and matches existing training stack |
 | experts/buckets per head | 4 | first low-risk compression setting |
 | router top-k | 1 | bucket id and expert id remain identical |
-| expert intermediate size | 3072 | matches dense active FFN parameters; total model is about 1.389B and remains below 2B |
+| ordinary expert intermediate size | 3072 | ordinary expert is `1024 -> 3072 -> 1024` |
+| derived head expert intermediate size | 512 | shared expert is `64 -> 512 -> 1024`, derived by equal-parameter matching |
 | sequence length | 1024 | existing DCLM training setting |
 | loss | NTP only | isolates whether the structure learns without auxiliary objectives |
 

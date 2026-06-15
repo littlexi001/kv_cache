@@ -35,6 +35,7 @@ def main():
     summary = {
         "run_dir": str(args.run_dir),
         "architecture": config.get("architecture"),
+        "architecture_version": config.get("architecture_version"),
         "setting": {
             key: config.get(key)
             for key in (
@@ -44,6 +45,9 @@ def main():
                 "router_normalization",
                 "num_experts",
                 "expert_intermediate_size",
+                "head_expert_intermediate_size",
+                "head_expert_output_size",
+                "head_expert_aggregation",
                 "local_window",
                 "sink_tokens",
                 "seq_len",

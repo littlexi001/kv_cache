@@ -298,23 +298,23 @@ Local fallback 的作用是避免训练早期错误 bucket 完全切断局部语
 Expert^l_{h,1}, ..., Expert^l_{h,E}
 ```
 
-需要先为 residual stream 构造 head-level 表征。Qwen3-0.6B 的 `hidden_size/H=64`，而 attention `head_dim=128`。第一版不增加额外 residual projection，而是把 normalized residual stream 均匀切成 `H` 个 64 维 slice：
+需要先为 residual stream 构造 head-level 表征。Qwen3-0.6B 的 `hidden_size/H=64`，而 attention `head_dim=128`。当前实现不增加额外 residual projection，而是把 normalized residual stream 均匀切成 `H` 个 64 维 slice：
 
 ```text
 X_head^l = reshape(X_norm, [B,T,H,d/H])
 ```
 
-attention 先通过标准 `W_O` 合并回 residual stream；随后 post-attention RMSNorm 的第 `h` 个 slice 进入共享 bucket 对应的 head expert：
+attention 先通过标准 `W_O` 合并回 residual stream；随后 post-attention RMSNorm 的第 `h` 个 slice 进入共享 bucket 对应的 head expert。每个 head expert 输出完整 `d` 维 residual update：
 
 ```text
 U^l = RMSNorm(X^l + W_O Concat_h(O^l_h))
-F^l_{t,h} = Expert^l_{h,b_t,h}(U^l_{t,h})
+F^l_{t,h} = Expert^l_{h,b_t,h}(U^l_{t,h}), F^l_{t,h} in R^d
 ```
 
 合并 heads：
 
 ```text
-F^l_t = Concat_h(F^l_{t,h})
+F^l_t = 1/sqrt(H) sum_h F^l_{t,h}
 X^{l+1}_t = X^l_t + W_O Concat_h(O^l_{t,h}) + F^l_t
 ```
 
@@ -326,13 +326,27 @@ X^{l+1}_t = X^l_t + W_O Concat_h(O^l_{t,h}) + F^l_t
 
 ### 3.7 Expert parameterization
 
-每个 head expert 的默认 MLP：
+每个 head expert 的 MLP：
 
 ```text
-d_h -> r d_h -> d_h
+d/H -> m -> d
 ```
 
-其中 `r` 是 expert expansion ratio。
+这与“每个 head 输出后拼接，再乘一个输出矩阵”等价：把公共输出矩阵按 head 输入列切分后，拼接后的线性映射可以写成各 head 映射结果之和。除以 `sqrt(H)` 用于控制独立 head update 相加后的初始化方差。
+
+为了与 ordinary MoE 严格匹配参数量，设 ordinary expert 为 `d -> I -> d`。每层每个 bucket 的 ordinary expert 参数为 `3dI`；shared 结构的 `H` 个 head experts 总参数为 `dm(H+2)`。因此：
+
+```text
+m = 3I / (H + 2)
+```
+
+对 Qwen3-0.6B：
+
+```text
+d = 1024, H = 16, I = 3072
+m = 512
+head expert = 64 -> 512 -> 1024
+```
 
 为了与 dense FFN 或 ordinary MoE 公平比较，必须分别控制：
 
@@ -499,7 +513,8 @@ KV_bucket[layer, head, expert]
 | `center_mode` | causal prefix mean | remove head common center | no centering leaves common bias | complex estimators add state and instability |
 | `center_gradient` | stopped | prevent history-gradient coupling | gradients can manipulate center | not applicable |
 | `router_input` | pre-RoPE K | pre-attention address representation | operational choice | must be ablated against Q/layer input |
-| `expert_intermediate_size` | 3072 | matches active FFN parameters to Qwen3 dense FFN; total model is about 1.389B with 4 experts | insufficient capacity | total parameters and optimizer memory increase |
+| `expert_intermediate_size` | 3072 | ordinary-MoE reference width | insufficient baseline capacity | total parameters and optimizer memory increase |
+| derived head expert width | 512 | `3I/(H+2)` gives equal parameters for `64 -> 512 -> 1024` head experts | shared experts under-capacity | shared model exceeds baseline budget |
 
 ## 9. Current Implementation Boundary
 
@@ -510,7 +525,7 @@ Implemented in `scripts/models/myqwen.py`:
 3. router input ablation among `layer_input/q/k/v`；
 4. detached exclusive causal mean centering；
 5. same-bucket causal attention with local/sink fallback；
-6. shared bucket id for head-level expert dispatch；
+6. shared bucket id for `64 -> 512 -> 1024` head-level expert dispatch；
 7. hard-forward/soft-gradient expert scale；
 8. per-step routing and candidate-ratio metrics。
 

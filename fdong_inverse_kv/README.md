@@ -57,7 +57,15 @@ EXPERT_INTERMEDIATE_SIZE=3072 \
 bash pretrain_qwen.sh
 ```
 
-`3072` 使每个 token 激活的 head-expert FFN 参数量与原始 Qwen3-0.6B dense FFN 近似一致。4 experts/head 时模型总参数量约为 `1.389B`，低于脚本默认的 2B 硬限制。
+`EXPERT_INTERMEDIATE_SIZE=3072` 是 ordinary MoE 的基准宽度。Shared head-level 模型按等参数公式自动推导实际宽度：
+
+```text
+head_width = 3 * 3072 / (16 + 2) = 512
+```
+
+因此 ordinary expert 是 `1024 -> 3072 -> 1024`，shared head expert 是 `64 -> 512 -> 1024`。16 个 head 输出求和并除以 `sqrt(16)`。4 experts 时两者总参数量分别约为 `1.388888B` 和 `1.389003B`。
+
+`runs/` 中当前已同步的四组阶段性结果来自旧版 `64 -> 3072 -> 64` head expert。它们保留为历史结果，但旧 checkpoint 不能加载到新版结构中；新版实验必须使用新的 `RUN_NAME`。
 
 ## 四组首轮实验
 
@@ -78,7 +86,7 @@ bash pretrain_qwen.sh
 ### 2. K routing + causal centering
 
 ```bash
-RUN_NAME=shared-k-centered-e4 \
+RUN_NAME=shared-fullout-k-centered-e4 \
 ARCHITECTURE=shared_bucket \
 ROUTER_INPUT=k \
 CENTER_ROUTER_INPUT=true \
@@ -90,7 +98,7 @@ bash pretrain_qwen.sh
 ### 3. Raw K routing
 
 ```bash
-RUN_NAME=shared-k-raw-e4 \
+RUN_NAME=shared-fullout-k-raw-e4 \
 ARCHITECTURE=shared_bucket \
 ROUTER_INPUT=k \
 CENTER_ROUTER_INPUT=false \
@@ -104,7 +112,7 @@ bash pretrain_qwen.sh
 第一轮默认也测试去中心化的 layer input，使它与实验 2 只相差 router representation：
 
 ```bash
-RUN_NAME=shared-layer-input-centered-e4 \
+RUN_NAME=shared-fullout-layer-input-centered-e4 \
 ARCHITECTURE=shared_bucket \
 ROUTER_INPUT=layer_input \
 CENTER_ROUTER_INPUT=true \
@@ -117,9 +125,9 @@ bash pretrain_qwen.sh
 
 ```text
 fdong_inverse_kv/runs/ordinary-moe-e4/
-fdong_inverse_kv/runs/shared-k-centered-e4/
-fdong_inverse_kv/runs/shared-k-raw-e4/
-fdong_inverse_kv/runs/shared-layer-input-centered-e4/
+fdong_inverse_kv/runs/shared-fullout-k-centered-e4/
+fdong_inverse_kv/runs/shared-fullout-k-raw-e4/
+fdong_inverse_kv/runs/shared-fullout-layer-input-centered-e4/
 ```
 
 每个目录包含：
@@ -136,19 +144,19 @@ checkpoint-*.pt           # 模型与优化器状态，被 .gitignore 忽略
 查看进度，例如：
 
 ```bash
-tail -f ../logs/shared-k-centered-e4.log
+tail -f ../logs/shared-fullout-k-centered-e4.log
 ```
 
 训练动态同时写入：
 
 ```text
-../runs/shared-k-centered-e4/train_metrics.jsonl
+../runs/shared-fullout-k-centered-e4/train_metrics.jsonl
 ```
 
 训练完成后生成紧凑汇总：
 
 ```bash
-python3 extract_train_metrics.py ../runs/shared-k-centered-e4
+python3 extract_train_metrics.py ../runs/shared-fullout-k-centered-e4
 ```
 
 ## 本地验证
