@@ -6,9 +6,9 @@ cd "$(dirname "$0")"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 
 RUN_NAME="${RUN_NAME:-inverse-kv-qwen3-0.6b-k-centered-e4}"
-CONFIG_DIR="${CONFIG_DIR:-../../Qwen3-0.6B}"
+CONFIG_DIR="${CONFIG_DIR:-../../../Qwen3-0.6B}"
 # Keep this server path paired with TokenizedJSONLData.
-DATA_DIR="${DATA_DIR:-../../dclm/global-shard_01_of_10}"
+DATA_DIR="${DATA_DIR:-../../../dclm/global-shard_01_of_10}"
 RUN_DIR="${RUN_DIR:-../runs/${RUN_NAME}}"
 LOG_DIR="${LOG_DIR:-../logs}"
 
