@@ -158,10 +158,14 @@ def evaluate_decode(
     input_device: torch.device,
     warmup_eval_tokens: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    profile_enabled = PROFILER.enabled
+    PROFILER.enabled = False
     PROFILER.reset()
     past_key_values, prev_logits, prefill_ms = prefill_cache(
         model, input_ids, prefill_tokens, prefill_chunk_size, input_device
     )
+    PROFILER.enabled = profile_enabled
+    PROFILER.reset()
 
     total_loss = 0.0
     total_count = 0
@@ -292,7 +296,7 @@ def main() -> None:
             input_device,
             args.warmup_eval_tokens,
         )
-        cluster_count = math.ceil((args.prefill_tokens + 1) / args.cluster_size)
+        cluster_count = math.ceil(args.prefill_tokens / args.cluster_size)
         keep_clusters = max(1, math.ceil(args.keep_ratio * cluster_count))
         summary.update(
             {

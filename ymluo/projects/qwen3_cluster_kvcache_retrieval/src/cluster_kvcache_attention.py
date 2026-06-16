@@ -61,6 +61,7 @@ class CudaEventProfiler:
 
 
 PROFILER = CudaEventProfiler()
+_ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 
 
 def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
@@ -211,11 +212,6 @@ def cluster_kvcache_attention_forward(
         scores = scores + attention_mask[:, :, :, : scores.shape[-1]]
     start = _record("qk_scores_ms", start)
 
-    if cfg.mode == "cluster":
-        keep_mask = _selected_cluster_mask(query_states, key_states, cfg)
-        if attention_mask is not None:
-            keep_mask = keep_mask & torch.isfinite(attention_mask[:, :, :, : scores.shape[-1]])
-        scores = scores.masked_fill(~keep_mask, torch.finfo(scores.dtype).min)
     start = _record("cluster_select_and_mask_ms", start)
 
     attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
@@ -228,13 +224,21 @@ def cluster_kvcache_attention_forward(
 
 
 def install_qwen3_cluster_attention_patch(model: torch.nn.Module, cfg: ClusterKVConfig) -> None:
-    if cfg.mode == "baseline":
-        PROFILER.enabled = cfg.profile
-        return
+    global _ORIGINAL_EAGER_ATTENTION_FORWARD
     try:
         import transformers.models.qwen3.modeling_qwen3 as modeling_qwen3
     except Exception as exc:
         raise RuntimeError("Could not import transformers.models.qwen3.modeling_qwen3.") from exc
+
+    if _ORIGINAL_EAGER_ATTENTION_FORWARD is None:
+        _ORIGINAL_EAGER_ATTENTION_FORWARD = getattr(modeling_qwen3, "eager_attention_forward")
+
+    if cfg.mode == "baseline":
+        setattr(modeling_qwen3, "eager_attention_forward", _ORIGINAL_EAGER_ATTENTION_FORWARD)
+        if hasattr(modeling_qwen3, "ALL_ATTENTION_FUNCTIONS"):
+            modeling_qwen3.ALL_ATTENTION_FUNCTIONS["eager"] = _ORIGINAL_EAGER_ATTENTION_FORWARD
+        PROFILER.enabled = cfg.profile
+        return
 
     setattr(modeling_qwen3, "eager_attention_forward", cluster_kvcache_attention_forward)
     if hasattr(modeling_qwen3, "ALL_ATTENTION_FUNCTIONS"):
