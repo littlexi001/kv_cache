@@ -1,0 +1,79 @@
+{
+  "variant": "fmoe_v1_common1_mid1_10_tail16",
+  "feature_mode": "full_mlp_input",
+  "group_idx": 0,
+  "group_name": "middle",
+  "mode": "crosstoken",
+  "layers": 28,
+  "input_dim": 1024,
+  "expert_num": 4,
+  "activated_experts": 1,
+  "random_baseline": 0.25,
+  "next_depth": 2,
+  "next_heads": 4,
+  "loss_history": [
+    0.4693023629952222,
+    0.4284228153992444,
+    0.4131043315283023
+  ],
+  "variant_config": {
+    "ckpt_dir": "/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768",
+    "code_root": "/mnt/workspace/Hrj/scripts_Qwen_huaweiMoE_0612_size_different",
+    "model_module": "models.myqwen_frequency_moe",
+    "shared_expert_type": "frequency",
+    "gating_reference": "attn_pre_o",
+    "routed_embedding": "oracle_w_residual",
+    "num_experts": 4,
+    "expert_per_token": 1,
+    "moe_intermediate_size": 1536,
+    "singular_intermediate_size": 16,
+    "subspace_matrix": "o_proj",
+    "subspace_svd_update_interval": 10,
+    "subspace_common_range": [
+      0.0,
+      0.01
+    ],
+    "subspace_group_ranges": [
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.1,
+        1.0
+      ]
+    ],
+    "subspace_router_use_singular_values": true,
+    "subspace_expert_input_mode": "full",
+    "fmoe_common_intermediate_size": 1536,
+    "fmoe_middle_intermediate_size": 768,
+    "fmoe_tail_intermediate_size": 768,
+    "fmoe_num_middle_experts": 4,
+    "fmoe_num_tail_experts": 16,
+    "fmoe_middle_top_k": 1,
+    "fmoe_tail_top_k": 1,
+    "fmoe_middle_range": [
+      0.01,
+      0.1
+    ],
+    "fmoe_tail_range": [
+      0.1,
+      1.0
+    ],
+    "group_num_experts": [
+      4,
+      16
+    ],
+    "group_names": [
+      "middle",
+      "tail"
+    ],
+    "ckpt_path": "/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_14000.pt",
+    "selected_step": 14000
+  },
+  "mean": 0.5809074759757151,
+  "diag_mean": 0.6154926449858716,
+  "offdiag_mean": 0.5796265437901538,
+  "upper_mean": 0.547807728913588,
+  "lower_mean": 0.6114453586667195
+}

@@ -1,0 +1,51 @@
+{
+  "variant": "old_baseline",
+  "feature_mode": "full_mlp_input",
+  "group_idx": 0,
+  "group_name": "0",
+  "mode": "crosstoken",
+  "layers": 28,
+  "input_dim": 1024,
+  "expert_num": 4,
+  "activated_experts": 1,
+  "random_baseline": 0.25,
+  "next_depth": 2,
+  "next_heads": 4,
+  "loss_history": [
+    0.4813353540375829,
+    0.4529990099836141,
+    0.4458220468368381
+  ],
+  "variant_config": {
+    "ckpt_dir": "/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2",
+    "model_module": "models.myqwen_subspace",
+    "shared_expert_type": "normal",
+    "num_experts": 4,
+    "expert_per_token": 1,
+    "moe_intermediate_size": 1536,
+    "subspace_group_ranges": [
+      [
+        0.02,
+        0.2
+      ],
+      [
+        0.2,
+        0.5
+      ],
+      [
+        0.5,
+        1.0
+      ]
+    ],
+    "subspace_router_use_singular_values": false,
+    "subspace_expert_input_mode": "full",
+    "subspace_component_use_singular_values": false,
+    "ckpt_path": "/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_14000.pt",
+    "selected_step": 14000
+  },
+  "mean": 0.37040427835463374,
+  "diag_mean": 0.39165079513830797,
+  "offdiag_mean": 0.36961737032560876,
+  "upper_mean": 0.3297042334345507,
+  "lower_mean": 0.4095305072166669
+}
