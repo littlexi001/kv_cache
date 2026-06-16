@@ -45,3 +45,6 @@ fdong/logs/
 fdong/scripts/draw_loss.py
 fdong/scripts/clean_checkpoints.py
 *.safetensors
+ymluo/models/
+.venv-qwen3/
+ymluo/.venv-qwen3/
