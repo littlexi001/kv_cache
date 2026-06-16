@@ -18,6 +18,7 @@ python "${PROJECT_DIR}/src/run_cluster_kvcache_eval.py" \
   --prefill_chunk_size "${PREFILL_CHUNK_SIZE:-512}" \
   --cluster_size "${CLUSTER_SIZE:-50}" \
   --keep_ratio "${KEEP_RATIO:-0.02}" \
+  --edge_ratio "${EDGE_RATIO:-0.01}" \
   --force_endpoints "${FORCE_ENDPOINTS:-true}" \
   --endpoints_count_in_budget "${ENDPOINTS_COUNT_IN_BUDGET:-true}" \
   --max_chars "${MAX_CHARS:-160000000}" \

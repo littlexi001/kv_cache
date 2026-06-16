@@ -13,6 +13,7 @@ class ClusterKVConfig:
     mode: str = "baseline"
     cluster_size: int = 50
     keep_ratio: float = 0.02
+    edge_ratio: float = 0.01
     force_endpoints: bool = True
     endpoints_count_in_budget: bool = True
     min_keep_clusters: int = 1
@@ -248,6 +249,41 @@ def _gather_selected_kv(
     return selected_key, selected_value, valid
 
 
+def _gather_edge_kv(
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    edge_ratio: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    batch, heads, key_len, head_dim = key_states.shape
+    edge_count = min(key_len, max(1, math.ceil(edge_ratio * key_len)))
+    if edge_count * 2 >= key_len:
+        positions = torch.arange(key_len, device=key_states.device)
+    else:
+        head_positions = torch.arange(edge_count, device=key_states.device)
+        tail_positions = torch.arange(key_len - edge_count, key_len, device=key_states.device)
+        positions = torch.cat([head_positions, tail_positions], dim=0)
+    gather_index = positions.view(1, 1, -1, 1).expand(batch, heads, positions.numel(), head_dim)
+    selected_key = key_states.gather(dim=2, index=gather_index)
+    selected_value = value_states.gather(dim=2, index=gather_index)
+    valid = torch.ones(batch, heads, positions.numel(), device=key_states.device, dtype=torch.bool)
+    return selected_key, selected_value, valid
+
+
+def _sparse_decode_attention(
+    query_states: torch.Tensor,
+    selected_key: torch.Tensor,
+    selected_value: torch.Tensor,
+    valid: torch.Tensor,
+    scaling: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    scores = torch.matmul(query_states, selected_key.transpose(2, 3)) * scaling
+    scores = scores.masked_fill(~valid.unsqueeze(-2), torch.finfo(scores.dtype).min)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, selected_value)
+    attention_output = attention_output.transpose(1, 2).contiguous()
+    return attention_output, attention_weights
+
+
 def cluster_kvcache_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -267,6 +303,16 @@ def cluster_kvcache_attention_forward(
     if scaling is None:
         scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
 
+    if cfg.mode == "edges" and query_states.shape[-2] == 1:
+        start = _event()
+        selected_key, selected_value, valid = _gather_edge_kv(key_states, value_states, cfg.edge_ratio)
+        start = _record("edge_gather_selected_kv_ms", start)
+        attention_output, attention_weights = _sparse_decode_attention(
+            query_states, selected_key, selected_value, valid, scaling
+        )
+        _record("edge_sparse_qk_softmax_value_ms", start)
+        return attention_output, attention_weights
+
     if cfg.mode == "cluster" and query_states.shape[-2] == 1:
         start = _event()
         cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
@@ -275,11 +321,9 @@ def cluster_kvcache_attention_forward(
             key_states, value_states, cluster_ids, cfg.cluster_size
         )
         start = _record("gather_selected_kv_ms", start)
-        scores = torch.matmul(query_states, selected_key.transpose(2, 3)) * scaling
-        scores = scores.masked_fill(~valid.unsqueeze(-2), torch.finfo(scores.dtype).min)
-        attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
-        attention_output = torch.matmul(attention_weights, selected_value)
-        attention_output = attention_output.transpose(1, 2).contiguous()
+        attention_output, attention_weights = _sparse_decode_attention(
+            query_states, selected_key, selected_value, valid, scaling
+        )
         _record("sparse_qk_softmax_value_ms", start)
         return attention_output, attention_weights
 

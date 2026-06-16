@@ -12,6 +12,10 @@ Qwen3-0.6B:
 
 For a 100k-token history, this gives roughly 2k clusters and keeps 40 clusters.
 
+It also includes an `edges` baseline that keeps only the first `EDGE_RATIO` and
+last `EDGE_RATIO` tokens during decode. With the default `EDGE_RATIO=0.01`, a
+100k-token history keeps roughly the first 1k and last 1k tokens.
+
 ## Default Paths
 
 ```text
@@ -22,6 +26,13 @@ data:  /mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.
 ## Run
 
 ```bash
+bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
+```
+
+Run baseline, cluster retrieval, and edge-only baseline:
+
+```bash
+MODES=baseline,cluster,edges EDGE_RATIO=0.01 \
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 

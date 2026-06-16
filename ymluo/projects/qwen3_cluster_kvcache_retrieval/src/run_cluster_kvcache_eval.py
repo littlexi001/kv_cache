@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefill_chunk_size", type=int, default=512)
     parser.add_argument("--cluster_size", type=int, default=50)
     parser.add_argument("--keep_ratio", type=float, default=0.02)
+    parser.add_argument("--edge_ratio", type=float, default=0.01)
     parser.add_argument("--force_endpoints", type=str2bool, default=True)
     parser.add_argument("--endpoints_count_in_budget", type=str2bool, default=True)
     parser.add_argument("--max_chars", type=int, default=160_000_000)
@@ -272,7 +273,7 @@ def main() -> None:
     summaries: dict[str, Any] = {"args": vars(args), "modes": {}}
 
     for mode in modes:
-        if mode not in {"baseline", "cluster"}:
+        if mode not in {"baseline", "cluster", "edges"}:
             raise ValueError(f"Unsupported mode: {mode}")
         print(f"loading model for mode={mode}", flush=True)
         model = load_model(args, requested_device)
@@ -281,6 +282,7 @@ def main() -> None:
             mode=mode,
             cluster_size=args.cluster_size,
             keep_ratio=args.keep_ratio,
+            edge_ratio=args.edge_ratio,
             force_endpoints=args.force_endpoints,
             endpoints_count_in_budget=args.endpoints_count_in_budget,
             profile=args.profile_attention,
@@ -298,13 +300,16 @@ def main() -> None:
         )
         cluster_count = math.ceil(args.prefill_tokens / args.cluster_size)
         keep_clusters = max(1, math.ceil(args.keep_ratio * cluster_count))
+        approx_edge_tokens = 2 * max(1, math.ceil(args.edge_ratio * args.prefill_tokens))
         summary.update(
             {
                 "mode": mode,
                 "cluster_size": args.cluster_size,
                 "keep_ratio": args.keep_ratio,
+                "edge_ratio": args.edge_ratio,
                 "approx_prefill_plus_one_clusters": cluster_count,
                 "approx_keep_clusters": keep_clusters,
+                "approx_edge_tokens": approx_edge_tokens,
             }
         )
         summaries["modes"][mode] = summary
@@ -322,7 +327,9 @@ def main() -> None:
                 "tokens_per_second": summary["tokens_per_second"],
                 "cluster_size": args.cluster_size,
                 "keep_ratio": args.keep_ratio,
+                "edge_ratio": args.edge_ratio,
                 "approx_keep_clusters": keep_clusters,
+                "approx_edge_tokens": approx_edge_tokens,
             }
         )
         if args.save_token_timings:
@@ -335,14 +342,25 @@ def main() -> None:
         if requested_device.type == "cuda":
             torch.cuda.empty_cache()
 
+    comparisons: dict[str, Any] = {}
     if "baseline" in summaries["modes"] and "cluster" in summaries["modes"]:
         baseline = summaries["modes"]["baseline"]
         cluster = summaries["modes"]["cluster"]
-        summaries["comparison"] = {
+        comparisons["cluster_vs_baseline"] = {
             "ppl_delta_cluster_minus_baseline": cluster["ppl"] - baseline["ppl"],
             "loss_delta_cluster_minus_baseline": cluster["loss"] - baseline["loss"],
             "decode_speedup_vs_baseline": baseline["decode_ms_per_token"] / cluster["decode_ms_per_token"],
         }
+    if "baseline" in summaries["modes"] and "edges" in summaries["modes"]:
+        baseline = summaries["modes"]["baseline"]
+        edges = summaries["modes"]["edges"]
+        comparisons["edges_vs_baseline"] = {
+            "ppl_delta_edges_minus_baseline": edges["ppl"] - baseline["ppl"],
+            "loss_delta_edges_minus_baseline": edges["loss"] - baseline["loss"],
+            "decode_speedup_vs_baseline": baseline["decode_ms_per_token"] / edges["decode_ms_per_token"],
+        }
+    if comparisons:
+        summaries["comparison"] = comparisons
 
     write_csv(
         output_dir / "summary.csv",
@@ -360,7 +378,9 @@ def main() -> None:
             "tokens_per_second",
             "cluster_size",
             "keep_ratio",
+            "edge_ratio",
             "approx_keep_clusters",
+            "approx_edge_tokens",
         ],
     )
     (output_dir / "summary.json").write_text(json.dumps(summaries, indent=2, ensure_ascii=False), encoding="utf-8")
