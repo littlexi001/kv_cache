@@ -109,7 +109,83 @@ def _cluster_centers(key_states: torch.Tensor, cluster_size: int) -> torch.Tenso
     return centers
 
 
+def _cluster_counts(key_len: int, cluster_size: int, device: torch.device) -> torch.Tensor:
+    cluster_count = math.ceil(key_len / cluster_size)
+    counts = torch.full((cluster_count,), cluster_size, device=device, dtype=torch.float32)
+    counts[-1] = key_len - (cluster_count - 1) * cluster_size
+    return counts.clamp_min_(1.0)
+
+
+def _cache_is_valid(cache: dict[str, Any] | None, key_states: torch.Tensor, cfg: ClusterKVConfig) -> bool:
+    if cache is None:
+        return False
+    return (
+        cache.get("cluster_size") == cfg.cluster_size
+        and cache.get("batch") == key_states.shape[0]
+        and cache.get("heads") == key_states.shape[1]
+        and cache.get("head_dim") == key_states.shape[-1]
+        and cache.get("device") == key_states.device
+    )
+
+
+def _build_center_cache(module: torch.nn.Module, key_states: torch.Tensor, cfg: ClusterKVConfig) -> torch.Tensor:
+    centers = _cluster_centers(key_states, cfg.cluster_size)
+    cache = {
+        "cluster_size": cfg.cluster_size,
+        "batch": key_states.shape[0],
+        "heads": key_states.shape[1],
+        "head_dim": key_states.shape[-1],
+        "device": key_states.device,
+        "key_len": key_states.shape[-2],
+        "centers": centers,
+        "counts": _cluster_counts(key_states.shape[-2], cfg.cluster_size, key_states.device),
+    }
+    module._cluster_kv_center_cache = cache
+    return centers
+
+
+def _cached_cluster_centers(
+    module: torch.nn.Module,
+    key_states: torch.Tensor,
+    cfg: ClusterKVConfig,
+) -> torch.Tensor:
+    key_len = key_states.shape[-2]
+    cache = getattr(module, "_cluster_kv_center_cache", None)
+    if not _cache_is_valid(cache, key_states, cfg):
+        return _build_center_cache(module, key_states, cfg)
+
+    cached_len = int(cache["key_len"])
+    if cached_len == key_len:
+        return cache["centers"]
+    if cached_len + 1 != key_len:
+        return _build_center_cache(module, key_states, cfg)
+
+    token_index = key_len - 1
+    cluster_index = token_index // cfg.cluster_size
+    position_in_cluster = token_index % cfg.cluster_size
+    new_key = key_states[:, :, -1, :]
+    centers = cache["centers"]
+    counts = cache["counts"]
+
+    if position_in_cluster == 0:
+        centers = torch.cat([centers, new_key.unsqueeze(-2)], dim=-2)
+        counts = torch.cat([counts, torch.ones(1, device=key_states.device, dtype=torch.float32)])
+    else:
+        old_count = counts[cluster_index].to(dtype=centers.dtype)
+        new_count = old_count + 1.0
+        centers[..., cluster_index, :] = (
+            centers[..., cluster_index, :] * old_count + new_key
+        ) / new_count
+        counts[cluster_index] = counts[cluster_index] + 1.0
+
+    cache["key_len"] = key_len
+    cache["centers"] = centers
+    cache["counts"] = counts
+    return centers
+
+
 def _select_cluster_ids(
+    module: torch.nn.Module,
     query_states: torch.Tensor,
     key_states: torch.Tensor,
     cfg: ClusterKVConfig,
@@ -119,7 +195,7 @@ def _select_cluster_ids(
     keep_count = max(cfg.min_keep_clusters, math.ceil(cfg.keep_ratio * cluster_count))
     keep_count = min(keep_count, cluster_count)
 
-    centers = _cluster_centers(key_states, cfg.cluster_size)
+    centers = _cached_cluster_centers(module, key_states, cfg)
     q = F.normalize(query_states.float(), p=2, dim=-1)
     c = F.normalize(centers.float(), p=2, dim=-1)
     scores = torch.einsum("bhqd,bhcd->bhqc", q, c)
@@ -142,12 +218,13 @@ def _select_cluster_ids(
 
 
 def _selected_cluster_mask(
+    module: torch.nn.Module,
     query_states: torch.Tensor,
     key_states: torch.Tensor,
     cfg: ClusterKVConfig,
 ) -> torch.Tensor:
     key_len = key_states.shape[-2]
-    cluster_ids = _select_cluster_ids(query_states, key_states, cfg)
+    cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
     token_cluster_ids = torch.arange(key_len, device=key_states.device) // cfg.cluster_size
     return (cluster_ids.unsqueeze(-1) == token_cluster_ids.view(1, 1, 1, 1, key_len)).any(dim=-2)
 
@@ -192,7 +269,7 @@ def cluster_kvcache_attention_forward(
 
     if cfg.mode == "cluster" and query_states.shape[-2] == 1:
         start = _event()
-        cluster_ids = _select_cluster_ids(query_states, key_states, cfg)
+        cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
         start = _record("cluster_center_score_topk_ms", start)
         selected_key, selected_value, valid = _gather_selected_kv(
             key_states, value_states, cluster_ids, cfg.cluster_size
@@ -248,6 +325,8 @@ def install_qwen3_cluster_attention_patch(model: torch.nn.Module, cfg: ClusterKV
     for module in model.modules():
         if module.__class__.__name__ == "Qwen3Attention":
             module.cluster_kv_config = cfg
+            if hasattr(module, "_cluster_kv_center_cache"):
+                delattr(module, "_cluster_kv_center_cache")
             patched += 1
     if patched == 0:
         raise ValueError("No Qwen3Attention modules found. Check model class and transformers version.")

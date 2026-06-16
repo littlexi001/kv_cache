@@ -82,4 +82,6 @@ These buckets are useful for later optimization, especially to see whether
 cluster-center construction/topk/masking dominates the sparse path.
 
 The optimized sparse path is used for `q_len=1` decode calls. Prefill remains
-full attention and is timed separately.
+full attention and is timed separately. Cluster centers are cached per attention
+layer after the first decode call and then updated incrementally as each new
+token enters the KV cache.
