@@ -19,6 +19,8 @@ python "${PROJECT_DIR}/src/run_cluster_kvcache_eval.py" \
   --cluster_size "${CLUSTER_SIZE:-50}" \
   --keep_ratio "${KEEP_RATIO:-0.02}" \
   --edge_ratio "${EDGE_RATIO:-0.01}" \
+  --sparse_start_layer "${SPARSE_START_LAYER:-0}" \
+  --sparse_end_layer "${SPARSE_END_LAYER:--1}" \
   --force_endpoints "${FORCE_ENDPOINTS:-true}" \
   --endpoints_count_in_budget "${ENDPOINTS_COUNT_IN_BUDGET:-true}" \
   --max_chars "${MAX_CHARS:-160000000}" \

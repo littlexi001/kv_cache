@@ -17,6 +17,8 @@ class ClusterKVConfig:
     force_endpoints: bool = True
     endpoints_count_in_budget: bool = True
     min_keep_clusters: int = 1
+    sparse_start_layer: int = 0
+    sparse_end_layer: int | None = None
     profile: bool = False
 
 
@@ -302,8 +304,13 @@ def cluster_kvcache_attention_forward(
 
     if scaling is None:
         scaling = float(getattr(module, "scaling", 1.0 / math.sqrt(query_states.shape[-1])))
+    layer_idx = getattr(module, "cluster_kv_layer_idx", None)
+    sparse_layer = layer_idx is None or (
+        layer_idx >= cfg.sparse_start_layer
+        and (cfg.sparse_end_layer is None or layer_idx <= cfg.sparse_end_layer)
+    )
 
-    if cfg.mode == "edges" and query_states.shape[-2] == 1:
+    if sparse_layer and cfg.mode == "edges" and query_states.shape[-2] == 1:
         start = _event()
         selected_key, selected_value, valid = _gather_edge_kv(key_states, value_states, cfg.edge_ratio)
         start = _record("edge_gather_selected_kv_ms", start)
@@ -313,7 +320,7 @@ def cluster_kvcache_attention_forward(
         _record("edge_sparse_qk_softmax_value_ms", start)
         return attention_output, attention_weights
 
-    if cfg.mode == "cluster" and query_states.shape[-2] == 1:
+    if sparse_layer and cfg.mode == "cluster" and query_states.shape[-2] == 1:
         start = _event()
         cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
         start = _record("cluster_center_score_topk_ms", start)
@@ -366,11 +373,14 @@ def install_qwen3_cluster_attention_patch(model: torch.nn.Module, cfg: ClusterKV
         modeling_qwen3.ALL_ATTENTION_FUNCTIONS["eager"] = cluster_kvcache_attention_forward
 
     patched = 0
+    layer_idx = 0
     for module in model.modules():
         if module.__class__.__name__ == "Qwen3Attention":
             module.cluster_kv_config = cfg
+            module.cluster_kv_layer_idx = layer_idx
             if hasattr(module, "_cluster_kv_center_cache"):
                 delattr(module, "_cluster_kv_center_cache")
+            layer_idx += 1
             patched += 1
     if patched == 0:
         raise ValueError("No Qwen3Attention modules found. Check model class and transformers version.")

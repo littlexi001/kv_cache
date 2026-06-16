@@ -145,6 +145,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cluster_size", type=int, default=50)
     parser.add_argument("--keep_ratio", type=float, default=0.02)
     parser.add_argument("--edge_ratio", type=float, default=0.01)
+    parser.add_argument("--sparse_start_layer", type=int, default=0)
+    parser.add_argument("--sparse_end_layer", type=int, default=-1)
     parser.add_argument("--force_endpoints", type=str2bool, default=True)
     parser.add_argument("--endpoints_count_in_budget", type=str2bool, default=True)
     parser.add_argument("--max_chars", type=int, default=160_000_000)
@@ -388,6 +390,7 @@ def main() -> None:
     modes = [mode.strip() for mode in args.modes.split(",") if mode.strip()]
     summary_rows: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {"args": vars(args), "modes": {}}
+    sparse_end_layer = None if args.sparse_end_layer < 0 else args.sparse_end_layer
 
     for mode in modes:
         if mode not in {"baseline", "cluster", "edges"}:
@@ -400,6 +403,8 @@ def main() -> None:
             cluster_size=args.cluster_size,
             keep_ratio=args.keep_ratio,
             edge_ratio=args.edge_ratio,
+            sparse_start_layer=args.sparse_start_layer,
+            sparse_end_layer=sparse_end_layer,
             force_endpoints=args.force_endpoints,
             endpoints_count_in_budget=args.endpoints_count_in_budget,
             profile=args.profile_attention,
@@ -427,6 +432,8 @@ def main() -> None:
                 "cluster_size": args.cluster_size,
                 "keep_ratio": args.keep_ratio,
                 "edge_ratio": args.edge_ratio,
+                "sparse_start_layer": args.sparse_start_layer,
+                "sparse_end_layer": sparse_end_layer,
                 "approx_prefill_plus_one_clusters": cluster_count,
                 "approx_keep_clusters": keep_clusters,
                 "approx_edge_tokens": approx_edge_tokens,
@@ -448,6 +455,8 @@ def main() -> None:
                 "cluster_size": args.cluster_size,
                 "keep_ratio": args.keep_ratio,
                 "edge_ratio": args.edge_ratio,
+                "sparse_start_layer": args.sparse_start_layer,
+                "sparse_end_layer": "all" if sparse_end_layer is None else sparse_end_layer,
                 "approx_keep_clusters": keep_clusters,
                 "approx_edge_tokens": approx_edge_tokens,
             }
@@ -512,6 +521,8 @@ def main() -> None:
             "cluster_size",
             "keep_ratio",
             "edge_ratio",
+            "sparse_start_layer",
+            "sparse_end_layer",
             "approx_keep_clusters",
             "approx_edge_tokens",
         ],
