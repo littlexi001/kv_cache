@@ -12,7 +12,7 @@ python "${PROJECT_DIR}/src/run_cluster_kvcache_eval.py" \
   --model_name_or_path "${MODEL_NAME_OR_PATH}" \
   --text_path "${TEXT_PATH}" \
   --output_dir "${OUTPUT_DIR}" \
-  --modes "${MODES:-baseline,cluster}" \
+  --modes "${MODES:-baseline,cluster,edges}" \
   --prefill_tokens "${PREFILL_TOKENS:-100000}" \
   --eval_tokens "${EVAL_TOKENS:-512}" \
   --prefill_chunk_size "${PREFILL_CHUNK_SIZE:-512}" \

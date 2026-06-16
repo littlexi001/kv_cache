@@ -29,7 +29,8 @@ data:  /mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 
-Run baseline, cluster retrieval, and edge-only baseline:
+By default this runs baseline, cluster retrieval, and edge-only baseline.
+You can also set the modes explicitly:
 
 ```bash
 MODES=baseline,cluster,edges EDGE_RATIO=0.01 \
