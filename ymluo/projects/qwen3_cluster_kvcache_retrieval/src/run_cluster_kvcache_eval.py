@@ -23,6 +23,110 @@ DEFAULT_MODEL_PATH = "/mnt/workspace/Qwen3-0.6B"
 DEFAULT_TEXT_PATH = "/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt"
 
 
+class ModuleProfiler:
+    def __init__(self, enabled: bool, device: torch.device) -> None:
+        self.enabled = enabled and device.type == "cuda"
+        self.device = device
+        self.handles: list[Any] = []
+        self.pending: list[tuple[str, str, torch.cuda.Event, torch.cuda.Event]] = []
+        self.records: dict[tuple[str, str], dict[str, float | int]] = {}
+
+    def _category(self, name: str, module: torch.nn.Module) -> str | None:
+        class_name = module.__class__.__name__.lower()
+        leaf_name = name.rsplit(".", 1)[-1]
+        if class_name == "qwen3attention" or leaf_name == "self_attn":
+            return "attention_module"
+        if class_name == "qwen3mlp" or leaf_name == "mlp":
+            return "mlp_module"
+        if "rmsnorm" in class_name or leaf_name in {"input_layernorm", "post_attention_layernorm", "norm"}:
+            return "norm"
+        if leaf_name in {"q_proj", "k_proj", "v_proj", "o_proj"}:
+            return f"attention_{leaf_name}"
+        if leaf_name in {"gate_proj", "up_proj", "down_proj"}:
+            return f"mlp_{leaf_name}"
+        if leaf_name in {"embed_tokens", "lm_head"}:
+            return leaf_name
+        return None
+
+    def install(self, model: torch.nn.Module) -> None:
+        if not self.enabled:
+            return
+        for name, module in model.named_modules():
+            category = self._category(name, module)
+            if category is None:
+                continue
+
+            def pre_hook(_module, _inputs, module_name=name):
+                if not self.enabled:
+                    return
+                event = torch.cuda.Event(enable_timing=True)
+                event.record()
+                _module._module_profile_start = (module_name, event)
+
+            def post_hook(_module, _inputs, _outputs, module_name=name, module_category=category):
+                if not self.enabled:
+                    return
+                start_info = getattr(_module, "_module_profile_start", None)
+                if start_info is None:
+                    return
+                _, start_event = start_info
+                end_event = torch.cuda.Event(enable_timing=True)
+                end_event.record()
+                self.pending.append((module_category, module_name, start_event, end_event))
+
+            self.handles.append(module.register_forward_pre_hook(pre_hook))
+            self.handles.append(module.register_forward_hook(post_hook))
+
+    def flush(self) -> None:
+        if not self.enabled or not self.pending:
+            return
+        torch.cuda.synchronize(self.device)
+        for category, name, start, end in self.pending:
+            key = (category, name)
+            record = self.records.setdefault(key, {"calls": 0, "elapsed_ms": 0.0})
+            record["calls"] = int(record["calls"]) + 1
+            record["elapsed_ms"] = float(record["elapsed_ms"]) + float(start.elapsed_time(end))
+        self.pending.clear()
+
+    def rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for (category, name), record in sorted(self.records.items()):
+            calls = int(record["calls"])
+            elapsed_ms = float(record["elapsed_ms"])
+            rows.append(
+                {
+                    "category": category,
+                    "module": name,
+                    "calls": calls,
+                    "elapsed_ms": elapsed_ms,
+                    "mean_ms": elapsed_ms / calls if calls else 0.0,
+                }
+            )
+        return rows
+
+    def summary(self) -> dict[str, dict[str, float | int]]:
+        grouped: dict[str, dict[str, float | int]] = {}
+        for row in self.rows():
+            category = str(row["category"])
+            bucket = grouped.setdefault(category, {"calls": 0, "elapsed_ms": 0.0})
+            bucket["calls"] = int(bucket["calls"]) + int(row["calls"])
+            bucket["elapsed_ms"] = float(bucket["elapsed_ms"]) + float(row["elapsed_ms"])
+        for bucket in grouped.values():
+            calls = int(bucket["calls"])
+            bucket["mean_ms"] = float(bucket["elapsed_ms"]) / calls if calls else 0.0
+        return dict(sorted(grouped.items()))
+
+    def reset(self) -> None:
+        self.pending.clear()
+        self.records.clear()
+
+    def close(self) -> None:
+        for handle in self.handles:
+            handle.remove()
+        self.handles.clear()
+        self.pending.clear()
+
+
 def str2bool(value: str | bool) -> bool:
     if isinstance(value, bool):
         return value
@@ -51,6 +155,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device_map", default="auto")
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument("--profile_attention", type=str2bool, default=True)
+    parser.add_argument("--profile_modules", type=str2bool, default=False)
     parser.add_argument("--warmup_eval_tokens", type=int, default=8)
     parser.add_argument("--save_token_timings", type=str2bool, default=True)
     parser.add_argument("--require_total_tokens", type=str2bool, default=True)
@@ -158,15 +263,23 @@ def evaluate_decode(
     prefill_chunk_size: int,
     input_device: torch.device,
     warmup_eval_tokens: int,
+    module_profiler: ModuleProfiler | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     profile_enabled = PROFILER.enabled
     PROFILER.enabled = False
     PROFILER.reset()
+    module_profile_enabled = module_profiler.enabled if module_profiler is not None else False
+    if module_profiler is not None:
+        module_profiler.enabled = False
+        module_profiler.reset()
     past_key_values, prev_logits, prefill_ms = prefill_cache(
         model, input_ids, prefill_tokens, prefill_chunk_size, input_device
     )
     PROFILER.enabled = profile_enabled
     PROFILER.reset()
+    if module_profiler is not None:
+        module_profiler.enabled = module_profile_enabled
+        module_profiler.reset()
 
     total_loss = 0.0
     total_count = 0
@@ -192,6 +305,8 @@ def evaluate_decode(
         }
         outputs, elapsed_ms = timed_forward(model, kwargs, input_device)
         PROFILER.synchronize_and_flush()
+        if module_profiler is not None:
+            module_profiler.flush()
         past_key_values = outputs.past_key_values
         prev_logits = outputs.logits[:, -1, :].detach()
         all_decode_ms += elapsed_ms
@@ -221,6 +336,7 @@ def evaluate_decode(
         "decode_ms_per_token": measured_decode_ms / measured_tokens if measured_tokens else float("nan"),
         "tokens_per_second": 1000.0 * measured_tokens / measured_decode_ms if measured_decode_ms > 0 else float("nan"),
         "attention_profile": PROFILER.snapshot(),
+        "module_profile": module_profiler.summary() if module_profiler is not None else {},
     }
     return summary, token_rows
 
@@ -288,6 +404,8 @@ def main() -> None:
             profile=args.profile_attention,
         )
         install_qwen3_cluster_attention_patch(model, cfg)
+        module_profiler = ModuleProfiler(args.profile_modules, input_device)
+        module_profiler.install(model)
         print(f"evaluating mode={mode}", flush=True)
         summary, token_rows = evaluate_decode(
             model,
@@ -297,6 +415,7 @@ def main() -> None:
             args.prefill_chunk_size,
             input_device,
             args.warmup_eval_tokens,
+            module_profiler,
         )
         cluster_count = math.ceil(args.prefill_tokens / args.cluster_size)
         keep_clusters = max(1, math.ceil(args.keep_ratio * cluster_count))
@@ -338,6 +457,13 @@ def main() -> None:
                 token_rows,
                 ["token_index", "absolute_position", "key_len", "decode_ms", "measured"],
             )
+        if args.profile_modules:
+            write_csv(
+                output_dir / f"module_profile_{mode}.csv",
+                module_profiler.rows(),
+                ["category", "module", "calls", "elapsed_ms", "mean_ms"],
+            )
+        module_profiler.close()
         del model
         if requested_device.type == "cuda":
             torch.cuda.empty_cache()

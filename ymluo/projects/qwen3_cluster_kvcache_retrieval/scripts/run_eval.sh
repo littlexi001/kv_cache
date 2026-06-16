@@ -27,5 +27,6 @@ python "${PROJECT_DIR}/src/run_cluster_kvcache_eval.py" \
   --device_map "${DEVICE_MAP:-auto}" \
   --attn_implementation "${ATTN_IMPLEMENTATION:-eager}" \
   --profile_attention "${PROFILE_ATTENTION:-true}" \
+  --profile_modules "${PROFILE_MODULES:-false}" \
   --warmup_eval_tokens "${WARMUP_EVAL_TOKENS:-8}" \
   --save_token_timings "${SAVE_TOKEN_TIMINGS:-true}"
