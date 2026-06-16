@@ -155,7 +155,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device_map", default="auto")
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument("--profile_attention", type=str2bool, default=True)
-    parser.add_argument("--profile_modules", type=str2bool, default=False)
+    parser.add_argument("--profile_modules", type=str2bool, default=True)
     parser.add_argument("--warmup_eval_tokens", type=int, default=8)
     parser.add_argument("--save_token_timings", type=str2bool, default=True)
     parser.add_argument("--require_total_tokens", type=str2bool, default=True)
@@ -381,6 +381,7 @@ def main() -> None:
     torch.backends.cuda.matmul.allow_tf32 = True
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    print(f"profile_modules={args.profile_modules}", flush=True)
 
     input_ids, tokenizer = load_inputs(args)
     requested_device = torch.device(args.device if torch.cuda.is_available() else "cpu")
@@ -458,10 +459,16 @@ def main() -> None:
                 ["token_index", "absolute_position", "key_len", "decode_ms", "measured"],
             )
         if args.profile_modules:
+            module_rows = module_profiler.rows()
             write_csv(
                 output_dir / f"module_profile_{mode}.csv",
-                module_profiler.rows(),
+                module_rows,
                 ["category", "module", "calls", "elapsed_ms", "mean_ms"],
+            )
+            print(
+                f"wrote module profile for mode={mode}: "
+                f"{output_dir / f'module_profile_{mode}.csv'} rows={len(module_rows)}",
+                flush=True,
             )
         module_profiler.close()
         del model

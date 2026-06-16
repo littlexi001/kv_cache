@@ -93,10 +93,9 @@ When `PROFILE_ATTENTION=true`, CUDA events also record attention-level buckets:
 These buckets are useful for later optimization, especially to see whether
 cluster-center construction/topk/masking dominates the sparse path.
 
-For broader decode bottleneck analysis, enable module profiling:
+For broader decode bottleneck analysis, module profiling is enabled by default:
 
 ```bash
-PROFILE_MODULES=true MODES=baseline,cluster,edges \
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 
@@ -105,6 +104,13 @@ This writes `module_profile_<mode>.csv` and adds `module_profile` to
 `attention_module` includes its q/k/v/o projections, while the projection rows
 are also reported separately. Use these rows to locate hot modules rather than
 adding every category into one total.
+
+To measure cleaner end-to-end decode latency without module hook overhead, run:
+
+```bash
+PROFILE_MODULES=false \
+bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
+```
 
 The optimized sparse path is used for `q_len=1` decode calls. Prefill remains
 full attention and is timed separately. Cluster centers are cached per attention
