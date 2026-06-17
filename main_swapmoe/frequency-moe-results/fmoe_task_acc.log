@@ -1,0 +1,59 @@
++ task_name=arc_challenge,arc_easy,hellaswag,lambada_openai,piqa,siqa,race,winogrande
++ model_name=fmoe_v1
++ step=23000
++ limit_arg=()
++ BASE_QWEN=/mnt/workspace/Qwen3-0.6B
++ LM_EVAL_ROOT=/mnt/workspace/lm-evaluation-harness
++ CKPT_ROOT=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert
++ DEVICE=cuda:0
++ BATCH_SIZE=64
++ '[' -n '' ']'
++ common_args=pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10
++ '[' fmoe_v1 = old_baseline ']'
++ '[' fmoe_v1 = baseline ']'
++ '[' fmoe_v1 = old_svroute_fullinput ']'
++ '[' fmoe_v1 = svroute_fullinput ']'
++ '[' fmoe_v1 = old_rawroute_rawcomponent ']'
++ '[' fmoe_v1 = rawroute_rawcomponent ']'
++ '[' fmoe_v1 = old_svroute_rawcomponent ']'
++ '[' fmoe_v1 = svroute_rawcomponent ']'
++ '[' fmoe_v1 = attnpreo_rawroute_fullinput ']'
++ '[' fmoe_v1 = attnpreo_svroute_fullinput ']'
++ '[' fmoe_v1 = attnpreo_rawroute_component ']'
++ '[' fmoe_v1 = fmoe_v1 ']'
++ model_args='pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_frequency_moe,shared_expert_type=frequency,moe_type=frequency,gating_reference=attn_pre_o,fmoe_common_intermediate_size=1536,fmoe_middle_intermediate_size=768,fmoe_tail_intermediate_size=768,fmoe_num_middle_experts=4,fmoe_num_tail_experts=16,fmoe_middle_range=0.01;0.10,fmoe_tail_range=0.10;1.00'
++ export PYTHONPATH=/mnt/workspace/lm-evaluation-harness:
++ PYTHONPATH=/mnt/workspace/lm-evaluation-harness:
++ cd /mnt/workspace/lm-evaluation-harness
++ lm_eval --model hf --model_args 'pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_frequency_moe,shared_expert_type=frequency,moe_type=frequency,gating_reference=attn_pre_o,fmoe_common_intermediate_size=1536,fmoe_middle_intermediate_size=768,fmoe_tail_intermediate_size=768,fmoe_num_middle_experts=4,fmoe_num_tail_experts=16,fmoe_middle_range=0.01;0.10,fmoe_tail_range=0.10;1.00' --tasks arc_challenge,arc_easy,hellaswag,lambada_openai,piqa,siqa,race,winogrande --device cuda:0 --batch_size 64
+INFO:lm_eval.__main__:Selected Tasks: ['arc_challenge', 'arc_easy', 'hellaswag', 'lambada_openai', 'piqa', 'race', 'siqa', 'winogrande']
+INFO:lm_eval.evaluator:Setting random seed to 0 | Setting numpy seed to 1234 | Setting torch manual seed to 1234 | Setting fewshot manual seed to 1234
+INFO:lm_eval.evaluator:Initializing hf model, with arguments: {'pretrained': '/mnt/workspace/Qwen3-0.6B', 'model_type': 'hrj_qwen', 'config_dir': '/mnt/workspace/Qwen3-0.6B', 'expert_per_token': 1, 'num_experts': 4, 'moe_intermediate_size': 1536, 'subspace_matrix': 'o_proj', 'subspace_svd_update_interval': 10, 'ckpt_path': '/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_23000.pt', 'model_module': 'lm_eval.models.hrj_models.models.myqwen_frequency_moe', 'shared_expert_type': 'frequency', 'moe_type': 'frequency', 'gating_reference': 'attn_pre_o', 'fmoe_common_intermediate_size': 1536, 'fmoe_middle_intermediate_size': 768, 'fmoe_tail_intermediate_size': 768, 'fmoe_num_middle_experts': 4, 'fmoe_num_tail_experts': 16, 'fmoe_middle_range': '0.01;0.10', 'fmoe_tail_range': '0.10;1.00'}
+INFO:lm_eval.models.huggingface:Using device 'cuda:0'
+====================================================================================================
+[HRJ_QWEN CONFIG]
+pretrained/tokenizer : /mnt/workspace/Qwen3-0.6B
+config_dir           : /mnt/workspace/Qwen3-0.6B
+model_module         : lm_eval.models.hrj_models.models.myqwen_frequency_moe
+ckpt_path            : /mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_23000.pt
+raw_model_kwargs     : {'expert_per_token': 1, 'num_experts': 4, 'moe_intermediate_size': 1536, 'subspace_matrix': 'o_proj', 'subspace_svd_update_interval': 10, 'shared_expert_type': 'frequency', 'moe_type': 'frequency', 'gating_reference': 'attn_pre_o', 'fmoe_common_intermediate_size': 1536, 'fmoe_middle_intermediate_size': 768, 'fmoe_tail_intermediate_size': 768, 'fmoe_num_middle_experts': 4, 'fmoe_num_tail_experts': 16, 'fmoe_middle_range': '0.01;0.10', 'fmoe_tail_range': '0.10;1.00'}
+====================================================================================================
+
+INFO:lm_eval.loggers.evaluation_tracker:Output path not provided, skipping saving results aggregated
+hf (pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/fmoe_v1_common1_mid1_10_tail16_active3072_c1536_m768_t768/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_frequency_moe,shared_expert_type=frequency,moe_type=frequency,gating_reference=attn_pre_o,fmoe_common_intermediate_size=1536,fmoe_middle_intermediate_size=768,fmoe_tail_intermediate_size=768,fmoe_num_middle_experts=4,fmoe_num_tail_experts=16,fmoe_middle_range=0.01;0.10,fmoe_tail_range=0.10;1.00), gen_kwargs: (None), limit: None, num_fewshot: None, batch_size: 64
+|    Tasks     |Version|Filter|n-shot|  Metric  |   | Value |   |Stderr|
+|--------------|------:|------|-----:|----------|---|------:|---|-----:|
+|arc_challenge |      1|none  |     0|acc       |↑  | 0.1749|±  |0.0111|
+|              |       |none  |     0|acc_norm  |↑  | 0.2261|±  |0.0122|
+|arc_easy      |      1|none  |     0|acc       |↑  | 0.4402|±  |0.0102|
+|              |       |none  |     0|acc_norm  |↑  | 0.3998|±  |0.0101|
+|hellaswag     |      1|none  |     0|acc       |↑  | 0.2780|±  |0.0045|
+|              |       |none  |     0|acc_norm  |↑  | 0.2955|±  |0.0046|
+|lambada_openai|      1|none  |     0|acc       |↑  | 0.2729|±  |0.0062|
+|              |       |none  |     0|perplexity|↓  |74.0712|±  |3.1002|
+|piqa          |      1|none  |     0|acc       |↑  | 0.6148|±  |0.0114|
+|              |       |none  |     0|acc_norm  |↑  | 0.6186|±  |0.0113|
+|race          |      2|none  |     0|acc       |↑  | 0.4880|±  |0.0071|
+|siqa          |      0|none  |     0|acc       |↑  | 0.3710|±  |0.0109|
+|winogrande    |      1|none  |     0|acc       |↑  | 0.5122|±  |0.0140|
+

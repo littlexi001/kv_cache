@@ -1,0 +1,48 @@
++ task_name=arc_challenge,arc_easy,hellaswag,lambada_openai,piqa,siqa,race,winogrande
++ model_name=old_baseline
++ step=23000
++ limit_arg=()
++ BASE_QWEN=/mnt/workspace/Qwen3-0.6B
++ LM_EVAL_ROOT=/mnt/workspace/lm-evaluation-harness
++ CKPT_ROOT=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert
++ DEVICE=cuda:0
++ BATCH_SIZE=64
++ '[' -n '' ']'
++ common_args=pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10
++ '[' old_baseline = old_baseline ']'
++ model_args=pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_subspace,shared_expert_type=normal,gating_reference=switch
++ export PYTHONPATH=/mnt/workspace/lm-evaluation-harness:
++ PYTHONPATH=/mnt/workspace/lm-evaluation-harness:
++ cd /mnt/workspace/lm-evaluation-harness
++ lm_eval --model hf --model_args pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_subspace,shared_expert_type=normal,gating_reference=switch --tasks arc_challenge,arc_easy,hellaswag,lambada_openai,piqa,siqa,race,winogrande --device cuda:0 --batch_size 64
+INFO:lm_eval.__main__:Selected Tasks: ['arc_challenge', 'arc_easy', 'hellaswag', 'lambada_openai', 'piqa', 'race', 'siqa', 'winogrande']
+INFO:lm_eval.evaluator:Setting random seed to 0 | Setting numpy seed to 1234 | Setting torch manual seed to 1234 | Setting fewshot manual seed to 1234
+INFO:lm_eval.evaluator:Initializing hf model, with arguments: {'pretrained': '/mnt/workspace/Qwen3-0.6B', 'model_type': 'hrj_qwen', 'config_dir': '/mnt/workspace/Qwen3-0.6B', 'expert_per_token': 1, 'num_experts': 4, 'moe_intermediate_size': 1536, 'subspace_matrix': 'o_proj', 'subspace_svd_update_interval': 10, 'ckpt_path': '/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_23000.pt', 'model_module': 'lm_eval.models.hrj_models.models.myqwen_subspace', 'shared_expert_type': 'normal', 'gating_reference': 'switch'}
+INFO:lm_eval.models.huggingface:Using device 'cuda:0'
+====================================================================================================
+[HRJ_QWEN CONFIG]
+pretrained/tokenizer : /mnt/workspace/Qwen3-0.6B
+config_dir           : /mnt/workspace/Qwen3-0.6B
+model_module         : lm_eval.models.hrj_models.models.myqwen_subspace
+ckpt_path            : /mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_23000.pt
+raw_model_kwargs     : {'expert_per_token': 1, 'num_experts': 4, 'moe_intermediate_size': 1536, 'subspace_matrix': 'o_proj', 'subspace_svd_update_interval': 10, 'shared_expert_type': 'normal', 'gating_reference': 'switch'}
+====================================================================================================
+
+INFO:lm_eval.loggers.evaluation_tracker:Output path not provided, skipping saving results aggregated
+hf (pretrained=/mnt/workspace/Qwen3-0.6B,model_type=hrj_qwen,config_dir=/mnt/workspace/Qwen3-0.6B,expert_per_token=1,num_experts=4,moe_intermediate_size=1536,subspace_matrix=o_proj,subspace_svd_update_interval=10,ckpt_path=/mnt/workspace/Hrj/checkpoint/checkpoint_share_expert/baseline_standard_moe_16e_top2/step_23000.pt,model_module=lm_eval.models.hrj_models.models.myqwen_subspace,shared_expert_type=normal,gating_reference=switch), gen_kwargs: (None), limit: None, num_fewshot: None, batch_size: 64
+|    Tasks     |Version|Filter|n-shot|  Metric  |   | Value |   |Stderr|
+|--------------|------:|------|-----:|----------|---|------:|---|-----:|
+|arc_challenge |      1|none  |     0|acc       |↑  | 0.1894|±  |0.0115|
+|              |       |none  |     0|acc_norm  |↑  | 0.2355|±  |0.0124|
+|arc_easy      |      1|none  |     0|acc       |↑  | 0.4609|±  |0.0102|
+|              |       |none  |     0|acc_norm  |↑  | 0.4162|±  |0.0101|
+|hellaswag     |      1|none  |     0|acc       |↑  | 0.2880|±  |0.0045|
+|              |       |none  |     0|acc_norm  |↑  | 0.3104|±  |0.0046|
+|lambada_openai|      1|none  |     0|acc       |↑  | 0.3002|±  |0.0064|
+|              |       |none  |     0|perplexity|↓  |48.6409|±  |1.9152|
+|piqa          |      1|none  |     0|acc       |↑  | 0.6322|±  |0.0113|
+|              |       |none  |     0|acc_norm  |↑  | 0.6376|±  |0.0112|
+|race          |      2|none  |     0|acc       |↑  | 0.4968|±  |0.0071|
+|siqa          |      0|none  |     0|acc       |↑  | 0.3756|±  |0.0110|
+|winogrande    |      1|none  |     0|acc       |↑  | 0.5178|±  |0.0140|
+
