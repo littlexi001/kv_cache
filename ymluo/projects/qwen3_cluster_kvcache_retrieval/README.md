@@ -44,10 +44,17 @@ PREFILL_TOKENS=2048 EVAL_TOKENS=32 PREFILL_CHUNK_SIZE=256 \
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 
-Run sparse attention only on upper layers, keeping lower layers full:
+By default, sparse attention is enabled only on upper layers 11-27, keeping
+lower layers full. To run that default:
 
 ```bash
-SPARSE_START_LAYER=11 SPARSE_END_LAYER=27 \
+bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
+```
+
+To run sparse attention on all layers:
+
+```bash
+SPARSE_START_LAYER=0 SPARSE_END_LAYER=-1 \
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 
