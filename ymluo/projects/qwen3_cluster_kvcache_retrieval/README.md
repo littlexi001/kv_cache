@@ -103,10 +103,14 @@ Main files:
 
 The eval path uses KV-cache decoding, not full-sequence training forward:
 
-- prefill builds the full cache in chunks;
+- prefill builds the full cache in chunks once and reuses that initial cache
+  across baseline, cluster, and edges decode runs;
 - eval runs one token at a time;
 - PPL is computed from the previous token's logits;
 - decode timing excludes the first `WARMUP_EVAL_TOKENS` tokens by default.
+
+Reusing prefill keeps an initial KV cache and clones it for each decode mode, so
+peak memory is higher than running a single mode in isolation.
 
 When `PROFILE_ATTENTION=true`, CUDA events also record attention-level buckets:
 

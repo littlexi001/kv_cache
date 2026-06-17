@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import math
@@ -138,7 +139,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model_name_or_path", default=DEFAULT_MODEL_PATH)
     parser.add_argument("--text_path", default=DEFAULT_TEXT_PATH)
     parser.add_argument("--output_dir", default="outputs/qwen3_cluster_kvcache_retrieval")
-    parser.add_argument("--modes", default="baseline,cluster")
+    parser.add_argument("--modes", default="baseline,cluster,edges")
     parser.add_argument("--prefill_tokens", type=int, default=100_000)
     parser.add_argument("--eval_tokens", type=int, default=512)
     parser.add_argument("--prefill_chunk_size", type=int, default=512)
@@ -221,6 +222,29 @@ def timed_forward(model: torch.nn.Module, kwargs: dict[str, Any], device: torch.
     return outputs, (time.perf_counter() - start_time) * 1000.0
 
 
+def clone_past_key_values(past_key_values: Any) -> Any:
+    try:
+        return copy.deepcopy(past_key_values)
+    except Exception:
+        pass
+
+    def clone_item(item: Any) -> Any:
+        if torch.is_tensor(item):
+            return item.detach().clone()
+        if isinstance(item, tuple):
+            return tuple(clone_item(value) for value in item)
+        if isinstance(item, list):
+            return [clone_item(value) for value in item]
+        return copy.deepcopy(item)
+
+    if hasattr(past_key_values, "to_legacy_cache"):
+        legacy = clone_item(past_key_values.to_legacy_cache())
+        if hasattr(past_key_values.__class__, "from_legacy_cache"):
+            return past_key_values.__class__.from_legacy_cache(legacy)
+        return legacy
+    return clone_item(past_key_values)
+
+
 @torch.inference_mode()
 def prefill_cache(
     model: torch.nn.Module,
@@ -261,28 +285,20 @@ def prefill_cache(
 def evaluate_decode(
     model: torch.nn.Module,
     input_ids: torch.Tensor,
+    initial_past_key_values: Any,
+    initial_prev_logits: torch.Tensor,
+    prefill_ms: float,
     prefill_tokens: int,
     eval_tokens: int,
-    prefill_chunk_size: int,
     input_device: torch.device,
     warmup_eval_tokens: int,
     module_profiler: ModuleProfiler | None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    profile_enabled = PROFILER.enabled
-    PROFILER.enabled = False
-    PROFILER.reset()
-    module_profile_enabled = module_profiler.enabled if module_profiler is not None else False
-    if module_profiler is not None:
-        module_profiler.enabled = False
-        module_profiler.reset()
-    past_key_values, prev_logits, prefill_ms = prefill_cache(
-        model, input_ids, prefill_tokens, prefill_chunk_size, input_device
-    )
-    PROFILER.enabled = profile_enabled
     PROFILER.reset()
     if module_profiler is not None:
-        module_profiler.enabled = module_profile_enabled
         module_profiler.reset()
+    past_key_values = clone_past_key_values(initial_past_key_values)
+    prev_logits = initial_prev_logits.detach().clone()
 
     total_loss = 0.0
     total_count = 0
@@ -392,13 +408,30 @@ def main() -> None:
     summary_rows: list[dict[str, Any]] = []
     summaries: dict[str, Any] = {"args": vars(args), "modes": {}}
     sparse_end_layer = None if args.sparse_end_layer < 0 else args.sparse_end_layer
+    print("loading model once for shared prefill", flush=True)
+    model = load_model(args, requested_device)
+    input_device = pick_input_device(model, requested_device)
+    install_qwen3_cluster_attention_patch(
+        model,
+        ClusterKVConfig(mode="baseline", profile=False),
+    )
+    prefill_profile_enabled = PROFILER.enabled
+    PROFILER.enabled = False
+    PROFILER.reset()
+    print("building shared full-attention prefill cache", flush=True)
+    initial_past_key_values, initial_prev_logits, shared_prefill_ms = prefill_cache(
+        model,
+        input_ids,
+        args.prefill_tokens,
+        args.prefill_chunk_size,
+        input_device,
+    )
+    PROFILER.enabled = prefill_profile_enabled
+    PROFILER.reset()
 
     for mode in modes:
         if mode not in {"baseline", "cluster", "edges"}:
             raise ValueError(f"Unsupported mode: {mode}")
-        print(f"loading model for mode={mode}", flush=True)
-        model = load_model(args, requested_device)
-        input_device = pick_input_device(model, requested_device)
         cfg = ClusterKVConfig(
             mode=mode,
             cluster_size=args.cluster_size,
@@ -418,9 +451,11 @@ def main() -> None:
         summary, token_rows = evaluate_decode(
             model,
             input_ids,
+            initial_past_key_values,
+            initial_prev_logits,
+            shared_prefill_ms,
             args.prefill_tokens,
             args.eval_tokens,
-            args.prefill_chunk_size,
             input_device,
             args.warmup_eval_tokens,
             module_profiler,
@@ -484,9 +519,9 @@ def main() -> None:
                 flush=True,
             )
         module_profiler.close()
-        del model
         if requested_device.type == "cuda":
             torch.cuda.empty_cache()
+    del model
 
     comparisons: dict[str, Any] = {}
     if "baseline" in summaries["modes"] and "cluster" in summaries["modes"]:
