@@ -2,6 +2,22 @@
 
 ## 0. Objective and Current Conclusion
 
+已有实验事实：在每层每个 head 中只保留 top-2% attention token，推理质量基本不下降，某些情况下还会优于 full attention。因此当前不是从零证明 sparse attention 是否可用，而是解释：
+
+> 对某一层某个 head，top-2% key token 为什么被当前 query 选中？它们共享的 feature 在哪里？
+
+这个问题直接决定 inverse KV 的设计。如果 top-2% token 共享的 feature 可以被 pre-attention 表征预测，那么这个 feature 就可以成为 KV bucket 和 expert bucket 的共同 index。
+
+当前要区分三种可能：
+
+1. **Hidden-native feature**：输入 residual hidden state 已经包含这种聚类，Q/K 只是在读出已有 feature；
+2. **Q/K-extracted feature**：hidden 中相似性不明显，但该 head 的 `W_Q/W_K` 把当前 head 关心的 feature 抽取出来；
+3. **Bilinear/SVD feature**：高 attention score 不是单一 hidden cosine 或 K-space cosine 能解释，而是来自完整 `W_Q/W_K` 奇异空间中的少数 query/key feature pairs。
+
+本方法希望先解释这些 feature，再用这些 feature 指导 head-level KV bucket 与 expert bucket 的共同设计。
+
+## 0.1 Architecture Objective
+
 本方法希望从 Transformer block 的入口开始，在每个 attention head 内学习一个离散 bucket。这个 bucket 同时决定：
 
 1. 当前 head 可以读取哪些历史 KV；
@@ -22,6 +38,21 @@ one layer
 
 ## 1. Falsifiable Conjecture
 
+当前更基础的 conjecture 是：
+
+> top-2% attention token 不是任意稀疏集合；对每一层每个 head，它们共享该 head 定义的少数 feature directions。这些 directions 可以通过 hidden space、Q/K space，或完整 `W_Q/W_K` SVD 后按 head 切输出空间的方式被定位。
+
+如果该 conjecture 成立，那么 inverse KV 的 bucket 不应按 token id 或位置定义，而应按 head-specific feature 定义。
+
+以下结果会削弱该 conjecture：
+
+1. top-2% pair 与匹配距离的 random pair 在 hidden/QK/SVD feature 指标上没有差异；
+2. top-2% token 主要由 sink、position 或 norm 解释，而不是 feature direction 解释；
+3. 不同 head 的 top-2% token 集合高度重叠，缺少 head-specific 分工；
+4. top-2% 的有效性只来自后续层补救，而不是当前 head 的 feature retrieval。
+
+在该问题之后，结构 conjecture 才是：
+
 > 在真实语言训练中，使用 head-level、因果中心化的共享 bucket，同时约束 attention 可见性与 expert ownership，可以在显著减少 KV 访问的同时维持 NTP，并形成比 ordinary MoE 更稳定的 expert specialization。
 
 更强、也更关键的版本是：
@@ -37,6 +68,82 @@ one layer
 5. bucket 计算开销抵消了减少 KV 访问的收益。
 
 ## 2. Physical Priors
+
+### 2.0 Top-2% token should share a head-specific feature
+
+Self-attention 在每个 head 上通过内积选择 token：
+
+$$
+\mathrm{score}(i,j,h)=q_{i,h}^{\top}k_{j,h}
+$$
+
+如果只保留每个 head 的 top-2% key token 仍能完成推理，那么这些 token 不是均匀可替换的历史上下文，而是当前 head 认为最相关的少数 feature carrier。
+
+这个 feature 可以有三个来源：
+
+1. `x_i` 和 `x_j` 在 residual hidden space 中已经相似；
+2. `W_Q/W_K` 从 `x` 中抽取出当前 head 关心的 feature，使 `q_i` 与 `k_j` 相似；
+3. 完整 `W_Q/W_K` 的 SVD 定义了全局 query/key singular feature；这些 feature 经由 $U_Q/U_K$ 写入不同 head，高 score 来自少数 query/key feature pair 的乘积。
+
+因此实验必须先回答 feature 来源，再决定 router input 应该是 layer input、Q、K，还是一个学习到的 Q/K-like projection。
+
+### 2.0.1 Mathematical model for full-WQ/WK feature source
+
+对某一层，先对完整 Q/K projection 做 SVD：
+
+$$
+W_Q=U_Q\Sigma_QV_Q^{\top}
+$$
+
+$$
+W_K=U_K\Sigma_KV_K^{\top}
+$$
+
+其中：
+
+1. $V_Q,V_K$ 在输入 residual hidden space 中，表示 query/key 读取的全局输入 feature；
+2. $\Sigma_Q,\Sigma_K$ 表示这些 feature 被放大的强度；
+3. $U_Q,U_K$ 在 concat 后的 Q/K 输出空间中，可以按 head 坐标切分。
+
+记第 $h$ 个 head 的输出坐标切片为 $U_{Q,h}$ 和 $U_{K,h}$，则：
+
+$$
+q_{h,i}=x_iV_Q\Sigma_QU_{Q,h}^{\top}
+$$
+
+$$
+k_{h,j}=x_jV_K\Sigma_KU_{K,h}^{\top}
+$$
+
+第 $h$ 个 head 的 QK score 为：
+
+$$
+s_{h,i,j}
+=x_iV_Q\Sigma_QU_{Q,h}^{\top}U_{K,h}\Sigma_KV_K^{\top}x_j^{\top}
+$$
+
+因此第 $r$ 个 query singular feature 和第 $s$ 个 key singular feature 的贡献为：
+
+$$
+c^{(h)}_{i,j,r,s}
+=(x_iV_Q)_r
+\sigma_{Q,r}
+\left(U_{Q,h}^{\top}U_{K,h}\right)_{r,s}
+\sigma_{K,s}
+(x_jV_K)_s
+$$
+
+这里的可测变量是：
+
+1. `cos(x_i, x_j)`：hidden-native feature 是否已经存在；
+2. `q_i^T k_j` 或 `cos(q_i, k_j)`：Q/K 是否抽取出更强相关性；
+3. $U_Q/U_K$ 的 head mass：某个全局 singular feature 被集中写入少数 head，还是分散写入多个 head；
+4. $c^{(h)}_{i,j,r,s}$：某个 query/key singular feature pair 对 high score 的贡献；
+5. top-contribution feature-pair overlap：top pair 是否共享少数稳定的 query/key feature pairs。
+
+如果 top-2% pair 的 $c^{(h)}_{i,j,r,s}$ 集中在少数 feature pairs，而 matched negative pair 没有这种集中性，说明该 head 的 retrieval 可以被完整 $W_Q/W_K$ 奇异空间中的 feature pairs 解释。
+
+对 $M_h=W_{Q,h}^{\top}W_{K,h}$ 做 SVD 只作为辅助 sanity check。它能说明组合后的双线性匹配是否集中，但不能回答原始 $W_Q/W_K$ 奇异 feature 如何分配到不同 head。
 
 ### 2.1 Strong QK relations have local closure
 
@@ -55,37 +162,33 @@ Qwen3-0.6B 的真实文本实验显示，在每个 head 的 strict-history top-2
 
 因此 bucket assignment 应为：
 
-```text
-b[layer, token, head]
-```
+$b[\mathrm{layer},\mathrm{token},\mathrm{head}]$
 
 而不是：
 
-```text
-b[layer, token]
-```
+$b[\mathrm{layer},\mathrm{token}]$
 
 ### 2.3 Raw K contains a large common center
 
 令某个 layer/head 的 key 为：
 
-```text
-k_i = c + r_i
-```
+$$
+k_i=c+r_i
+$$
 
 则：
 
-```text
-k_i^T k_j = ||c||^2 + c^T r_i + c^T r_j + r_i^T r_j
-```
+$$
+k_i^{\top}k_j=\lVert c\rVert^2+c^{\top}r_i+c^{\top}r_j+r_i^{\top}r_j
+$$
 
 大的 `||c||^2` 会让 raw K-K inner product 普遍很高，产生虚假相似性。
 
 但对固定 query：
 
-```text
-q^T k_i = q^T c + q^T r_i
-```
+$$
+q^{\top}k_i=q^{\top}c+q^{\top}r_i
+$$
 
 `q^T c` 对所有历史 token 相同，会在 token-wise softmax 中抵消。因此 router 应主要使用 residual K geometry，而不是 raw common center。
 
@@ -93,15 +196,15 @@ q^T k_i = q^T c + q^T r_i
 
 对线性 gate：
 
-```text
-z_i = G x_i + b
-```
+$$
+z_i=Gx_i+b
+$$
 
 有：
 
-```text
-||z_i - z_j|| <= ||G||_op ||x_i - x_j||
-```
+$$
+\lVert z_i-z_j\rVert \le \lVert G\rVert_{\mathrm{op}}\lVert x_i-x_j\rVert
+$$
 
 如果两个输入接近，router logits 也会接近。但 top-k expert assignment 保持一致还要求 routing margin 足够大。
 
@@ -118,9 +221,9 @@ z_i = G x_i + b
 
 因此 prefix center 必须 stop-gradient：
 
-```text
-center = stop_gradient(prefix_mean)
-```
+$$
+\mathrm{center}=\mathrm{stop\_gradient}(\mathrm{prefix\_mean})
+$$
 
 这避免模型通过操纵历史均值取巧，也与 decode 时已经写入 cache 的历史状态保持一致。
 
@@ -144,12 +247,15 @@ center = stop_gradient(prefix_mean)
 
 每层先保留标准 pre-norm 和 QKV projection：
 
-```text
-X_norm = RMSNorm(X^l)
-Q = X_norm W_Q
-K = X_norm W_K
-V = X_norm W_V
-```
+$$
+X_{\mathrm{norm}}=\mathrm{RMSNorm}(X^l)
+$$
+
+$$
+Q=X_{\mathrm{norm}}W_Q,\quad
+K=X_{\mathrm{norm}}W_K,\quad
+V=X_{\mathrm{norm}}W_V
+$$
 
 reshape：
 
@@ -172,9 +278,9 @@ Router 必须在 attention 前得到。候选包括：
 
 第一版推荐：
 
-```text
-router_input = pre-RoPE K
-```
+$$
+\mathrm{router\_input}=\mathrm{pre\text{-}RoPE}\ K
+$$
 
 原因：
 
@@ -189,29 +295,29 @@ router_input = pre-RoPE K
 
 对 layer `l`、head `h`、位置 `t` 的 router input `R^l_{t,h}`，定义 exclusive prefix mean：
 
-```text
-mu^l_{t-1,h} = 1/(t-1) sum_{j<t} R^l_{j,h}
-```
+$$
+\mu^l_{t-1,h}=\frac{1}{t-1}\sum_{j<t}R^l_{j,h}
+$$
 
 中心化输入：
 
-```text
-R_centered^l_{t,h}
-  = R^l_{t,h} - stop_gradient(mu^l_{t-1,h})
-```
+$$
+R^l_{\mathrm{centered},t,h}
+=R^l_{t,h}-\mathrm{stop\_gradient}(\mu^l_{t-1,h})
+$$
 
 随后归一化：
 
-```text
-R_router^l_{t,h}
-  = RMSNorm_or_L2Norm(R_centered^l_{t,h})
-```
+$$
+R^l_{\mathrm{router},t,h}
+=\mathrm{RMSNorm\_or\_L2Norm}(R^l_{\mathrm{centered},t,h})
+$$
 
 位置 `t=0` 时定义：
 
-```text
-mu = 0
-```
+$$
+\mu=0
+$$
 
 #### Gradient contract
 
@@ -237,27 +343,25 @@ router loss at t
 
 每个 head 有独立 gate：
 
-```text
-z^l_{t,h} = G^l_h R_router^l_{t,h} + b^l_h
-```
+$$
+z^l_{t,h}=G^l_hR^l_{\mathrm{router},t,h}+b^l_h
+$$
 
 其中：
 
-```text
-z: [B,T,H,E]
-```
+$z\in\mathbb{R}^{B\times T\times H\times E}$
 
 第一版使用 top-1：
 
-```text
-b^l_{t,h} = argmax_e z^l_{t,h,e}
-```
+$$
+b^l_{t,h}=\arg\max_e z^l_{t,h,e}
+$$
 
 每个 head 的 bucket 数量等于 expert 数量：
 
-```text
-bucket e <-> expert E^l_{h,e}
-```
+$$
+\mathrm{bucket}\ e \leftrightarrow \mathrm{expert}\ E^l_{h,e}
+$$
 
 历史 token 的 bucket id 在写入 KV cache 时确定，之后不因 prefix mean 更新而重新分桶。
 
@@ -265,26 +369,30 @@ bucket e <-> expert E^l_{h,e}
 
 当前 token `t`、head `h` 的同 bucket 历史集合：
 
-```text
-C^l_{t,h} = {j <= t | b^l_{j,h} = b^l_{t,h}}
-```
+$$
+C^l_{t,h}=\{j\le t\mid b^l_{j,h}=b^l_{t,h}\}
+$$
 
 第一版建议加入 local fallback：
 
-```text
-L_t = {max(0,t-w), ..., t}
-V^l_{t,h} = C^l_{t,h} union L_t union sink_tokens
-```
+$$
+L_t=\{\max(0,t-w),\ldots,t\}
+$$
+
+$$
+\mathcal{V}^l_{t,h}=C^l_{t,h}\cup L_t\cup \mathrm{sink\_tokens}
+$$
 
 attention 仍使用原始位置上的 post-RoPE Q/K：
 
-```text
+$$
 A^l_{t,h}
-  = softmax(Q^l_{t,h} K^l_{V_t,h}^T / sqrt(d_h))
+=\mathrm{softmax}\left(\frac{Q^l_{t,h}(K^l_{\mathcal{V}_t,h})^{\top}}{\sqrt{d_h}}\right)
+$$
 
-O^l_{t,h}
-  = A^l_{t,h} V^l_{V_t,h}
-```
+$$
+O^l_{t,h}=A^l_{t,h}V^l_{\mathcal{V}_t,h}
+$$
 
 Bucket 不重排 token，也不改变 position id。
 
@@ -300,23 +408,29 @@ Expert^l_{h,1}, ..., Expert^l_{h,E}
 
 需要先为 residual stream 构造 head-level 表征。Qwen3-0.6B 的 `hidden_size/H=64`，而 attention `head_dim=128`。当前实现不增加额外 residual projection，而是把 normalized residual stream 均匀切成 `H` 个 64 维 slice：
 
-```text
-X_head^l = reshape(X_norm, [B,T,H,d/H])
-```
+$$
+X^l_{\mathrm{head}}=\mathrm{reshape}(X_{\mathrm{norm}},[B,T,H,d/H])
+$$
 
 attention 先通过标准 `W_O` 合并回 residual stream；随后 post-attention RMSNorm 的第 `h` 个 slice 进入共享 bucket 对应的 head expert。每个 head expert 输出完整 `d` 维 residual update：
 
-```text
-U^l = RMSNorm(X^l + W_O Concat_h(O^l_h))
-F^l_{t,h} = Expert^l_{h,b_t,h}(U^l_{t,h}), F^l_{t,h} in R^d
-```
+$$
+U^l=\mathrm{RMSNorm}\left(X^l+W_O\,\mathrm{Concat}_h(O^l_h)\right)
+$$
+
+$$
+F^l_{t,h}=\mathrm{Expert}^l_{h,b_{t,h}}(U^l_{t,h}),\quad F^l_{t,h}\in\mathbb{R}^d
+$$
 
 合并 heads：
 
-```text
-F^l_t = 1/sqrt(H) sum_h F^l_{t,h}
-X^{l+1}_t = X^l_t + W_O Concat_h(O^l_{t,h}) + F^l_t
-```
+$$
+F^l_t=\frac{1}{\sqrt{H}}\sum_h F^l_{t,h}
+$$
+
+$$
+X^{l+1}_t=X^l_t+W_O\,\mathrm{Concat}_h(O^l_{t,h})+F^l_t
+$$
 
 这里没有删除 Transformer 的外部 residual。结构变化只发生在：
 
@@ -328,25 +442,27 @@ X^{l+1}_t = X^l_t + W_O Concat_h(O^l_{t,h}) + F^l_t
 
 每个 head expert 的 MLP：
 
-```text
-d/H -> m -> d
-```
+$$
+d/H \rightarrow m \rightarrow d
+$$
 
 这与“每个 head 输出后拼接，再乘一个输出矩阵”等价：把公共输出矩阵按 head 输入列切分后，拼接后的线性映射可以写成各 head 映射结果之和。除以 `sqrt(H)` 用于控制独立 head update 相加后的初始化方差。
 
 为了与 ordinary MoE 严格匹配参数量，设 ordinary expert 为 `d -> I -> d`。每层每个 bucket 的 ordinary expert 参数为 `3dI`；shared 结构的 `H` 个 head experts 总参数为 `dm(H+2)`。因此：
 
-```text
-m = 3I / (H + 2)
-```
+$$
+m=\frac{3I}{H+2}
+$$
 
 对 Qwen3-0.6B：
 
-```text
-d = 1024, H = 16, I = 3072
-m = 512
-head expert = 64 -> 512 -> 1024
-```
+$$
+d=1024,\quad H=16,\quad I=3072,\quad m=512
+$$
+
+$$
+\mathrm{head\ expert}:64\rightarrow512\rightarrow1024
+$$
 
 为了与 dense FFN 或 ordinary MoE 公平比较，必须分别控制：
 
@@ -407,9 +523,9 @@ hard top-1 forward
 
 最小实验首先使用：
 
-```text
-L = L_NTP
-```
+$$
+L=L_{\mathrm{NTP}}
+$$
 
 只有观察到 collapse 或 router 无梯度后，才逐项加入：
 

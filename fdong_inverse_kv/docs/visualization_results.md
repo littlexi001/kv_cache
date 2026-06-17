@@ -1,5 +1,19 @@
 # Current Verification Results
 
+## 0. Current Missing Evidence
+
+最新核心问题是：top-2% attention token 共享的 feature 到底来自 hidden space、Q/K space，还是完整 `W_Q/W_K` SVD 后按 head 切输出空间得到的 query/key feature pairs。
+
+这部分实验尚未运行。因此当前结果文档不能声称已经解释了 top-2% token 为什么有效。下一批需要补充的证据是：
+
+1. hidden cosine / K-space cosine / QK score 对 top-2% key 的预测能力；
+2. 完整 `W_Q/W_K` SVD 中哪些 query/key feature pairs 贡献了 high score；
+3. positive top-2% pairs 与 distance-matched negative pairs 的差异；
+4. 不同 head 的 top-key overlap 和 selected-head count；
+5. top-2% union 在 layer/head 维度上的覆盖情况。
+
+在这些结果出现前，feature-source conjecture 的研究状态是 incomplete。
+
 ## 1. What Was Tested
 
 The current evidence is a local CPU micro-test, not a DCLM training result. It tests the implementation contract before using remote compute:

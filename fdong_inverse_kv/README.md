@@ -2,6 +2,20 @@
 
 本目录管理 head-level KV bucket 与 expert bucket 共享结构的设计、实现、实验和结果。
 
+## 当前核心问题
+
+已有 seq-compress / sparse-inference 相关实验显示：在每层每个 head 只保留 top-2% attention token 时，推理质量基本不下降，某些情况下甚至优于 full attention。现在的核心问题不是再次证明 top-2% 有效，而是解释：
+
+> top-2% token 为什么有效？使它们在某个 head 上得到高 QK score 的共同 feature 到底来自哪里？
+
+需要定位的 feature 可能来自三类空间：
+
+1. **hidden-native feature**：输入 hidden state 本身已经聚类，Q/K 只是读出已有相似性；
+2. **Q/K-extracted feature**：hidden 中相似性不明显，经过该 head 的 `W_Q/W_K` 后才变明显；
+3. **bilinear/SVD feature**：高 score 主要来自完整 $W_Q/W_K$ SVD 后按 head 切输出空间得到的少数 query/key feature pairs。
+
+如果能解释 top-2% token 的共同 feature 在哪里，就能决定 inverse KV 的 bucket 和 expert specialization 应该定义在哪个空间里。
+
 当前研究文件：
 
 1. [设计文档](./docs/design.md)
@@ -59,9 +73,9 @@ bash pretrain_qwen.sh
 
 `EXPERT_INTERMEDIATE_SIZE=3072` 是 ordinary MoE 的基准宽度。Shared head-level 模型按等参数公式自动推导实际宽度：
 
-```text
-head_width = 3 * 3072 / (16 + 2) = 512
-```
+$$
+\mathrm{head\_width}=\frac{3\times3072}{16+2}=512
+$$
 
 因此 ordinary expert 是 `1024 -> 3072 -> 1024`，shared head expert 是 `64 -> 512 -> 1024`。16 个 head 输出求和并除以 `sqrt(16)`。4 experts 时两者总参数量分别约为 `1.388888B` 和 `1.389003B`。
 
