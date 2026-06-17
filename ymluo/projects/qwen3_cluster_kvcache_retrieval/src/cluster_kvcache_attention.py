@@ -340,6 +340,35 @@ def _sparse_decode_attention(
     return attention_output, attention_weights
 
 
+def _edge_contiguous_decode_attention(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    edge_ratio: float,
+    scaling: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    key_len = key_states.shape[-2]
+    edge_count = min(key_len, max(1, math.ceil(edge_ratio * key_len)))
+    if edge_count * 2 >= key_len:
+        scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+        attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        attention_output = torch.matmul(attention_weights, value_states)
+        return attention_output.transpose(1, 2).contiguous(), attention_weights
+
+    head_key = key_states[:, :, :edge_count, :]
+    tail_key = key_states[:, :, key_len - edge_count :, :]
+    head_value = value_states[:, :, :edge_count, :]
+    tail_value = value_states[:, :, key_len - edge_count :, :]
+
+    head_scores = torch.matmul(query_states, head_key.transpose(2, 3)) * scaling
+    tail_scores = torch.matmul(query_states, tail_key.transpose(2, 3)) * scaling
+    scores = torch.cat([head_scores, tail_scores], dim=-1)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    head_weights, tail_weights = attention_weights.split(edge_count, dim=-1)
+    attention_output = torch.matmul(head_weights, head_value) + torch.matmul(tail_weights, tail_value)
+    return attention_output.transpose(1, 2).contiguous(), attention_weights
+
+
 def cluster_kvcache_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -366,12 +395,10 @@ def cluster_kvcache_attention_forward(
 
     if sparse_layer and cfg.mode == "edges" and query_states.shape[-2] == 1:
         start = _event()
-        selected_key, selected_value, valid = _gather_edge_kv(key_states, value_states, cfg.edge_ratio)
-        start = _record("edge_gather_selected_kv_ms", start)
-        attention_output, attention_weights = _sparse_decode_attention(
-            query_states, selected_key, selected_value, valid, scaling
+        attention_output, attention_weights = _edge_contiguous_decode_attention(
+            query_states, key_states, value_states, cfg.edge_ratio, scaling
         )
-        _record("edge_sparse_qk_softmax_value_ms", start)
+        _record("edge_contiguous_sparse_attention_ms", start)
         return attention_output, attention_weights
 
     if sparse_layer and cfg.mode == "cluster" and query_states.shape[-2] == 1:

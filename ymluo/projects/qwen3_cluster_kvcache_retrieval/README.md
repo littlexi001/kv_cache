@@ -117,6 +117,7 @@ When `PROFILE_ATTENTION=true`, CUDA events also record attention-level buckets:
 - `cluster_center_score_topk_ms`
 - `gather_selected_kv_ms`
 - `sparse_qk_softmax_value_ms`
+- `edge_contiguous_sparse_attention_ms`
 
 These buckets are useful for later optimization, especially to see whether
 cluster-center construction/topk/masking dominates the sparse path.
