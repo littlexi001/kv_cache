@@ -19,6 +19,7 @@ class ClusterKVConfig:
     min_keep_clusters: int = 1
     sparse_start_layer: int = 0
     sparse_end_layer: int | None = None
+    retrieval_interval: int = 5
     profile: bool = False
 
 
@@ -37,6 +38,12 @@ class CudaEventProfiler:
     def record_segment(self, name: str, start: torch.cuda.Event, end: torch.cuda.Event) -> None:
         if self.enabled:
             self.pending.append((name, start, end))
+
+    def record_count(self, name: str, count: int = 1) -> None:
+        if not self.enabled:
+            return
+        bucket = self.buckets.setdefault(name, ProfileBucket())
+        bucket.calls += count
 
     def synchronize_and_flush(self) -> None:
         if not self.enabled or not self.pending:
@@ -220,6 +227,53 @@ def _select_cluster_ids(
     return torch.topk(selectable_scores, k=select_count, dim=-1).indices.sort(dim=-1).values
 
 
+def _cache_key_for_retrieval(key_states: torch.Tensor, cfg: ClusterKVConfig) -> tuple[Any, ...]:
+    cluster_count = math.ceil(key_states.shape[-2] / cfg.cluster_size)
+    return (
+        cfg.cluster_size,
+        cfg.keep_ratio,
+        cfg.force_endpoints,
+        cfg.endpoints_count_in_budget,
+        cfg.min_keep_clusters,
+        key_states.shape[0],
+        key_states.shape[1],
+        cluster_count,
+        key_states.device,
+    )
+
+
+def _select_cluster_ids_with_interval(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    cfg: ClusterKVConfig,
+) -> torch.Tensor:
+    interval = max(1, int(cfg.retrieval_interval))
+    key_len = key_states.shape[-2]
+    step = key_len - 1
+    cache = getattr(module, "_cluster_kv_retrieval_cache", None)
+    cache_key = _cache_key_for_retrieval(key_states, cfg)
+    can_reuse = (
+        cache is not None
+        and cache.get("cache_key") == cache_key
+        and cache.get("cluster_ids") is not None
+        and step % interval != 0
+    )
+    if can_reuse:
+        PROFILER.record_count("cluster_retrieval_reuse")
+        return cache["cluster_ids"]
+
+    cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
+    module._cluster_kv_retrieval_cache = {
+        "cache_key": cache_key,
+        "cluster_ids": cluster_ids,
+        "key_len": key_len,
+        "step": step,
+    }
+    PROFILER.record_count("cluster_retrieval_refresh")
+    return cluster_ids
+
+
 def _selected_cluster_mask(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -227,7 +281,7 @@ def _selected_cluster_mask(
     cfg: ClusterKVConfig,
 ) -> torch.Tensor:
     key_len = key_states.shape[-2]
-    cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
+    cluster_ids = _select_cluster_ids_with_interval(module, query_states, key_states, cfg)
     token_cluster_ids = torch.arange(key_len, device=key_states.device) // cfg.cluster_size
     return (cluster_ids.unsqueeze(-1) == token_cluster_ids.view(1, 1, 1, 1, key_len)).any(dim=-2)
 
@@ -322,7 +376,7 @@ def cluster_kvcache_attention_forward(
 
     if sparse_layer and cfg.mode == "cluster" and query_states.shape[-2] == 1:
         start = _event()
-        cluster_ids = _select_cluster_ids(module, query_states, key_states, cfg)
+        cluster_ids = _select_cluster_ids_with_interval(module, query_states, key_states, cfg)
         start = _record("cluster_center_score_topk_ms", start)
         selected_key, selected_value, valid = _gather_selected_kv(
             key_states, value_states, cluster_ids, cfg.cluster_size
@@ -380,6 +434,8 @@ def install_qwen3_cluster_attention_patch(model: torch.nn.Module, cfg: ClusterKV
             module.cluster_kv_layer_idx = layer_idx
             if hasattr(module, "_cluster_kv_center_cache"):
                 delattr(module, "_cluster_kv_center_cache")
+            if hasattr(module, "_cluster_kv_retrieval_cache"):
+                delattr(module, "_cluster_kv_retrieval_cache")
             layer_idx += 1
             patched += 1
     if patched == 0:

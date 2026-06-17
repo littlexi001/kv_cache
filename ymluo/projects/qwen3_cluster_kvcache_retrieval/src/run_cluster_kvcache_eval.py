@@ -147,6 +147,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--edge_ratio", type=float, default=0.01)
     parser.add_argument("--sparse_start_layer", type=int, default=0)
     parser.add_argument("--sparse_end_layer", type=int, default=-1)
+    parser.add_argument("--retrieval_interval", type=int, default=5)
     parser.add_argument("--force_endpoints", type=str2bool, default=True)
     parser.add_argument("--endpoints_count_in_budget", type=str2bool, default=True)
     parser.add_argument("--max_chars", type=int, default=160_000_000)
@@ -405,6 +406,7 @@ def main() -> None:
             edge_ratio=args.edge_ratio,
             sparse_start_layer=args.sparse_start_layer,
             sparse_end_layer=sparse_end_layer,
+            retrieval_interval=args.retrieval_interval,
             force_endpoints=args.force_endpoints,
             endpoints_count_in_budget=args.endpoints_count_in_budget,
             profile=args.profile_attention,
@@ -434,6 +436,7 @@ def main() -> None:
                 "edge_ratio": args.edge_ratio,
                 "sparse_start_layer": args.sparse_start_layer,
                 "sparse_end_layer": sparse_end_layer,
+                "retrieval_interval": args.retrieval_interval,
                 "approx_prefill_plus_one_clusters": cluster_count,
                 "approx_keep_clusters": keep_clusters,
                 "approx_edge_tokens": approx_edge_tokens,
@@ -457,6 +460,7 @@ def main() -> None:
                 "edge_ratio": args.edge_ratio,
                 "sparse_start_layer": args.sparse_start_layer,
                 "sparse_end_layer": "all" if sparse_end_layer is None else sparse_end_layer,
+                "retrieval_interval": args.retrieval_interval,
                 "approx_keep_clusters": keep_clusters,
                 "approx_edge_tokens": approx_edge_tokens,
             }
@@ -523,6 +527,7 @@ def main() -> None:
             "edge_ratio",
             "sparse_start_layer",
             "sparse_end_layer",
+            "retrieval_interval",
             "approx_keep_clusters",
             "approx_edge_tokens",
         ],

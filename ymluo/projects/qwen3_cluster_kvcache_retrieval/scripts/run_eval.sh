@@ -21,6 +21,7 @@ python "${PROJECT_DIR}/src/run_cluster_kvcache_eval.py" \
   --edge_ratio "${EDGE_RATIO:-0.01}" \
   --sparse_start_layer "${SPARSE_START_LAYER:-11}" \
   --sparse_end_layer "${SPARSE_END_LAYER:-27}" \
+  --retrieval_interval "${RETRIEVAL_INTERVAL:-5}" \
   --force_endpoints "${FORCE_ENDPOINTS:-true}" \
   --endpoints_count_in_budget "${ENDPOINTS_COUNT_IN_BUDGET:-true}" \
   --max_chars "${MAX_CHARS:-160000000}" \

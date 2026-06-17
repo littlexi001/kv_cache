@@ -51,6 +51,16 @@ lower layers full. To run that default:
 bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
 ```
 
+Cluster retrieval is refreshed every 5 decode tokens by default and reused for
+the intervening tokens:
+
+```bash
+RETRIEVAL_INTERVAL=5 \
+bash ymluo/projects/qwen3_cluster_kvcache_retrieval/scripts/run_eval.sh
+```
+
+Set `RETRIEVAL_INTERVAL=1` to restore per-token retrieval.
+
 To run sparse attention on all layers:
 
 ```bash
