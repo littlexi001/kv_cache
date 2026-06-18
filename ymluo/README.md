@@ -29,6 +29,9 @@
 | 15 | [section15_kv_retrieval_energy_analysis](doc/section15_kv_retrieval_energy_analysis.md) | 基于 K-L2 图的 KV 检索候选集合能量覆盖 |
 | 16 | [section16_kv_tree_ppl_results](doc/section16_kv_tree_ppl_results.md) | KV tree retrieval 的 loss/PPL 结果 |
 | 17 | [section17_attention_pruning_ppl](doc/section17_attention_pruning_ppl.md) | Attention top-ratio pruning 的长文本检索与普通生成 PPL |
+| 18 | [section18_full_context_not_optimal](doc/section18_full_context_not_optimal.md) | full context 不一定最优的 PPL 现象记录 |
+| 19 | [section19_tail10_top1_attention_tokens](doc/section19_tail10_top1_attention_tokens.md) | tail token 的 top1 attention 位置分析 |
+| 21 | [section21_top2_head_overlap_attention](doc/section21_top2_head_overlap_attention.md) | top2 跨 head 重合、PPL 崩坏、sink/recent 保护与位置分布 |
 
 ## 项目目录速查
 
@@ -44,6 +47,7 @@
 | `projects/qwen3_kcache_value_delta_analysis` | K-cache 取值与 delta 分布分析 |
 | `projects/qwen3_moe_attention_cluster` | MoE attention cluster 专家选择性实验 |
 | `projects/qwen3_attention_pruning_cos_ppl` | Attention top-ratio pruning 的 cosine/PPL 诊断 |
+| `projects/qwen3_top2_head_limit3_ppl` | top2 跨 head 重合、head cap、sink/recent 保护和 PPL 诊断 |
 | `logs/` | 历史日志 |
 | `utils/` | 共享工具（含 `moe_selectivity_experiment.py`） |
 

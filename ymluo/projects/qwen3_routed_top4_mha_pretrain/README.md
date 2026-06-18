@@ -1,0 +1,160 @@
+# Qwen3 Routed Top4 MHA Pretraining
+
+This project trains a randomly initialized Qwen3-style model where each token
+is routed to only 4 of 16 attention heads in every layer.
+
+The goal is to test whether the failure of post-hoc head-token pruning comes
+from the dense-attention training format. This model is trained with routing
+from the start.
+
+## Model Change
+
+Base configuration is read from:
+
+```text
+/mnt/workspace/Qwen3-0.6B/config.json
+```
+
+The script changes the attention to MHA:
+
+```text
+num_attention_heads = 16
+num_key_value_heads = 16
+head_dim = 128
+hidden_size = 1024
+```
+
+Each layer has an independent gate:
+
+```text
+gate_logits = W_gate x
+selected_heads = top4(gate_logits)
+```
+
+Forward pass uses hard top4 routing. Backward pass uses a straight-through
+softmax estimator:
+
+```text
+route = hard_top4 + softmax(gate_logits) - stopgrad(softmax(gate_logits))
+```
+
+The implementation keeps dense head slots:
+
+```text
+K/V tensor shape remains [batch, 16 heads, seq, head_dim]
+unselected token/head slots are masked
+unselected query-head outputs are zeroed
+```
+
+This is not yet a ragged KV cache implementation. It is the first training
+test for the routed-head architecture.
+
+## Auxiliary Loss
+
+Training loss:
+
+```text
+total_loss = CE
+           + router_aux_loss_coef * router_load_loss
+           + router_z_loss_coef * router_z_loss
+```
+
+Default coefficients:
+
+```text
+router_aux_loss_coef = 0.01
+router_z_loss_coef = 0.001
+```
+
+TensorBoard logs:
+
+- `train/ce_loss`
+- `train/loss`
+- `router/load_loss`
+- `router/z_loss`
+- `router/entropy`
+- `router/hard_load_min`
+- `router/hard_load_max`
+- `router/hard_load_mean`
+
+## Run On Server
+
+Start 8-GPU training with nohup:
+
+```bash
+cd ymluo/projects/qwen3_routed_top4_mha_pretrain
+bash scripts/nohup_train_8x80g.sh
+```
+
+The default script uses:
+
+```text
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+seq_len=2048
+per_device_batch_size=1
+gradient_accumulation_steps=8
+max_train_seconds=36000
+save_steps=500
+```
+
+Override examples:
+
+```bash
+RUN_NAME=test_longer bash scripts/nohup_train_8x80g.sh --seq_len 4096 --gradient_accumulation_steps 4
+```
+
+Resume:
+
+```bash
+RUN_NAME=resume_test bash scripts/nohup_train_8x80g.sh \
+  --resume_from /mnt/workspace/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
+```
+
+Start TensorBoard:
+
+```bash
+bash scripts/tensorboard.sh
+```
+
+Default TensorBoard URL:
+
+```text
+http://<server-ip>:6006
+```
+
+## Outputs
+
+Default output root:
+
+```text
+/mnt/workspace/routed_top4_qwen3_0p6b_runs
+```
+
+Default token cache:
+
+```text
+/mnt/workspace/routed_top4_qwen3_0p6b_token_cache
+```
+
+Each run contains:
+
+```text
+args.json
+routed_qwen_config.json
+token_cache/
+tokenizer/
+tensorboard/
+checkpoint-0000500/
+latest_checkpoint
+```
+
+## Smoke Test
+
+Local tiny model smoke test:
+
+```bash
+python src/train_routed_top4_qwen.py --smoke_test
+```
+
+This verifies forward/backward with a tiny routed model. It does not load the
+0.6B model.
