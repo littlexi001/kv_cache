@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import csv
 import json
 import math
 import os
@@ -541,6 +542,121 @@ def summarize(history, vocab, groups, active_groups, cfg, centers, group_probs):
     }
 
 
+def save_training_history(history, active_groups, outdir):
+    fields = [
+        "step",
+        "weighted_loss",
+        "weighted_acc",
+        "weighted_margin",
+        "macro_loss",
+        "macro_acc",
+        "macro_margin",
+    ]
+    for group in active_groups:
+        fields.extend([f"loss_{group}", f"acc_{group}", f"margin_{group}"])
+
+    csv_path = os.path.join(outdir, "training_history.csv")
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        for snap in history:
+            metrics = snap["metrics"]
+            group_losses = [metrics[f"loss_{group}"] for group in active_groups]
+            group_accs = [metrics[f"acc_{group}"] for group in active_groups]
+            group_margins = [metrics[f"margin_{group}"] for group in active_groups]
+            row = {
+                "step": snap["step"],
+                "weighted_loss": metrics["loss"],
+                "weighted_acc": metrics["acc_all_weighted"],
+                "weighted_margin": metrics["margin_all_weighted"],
+                "macro_loss": float(np.mean(group_losses)),
+                "macro_acc": float(np.mean(group_accs)),
+                "macro_margin": float(np.mean(group_margins)),
+            }
+            for group in active_groups:
+                row[f"loss_{group}"] = metrics[f"loss_{group}"]
+                row[f"acc_{group}"] = metrics[f"acc_{group}"]
+                row[f"margin_{group}"] = metrics[f"margin_{group}"]
+            writer.writerow(row)
+
+    first_full_acc_step = {}
+    for group in active_groups:
+        first_full_acc_step[group] = next(
+            (
+                snap["step"]
+                for snap in history
+                if snap["metrics"][f"acc_{group}"] >= 1.0 - 1e-12
+            ),
+            None,
+        )
+    first_all_groups_full_acc_step = next(
+        (
+            snap["step"]
+            for snap in history
+            if all(
+                snap["metrics"][f"acc_{group}"] >= 1.0 - 1e-12
+                for group in active_groups
+            )
+        ),
+        None,
+    )
+
+    stable_full_acc_step_by_group = {}
+    for group in active_groups:
+        last_failure_idx = max(
+            (
+                i
+                for i, snap in enumerate(history)
+                if snap["metrics"][f"acc_{group}"] < 1.0 - 1e-12
+            ),
+            default=-1,
+        )
+        stable_full_acc_step_by_group[group] = (
+            history[last_failure_idx + 1]["step"]
+            if last_failure_idx + 1 < len(history)
+            else None
+        )
+    last_all_groups_failure_idx = max(
+        (
+            i
+            for i, snap in enumerate(history)
+            if not all(
+                snap["metrics"][f"acc_{group}"] >= 1.0 - 1e-12
+                for group in active_groups
+            )
+        ),
+        default=-1,
+    )
+    first_stable_all_groups_full_acc_step = (
+        history[last_all_groups_failure_idx + 1]["step"]
+        if last_all_groups_failure_idx + 1 < len(history)
+        else None
+    )
+    learning_summary = {
+        "record_every": history[1]["step"] - history[0]["step"] if len(history) > 1 else None,
+        "first_full_accuracy_step_by_group": first_full_acc_step,
+        "first_all_groups_full_accuracy_step": first_all_groups_full_acc_step,
+        "first_stable_full_accuracy_step_by_group": stable_full_acc_step_by_group,
+        "first_stable_all_groups_full_accuracy_step": first_stable_all_groups_full_acc_step,
+    }
+    with open(os.path.join(outdir, "learning_speed_summary.json"), "w", encoding="utf-8") as f:
+        json.dump(learning_summary, f, indent=2, ensure_ascii=True)
+    return learning_summary
+
+
+def save_checkpoints(history, vocab, token_to_group, outdir):
+    np.savez_compressed(
+        os.path.join(outdir, "checkpoints.npz"),
+        steps=np.array([snap["step"] for snap in history], dtype=np.int64),
+        E=np.stack([snap["E"] for snap in history]),
+        W=np.stack([snap["W"] for snap in history]),
+        E_singular_values=np.stack([snap["E_S"] for snap in history]),
+        W_singular_values=np.stack([snap["W_S"] for snap in history]),
+        vocab=np.array(vocab),
+        token_groups=np.array([token_to_group[token] for token in vocab]),
+    )
+
+
 def render_and_save(cfg: Config):
     (
         _model,
@@ -591,7 +707,10 @@ def render_and_save(cfg: Config):
         cfg,
         os.path.join(outdir, "04_training_metrics.png"),
     )
+    learning_summary = save_training_history(history, active_groups, outdir)
+    save_checkpoints(history, vocab, token_to_group, outdir)
     summary = summarize(history, vocab, groups, active_groups, cfg, centers, group_probs)
+    summary["learning_dynamics"] = learning_summary
     with open(os.path.join(outdir, "summary.json"), "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=True)
     print(f"Done: {cfg.experiment_name} -> {outdir}")

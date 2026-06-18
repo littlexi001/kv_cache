@@ -1,6 +1,0 @@
-{
-  "input_csv": "tmp_hist_bins.csv",
-  "output_dir": "tmp_hist_bins_plot",
-  "summary_csv": "tmp_hist_bins_plot\\pairwise_hist_bin_summary.csv",
-  "plot_count": 5
-}

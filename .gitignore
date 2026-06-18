@@ -32,6 +32,12 @@ skills/writing-explanatory-reports
 logs/
 *.html
 
+# Temporary analysis / visualization outputs
+tmp_*/
+
+# WorkBuddy workspace memory (project-level)
+.workbuddy/
+
 # Analysis outputs
 ymluo/projects/*/outputs/
 fdong_embedding_dim/outputs/

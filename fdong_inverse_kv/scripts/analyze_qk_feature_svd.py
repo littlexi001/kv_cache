@@ -81,12 +81,28 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", choices=["auto", "cuda", "mps", "cpu"], default="auto")
     parser.add_argument("--dtype", choices=["auto", "float32", "float16", "bfloat16"], default="auto")
     parser.add_argument("--svd_device", choices=["cpu", "model"], default="cpu")
+    parser.add_argument("--svd_method", choices=["exact", "randomized"], default="exact")
+    parser.add_argument("--svd_oversample", type=int, default=32)
+    parser.add_argument("--svd_power_iters", type=int, default=2)
     parser.add_argument("--token_start", type=int, default=5000)
     parser.add_argument("--num_query_tokens", type=int, default=100)
     parser.add_argument("--extra_tokens", type=int, default=8)
     parser.add_argument("--top_ratio", type=float, default=0.02)
     parser.add_argument("--layers", type=str, default="all", help="'all' or comma-separated layer ids.")
     parser.add_argument("--heads", type=str, default="all", help="'all' or comma-separated query-head ids.")
+    parser.add_argument("--rope_ablation", type=str_to_bool, default=True)
+    parser.add_argument(
+        "--full_k_direction_layers",
+        type=str,
+        default="",
+        help="Comma-separated layers for exact full-rank K direction attribution; empty disables it.",
+    )
+    parser.add_argument(
+        "--full_k_keys_per_query",
+        type=int,
+        default=8,
+        help="Top and random keys per query used by full-rank K direction attribution.",
+    )
     parser.add_argument("--max_files", type=int, default=0)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--add_eos_between_docs", type=str_to_bool, default=True)
@@ -131,6 +147,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--example_top_pairs", type=int, default=16)
     parser.add_argument("--example_rank_limit", type=int, default=256)
     parser.add_argument("--save_input_tokens", type=str_to_bool, default=True)
+    parser.add_argument(
+        "--center_keys",
+        type=str_to_bool,
+        default=True,
+        help=(
+            "Measure causal-mean-centered hidden/K cosine, verify the exact "
+            "post-RoPE key-centering invariance, and recompute linear-K spectral attribution."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -343,6 +368,37 @@ def parse_indices(spec: str, total: int) -> List[int]:
     return sorted(set(values))
 
 
+def parse_optional_indices(spec: str, total: int) -> List[int]:
+    if not spec.strip():
+        return []
+    return parse_indices(spec, total)
+
+
+def rotate_half(values: torch.Tensor) -> torch.Tensor:
+    first, second = values.chunk(2, dim=-1)
+    return torch.cat((-second, first), dim=-1)
+
+
+def inverse_rope(
+    values: torch.Tensor,
+    cos: torch.Tensor,
+    sin: torch.Tensor,
+) -> torch.Tensor:
+    return values * cos - rotate_half(values) * sin
+
+
+def distance_bucket(distance: int) -> str:
+    if distance <= 16:
+        return "1_16"
+    if distance <= 64:
+        return "17_64"
+    if distance <= 256:
+        return "65_256"
+    if distance <= 1024:
+        return "257_1024"
+    return "gt_1024"
+
+
 def load_optional_checkpoint(model, path: str) -> Dict[str, object]:
     if not path:
         return {"loaded": False}
@@ -401,14 +457,24 @@ def project_qk_for_layer(layer, core, hidden_states: torch.Tensor, position_ids:
     normed = layer.input_layernorm(hidden_states)
     batch, seq_len, _ = normed.shape
 
-    q = attn.q_proj(normed).view(batch, seq_len, num_heads, head_dim).transpose(1, 2)
-    k = attn.k_proj(normed).view(batch, seq_len, num_kv_heads, head_dim).transpose(1, 2)
-    q = attn.q_norm(q)
-    k = attn.k_norm(k)
+    q_raw = attn.q_proj(normed).view(batch, seq_len, num_heads, head_dim).transpose(1, 2)
+    k_raw = attn.k_proj(normed).view(batch, seq_len, num_kv_heads, head_dim).transpose(1, 2)
+    q = attn.q_norm(q_raw)
+    k = attn.k_norm(k_raw)
     cos, sin = qwen_rotary(core, normed, position_ids)
     q_rope, k_rope = apply_rotary_pos_emb(q, k, cos, sin)
+    k_no_rope = repeat_kv(k, groups)
     k_rope = repeat_kv(k_rope, groups)
-    return normed.detach(), q_rope.detach(), k_rope.detach()
+    return (
+        normed.detach(),
+        q.detach(),
+        k_no_rope.detach(),
+        q_rope.detach(),
+        k_rope.detach(),
+        k_raw.detach(),
+        cos.detach(),
+        sin.detach(),
+    )
 
 
 def energy_band_edges(singular_values: torch.Tensor, mode: str, num_bands: int, fixed_edges: str) -> List[Tuple[int, int, str]]:
@@ -463,6 +529,92 @@ def head_mass(U: torch.Tensor, singular_values: torch.Tensor, head_dim: int, ind
 
 def cosine(a: torch.Tensor, b: torch.Tensor) -> float:
     return float(F.cosine_similarity(a.float(), b.float(), dim=0, eps=1e-8).item())
+
+
+def causal_prefix_mean(values: torch.Tensor) -> torch.Tensor:
+    """Return row i = mean(values[:i]); row 0 is zero."""
+    result = torch.zeros_like(values, dtype=torch.float32)
+    if values.shape[0] <= 1:
+        return result
+    prefix_sum = torch.cumsum(values.float(), dim=0)
+    counts = torch.arange(1, values.shape[0], dtype=torch.float32, device=values.device)
+    result[1:] = prefix_sum[:-1] / counts.unsqueeze(-1)
+    return result
+
+
+def causal_mean_energy_fractions(
+    values: torch.Tensor,
+    causal_means: torch.Tensor,
+) -> torch.Tensor:
+    """Fraction of historical mean-vector energy at every causal position."""
+    result = torch.zeros(values.shape[0], dtype=torch.float32, device=values.device)
+    if values.shape[0] <= 1:
+        return result
+    per_token_energy = values.float().square().sum(dim=-1)
+    prefix_energy = torch.cumsum(per_token_energy, dim=0)
+    counts = torch.arange(1, values.shape[0], dtype=torch.float32, device=values.device)
+    historical_mean_energy = prefix_energy[:-1] / counts
+    mean_vector_energy = causal_means[1:].float().square().sum(dim=-1)
+    result[1:] = mean_vector_energy / historical_mean_energy.clamp_min(1e-12)
+    return result
+
+
+def randomized_truncated_svd(
+    matrix: torch.Tensor,
+    rank: int,
+    oversample: int,
+    power_iters: int,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Randomized truncated SVD with large products on model device.
+
+    Apple MPS currently lacks native SVD and QR. Only QR of the skinny sketch
+    and SVD of the compressed matrix run on CPU; large matrix products remain
+    on MPS. Returned tensors are on CPU, matching the downstream attribution.
+    """
+    if rank <= 0:
+        raise ValueError("Randomized SVD requires --svd_rank_limit > 0.")
+    target_rank = min(rank, matrix.shape[0], matrix.shape[1])
+    sketch_rank = min(target_rank + oversample, matrix.shape[0], matrix.shape[1])
+    omega = torch.randn(
+        matrix.shape[1],
+        sketch_rank,
+        dtype=matrix.dtype,
+        device=matrix.device,
+    )
+    y = matrix @ omega
+    for _ in range(power_iters):
+        q, _ = torch.linalg.qr(y.cpu(), mode="reduced")
+        q = q.to(matrix.device)
+        y = matrix @ (matrix.transpose(0, 1) @ q)
+    q, _ = torch.linalg.qr(y.cpu(), mode="reduced")
+    q = q.to(matrix.device)
+
+    compressed = (q.transpose(0, 1) @ matrix).cpu()
+    u_small, singular_values, vh = torch.linalg.svd(compressed, full_matrices=False)
+    u = (q @ u_small.to(matrix.device)).cpu()
+    return (
+        u[:, :target_rank],
+        singular_values[:target_rank],
+        vh[:target_rank],
+    )
+
+
+def compute_svd(
+    matrix: torch.Tensor,
+    method: str,
+    rank_limit: int,
+    oversample: int,
+    power_iters: int,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if method == "randomized":
+        return randomized_truncated_svd(
+            matrix,
+            rank_limit,
+            oversample,
+            power_iters,
+        )
+    u, singular_values, vh = torch.linalg.svd(matrix, full_matrices=False)
+    return u.cpu(), singular_values.cpu(), vh.cpu()
 
 
 def choose_random_negatives(
@@ -554,6 +706,7 @@ def aggregate_band_contribution_matrix(
     q_bands: Sequence[Tuple[int, int, str]],
     k_bands: Sequence[Tuple[int, int, str]],
     pairs: Sequence[Tuple[int, int]],
+    k_causal_means: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     signed = torch.zeros(len(q_bands), len(k_bands), dtype=torch.float64)
     absolute = torch.zeros_like(signed)
@@ -567,6 +720,8 @@ def aggregate_band_contribution_matrix(
             continue
         for ki, (ks, ke, _) in enumerate(k_bands):
             bv = k_scaled_all[key_indices, ks:ke].double()
+            if k_causal_means is not None:
+                bv = bv - k_causal_means[query_indices, ks:ke].double()
             if bv.numel() == 0:
                 continue
             block = bridge[qs:qe, ks:ke].double()
@@ -613,9 +768,91 @@ def normalize_matrix(matrix: torch.Tensor, mode: str) -> List[List[float]]:
     return (values / denom).tolist()
 
 
+def full_k_direction_attribution(
+    top_pairs: Sequence[Tuple[int, int]],
+    random_pairs: Sequence[Tuple[int, int]],
+    q_rope_head: torch.Tensor,
+    k_rope_head: torch.Tensor,
+    k_raw_head: torch.Tensor,
+    z_all: torch.Tensor,
+    u_k_head: torch.Tensor,
+    singular_values: torch.Tensor,
+    rope_cos: torch.Tensor,
+    rope_sin: torch.Tensor,
+    k_norm_weight: torch.Tensor,
+    k_norm_eps: float,
+    head_dim: int,
+) -> Dict[str, object]:
+    def contributions(pairs: Sequence[Tuple[int, int]]) -> Tuple[torch.Tensor, torch.Tensor]:
+        if not pairs:
+            empty = torch.zeros(0, singular_values.numel())
+            return empty, torch.zeros(0)
+        query_indices = torch.tensor([pair[0] for pair in pairs], dtype=torch.long, device=q_rope_head.device)
+        key_indices = torch.tensor([pair[1] for pair in pairs], dtype=torch.long, device=q_rope_head.device)
+        q_values = q_rope_head[query_indices].float()
+        q_before_key_rope = inverse_rope(
+            q_values,
+            rope_cos[key_indices].float(),
+            rope_sin[key_indices].float(),
+        )
+        raw_keys = k_raw_head[key_indices].float()
+        rms_scale = torch.rsqrt(raw_keys.square().mean(dim=-1) + k_norm_eps)
+        sensitivity = (
+            q_before_key_rope
+            * k_norm_weight.float().unsqueeze(0)
+            * rms_scale.unsqueeze(-1)
+        ) @ u_k_head.float()
+        per_direction = z_all[key_indices].float() * sensitivity / math.sqrt(head_dim)
+        actual_scores = (
+            q_values * k_rope_head[key_indices].float()
+        ).sum(dim=-1) / math.sqrt(head_dim)
+        return per_direction.cpu(), actual_scores.cpu()
+
+    top_contrib, top_actual = contributions(top_pairs)
+    random_contrib, random_actual = contributions(random_pairs)
+    top_mean = top_contrib.mean(dim=0)
+    random_mean = random_contrib.mean(dim=0)
+    top_abs_mean = top_contrib.abs().mean(dim=0)
+    random_abs_mean = random_contrib.abs().mean(dim=0)
+    contrast = top_mean - random_mean
+    abs_contrast = contrast.abs()
+    order = torch.argsort(abs_contrast, descending=True)
+    cumulative = torch.cumsum(abs_contrast[order], dim=0) / abs_contrast.sum().clamp_min(1e-12)
+
+    def directions_for_fraction(fraction: float) -> int:
+        return int(torch.searchsorted(cumulative, torch.tensor(fraction)).item() + 1)
+
+    top_reconstructed = top_contrib.sum(dim=-1)
+    random_reconstructed = random_contrib.sum(dim=-1)
+    singular_cpu = singular_values.float().cpu()
+    if singular_cpu.numel() > 1 and abs_contrast.std().item() > 0:
+        sigma_contrast_corr = float(torch.corrcoef(torch.stack((singular_cpu, abs_contrast)))[0, 1].item())
+    else:
+        sigma_contrast_corr = 0.0
+
+    return {
+        "definition": "per-K-direction contribution to actual q_norm/k_norm/RoPE score; top-minus-random cancels causal common offsets",
+        "top_pair_count": len(top_pairs),
+        "random_pair_count": len(random_pairs),
+        "singular_values": singular_cpu.tolist(),
+        "top_mean_signed_contribution": top_mean.tolist(),
+        "random_mean_signed_contribution": random_mean.tolist(),
+        "top_minus_random_signed_contribution": contrast.tolist(),
+        "top_mean_abs_contribution": top_abs_mean.tolist(),
+        "random_mean_abs_contribution": random_abs_mean.tolist(),
+        "directions_ranked_by_abs_contrast": order.tolist(),
+        "directions_for_50pct_abs_contrast": directions_for_fraction(0.5),
+        "directions_for_90pct_abs_contrast": directions_for_fraction(0.9),
+        "singular_value_abs_contrast_correlation": sigma_contrast_corr,
+        "top_reconstruction_mae": float((top_reconstructed - top_actual).abs().mean().item()),
+        "random_reconstruction_mae": float((random_reconstructed - random_actual).abs().mean().item()),
+    }
+
+
 def main() -> None:
     args = parse_args()
     rng = random.Random(args.seed)
+    torch.manual_seed(args.seed)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -640,6 +877,7 @@ def main() -> None:
     model.eval()
     core = get_qwen_core(model)
     layers = parse_indices(args.layers, len(core.layers))
+    full_k_direction_layers = parse_optional_indices(args.full_k_direction_layers, len(core.layers))
     num_heads, _, _, _ = attention_shape(core.layers[0].self_attn, core.config)
     heads = parse_indices(args.heads, num_heads)
 
@@ -663,9 +901,15 @@ def main() -> None:
         "top_ratio": args.top_ratio,
         "layers": layers,
         "heads": heads,
+        "rope_ablation": args.rope_ablation,
+        "full_k_direction_layers": full_k_direction_layers,
+        "full_k_keys_per_query": args.full_k_keys_per_query,
         "device": str(device),
         "dtype": str(dtype),
         "svd_device": args.svd_device,
+        "svd_method": args.svd_method,
+        "svd_oversample": args.svd_oversample,
+        "svd_power_iters": args.svd_power_iters,
         "token_meta": token_meta,
         "created_at": time.time(),
         "formula": (
@@ -674,6 +918,12 @@ def main() -> None:
         ),
         "qk_selection_space": "actual q_norm/k_norm + RoPE attention score",
         "svd_attribution_space": "linear full WQ/WK SVD before q_norm/k_norm and RoPE",
+        "center_keys": args.center_keys,
+        "centering_contract": {
+            "causal_mean": "mean of positions [0, query_pos)",
+            "exact_k_space": "post q_norm and RoPE; subtract the same causal mean from every historical key",
+            "linear_svd_space": "subtract causal mean from (x V_K) Sigma_K before spectral attribution",
+        },
     }
 
     if args.save_input_tokens:
@@ -698,22 +948,62 @@ def main() -> None:
         _, num_kv_heads, head_dim, groups = attention_shape(attn, core.config)
         layer_hidden = hidden_states[layer_idx].to(device)
         print(f"[layer {layer_idx}] projecting Q/K", flush=True)
-        normed, q_states, k_states = project_qk_for_layer(layer, core, layer_hidden, position_ids)
+        (
+            normed,
+            q_no_rope,
+            k_no_rope,
+            q_states,
+            k_states,
+            k_raw,
+            rope_cos,
+            rope_sin,
+        ) = project_qk_for_layer(layer, core, layer_hidden, position_ids)
         normed_cpu = normed[0].detach().float().cpu()
+        hidden_causal_means = causal_prefix_mean(normed_cpu) if args.center_keys else None
+        hidden_common_mean_energy = (
+            causal_mean_energy_fractions(normed_cpu, hidden_causal_means)
+            if args.center_keys
+            else None
+        )
         q_states = q_states[0]  # [H, T, D]
         k_states = k_states[0]  # [H, T, D] repeated to query heads
+        q_no_rope = q_no_rope[0]
+        k_no_rope = k_no_rope[0]
+        k_raw = k_raw[0]  # [KV_H, T, D]
+        rope_cos = rope_cos[0]
+        rope_sin = rope_sin[0]
 
         print(f"[layer {layer_idx}] SVD WQ/WK", flush=True)
         svd_device = device if args.svd_device == "model" else torch.device("cpu")
+        if args.svd_method == "randomized" and args.svd_device != "model":
+            raise ValueError("Randomized SVD requires --svd_device model to accelerate large matrix products.")
         Wq = attn.q_proj.weight.detach().float().to(svd_device)
         Wk = attn.k_proj.weight.detach().float().to(svd_device)
-        Uq, Sq, Vhq = torch.linalg.svd(Wq, full_matrices=False)
-        Uk, Sk, Vhk = torch.linalg.svd(Wk, full_matrices=False)
-        Uq = Uq.cpu()
-        Sq = Sq.cpu()
+        Uq, Sq, Vhq = compute_svd(
+            Wq,
+            args.svd_method,
+            args.svd_rank_limit,
+            args.svd_oversample,
+            args.svd_power_iters,
+        )
+        if layer_idx in full_k_direction_layers:
+            print(f"[layer {layer_idx}] exact full-rank K SVD for direction attribution", flush=True)
+            Uk, Sk, Vhk = compute_svd(
+                Wk.cpu(),
+                "exact",
+                0,
+                0,
+                0,
+            )
+        else:
+            Uk, Sk, Vhk = compute_svd(
+                Wk,
+                args.svd_method,
+                args.svd_rank_limit,
+                args.svd_oversample,
+                args.svd_power_iters,
+            )
         Vq = Vhq.T.cpu()
-        Uk = Uk.cpu()
-        Sk = Sk.cpu()
         Vk = Vhk.T.cpu()
 
         q_rank = Sq.numel() if args.svd_rank_limit <= 0 else min(args.svd_rank_limit, Sq.numel())
@@ -726,6 +1016,19 @@ def main() -> None:
         Sk_used = Sk[:k_rank]
         q_scaled_all = q_features_all * Sq_used
         k_scaled_all = k_features_all * Sk_used
+        linear_k_causal_means = causal_prefix_mean(k_scaled_all) if args.center_keys else None
+        linear_k_common_mean_energy = (
+            causal_mean_energy_fractions(k_scaled_all, linear_k_causal_means)
+            if args.center_keys
+            else None
+        )
+        if layer_idx in full_k_direction_layers:
+            full_k_u = Uk.to(device)
+            full_k_s = Sk.to(device)
+            full_k_v = Vk.to(device)
+            full_k_z_all = (normed[0].float() @ full_k_v.float()) * full_k_s.float()
+        else:
+            full_k_u = full_k_s = full_k_z_all = None
 
         for head_idx in heads:
             kv_head = head_idx // groups
@@ -740,8 +1043,28 @@ def main() -> None:
             stats = MeanStats()
             top_svd_pairs: List[Tuple[int, int]] = []
             tail_svd_pairs: List[Tuple[int, int]] = []
+            full_k_top_pairs: List[Tuple[int, int]] = []
+            full_k_random_pairs: List[Tuple[int, int]] = []
             q_mass = head_mass(Uq, Sq, head_dim, head_idx)
             k_mass = head_mass(Uk, Sk, head_dim, kv_head)
+            k_head_cpu = k_states[head_idx].detach().float().cpu()
+            k_causal_means = causal_prefix_mean(k_head_cpu) if args.center_keys else None
+            k_common_mean_energy = (
+                causal_mean_energy_fractions(k_head_cpu, k_causal_means)
+                if args.center_keys
+                else None
+            )
+            k_causal_means_device = (
+                k_causal_means.to(device=k_states.device) if args.center_keys else None
+            )
+            if args.rope_ablation:
+                k_no_rope_head_cpu = k_no_rope[head_idx].detach().float().cpu()
+                k_no_rope_causal_means = causal_prefix_mean(k_no_rope_head_cpu)
+                k_no_rope_causal_means_device = k_no_rope_causal_means.to(k_no_rope.device)
+            else:
+                k_no_rope_head_cpu = None
+                k_no_rope_causal_means = None
+                k_no_rope_causal_means_device = None
 
             for query_pos in range(args.token_start, args.token_start + args.num_query_tokens):
                 if query_pos <= 0 or query_pos >= input_ids.shape[1]:
@@ -749,9 +1072,61 @@ def main() -> None:
                 q_vec = q_states[head_idx, query_pos].detach()
                 key_mat = k_states[head_idx, :query_pos].detach()
                 scores = torch.matmul(key_mat.float(), q_vec.float()) / math.sqrt(head_dim)
+                if args.rope_ablation:
+                    q_no_rope_vec = q_no_rope[head_idx, query_pos].detach()
+                    k_no_rope_mat = k_no_rope[head_idx, :query_pos].detach()
+                    no_rope_scores = (
+                        torch.matmul(k_no_rope_mat.float(), q_no_rope_vec.float())
+                        / math.sqrt(head_dim)
+                    )
+                    no_rope_mean = k_no_rope_causal_means_device[query_pos]
+                    centered_no_rope_scores = (
+                        torch.matmul(
+                            k_no_rope_mat.float() - no_rope_mean.unsqueeze(0),
+                            q_no_rope_vec.float(),
+                        )
+                        / math.sqrt(head_dim)
+                    )
+                else:
+                    no_rope_scores = centered_no_rope_scores = None
+                if args.center_keys:
+                    k_mean = k_causal_means_device[query_pos]
+                    centered_scores = torch.matmul(
+                        key_mat.float() - k_mean.unsqueeze(0),
+                        q_vec.float(),
+                    ) / math.sqrt(head_dim)
+                    score_shift = scores - centered_scores
+                    centered_softmax = torch.softmax(centered_scores, dim=0)
+                    original_softmax = torch.softmax(scores, dim=0)
+                    stats.add(
+                        "key_centered_logit_shift_residual_max",
+                        float((score_shift - score_shift.mean()).abs().max().item()),
+                    )
+                    stats.add(
+                        "key_centered_softmax_max_abs_diff",
+                        float((original_softmax - centered_softmax).abs().max().item()),
+                    )
+                    stats.add(
+                        "key_common_mean_energy_fraction",
+                        float(k_common_mean_energy[query_pos].item()),
+                    )
+                    stats.add(
+                        "hidden_common_mean_energy_fraction",
+                        float(hidden_common_mean_energy[query_pos].item()),
+                    )
+                    stats.add(
+                        "linear_k_common_mean_energy_fraction",
+                        float(linear_k_common_mean_energy[query_pos].item()),
+                    )
+                else:
+                    centered_scores = None
                 top_k = max(1, int(math.ceil(query_pos * args.top_ratio)))
                 top_k = min(top_k, scores.numel())
                 top_scores, top_indices = torch.topk(scores, k=top_k, largest=True)
+                if args.rope_ablation:
+                    _, no_rope_top_indices = torch.topk(no_rope_scores, k=top_k, largest=True)
+                    overlap = len(set(top_indices.tolist()) & set(no_rope_top_indices.tolist())) / top_k
+                    stats.add("rope_no_rope_top_set_overlap", overlap)
                 svd_top_count = top_k if args.svd_keys_per_query <= 0 else min(args.svd_keys_per_query, top_k)
                 tail_svd_count = svd_top_count if args.tail_svd_keys_per_query <= 0 else args.tail_svd_keys_per_query
                 tail_indices_for_svd = choose_tail_for_svd(
@@ -782,9 +1157,45 @@ def main() -> None:
                     hq = normed_cpu[query_pos]
                     hk = normed_cpu[key_idx]
                     stats.add(f"{prefix}_hidden_cos", cosine(hq, hk))
-                    stats.add(f"{prefix}_k_cos", cosine(k_states[head_idx, query_pos].detach().cpu(), k_states[head_idx, key_idx].detach().cpu()))
+                    stats.add(f"{prefix}_k_cos", cosine(k_head_cpu[query_pos], k_head_cpu[key_idx]))
                     stats.add(f"{prefix}_qk_score", float(scores[key_idx].item()))
                     stats.add(f"{prefix}_distance", float(query_pos - key_idx))
+                    if args.rope_ablation:
+                        rope_delta = float((scores[key_idx] - no_rope_scores[key_idx]).item())
+                        stats.add(f"{prefix}_no_rope_qk_score", float(no_rope_scores[key_idx].item()))
+                        stats.add(f"{prefix}_centered_no_rope_qk_score", float(centered_no_rope_scores[key_idx].item()))
+                        stats.add(f"{prefix}_rope_delta_score", rope_delta)
+                        stats.add(
+                            f"{prefix}_rope_delta_distance_{distance_bucket(query_pos - key_idx)}",
+                            rope_delta,
+                        )
+                    if args.center_keys:
+                        hidden_mean = hidden_causal_means[query_pos]
+                        stats.add(
+                            f"{prefix}_centered_hidden_cos",
+                            cosine(hq - hidden_mean, hk - hidden_mean),
+                        )
+                        key_mean = k_causal_means[query_pos]
+                        stats.add(
+                            f"{prefix}_centered_k_cos",
+                            cosine(
+                                k_head_cpu[query_pos] - key_mean,
+                                k_head_cpu[key_idx] - key_mean,
+                            ),
+                        )
+                        if args.rope_ablation:
+                            no_rope_mean_cpu = k_no_rope_causal_means[query_pos]
+                            stats.add(
+                                f"{prefix}_centered_no_rope_k_cos",
+                                cosine(
+                                    k_no_rope_head_cpu[query_pos] - no_rope_mean_cpu,
+                                    k_no_rope_head_cpu[key_idx] - no_rope_mean_cpu,
+                                ),
+                            )
+                        stats.add(
+                            f"{prefix}_centered_qk_score",
+                            float(centered_scores[key_idx].item()),
+                        )
 
                 for key_idx in pos_for_metrics.tolist():
                     add_pair_metrics("pos", int(key_idx))
@@ -825,14 +1236,73 @@ def main() -> None:
                 for key_idx in tail_indices_for_svd:
                     tail_svd_pairs.append((query_pos, int(key_idx)))
 
+                if layer_idx in full_k_direction_layers:
+                    direction_count = min(args.full_k_keys_per_query, top_k)
+                    direction_top = top_indices[:direction_count].tolist()
+                    direction_random = choose_random_negatives(
+                        query_pos,
+                        top_indices,
+                        direction_count,
+                        rng,
+                    )
+                    full_k_top_pairs.extend((query_pos, int(key_idx)) for key_idx in direction_top)
+                    full_k_random_pairs.extend((query_pos, int(key_idx)) for key_idx in direction_random)
+
             top_band_signed, top_band_abs = aggregate_band_contribution_matrix(
                 q_scaled_all, k_scaled_all, bridge, q_bands, k_bands, top_svd_pairs
             )
             tail_band_signed, tail_band_abs = aggregate_band_contribution_matrix(
                 q_scaled_all, k_scaled_all, bridge, q_bands, k_bands, tail_svd_pairs
             )
+            if args.center_keys:
+                centered_top_band_signed, centered_top_band_abs = aggregate_band_contribution_matrix(
+                    q_scaled_all,
+                    k_scaled_all,
+                    bridge,
+                    q_bands,
+                    k_bands,
+                    top_svd_pairs,
+                    k_causal_means=linear_k_causal_means,
+                )
+                centered_tail_band_signed, centered_tail_band_abs = aggregate_band_contribution_matrix(
+                    q_scaled_all,
+                    k_scaled_all,
+                    bridge,
+                    q_bands,
+                    k_bands,
+                    tail_svd_pairs,
+                    k_causal_means=linear_k_causal_means,
+                )
+            else:
+                centered_top_band_signed = centered_top_band_abs = None
+                centered_tail_band_signed = centered_tail_band_abs = None
             top_band_pair_count = len(top_svd_pairs)
             tail_band_pair_count = len(tail_svd_pairs)
+            if layer_idx in full_k_direction_layers:
+                k_norm_eps = float(
+                    getattr(
+                        attn.k_norm,
+                        "variance_epsilon",
+                        getattr(attn.k_norm, "eps", 1e-6),
+                    )
+                )
+                full_k_attribution = full_k_direction_attribution(
+                    full_k_top_pairs,
+                    full_k_random_pairs,
+                    q_states[head_idx],
+                    k_states[head_idx],
+                    k_raw[kv_head],
+                    full_k_z_all,
+                    full_k_u[k_start:k_end],
+                    full_k_s,
+                    rope_cos,
+                    rope_sin,
+                    attn.k_norm.weight.to(device),
+                    k_norm_eps,
+                    head_dim,
+                )
+            else:
+                full_k_attribution = None
 
             summary = {
                 "layer": layer_idx,
@@ -847,6 +1317,7 @@ def main() -> None:
                 "svd_rank_limit": args.svd_rank_limit,
                 "q_rank_used": q_rank,
                 "k_rank_used": k_rank,
+                "full_k_direction_attribution": full_k_attribution,
                 "top_svd_band_pair_count": top_band_pair_count,
                 "tail_svd_band_pair_count": tail_band_pair_count,
                 "top_svd_band_signed_fraction": normalize_matrix(top_band_signed, mode="signed") if top_band_pair_count else [],
@@ -861,10 +1332,56 @@ def main() -> None:
                     if top_band_pair_count and tail_band_pair_count
                     else []
                 ),
+                "centered_linear_k_top_svd_band_signed_fraction": (
+                    normalize_matrix(centered_top_band_signed, mode="signed")
+                    if args.center_keys and top_band_pair_count
+                    else []
+                ),
+                "centered_linear_k_top_svd_band_abs_fraction": (
+                    normalize_matrix(centered_top_band_abs, mode="abs")
+                    if args.center_keys and top_band_pair_count
+                    else []
+                ),
+                "centered_linear_k_tail_svd_band_signed_fraction": (
+                    normalize_matrix(centered_tail_band_signed, mode="signed")
+                    if args.center_keys and tail_band_pair_count
+                    else []
+                ),
+                "centered_linear_k_tail_svd_band_abs_fraction": (
+                    normalize_matrix(centered_tail_band_abs, mode="abs")
+                    if args.center_keys and tail_band_pair_count
+                    else []
+                ),
+                "centered_linear_k_top_minus_tail_svd_band_abs_fraction": (
+                    (
+                        torch.tensor(normalize_matrix(centered_top_band_abs, mode="abs"))
+                        - torch.tensor(normalize_matrix(centered_tail_band_abs, mode="abs"))
+                    ).tolist()
+                    if args.center_keys and top_band_pair_count and tail_band_pair_count
+                    else []
+                ),
             }
             summaries.append(summary)
 
-        del q_states, k_states, normed, normed_cpu, Uq, Sq, Vq, Uk, Sk, Vk
+        del (
+            q_states,
+            k_states,
+            q_no_rope,
+            k_no_rope,
+            k_raw,
+            rope_cos,
+            rope_sin,
+            normed,
+            normed_cpu,
+            Uq,
+            Sq,
+            Vq,
+            Uk,
+            Sk,
+            Vk,
+        )
+        if layer_idx in full_k_direction_layers:
+            del full_k_u, full_k_s, full_k_z_all
         if device.type == "cuda":
             torch.cuda.empty_cache()
 

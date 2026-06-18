@@ -15,12 +15,19 @@ LOG_DIR="${LOG_DIR:-../logs}"
 DEVICE="${DEVICE:-auto}"                # auto | cuda | mps | cpu
 DTYPE="${DTYPE:-auto}"                  # auto | float32 | float16 | bfloat16
 SVD_DEVICE="${SVD_DEVICE:-cpu}"         # cpu | model
+SVD_METHOD="${SVD_METHOD:-exact}"       # exact | randomized
+SVD_OVERSAMPLE="${SVD_OVERSAMPLE:-32}" # randomized only
+SVD_POWER_ITERS="${SVD_POWER_ITERS:-2}" # randomized only
+CENTER_KEYS="${CENTER_KEYS:-true}"      # true: causal-mean-center hidden/K diagnostics and linear-K SVD attribution
 
 TOKEN_START="${TOKEN_START:-5000}"
 NUM_QUERY_TOKENS="${NUM_QUERY_TOKENS:-100}"
 TOP_RATIO="${TOP_RATIO:-0.02}"
 LAYERS="${LAYERS:-all}"                 # all | comma-separated layer ids, e.g. 0,13,27
 HEADS="${HEADS:-all}"                   # all | comma-separated head ids, e.g. 0,1,2,3
+ROPE_ABLATION="${ROPE_ABLATION:-true}"
+FULL_K_DIRECTION_LAYERS="${FULL_K_DIRECTION_LAYERS:-}" # e.g. 0,7,13,20,27
+FULL_K_KEYS_PER_QUERY="${FULL_K_KEYS_PER_QUERY:-8}"
 
 BAND_MODE="${BAND_MODE:-equal_energy}"  # equal_energy | fixed
 NUM_ENERGY_BANDS="${NUM_ENERGY_BANDS:-8}"
@@ -50,11 +57,18 @@ nohup python3 analyze_qk_feature_svd.py \
   --device "$DEVICE" \
   --dtype "$DTYPE" \
   --svd_device "$SVD_DEVICE" \
+  --svd_method "$SVD_METHOD" \
+  --svd_oversample "$SVD_OVERSAMPLE" \
+  --svd_power_iters "$SVD_POWER_ITERS" \
+  --center_keys "$CENTER_KEYS" \
   --token_start "$TOKEN_START" \
   --num_query_tokens "$NUM_QUERY_TOKENS" \
   --top_ratio "$TOP_RATIO" \
   --layers "$LAYERS" \
   --heads "$HEADS" \
+  --rope_ablation "$ROPE_ABLATION" \
+  --full_k_direction_layers "$FULL_K_DIRECTION_LAYERS" \
+  --full_k_keys_per_query "$FULL_K_KEYS_PER_QUERY" \
   --band_mode "$BAND_MODE" \
   --num_energy_bands "$NUM_ENERGY_BANDS" \
   --svd_rank_limit "$SVD_RANK_LIMIT" \
