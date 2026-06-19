@@ -368,6 +368,8 @@ def build_token_cache(
     max_chars_per_file: int,
     chunk_chars: int,
     rebuild: bool,
+    cache_wait_timeout_seconds: int,
+    cache_poll_seconds: int,
     rank: int,
 ) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -376,7 +378,17 @@ def build_token_cache(
     if token_bin.exists() and meta_path.exists() and not rebuild:
         return token_bin
     if not is_rank0(rank):
-        return token_bin
+        started_wait = time.time()
+        while True:
+            cache_ready = token_bin.exists() and meta_path.exists()
+            if cache_ready and (not rebuild or meta_path.stat().st_mtime >= started_wait - 1):
+                return token_bin
+            if cache_wait_timeout_seconds > 0 and (time.time() - started_wait) > cache_wait_timeout_seconds:
+                raise TimeoutError(
+                    f"Timed out waiting for rank0 to build token cache at {token_bin}. "
+                    f"Waited {cache_wait_timeout_seconds} seconds."
+                )
+            time.sleep(max(1, cache_poll_seconds))
     if token_bin.exists():
         token_bin.unlink()
     tmp_bin = cache_dir / "train_tokens.uint32.tmp"
@@ -546,6 +558,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tokenize_max_chars", type=int, default=200_000_000)
     parser.add_argument("--tokenize_max_chars_per_file", type=int, default=250_000)
     parser.add_argument("--tokenize_chunk_chars", type=int, default=2_000_000)
+    parser.add_argument("--cache_wait_timeout_seconds", type=int, default=86_400)
+    parser.add_argument("--cache_poll_seconds", type=int, default=5)
     parser.add_argument("--rebuild_token_cache", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--no_gradient_checkpointing", action="store_true")
@@ -623,6 +637,8 @@ def main() -> None:
             args.tokenize_max_chars_per_file,
             args.tokenize_chunk_chars,
             args.rebuild_token_cache,
+            args.cache_wait_timeout_seconds,
+            args.cache_poll_seconds,
             rank,
         )
         barrier()

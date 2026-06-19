@@ -126,6 +126,13 @@ If token cache construction is too slow:
 2. reduce `--tokenize_max_chars_per_file` from `250000` to `100000`;
 3. keep `--train_data_root /mnt/workspace/dclm`, because the goal is to sample the full dataset tree rather than a single shard.
 
+If NCCL times out before the first training step:
+
+1. check whether the log says `WorkNCCL ... OpType=ALLREDUCE ... Timeout(ms)=600000`;
+2. this usually means rank0 is still building the token cache while other ranks are waiting;
+3. non-rank0 processes now wait for `train_tokens.uint32.bin` and `train_tokens_meta.json` with filesystem polling before entering the NCCL barrier;
+4. if cache construction legitimately takes more than 24 hours, raise `CACHE_WAIT_TIMEOUT_SECONDS`.
+
 ## Checkpoints
 
 Checkpoints are saved every `500` optimizer steps and once at time-limit stop.

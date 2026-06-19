@@ -109,6 +109,14 @@ Use a different DCLM file sample for another run:
 DATASET_SAMPLE_SEED=20260620 DATASET_SAMPLE_FILES=2048 bash scripts/nohup_train_8x80g.sh
 ```
 
+If the first run spends a long time building the token cache, non-rank0
+processes wait by polling the cache files instead of entering an NCCL barrier.
+The default wait limit is 24 hours:
+
+```bash
+CACHE_WAIT_TIMEOUT_SECONDS=172800 bash scripts/nohup_train_8x80g.sh
+```
+
 Resume:
 
 ```bash
