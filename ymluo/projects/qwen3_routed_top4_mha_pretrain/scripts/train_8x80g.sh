@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_NAME="${RUN_NAME:-routed_top4_$(date +%Y%m%d_%H%M%S)}"
-OUTPUT_ROOT="${OUTPUT_ROOT:-/mnt/workspace/routed_top4_qwen3_0p6b_runs}"
+OUTPUT_ROOT="${OUTPUT_ROOT:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${OUTPUT_ROOT}/${RUN_NAME}}"
 TOKEN_CACHE_DIR="${TOKEN_CACHE_DIR:-${OUTPUT_DIR}/token_cache}"
 DATASET_SAMPLE_FILES="${DATASET_SAMPLE_FILES:-1024}"

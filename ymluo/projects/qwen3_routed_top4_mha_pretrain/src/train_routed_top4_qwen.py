@@ -536,7 +536,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train_text_glob", default="*.txt")
     parser.add_argument("--dataset_sample_files", type=int, default=1024)
     parser.add_argument("--dataset_sample_seed", type=int, default=1234)
-    parser.add_argument("--output_dir", default="/mnt/workspace/routed_top4_qwen3_0p6b_runs/run")
+    parser.add_argument("--output_dir", default="/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/run")
     parser.add_argument("--seq_len", type=int, default=2048)
     parser.add_argument("--per_device_batch_size", type=int, default=1)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=8)

@@ -121,7 +121,7 @@ Resume:
 
 ```bash
 RUN_NAME=resume_test bash scripts/nohup_train_8x80g.sh \
-  --resume_from /mnt/workspace/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
+  --resume_from /mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
 ```
 
 Start TensorBoard:
@@ -141,7 +141,7 @@ http://<server-ip>:6006
 Default output root:
 
 ```text
-/mnt/workspace/routed_top4_qwen3_0p6b_runs
+/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs
 ```
 
 Default training data:

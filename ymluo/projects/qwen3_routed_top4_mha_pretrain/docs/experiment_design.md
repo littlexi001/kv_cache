@@ -27,7 +27,7 @@ Server paths:
 model/tokenizer: /mnt/workspace/Qwen3-0.6B
 train data root: /mnt/workspace/dclm
 train files:     recursively sampled *.txt files
-output root:     /mnt/workspace/routed_top4_qwen3_0p6b_runs
+output root:     /mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs
 ```
 
 Default data sampling contract:
@@ -150,7 +150,7 @@ Resume command:
 
 ```bash
 bash scripts/nohup_train_8x80g.sh \
-  --resume_from /mnt/workspace/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
+  --resume_from /mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
 ```
 
 ## First Result Interpretation
