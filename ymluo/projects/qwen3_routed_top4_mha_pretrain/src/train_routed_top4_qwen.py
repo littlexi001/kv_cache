@@ -314,11 +314,58 @@ def reduce_mean(value: torch.Tensor, world_size: int) -> torch.Tensor:
     return value / world_size
 
 
+def split_globs(globs: str) -> list[str]:
+    patterns = [item.strip() for item in globs.split(",") if item.strip()]
+    return patterns or ["*.txt"]
+
+
+def discover_text_files(data_root: Path, globs: str) -> list[Path]:
+    if not data_root.exists():
+        raise FileNotFoundError(f"train_data_root does not exist: {data_root}")
+    if data_root.is_file():
+        return [data_root]
+    files: list[Path] = []
+    for pattern in split_globs(globs):
+        files.extend(path for path in data_root.rglob(pattern) if path.is_file())
+    unique = sorted(set(files), key=lambda path: path.as_posix())
+    if not unique:
+        raise FileNotFoundError(f"No training text files found under {data_root} with globs={globs!r}")
+    return unique
+
+
+def select_training_files(files: list[Path], sample_files: int, seed: int) -> list[Path]:
+    if sample_files <= 0 or sample_files >= len(files):
+        return files
+    rng = random.Random(seed)
+    selected = list(files)
+    rng.shuffle(selected)
+    return sorted(selected[:sample_files], key=lambda path: path.as_posix())
+
+
+def iter_text_chunks(path: Path, chunk_chars: int, max_chars: int):
+    total_chars = 0
+    with path.open("r", encoding="utf-8", errors="ignore") as handle:
+        while max_chars <= 0 or total_chars < max_chars:
+            read_size = chunk_chars if max_chars <= 0 else min(chunk_chars, max_chars - total_chars)
+            if read_size <= 0:
+                break
+            text = handle.read(read_size)
+            if not text:
+                break
+            total_chars += len(text)
+            yield text, total_chars
+
+
 def build_token_cache(
     tokenizer_path: Path,
-    text_path: Path,
+    train_data_root: Path | None,
+    train_text_path: Path | None,
+    train_text_glob: str,
+    dataset_sample_files: int,
+    dataset_sample_seed: int,
     cache_dir: Path,
     max_chars: int,
+    max_chars_per_file: int,
     chunk_chars: int,
     rebuild: bool,
     rank: int,
@@ -336,34 +383,60 @@ def build_token_cache(
     if tmp_bin.exists():
         tmp_bin.unlink()
     tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+    if train_data_root is not None:
+        all_files = discover_text_files(train_data_root, train_text_glob)
+        selected_files = select_training_files(all_files, dataset_sample_files, dataset_sample_seed)
+    elif train_text_path is not None:
+        all_files = [train_text_path]
+        selected_files = [train_text_path]
+    else:
+        raise ValueError("Either --train_data_root or --train_text_path must be set.")
     total_chars = 0
     total_tokens = 0
     started = time.time()
-    with text_path.open("r", encoding="utf-8", errors="ignore") as handle, tmp_bin.open("ab") as out:
-        while True:
-            remaining = max_chars - total_chars if max_chars > 0 else chunk_chars
-            if remaining <= 0:
+    with tmp_bin.open("ab") as out:
+        for file_idx, text_path in enumerate(selected_files, start=1):
+            if max_chars > 0 and total_chars >= max_chars:
                 break
-            text = handle.read(min(chunk_chars, remaining))
-            if not text:
-                break
-            total_chars += len(text)
-            ids = tokenizer(text, add_special_tokens=False)["input_ids"]
-            if ids:
-                arr = np.asarray(ids, dtype=np.uint32)
-                arr.tofile(out)
-                total_tokens += int(arr.size)
-            if total_tokens and total_tokens % 5_000_000 < len(ids):
-                print(f"tokenized {total_tokens} tokens from {total_chars} chars", flush=True)
+            file_budget = max_chars_per_file
+            if max_chars > 0:
+                remaining_global = max_chars - total_chars
+                file_budget = remaining_global if file_budget <= 0 else min(file_budget, remaining_global)
+            file_chars = 0
+            for text, file_chars in iter_text_chunks(text_path, chunk_chars, file_budget):
+                total_chars += len(text)
+                ids = tokenizer(text, add_special_tokens=False)["input_ids"]
+                if ids:
+                    arr = np.asarray(ids, dtype=np.uint32)
+                    arr.tofile(out)
+                    total_tokens += int(arr.size)
+                if total_tokens and total_tokens % 5_000_000 < len(ids):
+                    print(f"tokenized {total_tokens} tokens from {total_chars} chars", flush=True)
+            if file_idx % 100 == 0:
+                print(
+                    f"processed {file_idx}/{len(selected_files)} sampled files; "
+                    f"chars={total_chars} tokens={total_tokens}",
+                    flush=True,
+                )
+            if file_chars == 0:
+                print(f"warning: sampled file had no readable text: {text_path}", flush=True)
     tmp_bin.replace(token_bin)
     meta = {
         "tokenizer_path": str(tokenizer_path),
-        "text_path": str(text_path),
+        "train_data_root": str(train_data_root) if train_data_root is not None else "",
+        "train_text_path": str(train_text_path) if train_text_path is not None else "",
+        "train_text_glob": train_text_glob,
+        "all_file_count": len(all_files),
+        "sampled_file_count": len(selected_files),
+        "dataset_sample_files": dataset_sample_files,
+        "dataset_sample_seed": dataset_sample_seed,
         "max_chars": max_chars,
+        "max_chars_per_file": max_chars_per_file,
         "chunk_chars": chunk_chars,
         "total_chars": total_chars,
         "total_tokens": total_tokens,
         "seconds": time.time() - started,
+        "sampled_files": [str(path) for path in selected_files],
     }
     meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
     print(f"wrote token cache: {token_bin} ({total_tokens} tokens)", flush=True)
@@ -446,13 +519,17 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_config_path", default="/mnt/workspace/Qwen3-0.6B/config.json")
     parser.add_argument("--tokenizer_path", default="/mnt/workspace/Qwen3-0.6B")
-    parser.add_argument("--train_text_path", default="/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt")
+    parser.add_argument("--train_data_root", default="/mnt/workspace/dclm")
+    parser.add_argument("--train_text_path", default="")
+    parser.add_argument("--train_text_glob", default="*.txt")
+    parser.add_argument("--dataset_sample_files", type=int, default=1024)
+    parser.add_argument("--dataset_sample_seed", type=int, default=1234)
     parser.add_argument("--output_dir", default="/mnt/workspace/routed_top4_qwen3_0p6b_runs/run")
     parser.add_argument("--seq_len", type=int, default=2048)
     parser.add_argument("--per_device_batch_size", type=int, default=1)
     parser.add_argument("--gradient_accumulation_steps", type=int, default=8)
     parser.add_argument("--max_steps", type=int, default=1_000_000)
-    parser.add_argument("--max_train_seconds", type=int, default=36_000)
+    parser.add_argument("--max_train_seconds", type=int, default=72_000)
     parser.add_argument("--learning_rate", type=float, default=3e-4)
     parser.add_argument("--min_lr_ratio", type=float, default=0.1)
     parser.add_argument("--warmup_steps", type=int, default=1000)
@@ -467,6 +544,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save_steps", type=int, default=500)
     parser.add_argument("--token_cache_dir", default="")
     parser.add_argument("--tokenize_max_chars", type=int, default=200_000_000)
+    parser.add_argument("--tokenize_max_chars_per_file", type=int, default=250_000)
     parser.add_argument("--tokenize_chunk_chars", type=int, default=2_000_000)
     parser.add_argument("--rebuild_token_cache", action="store_true")
     parser.add_argument("--seed", type=int, default=1234)
@@ -531,11 +609,18 @@ def main() -> None:
         barrier()
 
         token_cache_dir = Path(args.token_cache_dir) if args.token_cache_dir else output_dir / "token_cache"
+        train_data_root = Path(args.train_data_root) if args.train_data_root else None
+        train_text_path = Path(args.train_text_path) if args.train_text_path else None
         token_bin = build_token_cache(
             Path(args.tokenizer_path),
-            Path(args.train_text_path),
+            train_data_root,
+            train_text_path,
+            args.train_text_glob,
+            args.dataset_sample_files,
+            args.dataset_sample_seed,
             token_cache_dir,
             args.tokenize_max_chars,
+            args.tokenize_max_chars_per_file,
             args.tokenize_chunk_chars,
             args.rebuild_token_cache,
             rank,

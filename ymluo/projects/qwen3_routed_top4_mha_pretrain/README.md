@@ -93,7 +93,7 @@ CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 seq_len=2048
 per_device_batch_size=1
 gradient_accumulation_steps=8
-max_train_seconds=36000
+max_train_seconds=72000
 save_steps=500
 ```
 
@@ -101,6 +101,12 @@ Override examples:
 
 ```bash
 RUN_NAME=test_longer bash scripts/nohup_train_8x80g.sh --seq_len 4096 --gradient_accumulation_steps 4
+```
+
+Use a different DCLM file sample for another run:
+
+```bash
+DATASET_SAMPLE_SEED=20260620 DATASET_SAMPLE_FILES=2048 bash scripts/nohup_train_8x80g.sh
 ```
 
 Resume:
@@ -130,10 +136,28 @@ Default output root:
 /mnt/workspace/routed_top4_qwen3_0p6b_runs
 ```
 
+Default training data:
+
+```text
+/mnt/workspace/dclm/**/*.txt
+```
+
+Each run samples files before building the token cache:
+
+```text
+dataset_sample_files = 1024
+tokenize_max_chars = 200000000
+tokenize_max_chars_per_file = 250000
+```
+
+This means the old `part-00000.txt` path is no longer the default training set.
+It remains available only as a compatibility option through `--train_text_path`
+when `--train_data_root ""` is also passed.
+
 Default token cache:
 
 ```text
-/mnt/workspace/routed_top4_qwen3_0p6b_token_cache
+<output_dir>/token_cache
 ```
 
 Each run contains:
@@ -141,12 +165,16 @@ Each run contains:
 ```text
 args.json
 routed_qwen_config.json
-token_cache/
+token_cache/train_tokens.uint32.bin
+token_cache/train_tokens_meta.json
 tokenizer/
 tensorboard/
 checkpoint-0000500/
 latest_checkpoint
 ```
+
+`train_tokens_meta.json` records the discovered file count, sampled file count,
+sample seed, character limits, token count, and the exact sampled file list.
 
 ## Smoke Test
 

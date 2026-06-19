@@ -81,8 +81,12 @@ CE + 0.01 * router_load_loss + 0.001 * router_z_loss
 Training data:
 
 ```text
-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt
+/mnt/workspace/dclm/**/*.txt
 ```
+
+The training script does not use a single fixed shard by default. Each run
+samples files from the full DCLM directory tree, tokenizes the sampled text, and
+stores the exact sampled file list in `token_cache/train_tokens_meta.json`.
 
 Model config and tokenizer source:
 
@@ -97,7 +101,7 @@ Default training setting:
 seq_len = 2048
 per_device_batch_size = 1
 gradient_accumulation_steps = 8
-max_train_seconds = 36000
+max_train_seconds = 72000
 ```
 
 ## Pass Conditions
@@ -117,11 +121,11 @@ The operationalization fails if:
 1. attention produces NaNs because selected queries have no valid keys;
 2. gate load collapses so most tokens use the same 4 heads;
 3. CE loss does not decrease beyond random-init noise;
-4. training is too slow to collect meaningful evidence in the 10-hour budget.
+4. training is too slow to collect meaningful evidence in the 20-hour budget.
 
 ## Claim Boundary
 
-A 10-hour run from random initialization cannot prove final language-model
+A 20-hour run from random initialization cannot prove final language-model
 quality. It can only test whether the routed-head architecture is trainable and
 whether the gate avoids early collapse. A dense Qwen3 baseline trained for the
 same token budget is still needed for a quality comparison.

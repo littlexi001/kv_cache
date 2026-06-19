@@ -5,7 +5,13 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_NAME="${RUN_NAME:-routed_top4_$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/mnt/workspace/routed_top4_qwen3_0p6b_runs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${OUTPUT_ROOT}/${RUN_NAME}}"
-TOKEN_CACHE_DIR="${TOKEN_CACHE_DIR:-/mnt/workspace/routed_top4_qwen3_0p6b_token_cache}"
+TOKEN_CACHE_DIR="${TOKEN_CACHE_DIR:-${OUTPUT_DIR}/token_cache}"
+DATASET_SAMPLE_FILES="${DATASET_SAMPLE_FILES:-1024}"
+DATASET_SAMPLE_SEED="${DATASET_SAMPLE_SEED:-1234}"
+MAX_TRAIN_SECONDS="${MAX_TRAIN_SECONDS:-72000}"
+TOKENIZE_MAX_CHARS="${TOKENIZE_MAX_CHARS:-200000000}"
+TOKENIZE_MAX_CHARS_PER_FILE="${TOKENIZE_MAX_CHARS_PER_FILE:-250000}"
+TOKENIZE_CHUNK_CHARS="${TOKENIZE_CHUNK_CHARS:-2000000}"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0,1,2,3,4,5,6,7}"
 export TOKENIZERS_PARALLELISM=false
@@ -22,13 +28,16 @@ torchrun \
   "${PROJECT_DIR}/src/train_routed_top4_qwen.py" \
   --model_config_path /mnt/workspace/Qwen3-0.6B/config.json \
   --tokenizer_path /mnt/workspace/Qwen3-0.6B \
-  --train_text_path /mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt \
+  --train_data_root /mnt/workspace/dclm \
+  --train_text_glob "*.txt" \
+  --dataset_sample_files "${DATASET_SAMPLE_FILES}" \
+  --dataset_sample_seed "${DATASET_SAMPLE_SEED}" \
   --output_dir "${OUTPUT_DIR}" \
   --seq_len 2048 \
   --per_device_batch_size 1 \
   --gradient_accumulation_steps 8 \
   --max_steps 1000000 \
-  --max_train_seconds 36000 \
+  --max_train_seconds "${MAX_TRAIN_SECONDS}" \
   --learning_rate 3e-4 \
   --min_lr_ratio 0.1 \
   --warmup_steps 1000 \
@@ -42,6 +51,7 @@ torchrun \
   --log_steps 10 \
   --save_steps 500 \
   --token_cache_dir "${TOKEN_CACHE_DIR}" \
-  --tokenize_max_chars 200000000 \
-  --tokenize_chunk_chars 2000000 \
+  --tokenize_max_chars "${TOKENIZE_MAX_CHARS}" \
+  --tokenize_max_chars_per_file "${TOKENIZE_MAX_CHARS_PER_FILE}" \
+  --tokenize_chunk_chars "${TOKENIZE_CHUNK_CHARS}" \
   "$@"
