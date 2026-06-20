@@ -194,3 +194,29 @@ python src/train_routed_top4_qwen.py --smoke_test
 
 This verifies forward/backward with a tiny routed model. It does not load the
 0.6B model.
+
+## Downstream Eval
+
+Prepare small multiple-choice validation sets:
+
+```bash
+bash scripts/prepare_downstream_eval_data.sh
+```
+
+Compare the latest routed checkpoint with the official Qwen3-0.6B model:
+
+```bash
+bash scripts/eval_checkpoint_vs_baseline.sh
+```
+
+Compare a specific checkpoint:
+
+```bash
+CHECKPOINT_DIR=/path/to/checkpoint-0008500 bash scripts/eval_checkpoint_vs_baseline.sh
+```
+
+The detailed method is documented in:
+
+```text
+docs/downstream_eval.md
+```
