@@ -220,3 +220,13 @@ The detailed method is documented in:
 ```text
 docs/downstream_eval.md
 ```
+
+Held-out non-DCLM text PPL:
+
+```bash
+bash scripts/prepare_heldout_ppl_text.sh
+bash scripts/eval_heldout_ppl_vs_baseline.sh
+```
+
+This defaults to WikiText-103 validation text and compares the routed checkpoint
+with `/mnt/workspace/Qwen3-0.6B`.

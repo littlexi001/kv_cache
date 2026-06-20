@@ -131,6 +131,57 @@ bash scripts/eval_checkpoint_vs_baseline.sh \
 This is useful for checking whether train loss and held-out text loss move
 together.
 
+## Held-Out Non-DCLM Text PPL
+
+To check whether train CE is decreasing only because the token cache repeats
+DCLM text, use a held-out text source that is not sampled from `/mnt/workspace/dclm`.
+
+The default script prepares WikiText-103 validation text:
+
+```bash
+bash scripts/prepare_heldout_ppl_text.sh
+```
+
+Then compare the routed checkpoint with the official Qwen3-0.6B model:
+
+```bash
+bash scripts/eval_heldout_ppl_vs_baseline.sh
+```
+
+Defaults:
+
+```text
+held-out dataset = wikitext103_validation
+held-out chars = 5000000
+metric = CE and PPL on the same tokenized text
+baseline = /mnt/workspace/Qwen3-0.6B
+```
+
+Use a specific checkpoint:
+
+```bash
+CHECKPOINT_DIR=/path/to/checkpoint-0008500 bash scripts/eval_heldout_ppl_vs_baseline.sh
+```
+
+Use a custom non-DCLM text file:
+
+```bash
+HELDOUT_TEXT_PATH=/path/to/non_dclm_validation.txt bash scripts/eval_heldout_ppl_vs_baseline.sh
+```
+
+Interpretation:
+
+```text
+If train CE is low but held-out CE is high, the training signal may be dominated
+by repeated or easy DCLM cache text.
+
+If held-out CE also decreases across checkpoints, the routed model is learning
+more general language modeling behavior.
+
+The official Qwen3-0.6B PPL is not a fair equal-budget baseline. It is a strong
+reference point because it was fully pretrained.
+```
+
 ## Claim Boundary
 
 If the routed checkpoint is far behind official Qwen3, that does not falsify the
