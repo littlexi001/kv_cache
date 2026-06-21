@@ -172,52 +172,58 @@ total_loss = CE
 /mnt/workspace/dclm
 ```
 
-最初用户给过一个文件：
+最初实现使用固定 token cache：每次 run 只采样一部分 DCLM 文件，最多读取 `200M chars`，然后训练阶段反复从这个 cache 里随机截取窗口。后续 held-out WikiText PPL 结果显示这个设计有明显问题：train CE 可以降到约 2.5，但 held-out CE 仍然约 6.68，PPL 约 795。这说明固定小 cache 很可能导致重复训练和过拟合，不能用来判断泛化。
+
+因此当前训练入口已经改成默认流式读取 DCLM：
 
 ```text
-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt
+data_mode = streaming
 ```
 
-这个文件现在只作为路径示例，不再作为唯一训练文件。
-
-当前默认数据采样规则：
+当前默认数据规则：
 
 ```text
 1. 递归扫描 /mnt/workspace/dclm/**/*.txt。
-2. 使用 dataset_sample_seed = 1234 打乱文件列表。
-3. 默认采样 dataset_sample_files = 1024 个 txt 文件。
-4. 每个文件最多读取 tokenize_max_chars_per_file = 250000 字符。
-5. 全局最多读取 tokenize_max_chars = 200000000 字符。
-6. 用 /mnt/workspace/Qwen3-0.6B tokenizer 进行 tokenization。
-7. 把 token 写入本次 run 的 token cache。
+2. 按文件 index 对 DDP rank 分片：不同 rank 读不同文件子集。
+3. 每个 rank 在本地 pass 开始时 shuffle 自己的文件顺序。
+4. 每个 rank 顺序读取文本 chunk，并在训练中在线 tokenizer。
+5. 默认 stream_max_chars_per_file = 0，即不限制单个文件读取字符数。
+6. 默认不再构建固定 token cache。
 ```
 
-token cache 默认位置：
+这种方式的目的：
 
 ```text
-<output_dir>/token_cache/train_tokens.uint32.bin
+让训练 token 尽量来自持续推进的 DCLM 文件流，而不是反复抽同一个小 token cache。
 ```
 
-metadata 位置：
+流式数据 metadata 位置：
 
 ```text
-<output_dir>/token_cache/train_tokens_meta.json
+<output_dir>/streaming_data_meta.json
 ```
 
 metadata 记录：
 
 ```text
+data_mode
+train_data_root
+train_text_glob
 all_file_count
-sampled_file_count
-dataset_sample_seed
-max_chars
-max_chars_per_file
-total_chars
-total_tokens
-sampled_files
+world_size
+per_rank_file_counts
+stream_shuffle_files
+stream_chunk_chars
+stream_max_chars_per_file
 ```
 
-这个设计的原因是 DCLM 文件太多、总内容太大，不能每次把全部数据 tokenization。每次 run 采样一部分文件，可以让训练覆盖整个数据树，同时控制 token cache 构建时间。
+旧的固定 cache 模式仍然保留，但只建议 debug 用：
+
+```bash
+DATA_MODE=cache bash scripts/nohup_train_8x80g.sh
+```
+
+不建议继续用小 cache 模式做正式训练，因为它很容易让 train CE 下降但 held-out PPL 很差。
 
 ## 7. 训练设置
 
@@ -290,7 +296,7 @@ step = 8700
 
 ## 8. 工程问题和修复
 
-### 8.1 NCCL timeout
+### 8.1 固定 cache 模式下的 NCCL timeout
 
 训练最初遇到过类似报错：
 
@@ -298,7 +304,7 @@ step = 8700
 WorkNCCL ... OpType=ALLREDUCE ... Timeout(ms)=600000
 ```
 
-原因不是模型训练 step 内部出错，而是：
+这个问题发生在旧的固定 cache 模式，原因不是模型训练 step 内部出错，而是：
 
 ```text
 rank0 正在构建 token cache；

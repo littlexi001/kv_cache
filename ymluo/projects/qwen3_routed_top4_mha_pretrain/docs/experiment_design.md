@@ -9,7 +9,8 @@ The experiment answers:
 
 ```text
 Can a model trained from step 0 with per-token top4 head routing reduce CE loss
-without router collapse when trained on sampled files from the full DCLM tree?
+without router collapse when trained from a streaming pass over the full DCLM
+file tree?
 ```
 
 It does not answer:
@@ -26,25 +27,24 @@ Server paths:
 ```text
 model/tokenizer: /mnt/workspace/Qwen3-0.6B
 train data root: /mnt/workspace/dclm
-train files:     recursively sampled *.txt files
+train files:     recursively streamed *.txt files
 output root:     /mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs
 ```
 
-Default data sampling contract:
+Default data contract:
 
 ```text
 1. Recursively discover /mnt/workspace/dclm/**/*.txt.
-2. Shuffle the discovered file list with dataset_sample_seed = 1234.
-3. Select dataset_sample_files = 1024 files for this run.
-4. Tokenize at most tokenize_max_chars_per_file = 250000 characters per file.
-5. Stop after tokenize_max_chars = 200000000 total characters.
-6. Save the token cache under <output_dir>/token_cache.
+2. Shard the discovered file list across DDP ranks by file index.
+3. Each rank shuffles its local file order at the start of each local pass.
+4. Each rank reads text chunks sequentially and tokenizes online during training.
+5. The default does not impose a per-file or global character cap.
 ```
 
-The sampled file list and token counts are recorded in:
+The discovered file count and per-rank file counts are recorded in:
 
 ```text
-<output_dir>/token_cache/train_tokens_meta.json
+<output_dir>/streaming_data_meta.json
 ```
 
 Default run command:
@@ -120,13 +120,13 @@ If training is too slow:
 2. reduce `--gradient_accumulation_steps`;
 3. keep checkpointing on, because disabling it may raise memory use sharply.
 
-If token cache construction is too slow:
+If online tokenization is too slow:
 
-1. reduce `--dataset_sample_files` from `1024` to `512`;
-2. reduce `--tokenize_max_chars_per_file` from `250000` to `100000`;
-3. keep `--train_data_root /mnt/workspace/dclm`, because the goal is to sample the full dataset tree rather than a single shard.
+1. reduce `--stream_chunk_chars` from `2000000` to a smaller chunk only if memory spikes;
+2. increase CPU workers is not implemented yet, so tokenizer speed may become a bottleneck;
+3. use `DATA_MODE=cache` only for debugging, because fixed small caches can overfit quickly.
 
-If NCCL times out before the first training step:
+If using `DATA_MODE=cache` and NCCL times out before the first training step:
 
 1. check whether the log says `WorkNCCL ... OpType=ALLREDUCE ... Timeout(ms)=600000`;
 2. this usually means rank0 is still building the token cache while other ranks are waiting;

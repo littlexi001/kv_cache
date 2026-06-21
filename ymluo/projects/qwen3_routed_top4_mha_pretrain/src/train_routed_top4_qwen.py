@@ -473,6 +473,83 @@ class RandomTokenBatcher:
         return tensor[:, :-1], tensor[:, 1:]
 
 
+class StreamingTextBatcher:
+    def __init__(
+        self,
+        tokenizer_path: Path,
+        files: list[Path],
+        seq_len: int,
+        batch_size: int,
+        rank: int,
+        world_size: int,
+        seed: int,
+        chunk_chars: int,
+        max_chars_per_file: int,
+        shuffle_files: bool,
+        max_files_per_epoch: int,
+    ) -> None:
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
+        self.all_rank_files = [path for idx, path in enumerate(files) if idx % max(1, world_size) == rank]
+        if not self.all_rank_files:
+            raise ValueError(f"Rank {rank} received no training files out of {len(files)} discovered files.")
+        self.seq_len = seq_len
+        self.batch_size = batch_size
+        self.rank = rank
+        self.seed = seed
+        self.chunk_chars = chunk_chars
+        self.max_chars_per_file = max_chars_per_file
+        self.shuffle_files = shuffle_files
+        self.max_files_per_epoch = max_files_per_epoch
+        self.epoch = 0
+        self.file_index = 0
+        self.files: list[Path] = []
+        self.current_chunks = None
+        self.token_buffer: list[int] = []
+        self._reset_epoch()
+
+    def _reset_epoch(self) -> None:
+        self.files = list(self.all_rank_files)
+        if self.shuffle_files:
+            rng = random.Random(self.seed + self.rank * 100003 + self.epoch * 9973)
+            rng.shuffle(self.files)
+        if self.max_files_per_epoch > 0:
+            self.files = self.files[: self.max_files_per_epoch]
+        if not self.files:
+            raise ValueError("Streaming dataset has no files after max_files_per_epoch filtering.")
+        self.file_index = 0
+        self.current_chunks = None
+        self.epoch += 1
+
+    def _open_next_file(self) -> None:
+        if self.file_index >= len(self.files):
+            self._reset_epoch()
+        path = self.files[self.file_index]
+        self.file_index += 1
+        self.current_chunks = iter_text_chunks(path, self.chunk_chars, self.max_chars_per_file)
+
+    def _fill(self, target_tokens: int) -> None:
+        while len(self.token_buffer) < target_tokens:
+            if self.current_chunks is None:
+                self._open_next_file()
+            try:
+                text, _ = next(self.current_chunks)
+            except StopIteration:
+                self.current_chunks = None
+                continue
+            ids = self.tokenizer(text, add_special_tokens=False)["input_ids"]
+            if ids:
+                self.token_buffer.extend(int(token_id) for token_id in ids)
+
+    def next_batch(self, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+        needed = self.batch_size * (self.seq_len + 1)
+        self._fill(needed)
+        flat = self.token_buffer[:needed]
+        del self.token_buffer[:needed]
+        batch = np.asarray(flat, dtype=np.int64).reshape(self.batch_size, self.seq_len + 1)
+        tensor = torch.from_numpy(batch).to(device=device, non_blocking=True)
+        return tensor[:, :-1], tensor[:, 1:]
+
+
 def cosine_lr(step: int, warmup_steps: int, max_steps: int, min_lr_ratio: float) -> float:
     if step < warmup_steps:
         return max(1e-8, step / max(1, warmup_steps))
@@ -536,6 +613,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--train_text_glob", default="*.txt")
     parser.add_argument("--dataset_sample_files", type=int, default=1024)
     parser.add_argument("--dataset_sample_seed", type=int, default=1234)
+    parser.add_argument("--data_mode", choices=["streaming", "cache"], default="streaming")
+    parser.add_argument("--stream_shuffle_files", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--stream_max_files_per_rank_epoch", type=int, default=0)
+    parser.add_argument("--stream_chunk_chars", type=int, default=2_000_000)
+    parser.add_argument("--stream_max_chars_per_file", type=int, default=0)
     parser.add_argument("--output_dir", default="/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/run")
     parser.add_argument("--seq_len", type=int, default=2048)
     parser.add_argument("--per_device_batch_size", type=int, default=1)
@@ -622,26 +704,8 @@ def main() -> None:
             (output_dir / "args.json").write_text(json.dumps(vars(args), indent=2), encoding="utf-8")
         barrier()
 
-        token_cache_dir = Path(args.token_cache_dir) if args.token_cache_dir else output_dir / "token_cache"
         train_data_root = Path(args.train_data_root) if args.train_data_root else None
         train_text_path = Path(args.train_text_path) if args.train_text_path else None
-        token_bin = build_token_cache(
-            Path(args.tokenizer_path),
-            train_data_root,
-            train_text_path,
-            args.train_text_glob,
-            args.dataset_sample_files,
-            args.dataset_sample_seed,
-            token_cache_dir,
-            args.tokenize_max_chars,
-            args.tokenize_max_chars_per_file,
-            args.tokenize_chunk_chars,
-            args.rebuild_token_cache,
-            args.cache_wait_timeout_seconds,
-            args.cache_poll_seconds,
-            rank,
-        )
-        barrier()
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_path, trust_remote_code=True)
         if is_rank0(rank):
             tokenizer.save_pretrained(output_dir / "tokenizer")
@@ -662,7 +726,72 @@ def main() -> None:
             model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=False)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.learning_rate, betas=(0.9, 0.95), weight_decay=args.weight_decay)
         start_step = load_checkpoint_if_needed(args.resume_from, model, optimizer, device)
-        batcher = RandomTokenBatcher(token_bin, args.seq_len, args.per_device_batch_size, rank, args.seed)
+        if args.data_mode == "streaming":
+            if train_data_root is not None:
+                train_files = discover_text_files(train_data_root, args.train_text_glob)
+            elif train_text_path is not None:
+                train_files = [train_text_path]
+            else:
+                raise ValueError("Either --train_data_root or --train_text_path must be set.")
+            if is_rank0(rank):
+                per_rank_counts = [sum(1 for idx in range(len(train_files)) if idx % max(1, world_size) == r) for r in range(world_size)]
+                (output_dir / "streaming_data_meta.json").write_text(
+                    json.dumps(
+                        {
+                            "data_mode": args.data_mode,
+                            "train_data_root": str(train_data_root) if train_data_root is not None else "",
+                            "train_text_path": str(train_text_path) if train_text_path is not None else "",
+                            "train_text_glob": args.train_text_glob,
+                            "all_file_count": len(train_files),
+                            "world_size": world_size,
+                            "per_rank_file_counts": per_rank_counts,
+                            "stream_shuffle_files": args.stream_shuffle_files,
+                            "stream_max_files_per_rank_epoch": args.stream_max_files_per_rank_epoch,
+                            "stream_chunk_chars": args.stream_chunk_chars,
+                            "stream_max_chars_per_file": args.stream_max_chars_per_file,
+                        },
+                        indent=2,
+                    ),
+                    encoding="utf-8",
+                )
+                print(
+                    f"streaming data mode: discovered {len(train_files)} files; "
+                    f"per_rank_counts={per_rank_counts}",
+                    flush=True,
+                )
+            batcher = StreamingTextBatcher(
+                Path(args.tokenizer_path),
+                train_files,
+                args.seq_len,
+                args.per_device_batch_size,
+                rank,
+                world_size,
+                args.seed + start_step,
+                args.stream_chunk_chars,
+                args.stream_max_chars_per_file,
+                args.stream_shuffle_files,
+                args.stream_max_files_per_rank_epoch,
+            )
+        else:
+            token_cache_dir = Path(args.token_cache_dir) if args.token_cache_dir else output_dir / "token_cache"
+            token_bin = build_token_cache(
+                Path(args.tokenizer_path),
+                train_data_root,
+                train_text_path,
+                args.train_text_glob,
+                args.dataset_sample_files,
+                args.dataset_sample_seed,
+                token_cache_dir,
+                args.tokenize_max_chars,
+                args.tokenize_max_chars_per_file,
+                args.tokenize_chunk_chars,
+                args.rebuild_token_cache,
+                args.cache_wait_timeout_seconds,
+                args.cache_poll_seconds,
+                rank,
+            )
+            barrier()
+            batcher = RandomTokenBatcher(token_bin, args.seq_len, args.per_device_batch_size, rank, args.seed + start_step)
         writer = SummaryWriter(output_dir / "tensorboard") if (is_rank0(rank) and SummaryWriter is not None) else None
 
         start_time = time.time()

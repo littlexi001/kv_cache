@@ -103,18 +103,25 @@ Override examples:
 RUN_NAME=test_longer bash scripts/nohup_train_8x80g.sh --seq_len 4096 --gradient_accumulation_steps 4
 ```
 
-Use a different DCLM file sample for another run:
+The default training data mode is streaming:
 
-```bash
-DATASET_SAMPLE_SEED=20260620 DATASET_SAMPLE_FILES=2048 bash scripts/nohup_train_8x80g.sh
+```text
+data_mode = streaming
+train_data_root = /mnt/workspace/dclm
+train_text_glob = *.txt
+stream_shuffle_files = true
+stream_max_chars_per_file = 0
 ```
 
-If the first run spends a long time building the token cache, non-rank0
-processes wait by polling the cache files instead of entering an NCCL barrier.
-The default wait limit is 24 hours:
+In streaming mode, each DDP rank receives a different shard of the discovered
+DCLM file list. The file order is shuffled at the start of each local pass, and
+the rank reads text chunks sequentially from the files. This avoids repeatedly
+training on one small fixed token cache.
+
+The old fixed-cache mode is still available for debugging:
 
 ```bash
-CACHE_WAIT_TIMEOUT_SECONDS=172800 bash scripts/nohup_train_8x80g.sh
+DATA_MODE=cache DATASET_SAMPLE_SEED=20260620 DATASET_SAMPLE_FILES=2048 bash scripts/nohup_train_8x80g.sh
 ```
 
 Resume:
@@ -150,22 +157,19 @@ Default training data:
 /mnt/workspace/dclm/**/*.txt
 ```
 
-Each run samples files before building the token cache:
+Default streaming behavior:
 
 ```text
-dataset_sample_files = 1024
-tokenize_max_chars = 200000000
-tokenize_max_chars_per_file = 250000
+recursively discover /mnt/workspace/dclm/**/*.txt
+shard files across DDP ranks by file index
+shuffle each rank's file order each local pass
+tokenize text chunks online during training
 ```
 
-This means the old `part-00000.txt` path is no longer the default training set.
-It remains available only as a compatibility option through `--train_text_path`
-when `--train_data_root ""` is also passed.
-
-Default token cache:
+Streaming metadata:
 
 ```text
-<output_dir>/token_cache
+<output_dir>/streaming_data_meta.json
 ```
 
 Each run contains:
@@ -173,16 +177,12 @@ Each run contains:
 ```text
 args.json
 routed_qwen_config.json
-token_cache/train_tokens.uint32.bin
-token_cache/train_tokens_meta.json
+streaming_data_meta.json
 tokenizer/
 tensorboard/
 checkpoint-0000500/
 latest_checkpoint
 ```
-
-`train_tokens_meta.json` records the discovered file count, sampled file count,
-sample seed, character limits, token count, and the exact sampled file list.
 
 ## Smoke Test
 

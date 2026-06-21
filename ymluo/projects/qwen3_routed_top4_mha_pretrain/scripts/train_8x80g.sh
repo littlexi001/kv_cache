@@ -6,12 +6,17 @@ RUN_NAME="${RUN_NAME:-routed_top4_$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${OUTPUT_ROOT}/${RUN_NAME}}"
 TOKEN_CACHE_DIR="${TOKEN_CACHE_DIR:-${OUTPUT_DIR}/token_cache}"
+DATA_MODE="${DATA_MODE:-streaming}"
 DATASET_SAMPLE_FILES="${DATASET_SAMPLE_FILES:-1024}"
 DATASET_SAMPLE_SEED="${DATASET_SAMPLE_SEED:-1234}"
 MAX_TRAIN_SECONDS="${MAX_TRAIN_SECONDS:-72000}"
 TOKENIZE_MAX_CHARS="${TOKENIZE_MAX_CHARS:-200000000}"
 TOKENIZE_MAX_CHARS_PER_FILE="${TOKENIZE_MAX_CHARS_PER_FILE:-250000}"
 TOKENIZE_CHUNK_CHARS="${TOKENIZE_CHUNK_CHARS:-2000000}"
+STREAM_SHUFFLE_FILES="${STREAM_SHUFFLE_FILES:-true}"
+STREAM_MAX_FILES_PER_RANK_EPOCH="${STREAM_MAX_FILES_PER_RANK_EPOCH:-0}"
+STREAM_CHUNK_CHARS="${STREAM_CHUNK_CHARS:-2000000}"
+STREAM_MAX_CHARS_PER_FILE="${STREAM_MAX_CHARS_PER_FILE:-0}"
 CACHE_WAIT_TIMEOUT_SECONDS="${CACHE_WAIT_TIMEOUT_SECONDS:-86400}"
 CACHE_POLL_SECONDS="${CACHE_POLL_SECONDS:-5}"
 
@@ -22,6 +27,11 @@ export NCCL_DEBUG="${NCCL_DEBUG:-WARN}"
 export PYTHONUNBUFFERED=1
 
 mkdir -p "${OUTPUT_DIR}"
+
+STREAM_SHUFFLE_ARGS=(--stream_shuffle_files)
+if [[ "${STREAM_SHUFFLE_FILES}" == "0" || "${STREAM_SHUFFLE_FILES}" == "false" || "${STREAM_SHUFFLE_FILES}" == "False" ]]; then
+  STREAM_SHUFFLE_ARGS=(--no-stream_shuffle_files)
+fi
 
 torchrun \
   --standalone \
@@ -34,6 +44,11 @@ torchrun \
   --train_text_glob "*.txt" \
   --dataset_sample_files "${DATASET_SAMPLE_FILES}" \
   --dataset_sample_seed "${DATASET_SAMPLE_SEED}" \
+  --data_mode "${DATA_MODE}" \
+  "${STREAM_SHUFFLE_ARGS[@]}" \
+  --stream_max_files_per_rank_epoch "${STREAM_MAX_FILES_PER_RANK_EPOCH}" \
+  --stream_chunk_chars "${STREAM_CHUNK_CHARS}" \
+  --stream_max_chars_per_file "${STREAM_MAX_CHARS_PER_FILE}" \
   --output_dir "${OUTPUT_DIR}" \
   --seq_len 2048 \
   --per_device_batch_size 1 \
