@@ -18,3 +18,6 @@ echo "pid: ${PID}"
 echo "run_name: ${RUN_NAME}"
 echo "log: ${LOG_FILE}"
 echo "output root: ${OUTPUT_ROOT:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs}"
+if [[ -n "${RESUME_FROM:-}" ]]; then
+  echo "resume_from: ${RESUME_FROM}"
+fi

@@ -5,6 +5,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_NAME="${RUN_NAME:-routed_top4_$(date +%Y%m%d_%H%M%S)}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs}"
 OUTPUT_DIR="${OUTPUT_DIR:-${OUTPUT_ROOT}/${RUN_NAME}}"
+RESUME_FROM="${RESUME_FROM:-}"
 TOKEN_CACHE_DIR="${TOKEN_CACHE_DIR:-${OUTPUT_DIR}/token_cache}"
 DATA_MODE="${DATA_MODE:-streaming}"
 DATASET_SAMPLE_FILES="${DATASET_SAMPLE_FILES:-1024}"
@@ -31,6 +32,11 @@ mkdir -p "${OUTPUT_DIR}"
 STREAM_SHUFFLE_ARGS=(--stream_shuffle_files)
 if [[ "${STREAM_SHUFFLE_FILES}" == "0" || "${STREAM_SHUFFLE_FILES}" == "false" || "${STREAM_SHUFFLE_FILES}" == "False" ]]; then
   STREAM_SHUFFLE_ARGS=(--no-stream_shuffle_files)
+fi
+
+RESUME_ARGS=()
+if [[ -n "${RESUME_FROM}" ]]; then
+  RESUME_ARGS=(--resume_from "${RESUME_FROM}")
 fi
 
 torchrun \
@@ -73,4 +79,5 @@ torchrun \
   --tokenize_chunk_chars "${TOKENIZE_CHUNK_CHARS}" \
   --cache_wait_timeout_seconds "${CACHE_WAIT_TIMEOUT_SECONDS}" \
   --cache_poll_seconds "${CACHE_POLL_SECONDS}" \
+  "${RESUME_ARGS[@]}" \
   "$@"

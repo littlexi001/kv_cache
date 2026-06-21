@@ -127,9 +127,13 @@ DATA_MODE=cache DATASET_SAMPLE_SEED=20260620 DATASET_SAMPLE_FILES=2048 bash scri
 Resume:
 
 ```bash
-RUN_NAME=resume_test bash scripts/nohup_train_8x80g.sh \
-  --resume_from /mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/<run>/latest_checkpoint
+RUN_DIR=/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_routed_top4_mha_pretrain/output/routed_top4_qwen3_0p6b_runs/<run>
+OUTPUT_DIR="${RUN_DIR}" RESUME_FROM="${RUN_DIR}/latest_checkpoint" bash scripts/nohup_train_8x80g.sh
 ```
+
+This resumes the model and optimizer from the old checkpoint, switches the
+default data path to streaming DCLM, and writes new checkpoints back into the
+same run directory.
 
 Start TensorBoard:
 
