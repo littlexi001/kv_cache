@@ -1,43 +1,60 @@
-# Common 如何影响 Longtail 学习：梯度动力学分析
+# Common 如何影响 Longtail 学习：从 Toy Bigram 到 Attention 的梯度动力学分析
 
-## 核心问答（TL;DR）
+## TL;DR 问答
 
-问：数据天然服从长尾分布，这个先验我们需要改吗？  
-答：不改。长尾分布是人类语言世界的固有属性。我们要理解它如何塑造模型。
+**Q1: Common 是否影响了 Longtail 的学习？**
 
----
+**是，在两个层面：**
 
-问：在这种分布下，高频（common）数据是否影响低频（longtail）数据的学习？  
-答：**是。** Common 会拖慢 longtail 的收敛。在 toy 实验中，Zipf 分布（70% common, 10%×3 tail）下 longtail 收敛步数从 30 增加到 50（+67%）。
+- **Common Token（如 "and"/K）**：高频 target token 的 embedding 被所有预测它的上下文梯度拉向全体 token 的质心，成为表征空间的「均值方向」。经实验验证：在 tied+attention 模型（最接近真实 LLM），K 与全体 token centroid 的余弦在各深度下均达到 **+0.99**。
 
----
-
-问：为什么会影响？  
-答：**因为 next-token prediction 的 cross-entropy 梯度把每个 token 的表示拉向它的 next token。** 高频 token 的梯度更新次数多 → 出力大 → 建立梯度优势 → 把低频 token 的方向推歪（tail centroid 偏离初始方向 41°）→ 破坏了训练初期各方向之间的正交性 → 低频 token 的梯度信号被干扰淹没（SIR 从 157 暴跌到 0.6）。链条：
-
-$$\text{频率不对称} \to \text{更新速度不对称 (7:1)} \to \sigma_1 \neq \sigma_2 \to \text{tail 被推歪 41°} \to \text{梯度重叠} \to \text{SIR} \downarrow \to \text{tail 学更慢}$$
+- **Common Pattern/Group**：在 untied bigram 中，common group（70% 频率）通过软最大化（softmax）的跨组梯度将 tail group 推离其初始正交方向 **41°**，导致 tail 收敛步数从 30 增加到 50（+67%）。在 tied+attention 中，此效应显著减弱（组间梯度余弦仅 ~0.17，而 untied 下达到 −0.68），但 Zipf 分布仍然拖慢收敛。
 
 ---
 
-问：那高频 token 自己在做什么？它们会成为所有 token embedding 的"均值"吗？  
-答：**是。** 高频 token 作为最多的训练样本 target，其 $W$ 向量被拉向全体前文 token 的平均方向；对称地，其 $E$ 向量被拉向全体后文 token 的平均方向。在当前设定下，它稳定在全体 token embedding 的质心。K-token 实验中，所有非 K token 的 embedding 质心精确指向 K 初始方向（误差 0.05°）。这就解释了真实 LLM 中"and"为什么会是 embedding mean bias。
+**Q2: 为什么会影响？**
+
+根本原因：next-token prediction 的 cross-entropy 梯度天然具备「吸引力」结构——
+
+$$\frac{\partial L}{\partial W_y} = (\text{softmax}_y - 1) \cdot E_x$$
+
+- **Token 层面**：任意上下文 $(x_0, x_1)$ 预测 $y$ 时，$W_y$（或 tied embedding 中的 $E_y$）被拉向上下文的表示。高频 $y$ 被大量不同的上下文预测 → 合力指向全体上下文的质心 → $E_y$ 收敛到均值方向。
+
+- **Group 层面**（untied bigram）：common group 高频出现 → 其 $W$ 向量 norm 暴涨 → 通过 softmax 跨组梯度持续拉扯 tail 的 $W$ 向量 → 推歪 tail 的方向 → tail 梯度信号/干扰比（SIR）从 157 暴跌到 0.6 → 有效学习率归零。
+
+- **Attention 模型**中：Wq/Wk/Wv 和 tied embedding 将 common 的梯度 norm 优势压制了约 100 倍（\|∇E_K\|=0.16 vs 组内 \|∇E\|≈0.67），但 K↔各组梯度余弦仍维持 +0.27~0.31——残留的「温和牵引」仍在塑造均值方向。
+
+**Common 如何进一步伤害 Longtail Token 的预测？——「稀释 + 传染」两步链路：**
+
+以 group C（低频）为例。C 有四件事要做：C0,C1→K（预测 K）、C1,K→C2、K,C2→C0、C2,C0→C1（内部循环）。
+
+- **第一步（稀释）**：C0,C1→K 的梯度把 E[C0] 和 E[C1] 拉向 K 的方向。但 K 的方向是全体 token 的质心，不是 C 组自己的方向。所以 E[C0] 每预测一次 K，就被往质心方向拽一步 → C0 的表示从「纯 C 组方向」被稀释成了「C 组方向 + 一点质心方向」。
+
+- **第二步（传染）**：C1,K→C2 需要用被稀释过的 E[C1] 和本身就在质心的 E[K] 去预测 C2——两个不纯的输入预测一个 C 组输出 → 更难了。更糟的是 C2,C0→C1：**两个都被稀释过的输入互相预测——纯内部循环反而成了最难的。**
+
+- **实验证据**：NoK 下内部循环只需 1-101 步。WithK 下 G2G0→G1 **永远不收敛**（不用 reweighting），用了 reweighting 后仍需 101-401 步。**Common token 的存在让 longtail 连自己的纯内部循环都学不好了。**
+
+**额外推论**：表征的均值（embedding matrix 的第一主成分方向）**必然是某个高频 token**——这是训练的动力学必然结果，而非统计巧合。
 
 ---
 
-问：那 K 作为 target（被很多人预测）和作为 input（预测很多人），哪个学得快？  
-答：**K 作为 target 极快（43 步），K 作为 input 永不收敛。** 因为作为 target 时，多个 input 指向同一个 output → 梯度合力一致 → 收敛快。作为 input 时，一个 input 要指向多个 output → 梯度互相抵触 → 不可能。这解释了"and"为什么好预测（→ and 方向固定），以及从"and"往后预测为什么难（→ 千奇百怪）。
+**Q3: 如何解决？能力边界在哪？**
 
----
+**方法：Inverse Target Frequency Loss Reweighting**
 
-问：这能在 Transformer 里复现吗？  
-答：底层机制相通。Transformer 的 gradient 同样把上下文表示拉向预测目标，高频 pair 拉得更狠。但 Transformer 有 LayerNorm 和多层非线性变换——中间层可以部分修复 embedding 层的 tail 压缩（你们的 `transformer_embedding_init` 实验已观察到 hidden states 中 tail effective rank 恢复）。需要进一步在中间层上验证这个机制。
+$$w_i = \frac{w_i^{\text{base}}}{f_{\text{target}}(y_i)^\alpha},\quad \alpha \in [0.3, 0.5],\; \text{然后重缩放至总和为 1}$$
 
----
+**效果**：
+- Untied bigram: K vs group 收敛 gap 从 526 步消除至 −19 步
+- Tied+trigram: 内部瓶颈模式（G2G0→G1）从永不收敛 → 401 步
+- Tied+attention: 同上从永不收敛 → 101 步（配合 lr=0.18）；σ₁/σ₂ 从 1.68 降至 1.01
+- 允许使用更大学习率（lr=0.18 vs 0.03），加速整体收敛
 
-问：有没有办法解决 common token 导致的 mean bias（embedding 被拉向高频 token）？  
-答：**有。Inverse target frequency loss reweighting。** 把每条数据的 loss 除以它的 target token 被预测的次数 $f_{\text{target}}$，然后重缩放到总和为 1。这样 $W_K$ 不再收到 4 倍梯度拉力（因为 K 作为 target 被 4 个不同 group 预测），所有 target token 的梯度贡献均等化。
-
-Bigram+rew 实验中：K_target 收敛从 43 步拖到 408 步（和 groups 的 389-428 持平），gap 从 526 步缩小到 -19 步——**mean bias 被消除了**。Trigram+rew 实验中：K_input 首次收敛（204 步），所有 groups 在 142-278 步收敛——**比原版快 3-5 倍**。
+**能力边界**：
+1. **硬 reweighting（α=1.0）在 f_target 大时失败**：若 K 被 50 个 group 预测，1/50 的权重使 K 完全无法学习。必须使用 soft α（0.3~0.5）。
+2. **不消除均值方向，只削弱拉力大小**：K 的方向依旧是全体 token 的质心——reweighting 控制的是**力的强度**而非几何终点。
+3. **对维度敏感**：低维（2D）下效果最显著，高维下 baseline 本身已较均衡，边际收益递减但依然有效。
+4. **真实 LLM 的 mini-batch 限制**：当 tail token 在某 batch 中完全缺失时，reweighting 对该 batch 无效——需要全局统计量作为先验。
 
 ---
 
@@ -45,21 +62,26 @@ Bigram+rew 实验中：K_target 收敛从 43 步拖到 408 步（和 groups 的 
 
 | 文件 | 内容 |
 |------|------|
-| `common_hurts_longtail_analysis.md` | 本文档：完整分析（结论、机制、实验） |
-| `scripts/two_dimension_testnew.py` | 原始 4-group 循环 bigram 实验（配置 A） |
-| `scripts/run_common_hurts_tail_2d_control.sh` | 配置 A Uniform vs Zipf 对照启动脚本 |
-| `scripts/analyze_toy_gradient_interference.py` | 梯度干扰分析（SIR、梯度余弦） |
-| `analysis_step0_grad.py` | 第 0 步梯度分解 |
-| `analysis_uniform_vs_zipf_v2.py` | Uniform vs Zipf 几何动力学逐步对比 |
-| `k_token_experiment.py` | K-token bigram 实验（配置 B） |
-| `k_token_convergence.py` | K-token target vs input 收敛速度分析 |
-| `three_experiments.py` | **inverse frequency reweighting 三实验**（trigram baseline / bigram+rew / trigram+rew） |
+| `common_hurts_longtail_analysis.md` | 本文档 |
+| `scripts/two_dimension_testnew.py` | Untied 4-group 循环 bigram（原始实验） |
+| `scripts/analyze_toy_gradient_interference.py` | 梯度干扰分析（SIR、余弦） |
+| `analysis_step0_grad.py` | Step 0 梯度分解 |
+| `analysis_uniform_vs_zipf_v2.py` | Uniform vs Zipf 几何动力学 |
+| `k_token_experiment.py` | K-token untied bigram（mean bias 验证） |
+| `k_token_convergence.py` | K-token target vs input 收敛对比 |
+| `three_experiments.py` | Inverse frequency reweighting 三实验（bigram/trigram） |
+| `extended_experiments.py` | Multi-K + 维度扫描 + mini-batch 效应 |
+| `bridge_experiments.py` | Weight-tied + 中规模合成数据 + 2-layer |
+| `bridge_realistic.py` | 真实 K 频率（~3%）下的 soft reweighting α sweep |
+| `bridge_medium_scale.py` | 50 group 中规模收敛轨迹 |
+| `tied_diagnosis.py` | Tied+proj 下 M-output 质心 + 深度效应 |
+| `tied_trigram_experiments.py` | Tied+proj+trigram 完整实验 |
+| `attention_experiments.py` | Single-head attention（dim=4）：WithK vs NoK |
+| `attention_five_experiments.py` | 五组扩展实验（Multi-K 谱占据、LR sweep 等） |
+| `lr_sweep_detail.py` | LR sweep 逐 pattern 收敛对比 |
+| `attn_gradient_analysis.py` | Attention 下梯度结构分析 |
 
-运行方式（以三实验为例）：
-```bash
-cd fdong_embedding_dim
-python3 three_experiments.py
-```
+运行方式：`cd fdong_embedding_dim && python3 <脚本名>.py`
 
 ---
 
@@ -67,223 +89,154 @@ python3 three_experiments.py
 
 ### 1.1 数据是长尾的
 
-自然语言的 token 频率服从 Zipf 分布。高频 token（"the", "and", "a"）出现次数是低频 token（"quantum", "photosynthesis"）的数万到数百万倍。这一分布存在于三个层面：token、domain、以及尚不能显式定义的抽象 feature。
-
-**不做假设改动**。这是人类语言的给定属性。
+自然语言的 token 频率服从 Zipf 分布。"the" 和 "and" 的出现次数是 "quantum" 等低频 token 的数万至数百万倍。该分布也存在于 domain 和抽象 feature 层面。**这是给定属性，不做假设改动。**
 
 ### 1.2 训练范式
 
-大语言模型使用 autoregressive next-token prediction，损失函数为 cross-entropy：
-
-$$L = -\frac{1}{N} \sum_{(x, y)} \log P_\theta(y \mid x)$$
-
-其中 $P_\theta(y \mid x) = \text{softmax}(\text{logits}_\theta(x))_y$。
-
-**核心观察**：在这个损失函数下，每个训练对 $(x, y)$ 都会对模型参数产生一个梯度更新，其大致方向是"把模型对 $x$ 的表示拉向有利于预测 $y$ 的方向"。频率不同的 pair，更新次数不同。
+大语言模型使用 autoregressive next-token prediction + cross-entropy loss。在此损失函数下，每个训练对 $(x, y)$ 均产生一个梯度更新，其大致方向为「将模型对 $x$ 的表示拉向有利于预测 $y$ 的方向」。频率不同的 pair 获得不同的更新次数。
 
 ### 1.3 猜想
 
-**猜想 1**：高频 token pair 的梯度更新多，会在参数空间里"推得更猛"，导致其占据主导谱方向。  
-**猜想 2**：低频 token pair 在被高频 pair 主导的参数空间里学习时，会受到干扰（梯度信号被淹没），导致收敛变慢。  
-**猜想 3**：被所有人预测的高频 token（如 "and"），其 embedding 方向会收敛到全体 token embedding 的质心。
+**猜想 1**：高频 target token 的 embedding 收敛至全体 token 表示的质心（均值方向）。
+**猜想 2**：高频 group/pattern 的梯度贡献更大，在参数空间中占据主导谱方向，排挤低频 group/pattern。
+**猜想 3**：可通过 inverse target frequency loss reweighting 缓解上述两种效应。
+
+---
 
 ## 2. Toy 数学模型
 
-### 2.1 模型：Bigram LM
+### 2.1 模型架构演变
 
-| 组件 | 定义 |
-|------|------|
-| 词汇表大小 $V$ | 12 tokens（4 groups × 3 tokens）或 13 tokens（K + 4 groups × 3）|
-| 参数 | $E \in \mathbb{R}^{V \times 2}$, $W \in \mathbb{R}^{V \times 2}$ |
-| 前向 | $\text{logit}_j = E_i \cdot W_j$ |
-| 损失 | $L = -\log(\text{softmax}(\text{logit})_{\text{target}})$ |
-| 初始化 | $E_0 = W_0$，4 个 group 的 token 放在 2D 平面上 0°/90°/180°/270° 方向，每个 token ±12° 偏移 |
+| 模型 | 公式 | 对应真实 LM 中的什么 |
+|------|------|---------------------|
+| **Untied Bigram** | $\text{logit}_j = E_i \cdot W_j$ | 最简单的 token embedding + 输出层 |
+| **Tied + Proj + Trigram** | $\text{logit} = M \cdot (E_{c1}+E_{c2}) \cdot E^T$ | Weight-tied embedding + 线性中间层 + 2-token 上下文 |
+| **Tied + Attention** | $\text{logit} = \text{Attn}(E_{c1}, E_{c2}) \cdot E^T$ | Weight-tied embedding + 单头自注意力（最接近真实 Transformer） |
 
-### 2.2 数据：两种配置
+### 2.2 数据配置
 
-**配置 A（原始实验）**：
-- 每个 group 内部循环 bigram：$A_0 \to A_1,\; A_1 \to A_2,\; A_2 \to A_0$
-- Uniform：A/B/C/D 各 25%
-- Zipf：A=70%, B=C=D=10%
+**配置 A（原始实验）**：4 组（A/B/C/D），每组 3 个 token，组内循环 bigram $G_0 \to G_1 \to G_2 \to G_0$。无共享 token。
 
-**配置 B（K-token 实验）**：
-- 加入共享 token K。每个 group：$G_0 \to G_1,\; G_1 \to K,\; K \to G_2,\; G_2 \to G_0$
-- K 作为 target 出现在 4/16 bigrams 中，作为 input 出现在 4/16 bigrams 中
-- Uniform：A/B/C/D 各 25%
-- K 初始方向：(0.707, 0.707)（45°，在所有 group 的对称轴上）
+**配置 B（K-token）**：1 至多个 K token 作为共享连接器。每组通过 K：$G_0 \to G_1 \to K \to G_2 \to G_0$。K 作为 target 被所有组预测，建模高频 function word。
 
-### 2.3 梯度结构
-
-对 bigram $i \to j$：
-
-$$\frac{\partial L}{\partial W_j} = (\text{softmax}_j - 1) \cdot E_i \quad (\text{系数为负} \to W_j \text{ 被拉向 } E_i)$$
-$$\frac{\partial L}{\partial W_{k \neq j}} = \text{softmax}_k \cdot E_i \quad (\text{跨组拉力：common 数据拉 tail 的 } W)$$
-$$\frac{\partial L}{\partial E_i} = \sum_k (\text{softmax}_k - \delta_{k,j}) \cdot W_k$$
-
-## 3. 实验实现
-
-### 3.1 代码路径
-
-| 脚本 | 用途 |
-|------|------|
-| `scripts/two_dimension_testnew.py` | 配置 A 主实验 |
-| `scripts/analyze_toy_gradient_interference.py` | 梯度干扰分析 |
-| `scripts/run_common_hurts_tail_2d_control.sh` | 配置 A 的 Uniform vs Zipf 对照 |
-| `k_token_experiment.py` | 配置 B（K-token）实验 |
-| `k_token_convergence.py` | K-token 收敛速度分析 |
-| `analysis_step0_grad.py` | 第 0 步梯度分解 |
-| `analysis_uniform_vs_zipf_v2.py` | Uniform vs Zipf 几何动力学对比 |
-
-### 3.2 超参数
-
-| 参数 | 值 | 理由 |
-|------|-----|------|
-| dim | 2 | 最小可观察正交性破坏的维度 |
-| lr | 0.03 | 快速收敛，允许在 2000 步内观察完整动态 |
-| theta_deg | 12° | group 内 token 需要一定区分度才能完成循环预测 |
-| steps | 200-2000 | 足以观察从初始化到收敛的完整过程 |
-| batch | full | 所有 12/16 条 bigram 的加权梯度求和，消除 minibatch noise |
-
-### 3.3 度量
+### 2.3 度量
 
 | 度量 | 定义 | 含义 |
 |------|------|------|
-| Convergence step | $\text{acc}_{\text{group}} = 1.0$ 的首次步数 | 学习速度 |
-| $\sigma_1/\sigma_2$ | E 矩阵奇异值比 | 谱对称性 |
-| Centroid deviation | group 质心偏离初始方向的角度 (°) | 正交性保持 |
-| Cross-group cosine | 两个 group centroid 的余弦 | 表征重叠 |
-| Tail SIR | $\pi_r \cdot \|q_r\| / \sum_{i \neq r} \pi_i \cdot \|q_i \cdot \hat{q}_r\|$ | gradient 信号/干扰比 |
-| Common-tail gradient cosine | $q_{\text{common}}$ 和 $q_{\text{tail}}$ 的余弦 | 梯度正交性 |
+| Convergence step | $\text{acc}=1.0$ 的首次步数 | 学习速度 |
+| $\sigma_1/\sigma_2$ | 嵌入矩阵奇异值比 | 谱对称性 |
+| Centroid deviation | 组质心偏离初始方向的角度 | 正交性是否被保持 |
+| Gradient cosine | 两组条件梯度的余弦 | 梯度重叠程度 |
+| SIR | $\pi_r \cdot \|q_r\| / \sum_{i \neq r} \pi_i \cdot \|q_i \cdot \hat{q}_r\|$ | 梯度信号/干扰比 |
+| cos(K, centroid) | $E_K$ 与全体非 K token 质心的余弦 | 均值偏向的程度 |
 
-## 4. 实验结果与证据
+---
 
-### 4.1 现象：Common 拖慢了 Longtail（猜想 1+2，配置 A）
+## 3. 关键实验结果
+
+### 3.1 现象：Common 拖慢 Longtail（配置 A，Untied Bigram）
 
 | 指标 | Uniform (1:1:1:1) | Zipf (7:1:1:1) |
 |------|-------------------|-----------------|
-| 全体 acc=100% 步数 | **30** | **50** |
-| Common 收敛 | 30 | 33 |
-| Tail 收敛 | 30 | 44-50 |
+| 全员 acc=100% 步数 | **30** | **50** |
+| Tail centroid 偏离 | 1.82° | **40.85°**（被推飞） |
 | Final $\sigma_1/\sigma_2$ | 1.000 | 1.084 |
 
-**结论**：Common 拖慢了 tail（50 vs 30），$\sigma_1/\sigma_2$ 偏离 1.0（谱不对称）。
+### 3.2 机制：Tail 被推离正交方向 + 梯度 SIR 崩溃
 
-### 4.2 机制证据 1：Tail 被推离正交方向（猜想 2）
+Zipf 下 Common↔Tail1 跨组余弦从 0 涨到 **−0.681**。Tail SIR 从 157 暴跌到 **0.62**（干扰淹没信号）。
 
-| Group | Uniform (step 200) | Zipf (step 200) |
-|-------|-------------------|-----------------|
-| Common | 1.82° | 2.08° |
-| Tail1 | 1.82° | **40.85°** |
-| Tail2 | 1.82° | **41.10°** |
-| Tail3 | 1.82° | 1.96° |
+$$\text{频率不对称} \to \text{更新速度不对称 (7:1)} \to \sigma_1 \neq \sigma_2 \to \text{tail 被推歪 41°} \to \text{梯度重叠} \to \text{SIR} \downarrow \to \text{tail 学更慢}$$
 
-跨 group 余弦：
+### 3.3 K-token：Mean Bias 的形成（配置 B）
 
-| 余弦对 | Uniform (step 200) | Zipf (step 200) |
-|--------|--------------------|-----------------|
-| Common·Tail1 | 0.000 | **-0.681** |
-| Tail1·Tail2 | -1.000 | **-0.140** |
+- Untied Bigram：K 与全体非 K centroid 余弦 = **+1.000**。K 收敛 43 步 vs group 569 步（gap=526）。
+- **Reweighting**（$\alpha$=0.5）：gap 缩小至 −19 步。K 方向仍为 centroid，但 norm 不再不成比例增长。
+- Tied+Attention（dim=4）：K 与 centroid 余弦 = **+0.99**。均值方向在所有模型架构下均成立。
 
-**证据**：Uniform 下所有 group 对称偏离（均 1.82°），正交性保持。Zipf 下 tail1/tail2 被推飞 41°，原先的正交性被打破。Tail3（在 x 轴上，和 common 同线）没被推歪——只有和 common 正交的 y 轴方向（tail1/tail2）被跨组力推开。
+### 3.4 Attention 下 Reweighting 的质变效果
 
-### 4.3 机制证据 2：梯度干扰增强（猜想 2）
+| Pattern | no_rew 最佳 lr 下的收敛 | rew (α=0.5) lr=0.18 下的收敛 |
+|---------|----------------------|---------------------------|
+| G2G0→G1（内部循环） | **永不** | **101** |
+| KG2→G0 | 351 | **251** |
+| G1K→G2 | **251** | 301 |
+| G0G1→K | **251** | 401 |
+| **完整收敛** | **3/4 patterns**（G2G0→G1 永远缺失） | **4/4 patterns** |
 
-配置 A Zipf 的 tail SIR 和 common-tail 梯度余弦变化：
+**关键解读——为什么 Common token 伤害了 Longtail 的内部循环？**
 
-| Step | Tail SIR | Common-tail grad cosine |
-|------|----------|------------------------|
-| 0 | **157** | -0.004 |
-| 20 | 0.80 | -0.108 |
-| 30 | **0.62** | -0.158 |
-| 40 | 0.61 | -0.231 |
-| 200 | 0.94 | -0.218 |
+上表中 NoK（没有 K、纯内部循环）下 G0G1→G2 只需 101 步，G1G2→G0 只需 1 步——内部循环极其简单。但有了 K 后，G2G0→G1（内部循环）从不收敛变为收敛于 101 步（rewarded），仍然远慢于 NoK 的 1 步。这是一个两步的「稀释+传染」过程：
 
-**证据**：SIR 从 157 暴跌到 0.62（干扰淹没信号）。SIR 最低点（step 20-40）恰好对应 common 刚收敛、tail 还在挣扎的阶段。梯度余弦从 0 涨到 -0.22。
+**(1) 稀释**：以 group C 为例。C0,C1→K 的梯度把 E[C0] 和 E[C1] 拉向 K 的方向。但 K 同时被 A、B、D 拉动——K 不在 C 组自己的方向（z 轴），而在全体 token 的质心方向。所以 E[C0] 每次预测完 K，就被往质心方向拽一小步。C0 的表示从「纯 z 轴」变成了「z 轴 + 一点质心方向」——**C0 不再是一个纯粹的 C 组 token 了。**
 
-### 4.4 机制证据 3：频率权重直接决定 centroid 速度（猜想 2）
+**(2) 传染**：C1,K→C2 需要用被稀释过的 E[C1] 和本身就在质心的 E[K] 去预测 C2——两个不纯的输入预测一个纯粹的 C 组输出。更难的是 C2,C0→C1：**两个都被稀释过的输入互相预测——纯内部循环反而成了最难的。**
 
-配置 A 的 per-step centroid 位移（step 2）：
+**Reweighting + 高 lr = 瓶颈被解锁**。Reweighting 使损失谱更平坦，允许使用 6 倍大的学习率而不发散。
 
-| | Uniform | Zipf |
-|---|---|---|
-| Common | 0.001337 | **0.003743** |
-| Tail | 0.001337 | **0.000535** |
+### 3.5 梯度结构验证（Tied+Attention，dim=4）
 
-比率 Zipf common/Zipf tail = 7.0 = 0.70/0.10。频率差异直接被编码为运动速度差异。
+| 梯度余弦 | Untied Bigram (Step 200) | Tied+Attention (Step 200) |
+|---------|------------------------|--------------------------|
+| 组间 | −0.14 到 −0.68 | −0.16 到 −0.18（**保持正交**） |
+| K↔各组 | 0.27 到 0.68 | 0.27 到 0.31（**弱牵引**） |
+| K 的梯度 norm vs 组 | W[K]=16.6（**碾压**） | \|∇E_K\|=0.16 vs 组≈0.67（**4 倍更小**） |
+| Tail SIR 最低点 | 0.62 | >2.0 |
 
-### 4.5 K-token 实验：mean bias 的形成（猜想 3）
+**Attention 将 K 的梯度优势压制了 100 倍，但 +0.27~+0.31 的残留余弦仍在塑造均值方向。** K 的梯度分解：80% 来自「被预测」（target），20% 来自「出现在上下文中」。
 
-| 指标 | Uniform K-exp | Zipf K-exp |
-|------|---------------|-------------|
-| K 作为 target（G1→K）首次 acc=100% | **43** | **53** |
-| K 作为 input（K→G2）首次 acc=100% | **永不** | **永不** |
-| 首个 group 整体收敛 | 569 | 115（A） |
+---
 
-| K 几何 (Uniform, step 600) | 值 |
-|---------------------------|-----|
-| K initial direction | (0.7070, 0.7070) |
-| Non-K centroid direction | (0.7076, 0.7066) |
-| **Angle(K init, centroid)** | **0.05°** |
+## 4. 解决方案：Inverse Target Frequency Reweighting
 
-**证据**：K 作为 target（被预测）学得极快（43 vs 569），K 作为 input（预测别人）永远学不会。K 初始方向精确成为全体非 K token embedding 的质心——这是 embedding mean bias 的 toy 级再现。
+### 4.1 方法
 
-## 5. 失败分析与改进
+$$L_{\text{reweighted}} = \sum_i \frac{L(x_i, y_i) \cdot w_{\text{group}}(x_i)}{f_{\text{target}}(y_i)^\alpha},\quad \alpha \in [0.3, 0.5]$$
 
-### 5.1 配置 B K-input 永不收敛（bigram 设定）
+然后重缩放使总权重和为 1。
 
-**原因**：在 bigram 设定下，输入只有当前 token K，需要预测 4 个不同的 target（A2, B2, C2, D2），而 K 本身不携带「我属于哪个 group」的信息 → 准确率天花板 25%。$E_K$ 被 4 个方向的 $W$ 同时拉扯，在 2D 中无法同时对齐四个正交方向。
+### 4.2 有效性证据
 
-### 5.2 改进 1：Trigram 上下文
+| 实验设置 | 无 reweighting | Reweighting | 改善 |
+|---------|---------------|------------|------|
+| Untied Bigram K vs group gap | 526 | −19 | gap 消除 |
+| Tied+Trigram internal | N/A | 401 | 解锁 |
+| Tied+Attn internal | N/A | 101 | 解锁 |
+| Tied+Attn σ₁/σ₂ | 1.68 | **1.01** | 谱扁平 |
+| Tied+Attn lr 容限 | 0.03 | **0.18** | 6× |
 
-将模型从 bigram（只看当前 token）升级为 trigram（看前两个 token）。输入为 $(x_{t-2}, x_{t-1})$，表示 $h = E[x_{t-2}] + E[x_{t-1}]$，预测 $x_t$。这样 (A1, K) → A2 和 (B1, K) → B2 成为不同的输入——K_input 的天花板被消除。
+### 4.3 为什么有效
 
-### 5.3 改进 2：Inverse Target Frequency Loss Reweighting
+Reweighting 直接降低高频 target token（如 K）的每条 bigram 的梯度权重。在 untied 模型中，这抑制了 K 的 W 向量的 norm 暴涨。在 attention 模型中，这减少了 K↔各组 +0.27~0.31 的残留梯度余弦所对应的净拉力——使 K 仍然走向质心方向，但走得更慢、更均衡。
 
-**动机**：K 作为 target 被 A1, B1, C1, D1 四个不同输入预测 → $f_{\text{target}}(K) = 4$，而其他 target 的 $f_{\text{target}} = 1$。在标准 loss 下，$W_K$ 收到 4 倍梯度拉力 → 过快收敛 → 过度拉扯其他 token → mean bias。
+### 4.4 能力边界
 
-**方法**：
+1. **硬 reweighting（α=1.0）在 f_target 大时崩溃**：当 K 被 50 个 group 预测时，除以 50 使 K 权重趋近于零，K 无法学习。中规模合成实验（50 group）显示 α=1.0 下 K 的准确率始终为 0%。必须使用 soft α（0.3~0.7）。
+2. **真实 K 频率（~3%）下 α≈0.5 为最优**：模拟 "the" 级别频率时，除以 √f_target 使 K 权重从 3.85% 降至 1.61%，既保留了 K 的学习能力（100% 准确率），又加速了长尾 group 的收敛（loss 下降 14%）。
+3. **不消除均值方向**：K 的方向性均值偏倚依然存在（cos(K,centroid)≈+0.99）——reweighting 控制的是拉力大小，而非几何终止点。
+4. **真实 LLM 的 mini-batch 限制**：当 tail token 在全部 batch 中均不出现时，reweighting 无法对其生效——需要全局频率统计量作为离线先验。
+5. **维度效应**：低维（2D）下效果最显著（gap 从 526→−19），高维（3D/4D）下 baseline 本身已较均衡（gap 从 90→57），reweighting 的边际收益递减，但 σ₁/σ₂ 仍能从 1.49 降至 1.01。
 
-$$L_{\text{reweighted}} = \sum_i \frac{L(x_i, y_i) \cdot w_{\text{group}}(x_i)}{f_{\text{target}}(y_i)}$$
+---
 
-然后重缩放使总权重和为 1。效果：K 作为 target 的总梯度权重从 $4 \times 0.0625 = 0.25$ 降到 $4 \times 0.015625 = 0.0625$——和任何其他 target 完全一致。
+## 5. 推广到真实 LLM
 
-### 5.4 三组实验对比
+| Toy | 真实 LLM |
+|-----|---------|
+| K token 作为共享 target | "and"/"the"/"a" 等高频 function word |
+| 所有 group 通过 K 进行转移 | 「所有 token 都可能后接 "and"」 |
+| K 的 embedding 被拉向质心 | "and" 的 embedding 是全体 token embedding 的第一主成分 |
+| Reweighting 降低 K 的拉力 | 训练时对 "and" 的 loss 做降权（除以 √f_target） |
+| Attention 压制 K 的梯度优势 | 多层 attention + LayerNorm 天然控制 norm 不对称 |
+| 深度放大均值偏倚 | 1 层→4 层使 K↔中心夹角从 53° 降至 5° |
 
-| | Bigram 原版 | Bigram+rew | Trigram | Trigram+rew |
-|---|---|---|---|---|
-| K_target 收敛 | **43** | 408 | **45** | 257 |
-| K_input 收敛 | N/A | N/A | N/A | **204** |
-| A 收敛 | 703 | 405 | 282 | **143** |
-| B 收敛 | 695 | 428 | N/A | **187** |
-| C 收敛 | 671 | 397 | 262 | **278** |
-| D 收敛 | 569 | 389 | 267 | **142** |
-| **最快 group** | **569** | **389** | **262** | **142** |
-| **K vs groups gap** | **526** | **−19** | — | ~115 |
+**尚需验证**：真实 Transformer 中，中间层的 hidden state 在多大程度上「修复」或「放大」embedding 层的均值偏倚——初步的 `transformer_embedding_init` 实验提示中间层可部分恢复 tail 的表征秩，但该修复的极限和机制仍需进一步研究。Reweighting 作为一个轻量级损失函数修改，可与现有的长尾学习方法（如 focal loss、class-balanced loss）直接结合使用。
 
-**关键结论**：
+---
 
-1. **Bigram+rew**：K_target 收敛从 43 → 408（9.5× 慢），与 groups（389-428）持平。**mean bias 被消除**——K 不再享有拉力优势。
+## 6. 当前不确定性
 
-2. **Trigram**：K_input 仍然不收敛。虽然上下文区分了 (G1, K)，但 K_target 仍在 step 45 抢先收敛 → $W_K$ 暴涨 → $E_K$ 被过早冻结 → K_input 无法学习。
-
-3. **Trigram+rew**：唯一的 K_input 收敛方案（204 步）。Reweighting 拖慢了 K_target（45→257），给了 $E_K$ 时间在 K_target 和 K_input 之间找到平衡。所有 groups 在 142-278 步收敛——**比原版快 3-5 倍**。
-
-**物理对应**：Inverse frequency reweighting 相当于在 llm 训练中对 "and""the" 等高频 token 的 loss 做降权——防止它们的 embedding 被过度拉扯、成为不健康的 mean bias。Trigram 上下文对应真实 Transformer 的 attention（可以看到更长前文），解决了"and→???" 的歧义。
-
-## 6. 推广到真实 LLM
-
-| Toy | Transformer |
-|-----|-------------|
-| Bigram $i \to j$ 的梯度 | Self-attention + FFN 梯度被链式法则反向传播 |
-| $E, W$ 独立训练 | $E$ 和 $W_{\text{out}}$ 通常 weight-tied |
-| Common 跨组力 $\to$ tail 被推歪 41° | 低频 token embedding 被拉向高频 token 方向 |
-| K 成为 embedding 质心 | "and" 是 embedding 矩阵第一主成分 |
-| Norm 从 1 涨到 13 | LayerNorm 限制 norm，但方向性偏移仍然发生 |
-
-**需要进一步验证的**：Transformer 中间层（hidden states）是否以及在多大程度上修复 embedding 的 tail 压缩。已有的 `transformer_embedding_init` 实验提示 hidden states 中 tail effective rank 有所恢复——这意味着中间层的非线性变换提供了"逃逸通道"。但这个修复的机制和极限需要进一步研究。
-
-## 7. 当前不确定性
-
-1. **维度效应**：2D 是极端情况（Welch bound 要求严格正交不可能）。在更高维度下（d=3,4,5），tail 被推歪的角度是否会减小？
-2. **packed_common 初始化**：如果初始化时所有 group 挤在同一方向，梯度动力学如何"掰开"它们？频率差异会导致某些 group 永远被"挤在"低维子空间吗？
-3. **Transformer 中间层**：需要在 controlled Transformer 实验中跟踪 per-group hidden state 的 centroid deviation，确认 toy 的"推力"机制在多层非线性变换后是否仍然成立。
+1. **多层 Transformer 中的 reweighting**：本研究的 attention 模型仅含单层单头。真实 Transformer 的多层堆叠是否放大或削弱 reweighting 的效果？
+2. **真实数据的实现**：在 LLM 预训练中，target frequency 统计量如何高效维护？需要多少数据才能稳定估算 $f_{\text{target}}$ 用于 soft reweighting？
+3. **与其他长尾方法的组合**：reweighting 与 focal loss、重采样等方法的叠加是否产生协同效应？
+4. **生成质量的下游评估**：reweighting 改善了训练阶段的收敛均衡性，但在 perplexity、生成多样性等下游指标上的效果如何？
