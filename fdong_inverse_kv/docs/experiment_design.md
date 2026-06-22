@@ -212,6 +212,24 @@ $$
 5. head overlap 高：token-level 或 shared global routing 可能已经足够；
 6. distance/RoPE feature 强：router 需要显式接收或学习相对位置结构，而不能只看 token content。
 
+### 0.11 已完成结果与下一步统一归因
+
+当前实验已经确认：
+
+1. centered hidden space 已有 top-key feature；
+2. K projection 进一步放大该 feature；
+3. K 前 256 个奇异方向贡献约 `86.5%` 的净正向 top-vs-random margin；
+4. RoPE 显著改变 retrieval membership，并相对随机历史 token 提供约 `53.1%` 的条件 margin 增量；
+5. 控制 token distance 后，RoPE 的条件增量约为 `24.1%`。
+
+由于最终 score 是 input、learned Q/K 和 RoPE 的乘性交互，下一步若要给出统一贡献比例，必须在同一 score metric 上完成八组 factorial ablation：
+
+1. input relationship：原始 pair relationship / 距离桶内打乱 key hidden；
+2. Q/K transformation：训练后的 `W_Q/W_K` / 保持奇异值谱但随机化奇异向量方向的 matched transformation；
+3. position：RoPE / identity rotation。
+
+统一输出使用固定完整模型 top-2% label 的 standardized top-vs-control score margin，并同时报告 top-set recall。最后使用 Shapley value 分配三项主效应及其交互贡献。该设计避免把 hidden cosine、K cosine 与 QK score 上的百分比直接相加。
+
 ## 1. Falsifiable Question
 
 在真实 DCLM 数据上，head-level shared KV/expert bucket 能否仅靠 NTP：

@@ -14,7 +14,26 @@
 2. **Q/K-extracted feature**：hidden 中相似性不明显，但该 head 的 `W_Q/W_K` 把当前 head 关心的 feature 抽取出来；
 3. **Bilinear/SVD feature**：高 attention score 不是单一 hidden cosine 或 K-space cosine 能解释，而是来自完整 `W_Q/W_K` 奇异空间中的少数 query/key feature pairs。
 
-本方法希望先解释这些 feature，再用这些 feature 指导 head-level KV bucket 与 expert bucket 的共同设计。
+最新实验已经把这三种可能更新为一条共同成立的计算链条：
+
+1. 去中心后的 layer-input hidden space 已经具有 top-key feature geometry；
+2. K-space 相对 hidden space 具有更强区分度，说明 learned projection 会进一步选择和放大 feature；
+3. 完整 K 方向归因显示前 256 个奇异方向贡献约 `86.5%` 的净正向 top-vs-random score margin，但约需 `404` 个方向覆盖 90% 的绝对区分贡献；
+4. RoPE ablation 显示原 top-2% 集合只有 `42.2%` 能在移除 RoPE 后保留；相对随机历史 token，RoPE 提供约 `53.1%` 的条件 score-margin 增量，距离匹配后该增量约为 `24.1%`。
+
+因此 hidden-native、Q/K-extracted 和 position/RoPE feature 不是互斥解释。最终 score 是三者的乘性交互：
+
+$$
+s_{ij}
+=
+\frac{
+\operatorname{Norm}(W_Qx_i)^{\top}
+R_{i-j}
+\operatorname{Norm}(W_Kx_j)
+}{\sqrt d}
+$$
+
+现阶段不能把不同指标上的比例拼成唯一的三项加法分解。本方法希望先解释每个阶段在明确对照下的条件作用，再用可被 pre-attention 表征预测的 feature 指导 head-level KV bucket 与 expert bucket 的共同设计。
 
 ## 0.1 Architecture Objective
 
@@ -191,6 +210,8 @@ q^{\top}k_i=q^{\top}c+q^{\top}r_i
 $$
 
 `q^T c` 对所有历史 token 相同，会在 token-wise softmax 中抵消。因此 router 应主要使用 residual K geometry，而不是 raw common center。
+
+当前 Qwen3-0.6B 长序列实验测得：最终 RoPE 后 K-space 的 common mean 平均占 `65.5%` 能量，且该比例与随机 token raw K cosine 的相关系数为 `0.985`。去中心后，随机 token K cosine 从 `0.615` 降至约 `-0.012`，但 top-2% token 仍为 `0.396`。因此 common center 的确污染 raw similarity，却没有制造有效 top-key feature；去中心后的 residual K geometry 才是 router 应拟合的对象。
 
 ### 2.4 Similar representations produce similar routing only with margin
 
