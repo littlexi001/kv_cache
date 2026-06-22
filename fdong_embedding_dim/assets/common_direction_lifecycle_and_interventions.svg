@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
+  <title id="title">公共奇异方向的生命周期与干预位置</title>
+  <desc id="desc">左侧展示高频模式如何产生成核、被嵌套结构强化、达到饱和并伤害长尾；右侧展示每个阶段对应的潜在解决方案。</desc>
+  <defs>
+    <linearGradient id="leftBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset="1" stop-color="#eef5ff"/>
+    </linearGradient>
+    <linearGradient id="rightBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbfff9"/>
+      <stop offset="1" stop-color="#f0f8ec"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#18324a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#3973a8"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4f8a57"/>
+    </marker>
+    <style>
+      .title { font: 700 34px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #17324d; }
+      .subtitle { font: 500 17px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #526b80; }
+      .section { font: 700 24px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+      .box-title { font: 700 20px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #18324a; }
+      .body { font: 500 16px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #344d61; }
+      .small { font: 500 14px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #506779; }
+      .solution-title { font: 700 18px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #285c36; }
+      .solution-body { font: 500 15px -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; fill: #3b5f43; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" fill="#ffffff"/>
+  <text x="800" y="52" text-anchor="middle" class="title">公共奇异方向：成核、强化、饱和与干预</text>
+  <text x="800" y="84" text-anchor="middle" class="subtitle">目标不是删除有用的公共结构，而是阻止它过早、过强地垄断梯度与表示空间</text>
+
+  <rect x="45" y="115" width="950" height="810" rx="28" fill="url(#leftBg)" stroke="#c8dced" stroke-width="2"/>
+  <rect x="1025" y="115" width="530" height="810" rx="28" fill="url(#rightBg)" stroke="#cfe3c7" stroke-width="2"/>
+  <text x="80" y="158" class="section" fill="#285f8f">机制生命周期</text>
+  <text x="1060" y="158" class="section" fill="#407448">对应干预位置</text>
+
+  <!-- Phase 1 -->
+  <rect x="80" y="190" width="420" height="155" rx="20" fill="#ffffff" stroke="#8db7d9" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="116" cy="225" r="19" fill="#3973a8"/>
+  <text x="116" y="232" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#ffffff">1</text>
+  <text x="148" y="232" class="box-title">成核：第一个公共方向出现</text>
+  <text x="110" y="268" class="body">• 高频 K 作为 target，聚合大量前文 contexts</text>
+  <text x="110" y="296" class="body">• K 作为 input，向大量 hidden states 注入共享分量</text>
+  <text x="110" y="324" class="body">• 高频使这些相关梯度在训练早期占主导</text>
+
+  <rect x="545" y="190" width="410" height="155" rx="20" fill="#f7fbff" stroke="#b4cee3" stroke-width="2"/>
+  <text x="575" y="228" class="box-title">阶段产物</text>
+  <text x="575" y="265" class="body">不同样本的梯度开始同向累积</text>
+  <text x="575" y="294" class="body">形成公共预测方向与首个 dominant mode</text>
+  <text x="575" y="323" class="small">它代表高频 token 及关联结构，不等同于单个 token</text>
+
+  <!-- Phase 2 -->
+  <path d="M 290 345 L 290 382" stroke="#3973a8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <rect x="80" y="390" width="875" height="175" rx="20" fill="#ffffff" stroke="#6e9fc7" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="116" cy="425" r="19" fill="#3973a8"/>
+  <text x="116" y="432" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#ffffff">2</text>
+  <text x="148" y="432" class="box-title">强化：nested 结构复用已有高增益通道</text>
+  <text x="110" y="470" class="body">短 prefix 的公共成分被更长 prefix 继承：A → AB → ABC → ABCD</text>
+  <text x="110" y="500" class="body">已有大 singular gain 让复用该方向比建立新方向更快降低当前 loss</text>
+  <text x="110" y="530" class="body">更多 feature 使用该方向 → 梯度更对齐 → 该 singular mode 进一步增强</text>
+  <path d="M 770 536 C 900 610, 925 382, 770 435" fill="none" stroke="#3973a8" stroke-width="3" stroke-dasharray="8 7" marker-end="url(#arrowBlue)"/>
+  <text x="830" y="486" class="small" fill="#285f8f">正反馈</text>
+
+  <!-- Phase 3 -->
+  <path d="M 290 565 L 290 602" stroke="#3973a8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <rect x="80" y="610" width="420" height="150" rx="20" fill="#ffffff" stroke="#8db7d9" stroke-width="2" filter="url(#shadow)"/>
+  <circle cx="116" cy="645" r="19" fill="#3973a8"/>
+  <text x="116" y="652" text-anchor="middle" font-family="sans-serif" font-size="18" font-weight="700" fill="#ffffff">3</text>
+  <text x="148" y="652" class="box-title">饱和：强化边际递减</text>
+  <text x="110" y="689" class="body">• 高频 pattern 的 prediction error 逐渐下降</text>
+  <text x="110" y="717" class="body">• 大 singular value 不能凭空制造梯度</text>
+  <text x="110" y="745" class="body">• 只剩困难 contexts、input 路径与 margin growth</text>
+
+  <rect x="545" y="610" width="410" height="150" rx="20" fill="#fff9f1" stroke="#e5bf85" stroke-width="2"/>
+  <text x="575" y="649" class="box-title">此时已经留下的结构</text>
+  <text x="575" y="687" class="body">common 主空间已先成形</text>
+  <text x="575" y="716" class="body">tail 主要在剩余 residual space 中竞争</text>
+  <text x="575" y="745" class="small">饱和意味着增长停止，不意味着早期影响被自动逆转</text>
+
+  <!-- Harm -->
+  <path d="M 290 760 L 290 797" stroke="#3973a8" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <rect x="80" y="805" width="875" height="88" rx="20" fill="#fff4f2" stroke="#d98d84" stroke-width="2" filter="url(#shadow)"/>
+  <text x="110" y="841" class="box-title" fill="#8c3d36">对长尾的后果</text>
+  <text x="110" y="871" class="body">梯度份额不足　·　被注入 common 成分　·　residual space 拥挤　·　方向重叠与学习变慢</text>
+
+  <!-- Solutions -->
+  <rect x="1060" y="190" width="460" height="145" rx="18" fill="#ffffff" stroke="#93bd8d" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1090" y="228" class="solution-title">A. 成核前：平衡训练信号</text>
+  <text x="1090" y="263" class="solution-body">Loss reweighting / balanced sampling</text>
+  <text x="1090" y="291" class="solution-body">对高频且已学会的 pattern 动态降权</text>
+  <text x="1090" y="319" class="small">目标：削弱不成比例的早期梯度，而非删除 common</text>
+  <path d="M 1025 260 L 970 260" stroke="#4f8a57" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <rect x="1060" y="380" width="460" height="155" rx="18" fill="#ffffff" stroke="#78aa73" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1090" y="418" class="solution-title">B. 强化时：隔离 dominant update</text>
+  <text x="1090" y="453" class="solution-body">方向感知优化器 / top-direction soft clipping</text>
+  <text x="1090" y="481" class="solution-body">common 与 residual 分量采用不同学习率</text>
+  <text x="1090" y="509" class="small">目标：保留共享方向，同时让新 feature 能进入正交空间</text>
+  <path d="M 1025 455 L 970 455" stroke="#4f8a57" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <rect x="1060" y="580" width="460" height="145" rx="18" fill="#ffffff" stroke="#78aa73" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1090" y="618" class="solution-title">C. 参数层：控制谱增益</text>
+  <text x="1090" y="653" class="solution-body">Spectral clipping / 正交参数化</text>
+  <text x="1090" y="681" class="solution-body">Cosine classifier / 语义方向与置信度解耦</text>
+  <text x="1090" y="709" class="small">目标：避免少数通道拥有过高的优化增益</text>
+  <path d="M 1025 652 L 970 652" stroke="#4f8a57" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <rect x="1060" y="770" width="460" height="123" rx="18" fill="#ffffff" stroke="#78aa73" stroke-width="2" filter="url(#shadow)"/>
+  <text x="1090" y="808" class="solution-title">D. 空间层：隔离 feature 竞争</text>
+  <text x="1090" y="843" class="solution-body">MoE / subspace routing / local expert spaces</text>
+  <text x="1090" y="871" class="small">风险：routing collapse 会把问题复制到 expert 层</text>
+  <path d="M 1025 835 L 970 835" stroke="#4f8a57" stroke-width="3" marker-end="url(#arrowGreen)"/>
+
+  <text x="800" y="954" text-anchor="middle" class="small">证据边界：高频成核与长尾减速已有 toy 支持；nested attraction 与时间顺序仍需 checkpoint 级因果验证</text>
+</svg>
