@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+LOG_DIR="${PROJECT_DIR}/logs"
+mkdir -p "${LOG_DIR}"
+
+RUN_NAME="${RUN_NAME:-kv_head_gate_$(date +%Y%m%d_%H%M%S)}"
+LOG_FILE="${LOG_DIR}/${RUN_NAME}.log"
+
+export RUN_NAME
+
+nohup bash "${PROJECT_DIR}/scripts/train_8x80g.sh" "$@" > "${LOG_FILE}" 2>&1 &
+PID=$!
+
+echo "started Qwen3 KV-head gate training"
+echo "pid: ${PID}"
+echo "run_name: ${RUN_NAME}"
+echo "log: ${LOG_FILE}"
+echo "output root: ${OUTPUT_ROOT:-/mnt/workspace/lym_code/scripts/kv_cache/kv_cache/ymluo/projects/qwen3_kv_head_gate_training/output/kv_head_gate_runs}"
+if [[ -n "${RESUME_FROM:-}" ]]; then
+  echo "resume_from: ${RESUME_FROM}"
+fi
+
