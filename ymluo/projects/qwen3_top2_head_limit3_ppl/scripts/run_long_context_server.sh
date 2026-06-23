@@ -14,7 +14,7 @@ HELDOUT_TEXT_DIR="${HELDOUT_TEXT_DIR:-${REPO_DIR}/ymluo/projects/qwen3_routed_to
 TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs}"
 
-TOTAL_LENGTHS="${TOTAL_LENGTHS:-20000 40000 80000 120000}"
+PREFILL_LENGTHS="${PREFILL_LENGTHS:-10000 20000 40000 60000}"
 QUALITY_MODES="${QUALITY_MODES:-baseline,top2union,top2,obstop2fullnonmasst80kn2mn1}"
 SPEED_MODES="${SPEED_MODES:-baseline,top2union,top2,obstop2fullnonmasst80kn2mn1}"
 
@@ -25,6 +25,7 @@ PROTECT_RECENT_TOKENS="${PROTECT_RECENT_TOKENS:-1000}"
 OBS_RECENT_TOKENS="${OBS_RECENT_TOKENS:-${PROTECT_RECENT_TOKENS}}"
 
 QUALITY_CHUNK_SIZE="${QUALITY_CHUNK_SIZE:-8}"
+QUALITY_EVAL_TOKENS="${QUALITY_EVAL_TOKENS:-1000}"
 SPEED_EVAL_TOKENS="${SPEED_EVAL_TOKENS:-64}"
 SPEED_CHUNK_SIZE="${SPEED_CHUNK_SIZE:-1}"
 
@@ -82,20 +83,21 @@ run_eval() {
     --make_plots "${MAKE_PLOTS}"
 }
 
-for total_tokens in ${TOTAL_LENGTHS}; do
-  prefill_tokens=$((total_tokens / 2))
-  eval_tokens=$((total_tokens - prefill_tokens))
+for prefill_tokens in ${PREFILL_LENGTHS}; do
+  eval_tokens="${QUALITY_EVAL_TOKENS}"
+  total_tokens=$((prefill_tokens + eval_tokens))
 
   if [[ "${RUN_QUALITY}" == "true" ]]; then
-    out_dir="${OUTPUT_ROOT}/quality_total${total_tokens}_prefill${prefill_tokens}_eval${eval_tokens}"
+    out_dir="${OUTPUT_ROOT}/quality_prefill${prefill_tokens}_eval${eval_tokens}"
     echo "=== quality total=${total_tokens} prefill=${prefill_tokens} eval=${eval_tokens} chunk=${QUALITY_CHUNK_SIZE} ==="
     run_eval "${total_tokens}" "${prefill_tokens}" "${eval_tokens}" "${QUALITY_CHUNK_SIZE}" "${QUALITY_MODES}" "${out_dir}"
   fi
 
   if [[ "${RUN_SPEED}" == "true" ]]; then
     speed_eval="${SPEED_EVAL_TOKENS}"
-    out_dir="${OUTPUT_ROOT}/speed_total${total_tokens}_prefill${prefill_tokens}_eval${speed_eval}_chunk1"
-    echo "=== speed total=${total_tokens} prefill=${prefill_tokens} eval=${speed_eval} chunk=${SPEED_CHUNK_SIZE} ==="
-    run_eval "${total_tokens}" "${prefill_tokens}" "${speed_eval}" "${SPEED_CHUNK_SIZE}" "${SPEED_MODES}" "${out_dir}"
+    speed_total=$((prefill_tokens + speed_eval))
+    out_dir="${OUTPUT_ROOT}/speed_prefill${prefill_tokens}_eval${speed_eval}_chunk1"
+    echo "=== speed total=${speed_total} prefill=${prefill_tokens} eval=${speed_eval} chunk=${SPEED_CHUNK_SIZE} ==="
+    run_eval "${speed_total}" "${prefill_tokens}" "${speed_eval}" "${SPEED_CHUNK_SIZE}" "${SPEED_MODES}" "${out_dir}"
   fi
 done
