@@ -1,225 +1,435 @@
-# 公共奇异方向的生命周期：成核、嵌套强化、饱和与干预
+# 公共奇异方向的生命周期：理论故事、方法位置与 reweighting 验证
 
 ## 文档目的
 
-本文整理一个待验证的因果故事：大语言模型训练中，某些高频 token 和高频 pattern 如何首先形成公共高增益方向，嵌套语言结构如何持续复用并强化该方向，该强化何时边际递减，以及它如何在饱和前伤害长尾 feature 的学习。
+本文整理当前关于大语言模型训练中 common direction / 大奇异值方向的工作理论。我们关心的不是“所有公共方向都不好”。语言确实需要共享结构、句法模板和可复用语义。真正的问题是：
 
-本文的目标不是主张所有谱集中都有害。公共方向可以承载有用的句法和语义复用。真正需要解释和干预的是：
+> 高频 pattern 是否在训练早期过度占据表示、参数和梯度空间，使 residual / long-tail 方向得不到同等效率的优化。
 
-> 为什么少数公共方向会过早、过强地占据梯度和表示空间，使本来可以进入其他方向的长尾 feature 被迫共享有限的 residual space。
+当前理论分成三部分：
+
+1. 高频 token、短语、功能性 pattern 首先产生 common direction。
+2. nested 语言结构让这个 common direction 反复出现在大量 token / pattern 的表征中。
+3. 大奇异值方向拥有更高局部优化收益，梯度更偏好它；residual 方向被冷落，低频 token 和长尾 pattern 学得慢。
 
 ![公共奇异方向的生命周期与干预位置](assets/common_direction_lifecycle_and_interventions.svg)
 
-## 核心结论
+## 0. 当前结论摘要
 
-整个过程可以分成四个阶段：
+目前最强的 toy 实验证据支持以下版本：
 
-1. 高频 token、共享 target 和高频 pattern 使训练早期的相关梯度占据主导，形成第一个公共预测方向。
-2. 嵌套语言结构反复继承该方向；已有的大 singular gain 又让复用它成为更快的局部下降路径，从而形成正反馈。
-3. 当相关 pattern 的 prediction error 下降后，强化边际递减并逐渐饱和；大 singular value 本身不能凭空制造新梯度。
-4. 在饱和之前，common 主空间可能已经先成形，长尾 feature 只能在较弱、较小的 residual space 中竞争。
+```text
+高频/shared pattern
+→ early gradient mass 不均
+→ first common direction 成核
+→ nested / shared input 让 common component 广泛进入 hidden states
+→ common direction 获得较大 scale / singular gain
+→ 早期 update 变低秩，tail/residual loss decrease 很小
+→ long-tail 收敛成为整体 bottleneck
+```
 
-对应的干预可以发生在成核、强化、参数增益和空间共享四个位置，分别对应 loss reweighting、方向感知优化器、谱控制和 MoE / subspace routing。
+reweighting 的作用不是简单“最后把谱压平”。它的主要作用是：
 
-## 1. 第一个公共奇异方向如何形成
+```text
+从训练最早期削弱 frequency domination
+→ early update 更高秩
+→ residual / tail 方向更早获得有效 loss decrease
+→ common 学得相对慢一点，long-tail 学得更快
+→ 因为 bottleneck 原本是 long-tail，所以整体训练路径更健康
+```
 
-### 1.1 高频 token 的三个数据属性
+需要保留的边界：
 
-考虑高频句法 token K。它通常同时具有三个属性：
+- 这些结论目前来自 controlled toy experiments，不等价于真实 LLM 机制已被证明。
+- nested 结构是否是实际 LLM 中 top singular directions 的主要强化来源仍需 checkpoint 级验证。
+- “最终谱更平”不等价于“训练路径更 scale-balanced”。强行 clipping 后验谱没有改善 tail speed，说明路径本身很重要。
 
-1. K 经常作为 target；
-2. 能够预测 K 的前文 context 非常多样；
-3. K 也经常作为 input，出现在许多不同的后续预测中。
+## 1. 理论建模故事
 
-训练早期，模型还不能可靠预测 K，因此每个 K-related 样本都会产生明显梯度。K 的频率又高，所以这些梯度在总更新中的占比很大。
+### 1.1 高频 pattern 首先产生 common direction
 
-### 1.2 K 作为 target：聚合不同 contexts
+自然语言不是均匀分布。少数 token、短语、功能性结构和句法模板出现频率极高，例如：
 
-当 K 作为 target 时，K 的输出 embedding 会被预测 K 的 context hidden states 拉动。不同 context 反复预测同一个 K，K 因而逐渐接近这些 context 表示的加权平均方向。
+- 高频 token：标点、助词、冠词、介词、连接词；
+- 高频短语：`of the`、`in the`、`is a`、`there is`；
+- 高频功能结构：列表、从句开头、问答模板、固定 syntactic slots；
+- 高频 target：很多不同 context 都预测同一个 token；
+- 高频 prefix / subpattern：很多长 pattern 共享同一个短结构。
 
-同时，预测 K 的 context hidden states 也会被拉向有利于提高 K logit 的方向。在 tied embedding 中，这两条路径通过同一张 embedding 表直接耦合。
+这些 pattern 的共同点是：它们在 early training 中贡献了不成比例的梯度质量。
 
-这里的“均值方向”应严格理解为：
+#### K 作为 target：many-to-one 成核
 
-> 所有预测 K 的 context hidden states 的条件均值，而不一定是全体 token embedding 的简单算术平均。
+假设很多不同 context 都预测同一个高频 token `K`：
 
-只有当 K 的前文覆盖许多 group 且分布较广时，这个条件均值才可能接近全局公共方向。
+```text
+context_1 -> K
+context_2 -> K
+context_3 -> K
+...
+```
 
-### 1.3 K 作为 input：向 hidden states 注入共享分量
+训练早期模型还不会预测 `K`，所以这些样本都有较大 cross-entropy gradient。因为 target 相同，它们在 output side 的更新方向高度一致：都要求提高 `K` 的 logit。
 
-当 K 出现在输入 context 中时，所有包含 K 的 hidden states 都会继承一段由 K 提供的共享分量。它们并不会因此完全相同，因为其他 token 和位置仍然提供不同的 residual component。
+在 tied embedding 中，这会同时带来两件事：
 
-因此更准确的图像是：
+1. `K` 的 output embedding 被许多 context hidden states 拉向它们的条件均值；
+2. 这些 context hidden states 也被拉向更能预测 `K` 的方向。
 
-> 包含 K 的 hidden state = K 提供的 common component + 当前 context 提供的 residual component。
+因此，最初的 common direction 不是 nested 结构凭空产生的，而是 high-frequency / shared-target 统计结构造成的 early gradient alignment。
 
-如果 common component 的能量过大，不同 hidden states 就会显得更相似，真正区分不同预测任务的信息只能进入 residual space。
+#### K 作为 input：one-to-many 传播
 
-### 1.4 从公共统计方向到 dominant singular mode
+高频 token 也经常作为 input 出现在许多 context 中：
 
-K 作为 target 聚合 contexts，作为 input 又把公共分量传播给更多 contexts。高频使这些相关更新在训练早期反复出现，不再像随机方向那样互相抵消。
+```text
+K, x_1 -> y_1
+K, x_2 -> y_2
+K, x_3 -> y_3
+...
+```
 
-于是 tied embedding、hidden representation 和中间映射中逐渐出现一条公共输入—输出通道。该通道收到最多的同向更新，形成第一个 dominant singular mode。
+这时所有包含 `K` 的 hidden states 都共享一部分来自 `K` 的 component：
 
-这个 singular mode 不应被解释成“一个 singular vector 就等于 K”。更准确的解释是：
+```text
+hidden state = common component from K + residual component from current context
+```
 
-> 它承载了 K 及其关联句法结构共同形成的公共预测成分；K 可能是该方向上投影最大的锚点之一。
+这不意味着这些 hidden states 完全一样。不同 `x_i` 和不同 target 仍然提供 residual information。但如果 common component 的 norm 很大，不同 hidden states 的角度会被 common component 主导，真正区分样本的信息被压到 residual subspace。
 
-## 2. 嵌套语言结构如何持续强化该方向
+#### 实验证据
 
-### 2.1 嵌套结构提供链式继承
+Stage 4 直接验证了这一点：
 
-语言 feature 往往不是彼此独立，而是在已有结构上继续增加条件：
+- `uniform_disjoint`：token、target、input prefix 和完整 pattern 都不共享，且频率均匀；
+- `shared_target`：很多不同 context 预测同一个 target；
+- `shared_target_reweight`：对 target frequency 做 reweighting。
+
+关键结果：
+
+| 指标 | uniform-disjoint | shared-target | shared-target reweight |
+|---|---:|---:|---:|
+| step 0 centered output-gradient top1 energy | 0.125 | 0.500 | 0.152 |
+| repeated target gradient 与 context mean cosine | - | 0.99997 | - |
+| final centered embedding top1 energy | 0.112 | 0.143 | 0.128 |
+
+这说明：
+
+```text
+shared target statistics
+→ step 0 gradient concentration
+→ later parameter / embedding concentration
+```
+
+也说明 `reweighting` 能直接削弱这个成核过程。
+
+### 1.2 nested 结构让 common direction 广泛进入表征
+
+自然语言具有嵌套结构：
 
 ```text
 A
-AB
-ABC
-ABCD
+A B
+A B C
+A B C D
 ```
 
-较长 prefix 会继承较短 prefix 已经学到的公共成分，再增加自己的 residual information。因此，如果 A 或 AB 已经使用了 common direction，ABC 和 ABCD 在训练开始时就不是从空白表示空间出发。
-
-### 2.2 大 singular gain 提供局部优化优势
-
-一旦某条公共通道已经具有较大的 singular value，hidden state 沿该方向发生较小改变，就能带来较大的相关 logit 变化。
-
-对于一个尚未学会、但与已有结构相关的新 pattern，模型有两种局部选择：
-
-1. 在新的 residual direction 上建立独立 feature；
-2. 调整已经存在的 common direction，快速改变相关 logits。
-
-如果第二种方式能够更快降低当前 loss，反向传播就会在该方向产生更大的 hidden gradient。优化器并不是主动“选择”它，而是大 singular gain 自动放大了与当前 prediction error 对齐的梯度分量。
-
-### 2.3 正反馈循环
-
-强化循环可以按下面的顺序理解：
-
-1. common direction 已经形成，并具有较大 singular gain；
-2. 新的 nested feature 继承已有 common component；
-3. 沿 common direction 修改 hidden state 能更快改变相关 logits；
-4. 更多新 feature 因而继续使用该方向；
-5. 更多 hidden states 在该方向上具有较大投影；
-6. 参数收到更多沿同一输入—输出通道的更新；
-7. 该 singular mode 进一步增强。
-
-这个循环成立需要两个条件：
-
-- 当前 prediction error 与该 singular mode 的输出方向仍然对齐；
-- 新 feature 对该方向的使用确实产生继续强化参数的更新，而不是被 residual path 或其他层重新展开。
-
-所以“大 singular value 自动无限增长”不是本文的主张。它只能放大已有且对齐的 error signal。
-
-## 3. 强化何时边际递减并达到饱和
-
-### 3.1 早期：成核最快
-
-高频 pattern 尚未学会，单样本梯度大，出现次数又多。此时公共方向增长最快，频率优势最明显。
-
-### 3.2 中期：吸引相关但尚未学会的 feature
-
-简单 common pattern 已经较容易预测，但复杂或新的相关 contexts 仍存在明显 error。已经形成的大 singular gain 会继续影响这些尚未解决的 pattern，使它们更容易复用 common direction。
-
-### 3.3 后期：随 prediction error 衰减而饱和
-
-当相关 pattern 的预测概率已经足够高，其 gradient 会变小。此时无论 singular value 多大，都不能凭空产生新的更新，正反馈因而边际递减。
-
-后期仍可能保留三类较弱更新：
-
-- cross-entropy 在 accuracy 饱和后继续缓慢增大 margin；
-- K 作为 input 参与其他尚未学会的预测任务；
-- 少数困难或新 context 仍然产生与 common mode 对齐的 error。
-
-因此，饱和表示“该方向不再快速增长”，不表示早期形成的表示结构会自动恢复均衡。
-
-## 4. 公共方向如何伤害长尾学习
-
-### 4.1 梯度份额失衡
-
-训练早期，高频 pattern 对总更新贡献更大。长尾 pattern 的梯度出现次数少，容易被 common 梯度覆盖、抵消或延迟。直接结果是长尾达到稳定准确率和足够 margin 所需的训练步数增加。
-
-### 4.2 长尾被迫进入 residual space
-
-当 common component 已经占据大量表示能量后，长尾特有信息主要依靠 residual component 表达。raw hidden dimension 即使很大，如果训练没有把 tail feature 分配到这些额外方向，实际 tail effective dimension 仍然可能很小。
-
-### 4.3 Feature interference
-
-多个长尾 feature 如果被挤入同一个低维 residual space，它们的表示和参数梯度会更容易重叠。更新一个 feature 可能同时影响其他 feature，表现为更低的 gradient signal-to-interference ratio、更小 margin 和更慢学习。
-
-### 4.4 Tied embedding 中的“稀释—传染”
-
-高频 K 作为 target 形成公共方向后，又作为 input 把该方向注入其他 contexts。被注入 common component 的长尾 token 随后还要参与自己的内部预测，因此最初来自 K 的表示稀释会传播到本来不以 K 为 target 的任务。
-
-## 5. 按因果环节组织潜在解决方案
-
-| 干预位置 | 潜在方法 | 目标 | 主要风险 |
-|---|---|---|---|
-| 成核之前 | Inverse target-frequency loss reweighting、balanced sampling、对已学会高频 pattern 动态降权 | 削弱高频 pattern 在训练早期不成比例的梯度份额 | 降权过强会让有用 common pattern 学不会 |
-| 方向强化时 | 方向感知优化器、top-gradient-direction soft clipping、common/residual 分量使用不同学习率 | 允许 common direction 存在，但阻止它继续吸收所有新 feature | 硬删除 top direction 会破坏真正有用的共享结构 |
-| 参数增益层 | Spectral clipping、谱正则、正交参数化、cosine classifier、语义方向与 confidence scale 解耦 | 限制少数通道获得过高 singular gain | 可能降低有效 compositional reuse 或置信度表达 |
-| 表示空间层 | MoE、subspace routing、局部 expert spaces | 让无关 feature 不必在同一个 global subspace 内竞争 | Routing collapse 会把同一问题复制到 expert 层 |
-
-### 5.1 Loss reweighting：干预成核
-
-Loss reweighting 直接减少高频 target 对总梯度的贡献。它改变的是公共方向形成的速度和强度，而不是要求 K 的几何终点完全改变。
-
-合理目标是 soft reweighting：保留 K 的学习信号，同时避免 K 在长尾开始学习前就垄断主要更新。
-
-### 5.2 优化器隔离：干预强化循环
-
-方向感知优化器可以将更新拆成 dominant component 和 residual component，分别控制两者的学习率或更新上限。
-
-这种方法比直接删除 top singular direction 更符合本理论，因为目标是控制过度复用，而不是否认 common structure 的价值。
-
-### 5.3 谱控制：限制高增益通道
-
-谱控制直接限制少数 singular values 的增长，使不同方向的局部优化增益不至于相差过大。
-
-它处理的是强化条件，而不一定消除频率不均的起因。因此，谱控制和 loss reweighting 应被视为作用在不同阶段的互补方法。
-
-### 5.4 MoE：隔离表示空间
-
-MoE 不直接消灭 common direction，而是允许不同语义区域在不同局部参数空间中形成自己的 singular structure。长尾 feature 不必与所有 common feature 共享同一个 global matrix。
-
-有效性不能只看 routing entropy 或参数量，还必须检查 expert specialization、每个 expert 内部的 effective rank，以及长尾 feature 是否真正减少了相互干扰。
-
-## 6. 现有实验证据与主张边界
-
-### 6.1 已有实验支持的部分
-
-- 严格 `1:1:1:1` 与 `7:1:1:1` 对照表明，频率不均会延迟所有 group 达到稳定满准确率的时间。
-- K-token 实验表明，共享高频 target 可以形成接近 context centroid 的方向。
-- Tied + attention 实验中，target-frequency reweighting 能显著压平谱并改善长尾内部 pattern 的收敛。
-- 3D toy 实验表明，raw dimension 增加不会自动转化为 tail effective dimension；packed condition 中 tail 仍可能停留在低维 residual space。
-- Transformer 实验表明，多层 hidden transformation 能重新展开一部分被压缩的 embedding geometry，因此集中并非不可逆。
-
-### 6.2 尚未被直接验证的部分
-
-- 自然语言 nested prefix 是否是实际 LLM 中 dominant singular mode 的主要强化来源；
-- 参数 singular value 的增长是否在时间上先于 feature top-subspace mass 的增长；
-- feature concentration 是否又能预测下一阶段相同 singular value 的继续增长；
-- 优化器隔离、谱控制和 MoE 是否通过本文描述的机制改善长尾，而不是通过其他容量或正则效应。
-
-因此，本文当前应被视为一个与已有现象一致、但仍需 checkpoint 级因果验证的工作理论。
-
-## 7. 最小验证路径
-
-下一步实验应至少同时记录以下时间序列：
-
-1. 梯度矩阵的 top singular value 和方向；
-2. 参数矩阵的 top singular value 和方向；
-3. common、nested-extra 与 tail feature 在 top subspace 上的投影；
-4. common、tail 的 group-conditioned gradient norm、cosine 和 SIR；
-5. 每个 pattern 的 loss、accuracy 和 margin。
-
-关键因果顺序是：
+更长的结构通常继承更短结构的表示，再加入额外约束。比如：
 
 ```text
-高频相关梯度先对齐
-→ 参数 common singular mode 形成
-→ nested feature 的 top-subspace mass 上升
-→ 下一阶段同一 singular mode 继续增强
-→ tail residual rank / SIR / 学习速度下降
+in
+in the
+in the middle
+in the middle of
+in the middle of the sentence
 ```
 
-如果 feature concentration 先于参数谱集中，或者切断 top singular direction 后 nested feature 仍以相同方式集中，则本文关于 singular-gain attraction 的机制需要被修正。
+如果短结构已经带有 strong common component，那么更长结构的 hidden state 往往也会继承这个 component：
+
+```text
+h_long = inherited common component + new residual component
+```
+
+这里要避免一个过强说法：我们目前不应说 nested residual feature 一定会被吸进同一个 top singular direction。Stage 2 没有强力支持这个版本。
+
+更准确的说法是：
+
+> nested 结构让 common component 反复出现在许多 token / pattern 的 hidden states 中；这会让 residual feature 的优化处在一个 common component 已经很大的背景下。
+
+这和“residual feature 必然投影到 common direction”不是同一件事。
+
+### 1.3 梯度偏好 common 大方向，residual 方向被冷落
+
+一旦 common direction 获得较大 norm 或 singular gain，优化器面对的是不平衡的局部几何。
+
+设一个 hidden state 近似为：
+
+```text
+h = c · u_common + r_residual
+```
+
+如果 `|c|` 很大，那么 hidden direction 主要由 `u_common` 决定。此时：
+
+- 沿 common direction 小幅移动，可能产生较大 logit / attention score 改变；
+- 沿 residual direction 同样幅度移动，产生的 logit 改变较小；
+- tail feature 若要产生可见角度差异，需要更大的 residual norm；
+- 但 low-frequency tail pattern 本来梯度就少，因此 residual 方向长得慢。
+
+所以优化器不是“有意识地只喜欢 common direction”。更准确地说：
+
+> 在相同 update budget 下，common high-gain direction 的即时 loss decrease 更大，residual direction 的有效学习效率更低。
+
+这造成一个优化路径问题：
+
+```text
+common direction already large
+→ update 更容易继续利用 common channel
+→ residual / tail 方向 early loss decrease 小
+→ tail 收敛慢
+→ tail 成为整体训练 bottleneck
+```
+
+在后期，当 common pattern 的 loss 已经很低时，common gradient 会下降，tail 方向会相对获得更多学习机会。但这时早期路径已经塑造了表示空间和参数空间，tail 学习已经被延迟。
+
+## 2. 基于建模故事的方法位置
+
+不同方法对应不同因果环节。它们不应被混成一种“压谱方法”。
+
+| 方法 | 对应环节 | 目标 | 主要风险 |
+|---|---|---|---|
+| loss reweighting / balanced sampling | 1.1 高频 pattern 成核 | 从源头削弱 common direction 的 early gradient domination | 降权过强会让必要 common pattern 学得太慢 |
+| MoE / subspace routing | 1.2 nested 后的表征共享 | 把不同 feature 放入不同参数/表示空间，减少所有 feature 争同一 global common subspace | routing collapse 会在 expert 内复现同样问题 |
+| 方向感知优化器 | 1.3 梯度偏好 common 大方向 | 限制 update 反复 align 到大奇异方向，给 residual directions 更高有效学习机会 | 硬删除 top direction 可能破坏有用共享结构 |
+| 谱控制 / normalization | common scale / gain 过大 | 控制 semantic direction 与 confidence scale 的耦合 | 后验强行压谱不等于从头获得 scale-balanced path |
+
+### 2.1 Reweighting loss：针对成核源头
+
+reweighting 直接作用于第 1.1 步：
+
+```text
+高频 target / phrase 贡献过多 gradient
+→ 通过 frequency-aware weight 降低其 early gradient mass
+→ first common direction 变弱
+```
+
+这不是要删除 common structure，而是避免它在 tail feature 开始有效学习前垄断主要更新。
+
+合理目标是 soft reweighting：
+
+- common 仍然能学会；
+- 但 common 不再过早吞掉 early update；
+- tail 在更早阶段获得有效 loss decrease。
+
+### 2.2 MoE：针对 nested 后的表征解耦
+
+MoE 不一定要消灭 common direction。它更像是在改变“所有 feature 是否必须共享同一个 global 表征空间”。
+
+如果每个 expert 或 routed subspace 可以形成自己的局部表示结构，那么：
+
+```text
+global common direction domination
+→ local expert subspace specialization
+→ common / tail 不必全部竞争同一个 top singular subspace
+```
+
+这对应第 1.2 步：nested 会让 common component 广泛进入 hidden states，而 MoE 尝试把不同语义区域分配到不同空间里学习，平衡不同参数/表征的强度。
+
+验证 MoE 是否真的解决问题，不能只看 routing entropy 或 expert load balance，还要看：
+
+- 每个 expert 内部 effective rank；
+- common 与 tail feature 是否进入不同局部 subspace；
+- tail feature 的 loss / margin / residual rank 是否改善；
+- expert 内是否重新出现 common singular collapse。
+
+### 2.3 优化器中对梯度做操作：针对 common 方向偏好
+
+方向感知优化器针对第 1.3 步：
+
+```text
+当前 update = common component + residual component
+```
+
+它可以做：
+
+- 限制 top-gradient / top-singular direction 的 update share；
+- 给 common component 和 residual component 使用不同学习率；
+- 对连续 align 到同一大奇异方向的梯度做 soft clipping；
+- 提高 residual component 的有效 learning rate 或 preconditioning。
+
+目标不是硬删除 common direction，而是防止优化器反复把 update budget 投给已经过强的 common channel。
+
+### 2.4 为什么“强行 clip 谱”不是充分方法
+
+Stage 3/5 中 `zipf_clip` 能降低部分谱集中，但没有改善 tail stable speed。它不应被解释成 reweighting 理论的反例。
+
+更准确的解释是：
+
+> 后验强行压平谱，不等价于从训练开始就让优化路径 scale-balanced。
+
+如果 early training 已经让 tail 方向长期欠优化，那么 later clipping 不能自动补回早期没学到的 residual structure。
+
+## 3. 如何验证建模是对的：reweighting 的预测与实验
+
+如果上述理论建模是对的，那么 reweighting 应该按下面方式工作。
+
+### 3.1 预测一：从一开始 common direction 就应弱化
+
+理论预测：
+
+```text
+reweighting 降低高频 target / phrase 的 early gradient mass
+→ step 0 或 early window 中 common direction 弱化
+```
+
+Stage 4 支持：
+
+| 条件 | step 0 centered output-gradient top1 energy |
+|---|---:|
+| uniform-disjoint | 0.125 |
+| shared-target | 0.500 |
+| shared-target reweight | 0.152 |
+
+解释：
+
+- shared-target 会立刻制造强 common output-gradient mode；
+- reweighting 把这个 early gradient mode 大幅削弱；
+- 因此 reweighting 确实首先打断第 1.1 步。
+
+### 3.2 预测二：尽管依旧有 nested，common component 的强度应减弱
+
+理论预测：
+
+```text
+reweighting 不能删除 nested 结构
+但因为最初 common direction 较弱
+所以 nested 传播出去的 common component 也应较弱
+```
+
+Stage 3/5 支持一部分：
+
+| 条件 | final centered embedding top1 energy | final tail residual rank |
+|---|---:|---:|
+| uniform | 0.217 | 3.199 |
+| Zipf | 0.219 | 3.164 |
+| Zipf + reweight | 0.215 | 3.292 |
+| Zipf + clip | 0.218 | 3.172 |
+
+解释：
+
+- reweighting 后最终 common concentration 更低；
+- tail residual rank 更高；
+- 这说明 reweighting 没有改变 nested 数据结构本身，但改变了 nested 结构中 common component 的强度和 tail residual 的可用空间。
+
+边界：
+
+- 这不是证明 nested 在真实 LLM 中一定是主要传播机制；
+- 但在当前 toy 中，reweighting 后 common direction 确实弱化，tail residual structure 更健康。
+
+### 3.3 预测三：梯度不再那么偏好 common 方向，更多方向被利用
+
+理论预测：
+
+```text
+Zipf baseline:
+  early update 低秩
+  common-update share 高
+  tail next-step loss decrease 小
+
+Zipf + reweight:
+  early update 更高秩
+  common-update share 降低
+  residual update rank 提高
+  tail next-step loss decrease 提高
+```
+
+Stage 5 在 nucleation window `0..50` 中支持：
+
+| 指标，steps 0..50 | uniform | Zipf | Zipf + reweight | Zipf + clip |
+|---|---:|---:|---:|---:|
+| common-update share | 0.235 | 0.262 | 0.200 | 0.262 |
+| embedding-update effective rank | 5.097 | 1.824 | 3.333 | 1.824 |
+| residual-update effective rank | 4.752 | 1.982 | 3.020 | 1.982 |
+| next-step tail loss decrease | 0.00516 | 0.00076 | 0.00391 | 0.00160 |
+
+这说明：
+
+- Zipf 让 early update 极低秩；
+- reweighting 让 early update 更高秩；
+- reweighting 提高 residual-update rank；
+- reweighting 让 tail 在下一步获得更大 loss decrease。
+
+因此，reweighting 的 work 原理与我们的建模一致：它确实从早期优化路径上减少 common domination，增加非 common / residual 方向的有效使用。
+
+### 3.4 common 慢一点，long-tail 快一点，整体 bottleneck 改善
+
+reweighting 不是让所有 pattern 都同时更快。它重新分配 early learning budget：
+
+```text
+common 少吃一点
+tail 早吃一点
+update 使用更多方向
+```
+
+在 Stage 3/5 中，stable full tail accuracy：
+
+| 条件 | stable full tail accuracy step |
+|---|---:|
+| uniform | 520 |
+| Zipf | 970 |
+| Zipf + reweight | 770 |
+| Zipf + clip | 970 |
+
+解释：
+
+- Zipf 下 tail 是整体瓶颈；
+- reweighting 让 common 收敛相对慢一点，但 common 本来不是瓶颈；
+- tail 更早获得有效学习，整体 bottleneck 缩短；
+- 因而整体训练路径更接近 scale-balanced / multi-direction optimization。
+
+### 3.5 当前证据边界
+
+已支持：
+
+1. 高频/shared target 可以在 step 0 产生强 common gradient direction。
+2. uniform-disjoint 数据不会产生 shared-target 那种额外 common mode。
+3. reweighting 明显削弱 early common gradient mode。
+4. reweighting 在成核窗口提高 update effective rank 和 residual-update effective rank。
+5. reweighting 提高 early next-step tail loss decrease。
+6. reweighting 改善 tail stable accuracy step 和 final tail residual rank。
+7. 后验 clipping 谱不能替代从头 scale-balanced 的优化路径。
+
+仍未完全证明：
+
+1. 真实 LLM 中最主要的 common directions 是否由同一高频/shared-target 机制产生。
+2. nested 结构在真实 LLM 中是否是 common direction 广泛进入 hidden states 的主要传播机制。
+3. MoE / optimizer intervention 是否能通过同一机制改善 long-tail，而不是通过容量或正则化副作用。
+4. reweighting 是否在更大模型、更自然数据和非 tied embedding setting 中保持同样机制。
+
+## 4. 当前最简理论表述
+
+可以把当前故事写成：
+
+```text
+高频 token / phrase / target / prefix
+→ early gradient mass 不均
+→ common direction 成核
+→ nested 结构让 common component 广泛进入 hidden states
+→ common direction 获得高 norm / high singular gain
+→ optimizer 的即时 loss decrease 偏向 common channel
+→ residual / tail directions 早期欠优化
+→ long-tail 收敛变慢，成为整体 bottleneck
+```
+
+reweighting 的位置是：
+
+```text
+在成核阶段降低高频 pattern 的 gradient domination
+→ common direction 变弱
+→ early update 更高秩
+→ residual / tail 获得更大即时 loss decrease
+→ tail bottleneck 缩短
+```
+
+因此，我们当前不应把目标写成“消灭所有 common direction”。更准确的目标是：
+
+> 保留必要的 compositional reuse，同时防止少数 high-frequency common directions 在训练早期垄断 scale、gradient 和 representation geometry。
