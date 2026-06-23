@@ -6,8 +6,9 @@ import json
 import math
 import re
 import time
+from collections import Counter, defaultdict
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -28,7 +29,12 @@ _ACTIVE_MODE: str = "baseline"
 _ACTIVE_TOP_FRACTION: float = 0.02
 _ACTIVE_MAX_HEADS_PER_TOKEN: int = 3
 _ACTIVE_ALWAYS_KEEP_SELF: bool = True
+_ACTIVE_PROTECT_SINK_TOKENS: int = 0
+_ACTIVE_PROTECT_RECENT_TOKENS: int = 0
 _ACTIVE_LOAD_STATS: "LoadStats | None" = None
+_ACTIVE_OBS_STATE: "ObservationWindowState | None" = None
+_ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
+_ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 
 
@@ -59,6 +65,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top_fraction", type=float, default=0.02)
     parser.add_argument("--max_heads_per_token", type=int, default=3)
     parser.add_argument(
+        "--protect_sink_tokens",
+        type=int,
+        default=0,
+        help="For compatible sparse modes, keep all heads for the first N historical tokens.",
+    )
+    parser.add_argument(
+        "--protect_recent_tokens",
+        type=int,
+        default=0,
+        help="For compatible sparse modes, keep all heads for the most recent N historical tokens.",
+    )
+    parser.add_argument(
         "--always_keep_self",
         type=str2bool,
         default=True,
@@ -66,6 +84,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--modes", default="baseline,top2,top2limit3score")
+    parser.add_argument("--obs_window_tokens", type=int, default=100)
+    parser.add_argument("--obs_recent_tokens", type=int, default=100)
+    parser.add_argument("--obs_target_coverage", type=float, default=0.90)
+    parser.add_argument("--obs_min_heads", type=int, default=1)
+    parser.add_argument("--obs_max_heads", type=int, default=16)
+    parser.add_argument(
+        "--obs_fallback_all",
+        type=str2bool,
+        default=True,
+        help="If true, tokens not seen in the last observation window keep all original top2-selected heads.",
+    )
     parser.add_argument("--make_plots", type=str2bool, default=True)
     parser.add_argument("--plot_dpi", type=int, default=180)
     return parser.parse_args()
@@ -131,13 +160,18 @@ def parse_modes(spec: str) -> list[str]:
             "limit_score_fill",
             "limit_score_gap",
             "limit_score_protect",
+            "top2_union_all",
+            "observation_window",
+            "observation_all_mass",
+            "observation_hybrid",
         }
     ]
     if invalid:
         raise ValueError(
             "Invalid modes: "
             f"{invalid}. Valid examples: baseline, top2, top2limit3, top2limit3score, "
-            "top2limit3gap1p0, top2limit3protects16r1p0."
+            "top2union, obstop2fullnonmasst80kn2mn1, top2limit3gap1p0, "
+            "top2limit3protects16r1p0."
         )
     if not modes:
         raise ValueError("--modes cannot be empty.")
@@ -149,6 +183,18 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "baseline", None
     if mode == "top2":
         return "top2", None
+    if mode == "top2union":
+        return "top2_union_all", None
+    if mode == "top2obswin":
+        return "observation_window", None
+    if mode == "obsallmass":
+        return "observation_all_mass", None
+    if re.fullmatch(r"obshybridt\d+n\d+(?:kt\d+kn\d+)?", mode):
+        return "observation_hybrid", None
+    if re.fullmatch(r"obshybridmasst\d+n\d+(?:kt\d+kn\d+)?(?:mt\d+mn\d+)?", mode):
+        return "observation_hybrid", None
+    if re.fullmatch(r"obstop2fullnonmasst\d+(?:kn\d+)?(?:mn\d+)?", mode):
+        return "observation_hybrid", None
     match = re.fullmatch(r"top2limit(\d+)protects(\d+)r([0-9]+(?:p[0-9]+)?)", mode)
     if match:
         return "limit_score_protect", int(match.group(1))
@@ -183,6 +229,61 @@ def parse_protect_params(mode: str) -> tuple[int, float] | None:
     sink_tokens = int(match.group(2))
     recent_percent = float(match.group(3).replace("p", "."))
     return sink_tokens, recent_percent / 100.0
+
+
+def parse_hybrid_params(mode: str) -> dict[str, Any]:
+    top2_full_match = re.fullmatch(
+        r"obstop2fullnonmasst(\d+)(?:kn(\d+))?(?:mn(\d+))?",
+        mode,
+    )
+    if top2_full_match:
+        return {
+            "top2_full_heads": True,
+            "top2_use_mass": True,
+            "top2_target": 1.0,
+            "non_top2_target": int(top2_full_match.group(1)) / 100.0,
+            "top2_max_heads": 16,
+            "non_top2_max_heads": int(top2_full_match.group(2)) if top2_full_match.group(2) is not None else 2,
+            "top2_min_heads": 16,
+            "non_top2_min_heads": int(top2_full_match.group(3)) if top2_full_match.group(3) is not None else 1,
+        }
+    mass_match = re.fullmatch(
+        r"obshybridmasst(\d+)n(\d+)(?:kt(\d+)kn(\d+))?(?:mt(\d+)mn(\d+))?",
+        mode,
+    )
+    if mass_match:
+        return {
+            "top2_full_heads": False,
+            "top2_use_mass": True,
+            "top2_target": int(mass_match.group(1)) / 100.0,
+            "non_top2_target": int(mass_match.group(2)) / 100.0,
+            "top2_max_heads": int(mass_match.group(3)) if mass_match.group(3) is not None else 16,
+            "non_top2_max_heads": int(mass_match.group(4)) if mass_match.group(4) is not None else 10,
+            "top2_min_heads": int(mass_match.group(5)) if mass_match.group(5) is not None else 1,
+            "non_top2_min_heads": int(mass_match.group(6)) if mass_match.group(6) is not None else 1,
+        }
+    match = re.fullmatch(r"obshybridt(\d+)n(\d+)(?:kt(\d+)kn(\d+))?", mode)
+    if not match:
+        return {
+            "top2_full_heads": False,
+            "top2_use_mass": False,
+            "top2_target": 0.95,
+            "non_top2_target": 0.80,
+            "top2_max_heads": 16,
+            "non_top2_max_heads": 6,
+            "top2_min_heads": 1,
+            "non_top2_min_heads": 1,
+        }
+    return {
+        "top2_full_heads": False,
+        "top2_use_mass": False,
+        "top2_target": int(match.group(1)) / 100.0,
+        "non_top2_target": int(match.group(2)) / 100.0,
+        "top2_max_heads": int(match.group(3)) if match.group(3) is not None else 16,
+        "non_top2_max_heads": int(match.group(4)) if match.group(4) is not None else 6,
+        "top2_min_heads": 1,
+        "non_top2_min_heads": 1,
+    }
 
 
 @dataclass
@@ -259,6 +360,416 @@ class LoadStats:
         return rows
 
 
+@dataclass
+class WindowTokenStats:
+    event_count: int = 0
+    head_counts: list[int] = field(default_factory=list)
+    head_set_counts: Counter[int] = field(default_factory=Counter)
+
+    def ensure_heads(self, head_count: int) -> None:
+        if not self.head_counts:
+            self.head_counts = [0 for _ in range(head_count)]
+
+    def add_event(self, selected_heads: list[int], head_count: int) -> None:
+        if not selected_heads:
+            return
+        self.ensure_heads(head_count)
+        self.event_count += 1
+        mask = 0
+        for head in selected_heads:
+            self.head_counts[head] += 1
+            mask |= 1 << head
+        self.head_set_counts[mask] += 1
+
+    def choose_heads(self, target_coverage: float, min_heads: int, max_heads: int) -> list[int]:
+        self.ensure_heads(len(self.head_counts))
+        if self.event_count <= 0:
+            return []
+        head_count = len(self.head_counts)
+        ordered = sorted(range(head_count), key=lambda head: self.head_counts[head], reverse=True)
+        max_heads = min(max_heads, head_count)
+        min_heads = min(max(min_heads, 1), max_heads)
+        chosen = ordered[:min_heads]
+        for k in range(min_heads, max_heads + 1):
+            chosen = ordered[:k]
+            chosen_set = set(chosen)
+            covered = 0
+            for mask, count in self.head_set_counts.items():
+                if any(mask & (1 << head) for head in chosen_set):
+                    covered += count
+            if covered / self.event_count >= target_coverage:
+                break
+        return chosen
+
+
+@dataclass
+class ObservationWindowState:
+    layer_count: int
+    head_count: int
+    window_tokens: int
+    recent_tokens: int
+    target_coverage: float
+    min_heads: int
+    max_heads: int
+    fallback_all: bool
+
+    def __post_init__(self) -> None:
+        self.window_stats: list[dict[int, WindowTokenStats]] = [
+            defaultdict(WindowTokenStats) for _ in range(self.layer_count)
+        ]
+        self.assignments: list[dict[int, set[int]]] = [dict() for _ in range(self.layer_count)]
+        self.last_boundary: list[int] = [-1 for _ in range(self.layer_count)]
+        self.allocation_rows: list[dict[str, Any]] = []
+
+    def maybe_reallocate(self, layer: int, query_token: int) -> None:
+        if query_token <= 0 or query_token % self.window_tokens != 0:
+            return
+        if self.last_boundary[layer] == query_token:
+            return
+        stats = self.window_stats[layer]
+        new_assignment: dict[int, set[int]] = {}
+        assigned_counts: list[int] = []
+        event_counts: list[int] = []
+        for key_token, token_stats in stats.items():
+            heads = token_stats.choose_heads(self.target_coverage, self.min_heads, self.max_heads)
+            if heads:
+                new_assignment[key_token] = set(heads)
+                assigned_counts.append(len(heads))
+                event_counts.append(token_stats.event_count)
+        self.assignments[layer] = new_assignment
+        self.window_stats[layer] = defaultdict(WindowTokenStats)
+        self.last_boundary[layer] = query_token
+        if assigned_counts:
+            counts = Counter(assigned_counts)
+            row = {
+                "layer": layer,
+                "boundary_query_token": query_token,
+                "assigned_token_count": len(assigned_counts),
+                "mean_assigned_heads": sum(assigned_counts) / len(assigned_counts),
+                "mean_window_events_per_assigned_token": sum(event_counts) / len(event_counts),
+                "min_assigned_heads": min(assigned_counts),
+                "max_assigned_heads": max(assigned_counts),
+            }
+            for head_count in range(1, self.head_count + 1):
+                row[f"tokens_assigned_{head_count}_heads"] = counts.get(head_count, 0)
+        else:
+            row = {
+                "layer": layer,
+                "boundary_query_token": query_token,
+                "assigned_token_count": 0,
+                "mean_assigned_heads": 0.0,
+                "mean_window_events_per_assigned_token": 0.0,
+                "min_assigned_heads": 0,
+                "max_assigned_heads": 0,
+            }
+            for head_count in range(1, self.head_count + 1):
+                row[f"tokens_assigned_{head_count}_heads"] = 0
+        self.allocation_rows.append(row)
+
+    def observe(self, layer: int, original_keep: torch.Tensor) -> None:
+        # original_keep has shape [batch=1, heads, key].
+        if original_keep.shape[0] != 1:
+            raise ValueError("ObservationWindowState currently expects batch size 1.")
+        selected_by_key: dict[int, list[int]] = defaultdict(list)
+        selected = torch.nonzero(original_keep[0], as_tuple=False)
+        for head, key_token in selected.tolist():
+            selected_by_key[int(key_token)].append(int(head))
+        for key_token, heads in selected_by_key.items():
+            self.window_stats[layer][key_token].add_event(heads, self.head_count)
+
+    def apply(self, layer: int, query_token: int, original_keep: torch.Tensor) -> torch.Tensor:
+        if original_keep.shape[0] != 1:
+            raise ValueError("ObservationWindowState currently expects batch size 1.")
+        final_keep = original_keep.clone()
+        history_count = max(0, query_token)
+        recent_start = max(0, history_count - self.recent_tokens)
+        selected = torch.nonzero(original_keep[0], as_tuple=False)
+        for head, key_token in selected.tolist():
+            key_token = int(key_token)
+            head = int(head)
+            if key_token >= recent_start:
+                continue
+            assigned = self.assignments[layer].get(key_token)
+            if assigned is None:
+                if self.fallback_all:
+                    continue
+                final_keep[0, head, key_token] = False
+            elif head not in assigned:
+                final_keep[0, head, key_token] = False
+        return final_keep
+
+    def rows(self) -> list[dict[str, Any]]:
+        return self.allocation_rows
+
+
+@dataclass
+class AllTokenMassObservationState:
+    layer_count: int
+    head_count: int
+    window_tokens: int
+    recent_tokens: int
+    target_coverage: float
+    min_heads: int
+    max_heads: int
+    fallback_all: bool
+
+    def __post_init__(self) -> None:
+        self.mass: list[torch.Tensor] = [
+            torch.zeros((self.head_count, 0), dtype=torch.float32) for _ in range(self.layer_count)
+        ]
+        self.assignments: list[dict[int, set[int]]] = [dict() for _ in range(self.layer_count)]
+        self.last_boundary: list[int] = [-1 for _ in range(self.layer_count)]
+        self.allocation_rows: list[dict[str, Any]] = []
+
+    def ensure_tokens(self, layer: int, token_count: int) -> None:
+        current = self.mass[layer].shape[1]
+        if token_count <= current:
+            return
+        extra = torch.zeros((self.head_count, token_count - current), dtype=torch.float32)
+        self.mass[layer] = torch.cat([self.mass[layer], extra], dim=1)
+
+    def observe(self, layer: int, query_token: int, full_attention_weights: torch.Tensor) -> None:
+        # full_attention_weights has shape [batch=1, heads, key].
+        history_count = max(0, query_token)
+        if history_count <= 0:
+            return
+        self.ensure_tokens(layer, history_count)
+        weights = full_attention_weights[0, :, :history_count].detach().float().cpu()
+        self.mass[layer][:, :history_count] += weights
+
+    def maybe_reallocate(self, layer: int, query_token: int) -> None:
+        if query_token <= 0 or query_token % self.window_tokens != 0:
+            return
+        if self.last_boundary[layer] == query_token:
+            return
+        history_count = max(0, query_token)
+        assignable_count = max(0, history_count - self.recent_tokens)
+        layer_mass = self.mass[layer]
+        new_assignment: dict[int, set[int]] = {}
+        assigned_counts: list[int] = []
+        mass_values: list[float] = []
+        for key_token in range(min(assignable_count, layer_mass.shape[1])):
+            per_head = layer_mass[:, key_token]
+            total = float(per_head.sum())
+            if total <= 0.0:
+                continue
+            ordered = torch.argsort(per_head, descending=True).tolist()
+            max_heads = min(self.max_heads, self.head_count)
+            min_heads = min(max(self.min_heads, 1), max_heads)
+            chosen = ordered[:min_heads]
+            cumulative = float(per_head[chosen].sum())
+            for k in range(min_heads, max_heads + 1):
+                chosen = ordered[:k]
+                cumulative = float(per_head[chosen].sum())
+                if cumulative / total >= self.target_coverage:
+                    break
+            new_assignment[key_token] = set(int(head) for head in chosen)
+            assigned_counts.append(len(chosen))
+            mass_values.append(total)
+        self.assignments[layer] = new_assignment
+        self.mass[layer] = torch.zeros_like(layer_mass)
+        self.last_boundary[layer] = query_token
+        counts = Counter(assigned_counts)
+        row = {
+            "layer": layer,
+            "boundary_query_token": query_token,
+            "assigned_token_count": len(assigned_counts),
+            "mean_assigned_heads": sum(assigned_counts) / len(assigned_counts) if assigned_counts else 0.0,
+            "mean_window_attention_mass_per_assigned_token": sum(mass_values) / len(mass_values) if mass_values else 0.0,
+            "min_assigned_heads": min(assigned_counts) if assigned_counts else 0,
+            "max_assigned_heads": max(assigned_counts) if assigned_counts else 0,
+        }
+        for head_count in range(1, self.head_count + 1):
+            row[f"tokens_assigned_{head_count}_heads"] = counts.get(head_count, 0)
+        self.allocation_rows.append(row)
+
+    def apply(self, layer: int, query_token: int, history_valid: torch.Tensor) -> torch.Tensor:
+        # history_valid has shape [batch=1, heads, key].
+        final_keep = history_valid.clone()
+        history_count = max(0, query_token)
+        recent_start = max(0, history_count - self.recent_tokens)
+        selected = torch.nonzero(history_valid[0], as_tuple=False)
+        for head, key_token in selected.tolist():
+            key_token = int(key_token)
+            head = int(head)
+            if key_token >= recent_start:
+                continue
+            assigned = self.assignments[layer].get(key_token)
+            if assigned is None:
+                if self.fallback_all:
+                    continue
+                final_keep[0, head, key_token] = False
+            elif head not in assigned:
+                final_keep[0, head, key_token] = False
+        return final_keep
+
+    def rows(self) -> list[dict[str, Any]]:
+        return self.allocation_rows
+
+
+@dataclass
+class HybridObservationState:
+    layer_count: int
+    head_count: int
+    window_tokens: int
+    recent_tokens: int
+    top2_use_mass: bool
+    top2_target_coverage: float
+    non_top2_mass_coverage: float
+    top2_min_heads: int
+    top2_max_heads: int
+    non_top2_min_heads: int
+    non_top2_max_heads: int
+    top2_full_heads: bool
+    sink_tokens: int
+    fallback_all: bool
+
+    def __post_init__(self) -> None:
+        self.mass: list[torch.Tensor] = [
+            torch.zeros((self.head_count, 0), dtype=torch.float32) for _ in range(self.layer_count)
+        ]
+        self.top2_stats: list[dict[int, WindowTokenStats]] = [
+            defaultdict(WindowTokenStats) for _ in range(self.layer_count)
+        ]
+        self.assignments: list[dict[int, set[int]]] = [dict() for _ in range(self.layer_count)]
+        self.assignment_kind: list[dict[int, str]] = [dict() for _ in range(self.layer_count)]
+        self.last_boundary: list[int] = [-1 for _ in range(self.layer_count)]
+        self.allocation_rows: list[dict[str, Any]] = []
+
+    def ensure_tokens(self, layer: int, token_count: int) -> None:
+        current = self.mass[layer].shape[1]
+        if token_count <= current:
+            return
+        extra = torch.zeros((self.head_count, token_count - current), dtype=torch.float32)
+        self.mass[layer] = torch.cat([self.mass[layer], extra], dim=1)
+
+    def observe(self, layer: int, query_token: int, full_attention_weights: torch.Tensor, top2_keep: torch.Tensor) -> None:
+        history_count = max(0, query_token)
+        if history_count <= 0:
+            return
+        self.ensure_tokens(layer, history_count)
+        weights = full_attention_weights[0, :, :history_count].detach().float().cpu()
+        self.mass[layer][:, :history_count] += weights
+
+        selected_by_key: dict[int, list[int]] = defaultdict(list)
+        selected = torch.nonzero(top2_keep[0], as_tuple=False)
+        for head, key_token in selected.tolist():
+            selected_by_key[int(key_token)].append(int(head))
+        for key_token, heads in selected_by_key.items():
+            self.top2_stats[layer][key_token].add_event(heads, self.head_count)
+
+    def choose_mass_heads(self, per_head: torch.Tensor, target: float, min_heads: int, max_heads: int) -> list[int]:
+        total = float(per_head.sum())
+        if total <= 0.0:
+            return []
+        ordered = torch.argsort(per_head, descending=True).tolist()
+        max_heads = min(max_heads, self.head_count)
+        min_heads = min(max(min_heads, 1), max_heads)
+        chosen = ordered[:min_heads]
+        for k in range(min_heads, max_heads + 1):
+            chosen = ordered[:k]
+            if float(per_head[chosen].sum()) / total >= target:
+                break
+        return [int(head) for head in chosen]
+
+    def maybe_reallocate(self, layer: int, query_token: int) -> None:
+        if query_token <= 0 or query_token % self.window_tokens != 0:
+            return
+        if self.last_boundary[layer] == query_token:
+            return
+        history_count = max(0, query_token)
+        assignable_count = max(0, history_count - self.recent_tokens)
+        layer_mass = self.mass[layer]
+        layer_top2 = self.top2_stats[layer]
+        new_assignment: dict[int, set[int]] = {}
+        new_kind: dict[int, str] = {}
+        assigned_counts: list[int] = []
+        top2_assigned = 0
+        non_top2_assigned = 0
+        for key_token in range(min(assignable_count, layer_mass.shape[1])):
+            if key_token < self.sink_tokens:
+                continue
+            if key_token in layer_top2:
+                if self.top2_full_heads:
+                    heads = list(range(self.head_count))
+                elif self.top2_use_mass:
+                    heads = self.choose_mass_heads(
+                        layer_mass[:, key_token],
+                        self.top2_target_coverage,
+                        self.top2_min_heads,
+                        self.top2_max_heads,
+                    )
+                else:
+                    heads = layer_top2[key_token].choose_heads(
+                        self.top2_target_coverage,
+                        self.top2_min_heads,
+                        self.top2_max_heads,
+                    )
+                kind = "top2"
+            else:
+                heads = self.choose_mass_heads(
+                    layer_mass[:, key_token],
+                    self.non_top2_mass_coverage,
+                    self.non_top2_min_heads,
+                    self.non_top2_max_heads,
+                )
+                kind = "non_top2"
+            if not heads:
+                continue
+            new_assignment[key_token] = set(heads)
+            new_kind[key_token] = kind
+            assigned_counts.append(len(heads))
+            if kind == "top2":
+                top2_assigned += 1
+            else:
+                non_top2_assigned += 1
+        self.assignments[layer] = new_assignment
+        self.assignment_kind[layer] = new_kind
+        self.mass[layer] = torch.zeros_like(layer_mass)
+        self.top2_stats[layer] = defaultdict(WindowTokenStats)
+        self.last_boundary[layer] = query_token
+        counts = Counter(assigned_counts)
+        row = {
+            "layer": layer,
+            "boundary_query_token": query_token,
+            "assigned_token_count": len(assigned_counts),
+            "top2_assigned_token_count": top2_assigned,
+            "non_top2_assigned_token_count": non_top2_assigned,
+            "mean_assigned_heads": sum(assigned_counts) / len(assigned_counts) if assigned_counts else 0.0,
+            "mean_window_events_per_assigned_token": 0.0,
+            "mean_window_attention_mass_per_assigned_token": 0.0,
+            "min_assigned_heads": min(assigned_counts) if assigned_counts else 0,
+            "max_assigned_heads": max(assigned_counts) if assigned_counts else 0,
+        }
+        for head_count in range(1, self.head_count + 1):
+            row[f"tokens_assigned_{head_count}_heads"] = counts.get(head_count, 0)
+        self.allocation_rows.append(row)
+
+    def apply(self, layer: int, query_token: int, history_valid: torch.Tensor) -> torch.Tensor:
+        final_keep = history_valid.clone()
+        history_count = max(0, query_token)
+        recent_start = max(0, history_count - self.recent_tokens)
+        selected = torch.nonzero(history_valid[0], as_tuple=False)
+        for head, key_token in selected.tolist():
+            key_token = int(key_token)
+            head = int(head)
+            if key_token < self.sink_tokens:
+                continue
+            if key_token >= recent_start:
+                continue
+            assigned = self.assignments[layer].get(key_token)
+            if assigned is None:
+                if self.fallback_all:
+                    continue
+                final_keep[0, head, key_token] = False
+            elif head not in assigned:
+                final_keep[0, head, key_token] = False
+        return final_keep
+
+    def rows(self) -> list[dict[str, Any]]:
+        return self.allocation_rows
+
+
 def _top2_history_keep_for_query(row_scores: torch.Tensor, finite: torch.Tensor, top_fraction: float) -> torch.Tensor:
     # row_scores and finite: [batch, heads, key].
     history_valid = finite.clone()
@@ -275,6 +786,35 @@ def _top2_history_keep_for_query(row_scores: torch.Tensor, finite: torch.Tensor,
     keep.scatter_(-1, top_indices, True)
     keep &= history_valid
     return keep
+
+
+def _expand_selected_tokens_to_all_heads(original_keep: torch.Tensor) -> torch.Tensor:
+    token_keep = original_keep.any(dim=1, keepdim=True)
+    return token_keep.expand_as(original_keep).clone()
+
+
+def _apply_full_head_protection(
+    keep: torch.Tensor,
+    finite: torch.Tensor,
+    sink_tokens: int,
+    recent_tokens: int,
+) -> torch.Tensor:
+    if sink_tokens <= 0 and recent_tokens <= 0:
+        return keep
+    final_keep = keep.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return final_keep
+    history_count = valid_count - 1
+    if sink_tokens > 0:
+        sink_end = min(sink_tokens, history_count)
+        if sink_end > 0:
+            final_keep[:, :, :sink_end] = True
+    if recent_tokens > 0:
+        recent_start = max(0, history_count - recent_tokens)
+        if recent_start < history_count:
+            final_keep[:, :, recent_start:history_count] = True
+    return final_keep
 
 
 def _limit_heads_per_token_random(original_keep: torch.Tensor, max_heads: int) -> torch.Tensor:
@@ -451,14 +991,49 @@ def _limited_eager_attention_forward(
         "limit_score_fill",
         "limit_score_gap",
         "limit_score_protect",
+        "top2_union_all",
+        "observation_window",
+        "observation_all_mass",
+        "observation_hybrid",
     }:
         final_keep = torch.zeros_like(scores, dtype=torch.bool)
         query_count = scores.shape[-2]
+        key_count = scores.shape[-1]
+        chunk_query_start = key_count - query_count
         for query_index in range(query_count):
             row = scores[:, :, query_index, :]
             finite = torch.isfinite(row)
             history_original = _top2_history_keep_for_query(row, finite, _ACTIVE_TOP_FRACTION)
-            if mode_kind == "limit_random":
+            if mode_kind == "top2":
+                history_final = _apply_full_head_protection(
+                    history_original,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind == "top2_union_all":
+                history_final = _expand_selected_tokens_to_all_heads(history_original)
+                history_final = _apply_full_head_protection(
+                    history_final,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind == "limit_random":
                 history_final = _limit_heads_per_token_random(
                     history_original,
                     mode_max_heads if mode_max_heads is not None else _ACTIVE_MAX_HEADS_PER_TOKEN,
@@ -527,6 +1102,50 @@ def _limited_eager_attention_forward(
                     if valid_count > 0:
                         history_valid[:, :, valid_count - 1] = False
                     _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind == "observation_window":
+                if _ACTIVE_OBS_STATE is None:
+                    raise RuntimeError("Observation-window mode requires an active ObservationWindowState.")
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                valid_count = int(finite[0, 0].sum().item())
+                query_token = chunk_query_start + query_index
+                _ACTIVE_OBS_STATE.maybe_reallocate(layer_idx, query_token)
+                history_final = _ACTIVE_OBS_STATE.apply(layer_idx, query_token, history_original)
+                _ACTIVE_OBS_STATE.observe(layer_idx, history_original)
+                if _ACTIVE_LOAD_STATS is not None:
+                    history_valid = finite.clone()
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind == "observation_all_mass":
+                if _ACTIVE_OBS_MASS_STATE is None:
+                    raise RuntimeError("obsallmass mode requires an active AllTokenMassObservationState.")
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                valid_count = int(finite[0, 0].sum().item())
+                query_token = chunk_query_start + query_index
+                history_valid = finite.clone()
+                if valid_count > 0:
+                    history_valid[:, :, valid_count - 1] = False
+                _ACTIVE_OBS_MASS_STATE.maybe_reallocate(layer_idx, query_token)
+                full_weights = F.softmax(row, dim=-1, dtype=torch.float32)
+                _ACTIVE_OBS_MASS_STATE.observe(layer_idx, query_token, full_weights)
+                history_final = _ACTIVE_OBS_MASS_STATE.apply(layer_idx, query_token, history_valid)
+                if _ACTIVE_LOAD_STATS is not None:
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
+            elif mode_kind == "observation_hybrid":
+                if _ACTIVE_OBS_HYBRID_STATE is None:
+                    raise RuntimeError("obshybrid mode requires an active HybridObservationState.")
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                valid_count = int(finite[0, 0].sum().item())
+                query_token = chunk_query_start + query_index
+                history_valid = finite.clone()
+                if valid_count > 0:
+                    history_valid[:, :, valid_count - 1] = False
+                _ACTIVE_OBS_HYBRID_STATE.maybe_reallocate(layer_idx, query_token)
+                full_weights = F.softmax(row, dim=-1, dtype=torch.float32)
+                _ACTIVE_OBS_HYBRID_STATE.observe(layer_idx, query_token, full_weights, history_original)
+                history_final = _ACTIVE_OBS_HYBRID_STATE.apply(layer_idx, query_token, history_valid)
+                if _ACTIVE_LOAD_STATS is not None:
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
             else:
                 history_final = history_original
             keep = history_final
@@ -564,21 +1183,36 @@ def attention_mode(
     top_fraction: float,
     max_heads_per_token: int,
     always_keep_self: bool,
+    protect_sink_tokens: int,
+    protect_recent_tokens: int,
     load_stats: LoadStats | None,
+    obs_state: ObservationWindowState | None = None,
+    obs_mass_state: AllTokenMassObservationState | None = None,
+    obs_hybrid_state: HybridObservationState | None = None,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_LOAD_STATS
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
         _ACTIVE_MAX_HEADS_PER_TOKEN,
         _ACTIVE_ALWAYS_KEEP_SELF,
+        _ACTIVE_PROTECT_SINK_TOKENS,
+        _ACTIVE_PROTECT_RECENT_TOKENS,
         _ACTIVE_LOAD_STATS,
+        _ACTIVE_OBS_STATE,
+        _ACTIVE_OBS_MASS_STATE,
+        _ACTIVE_OBS_HYBRID_STATE,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
     _ACTIVE_MAX_HEADS_PER_TOKEN = max_heads_per_token
     _ACTIVE_ALWAYS_KEEP_SELF = always_keep_self
+    _ACTIVE_PROTECT_SINK_TOKENS = max(0, protect_sink_tokens)
+    _ACTIVE_PROTECT_RECENT_TOKENS = max(0, protect_recent_tokens)
     _ACTIVE_LOAD_STATS = load_stats
+    _ACTIVE_OBS_STATE = obs_state
+    _ACTIVE_OBS_MASS_STATE = obs_mass_state
+    _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
     try:
         yield
     finally:
@@ -587,7 +1221,12 @@ def attention_mode(
             _ACTIVE_TOP_FRACTION,
             _ACTIVE_MAX_HEADS_PER_TOKEN,
             _ACTIVE_ALWAYS_KEEP_SELF,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+            _ACTIVE_PROTECT_RECENT_TOKENS,
             _ACTIVE_LOAD_STATS,
+            _ACTIVE_OBS_STATE,
+            _ACTIVE_OBS_MASS_STATE,
+            _ACTIVE_OBS_HYBRID_STATE,
         ) = previous
 
 
@@ -639,7 +1278,12 @@ def compute_eval_loss(
     top_fraction: float,
     max_heads_per_token: int,
     always_keep_self: bool,
+    protect_sink_tokens: int,
+    protect_recent_tokens: int,
     load_stats: LoadStats | None,
+    obs_state: ObservationWindowState | None = None,
+    obs_mass_state: AllTokenMassObservationState | None = None,
+    obs_hybrid_state: HybridObservationState | None = None,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
     started = time.perf_counter()
@@ -662,7 +1306,18 @@ def compute_eval_loss(
         if past_key_values is not None:
             kwargs["past_key_values"] = past_key_values
         print(f"ppl {mode} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
-        with attention_mode(mode, top_fraction, max_heads_per_token, always_keep_self, load_stats):
+        with attention_mode(
+            mode,
+            top_fraction,
+            max_heads_per_token,
+            always_keep_self,
+            protect_sink_tokens,
+            protect_recent_tokens,
+            load_stats,
+            obs_state,
+            obs_mass_state,
+            obs_hybrid_state,
+        ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
         shifted_logits = torch.cat([prev_logits.unsqueeze(1), logits[:, :-1, :]], dim=1)
@@ -850,12 +1505,74 @@ def main() -> None:
 
     ppl_rows: list[dict[str, Any]] = []
     load_rows: list[dict[str, Any]] = []
+    observation_rows: list[dict[str, Any]] = []
     for mode in modes:
         mode_kind, mode_max_heads = parse_mode_config(mode)
         protect_params = parse_protect_params(mode)
         stats = (
             LoadStats(layer_count, head_count)
-            if mode_kind in {"limit_random", "limit_score", "limit_score_fill", "limit_score_gap", "limit_score_protect"}
+            if mode_kind
+            in {
+                "top2",
+                "top2_union_all",
+                "limit_random",
+                "limit_score",
+                "limit_score_fill",
+                "limit_score_gap",
+                "limit_score_protect",
+                "observation_window",
+                "observation_all_mass",
+                "observation_hybrid",
+            }
+            else None
+        )
+        hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
+        obs_state = (
+            ObservationWindowState(
+                layer_count=layer_count,
+                head_count=head_count,
+                window_tokens=args.obs_window_tokens,
+                recent_tokens=args.obs_recent_tokens,
+                target_coverage=args.obs_target_coverage,
+                min_heads=args.obs_min_heads,
+                max_heads=args.obs_max_heads,
+                fallback_all=args.obs_fallback_all,
+            )
+            if mode_kind == "observation_window"
+            else None
+        )
+        obs_mass_state = (
+            AllTokenMassObservationState(
+                layer_count=layer_count,
+                head_count=head_count,
+                window_tokens=args.obs_window_tokens,
+                recent_tokens=args.obs_recent_tokens,
+                target_coverage=args.obs_target_coverage,
+                min_heads=args.obs_min_heads,
+                max_heads=args.obs_max_heads,
+                fallback_all=args.obs_fallback_all,
+            )
+            if mode_kind == "observation_all_mass"
+            else None
+        )
+        obs_hybrid_state = (
+            HybridObservationState(
+                layer_count=layer_count,
+                head_count=head_count,
+                window_tokens=args.obs_window_tokens,
+                recent_tokens=args.obs_recent_tokens,
+                top2_use_mass=bool(hybrid_params["top2_use_mass"]) if hybrid_params else False,
+                top2_target_coverage=hybrid_params["top2_target"] if hybrid_params else 0.95,
+                non_top2_mass_coverage=hybrid_params["non_top2_target"] if hybrid_params else 0.80,
+                top2_min_heads=hybrid_params["top2_min_heads"] if hybrid_params else args.obs_min_heads,
+                top2_max_heads=hybrid_params["top2_max_heads"] if hybrid_params else 16,
+                non_top2_min_heads=hybrid_params["non_top2_min_heads"] if hybrid_params else args.obs_min_heads,
+                non_top2_max_heads=hybrid_params["non_top2_max_heads"] if hybrid_params else 6,
+                top2_full_heads=bool(hybrid_params["top2_full_heads"]) if hybrid_params else False,
+                sink_tokens=args.protect_sink_tokens,
+                fallback_all=args.obs_fallback_all,
+            )
+            if mode_kind == "observation_hybrid"
             else None
         )
         loss, ppl, token_count, seconds = compute_eval_loss(
@@ -869,7 +1586,12 @@ def main() -> None:
             args.top_fraction,
             mode_max_heads if mode_max_heads is not None else args.max_heads_per_token,
             args.always_keep_self,
+            args.protect_sink_tokens,
+            args.protect_recent_tokens,
             stats,
+            obs_state,
+            obs_mass_state,
+            obs_hybrid_state,
         )
         ppl_rows.append(
             {
@@ -896,10 +1618,19 @@ def main() -> None:
                     if mode_kind == "limit_score_gap"
                     else "score_protect"
                     if mode_kind == "limit_score_protect"
+                    else "top2_union_all"
+                    if mode_kind == "top2_union_all"
+                    else "observation_window"
+                    if mode_kind == "observation_window"
+                    else "observation_all_mass"
+                    if mode_kind == "observation_all_mass"
+                    else "observation_hybrid"
+                    if mode_kind == "observation_hybrid"
                     else ""
                 ),
-                "protected_sink_tokens": protect_params[0] if protect_params else "",
+                "protected_sink_tokens": protect_params[0] if protect_params else args.protect_sink_tokens,
                 "protected_recent_fraction": protect_params[1] if protect_params else "",
+                "protected_recent_tokens": args.protect_recent_tokens,
                 "always_keep_self": args.always_keep_self if mode != "baseline" else "",
             }
         )
@@ -918,12 +1649,76 @@ def main() -> None:
                     if mode_kind == "limit_score_gap"
                     else "score_protect"
                     if mode_kind == "limit_score_protect"
+                    else "top2_union_all"
+                    if mode_kind == "top2_union_all"
+                    else "observation_window"
+                    if mode_kind == "observation_window"
+                    else "observation_all_mass"
+                    if mode_kind == "observation_all_mass"
+                    else "observation_hybrid"
+                    if mode_kind == "observation_hybrid"
                     else ""
                 )
                 row["max_heads_per_token"] = mode_max_heads
-                row["protected_sink_tokens"] = protect_params[0] if protect_params else ""
+                row["protected_sink_tokens"] = protect_params[0] if protect_params else args.protect_sink_tokens
                 row["protected_recent_fraction"] = protect_params[1] if protect_params else ""
+                row["protected_recent_tokens"] = args.protect_recent_tokens
                 load_rows.append(row)
+        if obs_state is not None:
+            for row in obs_state.rows():
+                row = dict(row)
+                row["mode"] = mode
+                row["obs_window_tokens"] = args.obs_window_tokens
+                row["obs_recent_tokens"] = args.obs_recent_tokens
+                row["obs_target_coverage"] = args.obs_target_coverage
+                row["hybrid_top2_target_coverage"] = ""
+                row["hybrid_top2_full_heads"] = ""
+                row["hybrid_non_top2_mass_coverage"] = ""
+                row["hybrid_top2_max_heads"] = ""
+                row["hybrid_non_top2_max_heads"] = ""
+                row["top2_assigned_token_count"] = ""
+                row["non_top2_assigned_token_count"] = ""
+                row["obs_min_heads"] = args.obs_min_heads
+                row["obs_max_heads"] = args.obs_max_heads
+                row["obs_fallback_all"] = args.obs_fallback_all
+                observation_rows.append(row)
+        if obs_mass_state is not None:
+            for row in obs_mass_state.rows():
+                row = dict(row)
+                row["mode"] = mode
+                row["obs_window_tokens"] = args.obs_window_tokens
+                row["obs_recent_tokens"] = args.obs_recent_tokens
+                row["obs_target_coverage"] = args.obs_target_coverage
+                row["hybrid_top2_target_coverage"] = ""
+                row["hybrid_top2_full_heads"] = ""
+                row["hybrid_non_top2_mass_coverage"] = ""
+                row["hybrid_top2_max_heads"] = ""
+                row["hybrid_non_top2_max_heads"] = ""
+                row["top2_assigned_token_count"] = ""
+                row["non_top2_assigned_token_count"] = ""
+                row["obs_min_heads"] = args.obs_min_heads
+                row["obs_max_heads"] = args.obs_max_heads
+                row["obs_fallback_all"] = args.obs_fallback_all
+                observation_rows.append(row)
+        if obs_hybrid_state is not None:
+            for row in obs_hybrid_state.rows():
+                row = dict(row)
+                row["mode"] = mode
+                row["obs_window_tokens"] = args.obs_window_tokens
+                row["obs_recent_tokens"] = args.obs_recent_tokens
+                row["obs_target_coverage"] = args.obs_target_coverage
+                row["hybrid_top2_use_mass"] = hybrid_params["top2_use_mass"] if hybrid_params else ""
+                row["hybrid_top2_full_heads"] = hybrid_params["top2_full_heads"] if hybrid_params else ""
+                row["hybrid_top2_target_coverage"] = hybrid_params["top2_target"] if hybrid_params else ""
+                row["hybrid_non_top2_mass_coverage"] = hybrid_params["non_top2_target"] if hybrid_params else ""
+                row["hybrid_top2_min_heads"] = hybrid_params["top2_min_heads"] if hybrid_params else ""
+                row["hybrid_top2_max_heads"] = hybrid_params["top2_max_heads"] if hybrid_params else ""
+                row["hybrid_non_top2_min_heads"] = hybrid_params["non_top2_min_heads"] if hybrid_params else ""
+                row["hybrid_non_top2_max_heads"] = hybrid_params["non_top2_max_heads"] if hybrid_params else ""
+                row["obs_min_heads"] = args.obs_min_heads
+                row["obs_max_heads"] = args.obs_max_heads
+                row["obs_fallback_all"] = args.obs_fallback_all
+                observation_rows.append(row)
     write_csv(
         output_dir / "ppl_by_mode.csv",
         ppl_rows,
@@ -938,6 +1733,7 @@ def main() -> None:
             "limit_strategy",
             "protected_sink_tokens",
             "protected_recent_fraction",
+            "protected_recent_tokens",
             "always_keep_self",
         ],
     )
@@ -952,6 +1748,7 @@ def main() -> None:
                 "max_heads_per_token",
                 "protected_sink_tokens",
                 "protected_recent_fraction",
+                "protected_recent_tokens",
                 "layer",
                 "head",
                 "query_count",
@@ -979,6 +1776,7 @@ def main() -> None:
                     "max_heads_per_token",
                     "protected_sink_tokens",
                     "protected_recent_fraction",
+                    "protected_recent_tokens",
                     "layer",
                     "head",
                     "query_count",
@@ -995,6 +1793,39 @@ def main() -> None:
                     "max_removed_per_query",
                 ],
             )
+    if observation_rows:
+        write_csv(
+            output_dir / "observation_window_allocations.csv",
+            observation_rows,
+            [
+                "mode",
+                "obs_window_tokens",
+                "obs_recent_tokens",
+                "obs_target_coverage",
+                "hybrid_top2_use_mass",
+                "hybrid_top2_full_heads",
+                "hybrid_top2_target_coverage",
+                "hybrid_non_top2_mass_coverage",
+                "hybrid_top2_min_heads",
+                "hybrid_top2_max_heads",
+                "hybrid_non_top2_min_heads",
+                "hybrid_non_top2_max_heads",
+                "obs_min_heads",
+                "obs_max_heads",
+                "obs_fallback_all",
+                "layer",
+                "boundary_query_token",
+                "assigned_token_count",
+                "top2_assigned_token_count",
+                "non_top2_assigned_token_count",
+                "mean_assigned_heads",
+                "mean_window_events_per_assigned_token",
+                "mean_window_attention_mass_per_assigned_token",
+                "min_assigned_heads",
+                "max_assigned_heads",
+            ]
+            + [f"tokens_assigned_{count}_heads" for count in range(1, head_count + 1)],
+        )
 
     plot_paths = plot_outputs(output_dir, ppl_rows, load_rows, args.plot_dpi) if args.make_plots else []
     (output_dir / "summary.json").write_text(
@@ -1013,6 +1844,12 @@ def main() -> None:
                         "if a historical key is selected by more than max_heads_per_token heads, "
                         "random modes keep a random subset and score modes keep the highest-score heads"
                     ),
+                    "observation_window_rule": (
+                        "top2obswin observes full top2 head sets for each layer over fixed query windows, "
+                        "then reallocates each observed historical token to the smallest head set whose "
+                        "window event coverage reaches obs_target_coverage; recent tokens and unobserved "
+                        "tokens are kept according to obs_recent_tokens and obs_fallback_all"
+                    ),
                     "self_token_rule": "kept unconditionally when always_keep_self=true",
                 },
                 "paths": {
@@ -1022,6 +1859,9 @@ def main() -> None:
                         str(output_dir / "top2limit3score_load_by_head.csv")
                         if any(row["mode"] == "top2limit3score" for row in load_rows)
                         else None
+                    ),
+                    "observation_window_allocations": (
+                        str(output_dir / "observation_window_allocations.csv") if observation_rows else None
                     ),
                     "plots": plot_paths,
                 },
