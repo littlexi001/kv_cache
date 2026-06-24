@@ -65,23 +65,23 @@ $$w_i = \frac{w_i^{\text{base}}}{f_{\text{target}}(y_i)^\alpha},\quad \alpha \in
 | `common_hurts_longtail_analysis.md` | 本文档 |
 | `scripts/two_dimension_testnew.py` | Untied 4-group 循环 bigram（原始实验） |
 | `scripts/analyze_toy_gradient_interference.py` | 梯度干扰分析（SIR、余弦） |
-| `analysis_step0_grad.py` | Step 0 梯度分解 |
-| `analysis_uniform_vs_zipf_v2.py` | Uniform vs Zipf 几何动力学 |
-| `k_token_experiment.py` | K-token untied bigram（mean bias 验证） |
-| `k_token_convergence.py` | K-token target vs input 收敛对比 |
-| `three_experiments.py` | Inverse frequency reweighting 三实验（bigram/trigram） |
-| `extended_experiments.py` | Multi-K + 维度扫描 + mini-batch 效应 |
-| `bridge_experiments.py` | Weight-tied + 中规模合成数据 + 2-layer |
-| `bridge_realistic.py` | 真实 K 频率（~3%）下的 soft reweighting α sweep |
-| `bridge_medium_scale.py` | 50 group 中规模收敛轨迹 |
-| `tied_diagnosis.py` | Tied+proj 下 M-output 质心 + 深度效应 |
-| `tied_trigram_experiments.py` | Tied+proj+trigram 完整实验 |
-| `attention_experiments.py` | Single-head attention（dim=4）：WithK vs NoK |
-| `attention_five_experiments.py` | 五组扩展实验（Multi-K 谱占据、LR sweep 等） |
-| `lr_sweep_detail.py` | LR sweep 逐 pattern 收敛对比 |
-| `attn_gradient_analysis.py` | Attention 下梯度结构分析 |
+| `scripts/analysis_step0_grad.py` | Step 0 梯度分解 |
+| `scripts/analysis_uniform_vs_zipf_v2.py` | Uniform vs Zipf 几何动力学 |
+| `scripts/k_token_experiment.py` | K-token untied bigram（mean bias 验证） |
+| `scripts/k_token_convergence.py` | K-token target vs input 收敛对比 |
+| `scripts/three_experiments.py` | Inverse frequency reweighting 三实验（bigram/trigram） |
+| `scripts/extended_experiments.py` | Multi-K + 维度扫描 + mini-batch 效应 |
+| `scripts/bridge_experiments.py` | Weight-tied + 中规模合成数据 + 2-layer |
+| `scripts/bridge_realistic.py` | 真实 K 频率（~3%）下的 soft reweighting α sweep |
+| `scripts/bridge_medium_scale.py` | 50 group 中规模收敛轨迹 |
+| `scripts/tied_diagnosis.py` | Tied+proj 下 M-output 质心 + 深度效应 |
+| `scripts/tied_trigram_experiments.py` | Tied+proj+trigram 完整实验 |
+| `scripts/attention_experiments.py` | Single-head attention（dim=4）：WithK vs NoK |
+| `scripts/attention_five_experiments.py` | 五组扩展实验（Multi-K 谱占据、LR sweep 等） |
+| `scripts/lr_sweep_detail.py` | LR sweep 逐 pattern 收敛对比 |
+| `scripts/attn_gradient_analysis.py` | Attention 下梯度结构分析 |
 
-运行方式：`cd fdong_embedding_dim && python3 <脚本名>.py`
+运行方式：`cd fdong_embedding_dim && python3 scripts/<脚本名>.py`
 
 ---
 

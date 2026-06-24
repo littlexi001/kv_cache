@@ -205,13 +205,13 @@ Reweighting 降低了 G0G1→K（common pattern）的梯度绝对值（0.33→0.
 
 | 实验 | 脚本 | 关键结论 |
 |------|------|---------|
-| K-token 起源实验 | `k_token_experiment.py` | K = 均值方向，rew 消除起源 |
-| 三位一体实验 | `three_experiments.py` | Bigram/Trigram × no/soft/hard rew 基线 |
-| 扩展实验 | `extended_experiments.py` | Multi-K、维度扩展、Mini-batch 效应 |
-| 桥接实验 | `bridge_experiments.py` | Weight-tied + 中等规模 |
-| 注意力实验 | `attention_experiments.py` | Attention 下 K 为脚手架 / 双刃剑 |
-| 五个注意力实验 | `attention_five_experiments.py` | Multi-K 谱竞争、LR sweep |
-| 梯度分析 | `attn_gradient_analysis.py` | Per-pattern 梯度投影分解 |
-| 理论缺口实验 | `theory_gap_experiments.py` | 嵌套消融、σ-vs-loss、hidden 注入 |
+| K-token 起源实验 | `scripts/k_token_experiment.py` | K = 均值方向，rew 消除起源 |
+| 三位一体实验 | `scripts/three_experiments.py` | Bigram/Trigram × no/soft/hard rew 基线 |
+| 扩展实验 | `scripts/extended_experiments.py` | Multi-K、维度扩展、Mini-batch 效应 |
+| 桥接实验 | `scripts/bridge_experiments.py` | Weight-tied + 中等规模 |
+| 注意力实验 | `scripts/attention_experiments.py` | Attention 下 K 为脚手架 / 双刃剑 |
+| 五个注意力实验 | `scripts/attention_five_experiments.py` | Multi-K 谱竞争、LR sweep |
+| 梯度分析 | `scripts/attn_gradient_analysis.py` | Per-pattern 梯度投影分解 |
+| 理论缺口实验 | `scripts/theory_gap_experiments.py` | 嵌套消融、σ-vs-loss、hidden 注入 |
 | 同 loss 对比 | (内联实验) | No/soft/hard rew 在相同 loss 下的梯度分配 |
 | 长训练 + 硬 rew | (内联实验) | Hard rew 过渡期消解、稳态 scale-free |

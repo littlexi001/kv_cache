@@ -5,7 +5,8 @@
 Stage 1 passed after one conjecture correction. Stage 2 is partial. Stage 3
 passed with a causal caveat. Stage 4 passed and directly separates a
 uniform-disjoint null from shared statistical features. Stage 5 passed for the
-early optimizer-path mechanism of reweighting.
+early optimizer-path mechanism of reweighting. Stage 6 passed for the
+plain-training parameter-representation alignment diagnostic.
 
 ## Reading contract
 
@@ -333,7 +334,132 @@ after step `100`, but it does not improve stable tail speed. This means forcing
 a flatter spectrum after the fact is not equivalent to training under a
 scale-balanced path from the start.
 
-## Overall claim audit after all five stages
+## Stage 6: parameter-representation singular direction alignment
+
+### What was tested
+
+Stage 6 used the existing single-head attention toy without loss reweighting.
+It compared `noK_uniform`, `withK_uniform`, and `withK_zipf` for five seeds over
+2000 steps. The goal was not to test a solution. The goal was to diagnose how
+plain training relates representation singular directions to parameter singular
+directions.
+
+Artifacts:
+
+- `outputs/common_direction_causal/stage6_parameter_representation_alignment/history.csv`
+- `outputs/common_direction_causal/stage6_parameter_representation_alignment/aggregate.csv`
+- `outputs/common_direction_causal/stage6_parameter_representation_alignment/metrics.png`
+- `outputs/common_direction_causal/stage6_parameter_representation_alignment/summary.json`
+
+The analyzed matrices were:
+
+- centered embedding/output matrix `E`;
+- raw attention matrices `Wq`, `Wk`, and `Wv`;
+- effective QK routing bilinear `Bqk = Wq.T @ Wk`;
+- transformed token clouds `E @ Wq.T`, `E @ Wk.T`, and `E @ Wv.T`.
+
+### Parameter singularity evidence
+
+At step 2000, centered embedding top-1 energy was:
+
+| condition | centered `E` top-1 energy |
+|---|---:|
+| noK uniform | 0.334 |
+| withK uniform | 0.377 |
+| withK Zipf | 0.439 |
+
+The effective QK routing matrix became almost rank-1 whenever K was present:
+
+| condition | `Bqk` top-1 energy |
+|---|---:|
+| noK uniform | 0.320 |
+| withK uniform | 0.99995 |
+| withK Zipf | 0.99978 |
+
+This shows that the shared K structure does not only make the embedding space
+anisotropic. It also creates an extremely concentrated parameter-space routing
+channel.
+
+### Representation-parameter alignment evidence
+
+At step 2000, the squared cosine between the centered embedding top direction
+and the input side of `Bqk` was:
+
+| condition | alignment |
+|---|---:|
+| noK uniform | 0.218 |
+| withK uniform | 0.9997 |
+| withK Zipf | 0.510 |
+
+For `withK_zipf`, alignment between the embedding common direction and input
+singular directions of attention parameter blocks was:
+
+| parameter block | squared cosine |
+|---|---:|
+| `Wq` | 0.140 |
+| `Wk` | 0.510 |
+| `Wv` | 0.973 |
+
+This corrects an overly narrow prior. In this toy, the common direction enters
+not only Q/K routing. It also strongly enters the value/content path. The safe
+conclusion is that the common representation direction is written into attention
+parameter space, but the exact block carrying it is architecture- and
+task-dependent.
+
+### Gradient-source evidence
+
+At the early checkpoint used in the summary, K-related examples pushed centered
+embedding `sigma1` upward:
+
+| contribution to early `sigma1` growth, withK Zipf | value |
+|---|---:|
+| `E`, K-related examples | 0.00328 |
+| `E`, tail examples | -0.00073 |
+| `Wv`, K-related examples | 0.00423 |
+
+This supports the interpretation that K-related/shared examples are an early
+source of the parameter/representation common channel. In this toy, the largest
+early parameter contribution is in `Wv`, not Q/K.
+
+### Functional meaning from ablation
+
+At step 2000 in `withK_zipf`, removing the top singular component of `Bqk`
+changed losses by:
+
+| split | loss increase after `Bqk` top-1 removal |
+|---|---:|
+| common group A | 0.675 |
+| tail groups | 1.997 |
+| K-related examples | 1.875 |
+| internal examples | 1.041 |
+
+This is the most important Stage 6 result. The top QK routing component is a
+shared K-related routing backbone. Tail examples depend on it even more than the
+frequency-common group A. Therefore, in plain training, tail does not simply live
+in a cleanly separate residual parameter space. It uses the common routing
+channel and is vulnerable to interference there.
+
+### Allowed conclusion
+
+Stage 6 supports the first two MoE-preparation diagnostics:
+
+1. Parameter-space top directions have interpretable meaning: in the attention
+   toy, `Bqk` top direction is a shared K-related routing backbone, and `Wv` also
+   carries a strong common content/value channel.
+2. Representation and parameter spaces are coupled: the embedding common
+   direction aligns with the input side of the high-gain QK routing channel.
+3. Tail examples depend on the shared parameter channel, rather than being
+   naturally separated into an independent parameter subspace.
+
+### Boundary and next implication
+
+This does not yet prove that a better parameter-space learning path exists. It
+does show why a MoE-style intervention is meaningful to test next: a dense model
+puts common and tail through the same high-gain parameter channel. The next
+existence experiment should ask whether oracle common/tail parameter separation
+improves tail learning beyond matched-capacity dense controls.
+
+## Overall claim audit after all six stages
 
 ### Supported in this toy model
 
@@ -356,6 +482,10 @@ scale-balanced path from the start.
 9. Forcing a flatter spectrum after the path has already formed does not recover
    the same tail-learning speed, so "flat final spectrum" is not the same as
    "scale-balanced optimization path."
+10. In the single-head attention toy, plain training writes the common
+    representation direction into parameter space: the QK routing bilinear
+    becomes nearly rank-1 with K, aligns with the embedding common direction, and
+    is functionally important for K-related and tail examples.
 
 ### Not supported or still open
 
@@ -369,6 +499,9 @@ scale-balanced path from the start.
 5. The optimizer-path evidence is strongest in the nucleation window. It does
    not prove that the update projection onto the current top vector is lower at
    every later point in training.
+6. Stage 6 does not prove that a better parameter-space path exists. It only
+   shows that dense plain training couples common and tail through shared
+   high-gain parameter channels.
 
 ### Updated working theory
 

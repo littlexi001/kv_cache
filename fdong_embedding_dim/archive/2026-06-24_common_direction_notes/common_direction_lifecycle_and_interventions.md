@@ -12,7 +12,7 @@
 2. nested 语言结构让这个 common direction 反复出现在大量 token / pattern 的表征中。
 3. 大奇异值方向拥有更高局部优化收益，梯度更偏好它；residual 方向被冷落，低频 token 和长尾 pattern 学得慢。
 
-![公共奇异方向的生命周期与干预位置](assets/common_direction_lifecycle_and_interventions.svg)
+![公共奇异方向的生命周期与干预位置](common_direction_lifecycle_and_interventions.svg)
 
 ## 0. 当前结论摘要
 

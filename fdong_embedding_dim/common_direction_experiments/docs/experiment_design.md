@@ -295,3 +295,63 @@ domination. Stage 5 passes if:
 7. `zipf_clip` lowers the spectrum but does not improve the tail path, showing
    that forcing the final spectrum flatter is not equivalent to learning under
    a scale-balanced path from the start.
+
+## Stage 6: parameter-representation singular direction alignment
+
+### Question
+
+Before designing a MoE solution, we need to know whether representation-space
+common directions correspond to parameter-space high-gain channels. Stage 6 asks:
+
+1. Where do parameter singular directions in a plain single-head attention model
+   come from?
+2. Do parameter top singular directions align with representation common
+   directions?
+3. Do tail examples depend on the same shared parameter channel?
+
+This stage intentionally does not use loss reweighting. The goal is to diagnose
+plain training.
+
+### Conditions
+
+The stage reuses the existing single-head attention toy:
+
+1. `noK_uniform`: four orthogonal groups without the shared K token.
+2. `withK_uniform`: four groups with a shared K connector and uniform group
+   weights.
+3. `withK_zipf`: shared K connector plus Zipf group weights.
+
+### Matrices analyzed
+
+The script measures both raw parameter matrices and effective representation
+spaces:
+
+- embedding/output rows `E`;
+- attention parameter blocks `Wq`, `Wk`, and `Wv`;
+- effective QK routing bilinear `Bqk = Wq.T @ Wk`;
+- token clouds after Q/K/V transforms: `E @ Wq.T`, `E @ Wk.T`, and `E @ Wv.T`.
+
+### Metrics
+
+- top-1 spectral energy and effective rank for each matrix;
+- alignment between the embedding common direction and each parameter
+  input-side top singular direction;
+- common/tail group centroid mass on parameter top subspaces;
+- group-conditioned contribution to first-order `sigma1` growth;
+- top-1 singular-component ablation damage on common, tail, K-related, and
+  internal examples.
+
+### Pass conditions
+
+Stage 6 passes if plain `withK_zipf` training shows:
+
+1. stronger embedding concentration than `noK_uniform`;
+2. stronger QK routing concentration than `noK_uniform`;
+3. alignment between the embedding common direction and the input side of the
+   QK routing channel;
+4. the common direction entering at least one attention parameter block;
+5. K-related gradients pushing early embedding `sigma1` growth;
+6. QK top-component ablation damaging K-related examples more than internal
+   examples;
+7. QK top-component ablation showing tail examples depend on the shared routing
+   channel.
