@@ -35,6 +35,8 @@ _ACTIVE_LOAD_STATS: "LoadStats | None" = None
 _ACTIVE_OBS_STATE: "ObservationWindowState | None" = None
 _ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
 _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
+_ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
+_ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 
 
@@ -54,6 +56,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prefill_tokens", type=int, default=1024)
     parser.add_argument("--eval_tokens", type=int, default=512)
     parser.add_argument("--chunk_size", type=int, default=128)
+    parser.add_argument(
+        "--eval_chunk_size",
+        type=int,
+        default=None,
+        help="Eval/decode chunk size. Defaults to --chunk_size. Use 1 for token-by-token decoding.",
+    )
     parser.add_argument("--max_chars", type=int, default=8_000_000)
     parser.add_argument("--add_special_tokens", type=str2bool, default=False)
     parser.add_argument("--append_eos", type=str2bool, default=False)
@@ -164,6 +172,12 @@ def parse_modes(spec: str) -> list[str]:
             "observation_window",
             "observation_all_mass",
             "observation_hybrid",
+            "sign_xnor",
+            "sign_xnor_knorm",
+            "sign_xnor_rerank",
+            "recent_window",
+            "qabs_partial_rerank",
+            "qabs_reuse_rerank",
         }
     ]
     if invalid:
@@ -189,6 +203,18 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "observation_window", None
     if mode == "obsallmass":
         return "observation_all_mass", None
+    if re.fullmatch(r"signxnor\d+(?:p\d+)?", mode):
+        return "sign_xnor", None
+    if re.fullmatch(r"signxnorknorm\d+(?:p\d+)?", mode):
+        return "sign_xnor_knorm", None
+    if re.fullmatch(r"signxnor\d+(?:p\d+)?rerank", mode):
+        return "sign_xnor_rerank", None
+    if re.fullmatch(r"recent\d+", mode):
+        return "recent_window", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?rerank", mode):
+        return "qabs_partial_rerank", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse", mode):
+        return "qabs_reuse_rerank", None
     if re.fullmatch(r"obshybridt\d+n\d+(?:kt\d+kn\d+)?", mode):
         return "observation_hybrid", None
     if re.fullmatch(r"obshybridmasst\d+n\d+(?:kt\d+kn\d+)?(?:mt\d+mn\d+)?", mode):
@@ -220,6 +246,29 @@ def parse_gap_margin(mode: str) -> float | None:
     if not match:
         return None
     return float(match.group(2).replace("p", "."))
+
+
+def parse_sign_xnor_candidate_fraction(mode: str) -> float | None:
+    match = re.fullmatch(r"signxnor(?:knorm)?(\d+(?:p\d+)?)(?:rerank)?", mode)
+    if not match:
+        return None
+    return float(match.group(1).replace("p", ".")) / 100.0
+
+
+def parse_recent_window_tokens(mode: str) -> int | None:
+    match = re.fullmatch(r"recent(\d+)", mode)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def parse_qabs_partial_rerank_params(mode: str) -> tuple[int, float] | None:
+    match = re.fullmatch(r"qabs(\d+)cand(\d+(?:p\d+)?)(?:rerank|reuse)", mode)
+    if not match:
+        return None
+    dim_count = int(match.group(1))
+    candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
+    return dim_count, candidate_fraction
 
 
 def parse_protect_params(mode: str) -> tuple[int, float] | None:
@@ -358,6 +407,96 @@ class LoadStats:
                     }
                 )
         return rows
+
+
+@dataclass
+class CandidateStats:
+    layer_count: int
+    head_count: int
+
+    def __post_init__(self) -> None:
+        shape = (self.layer_count, self.head_count)
+        self.query_counts = torch.zeros(shape, dtype=torch.long)
+        self.history_token_counts = torch.zeros(shape, dtype=torch.long)
+        self.candidate_counts = torch.zeros(shape, dtype=torch.long)
+        self.max_candidate_per_query = torch.zeros(shape, dtype=torch.long)
+
+    def update(self, layer: int, candidate_keep: torch.Tensor, history_valid: torch.Tensor) -> None:
+        candidate_counts = candidate_keep.sum(dim=(0, 2)).cpu().to(torch.long)
+        history_counts = history_valid.sum(dim=(0, 2)).cpu().to(torch.long)
+        candidate_per_query = candidate_keep.sum(dim=2).cpu().to(torch.long)
+        batch_count = int(candidate_keep.shape[0])
+        self.query_counts[layer] += batch_count
+        self.history_token_counts[layer] += history_counts
+        self.candidate_counts[layer] += candidate_counts
+        self.max_candidate_per_query[layer] = torch.maximum(
+            self.max_candidate_per_query[layer],
+            candidate_per_query.max(dim=0).values,
+        )
+
+    def rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for layer in range(self.layer_count):
+            for head in range(self.head_count):
+                query_count = int(self.query_counts[layer, head])
+                history_count = int(self.history_token_counts[layer, head])
+                candidate = int(self.candidate_counts[layer, head])
+                rows.append(
+                    {
+                        "layer": layer,
+                        "head": head,
+                        "query_count": query_count,
+                        "history_token_cases": history_count,
+                        "candidate_tokens": candidate,
+                        "candidate_per_query_mean": candidate / query_count if query_count else 0.0,
+                        "candidate_fraction_of_history": candidate / history_count if history_count else 0.0,
+                        "max_candidate_per_query": int(self.max_candidate_per_query[layer, head]),
+                    }
+                )
+        return rows
+
+
+class ReuseCandidateState:
+    def __init__(self) -> None:
+        self.previous: dict[tuple[int, int], dict[str, Any]] = {}
+
+    def previous_masks(
+        self,
+        layer: int,
+        head: int,
+        query_token: int,
+        history_count: int,
+        device: torch.device,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        previous = self.previous.get((layer, head))
+        if previous is None or previous["query_token"] != query_token - 1:
+            return None, None
+        candidate = previous["candidate"].to(device)
+        final = previous["final"].to(device)
+        if candidate.numel() > history_count:
+            candidate = candidate[:history_count]
+        if final.numel() > history_count:
+            final = final[:history_count]
+        if candidate.numel() < history_count:
+            candidate = F.pad(candidate, (0, history_count - candidate.numel()), value=False)
+        if final.numel() < history_count:
+            final = F.pad(final, (0, history_count - final.numel()), value=False)
+        return candidate, final
+
+    def update(
+        self,
+        layer: int,
+        query_token: int,
+        candidate_keep: torch.Tensor,
+        final_keep: torch.Tensor,
+        history_count: int,
+    ) -> None:
+        for head in range(candidate_keep.shape[1]):
+            self.previous[(layer, head)] = {
+                "query_token": query_token,
+                "candidate": candidate_keep[0, head, :history_count].detach().cpu().bool(),
+                "final": final_keep[0, head, :history_count].detach().cpu().bool(),
+            }
 
 
 @dataclass
@@ -788,6 +927,112 @@ def _top2_history_keep_for_query(row_scores: torch.Tensor, finite: torch.Tensor,
     return keep
 
 
+def _sign_xnor_history_keep_for_query(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    query_index: int,
+    finite: torch.Tensor,
+    candidate_fraction: float,
+    weight_by_key_norm: bool = False,
+) -> torch.Tensor:
+    # Keep historical keys whose sign-match popcount is in the requested top
+    # candidate bucket for each query head. Optionally weight the popcount by
+    # the key vector norm. Boundary ties are kept, matching the recall-analysis
+    # script.
+    history_valid = finite.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return torch.zeros_like(finite, dtype=torch.bool)
+    self_index = valid_count - 1
+    history_valid[:, :, self_index] = False
+    history_count = valid_count - 1
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+
+    q_sign = torch.signbit(query_states[:, :, query_index, :])
+    k_sign = torch.signbit(key_states[:, :, :history_count, :])
+    candidate_scores = (k_sign == q_sign[:, :, None, :]).sum(dim=-1).float()
+    if weight_by_key_norm:
+        key_norm = key_states[:, :, :history_count, :].float().norm(dim=-1)
+        candidate_scores = candidate_scores * key_norm
+    threshold = torch.topk(candidate_scores, k=requested, dim=-1, largest=True).values[:, :, -1:]
+
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    keep[:, :, :history_count] = candidate_scores >= threshold
+    keep &= history_valid
+    return keep
+
+
+def _topk_within_candidate_for_query(
+    row_scores: torch.Tensor,
+    finite: torch.Tensor,
+    candidate_keep: torch.Tensor,
+    top_fraction: float,
+) -> torch.Tensor:
+    # Use exact QK score only inside a candidate mask, then keep the requested
+    # top fraction of the full historical length for each head.
+    history_valid = finite.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return torch.zeros_like(finite, dtype=torch.bool)
+    self_index = valid_count - 1
+    history_valid[:, :, self_index] = False
+    history_count = valid_count - 1
+    keep_count = min(history_count, max(1, math.ceil(top_fraction * history_count)))
+    candidate_valid = candidate_keep & history_valid
+    if int(candidate_valid.sum().item()) == 0:
+        return torch.zeros_like(finite, dtype=torch.bool)
+    candidate_scores = row_scores.masked_fill(~candidate_valid, torch.finfo(row_scores.dtype).min)
+    _, top_indices = torch.topk(candidate_scores, k=keep_count, dim=-1, largest=True)
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    keep.scatter_(-1, top_indices, True)
+    keep &= candidate_valid
+    return keep
+
+
+def _recent_history_keep_for_query(
+    finite: torch.Tensor,
+    recent_tokens: int,
+    sink_tokens: int,
+) -> torch.Tensor:
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    return _apply_full_head_protection(keep, finite, sink_tokens, max(0, recent_tokens))
+
+
+def _qabs_partial_candidate_keep_for_query(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    query_index: int,
+    finite: torch.Tensor,
+    dim_count: int,
+    candidate_fraction: float,
+) -> torch.Tensor:
+    # Approximate QK by using only the query dimensions with largest absolute
+    # value for the current query/head, then keep the top candidate bucket.
+    history_valid = finite.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return torch.zeros_like(finite, dtype=torch.bool)
+    self_index = valid_count - 1
+    history_valid[:, :, self_index] = False
+    history_count = valid_count - 1
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+
+    q = query_states[:, :, query_index, :].float()
+    k = key_states[:, :, :history_count, :].float()
+    selected_dim_count = min(max(1, dim_count), q.shape[-1])
+    dim_indices = torch.topk(q.abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    q_selected = torch.gather(q, dim=-1, index=dim_indices)
+    k_indices = dim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+    k_selected = torch.gather(k, dim=-1, index=k_indices)
+    partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+    threshold = torch.topk(partial_scores, k=requested, dim=-1, largest=True).values[:, :, -1:]
+
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    keep[:, :, :history_count] = partial_scores >= threshold
+    keep &= history_valid
+    return keep
+
+
 def _expand_selected_tokens_to_all_heads(original_keep: torch.Tensor) -> torch.Tensor:
     token_keep = original_keep.any(dim=1, keepdim=True)
     return token_keep.expand_as(original_keep).clone()
@@ -995,6 +1240,12 @@ def _limited_eager_attention_forward(
         "observation_window",
         "observation_all_mass",
         "observation_hybrid",
+        "sign_xnor",
+        "sign_xnor_knorm",
+        "sign_xnor_rerank",
+        "recent_window",
+        "qabs_partial_rerank",
+        "qabs_reuse_rerank",
     }:
         final_keep = torch.zeros_like(scores, dtype=torch.bool)
         query_count = scores.shape[-2]
@@ -1004,7 +1255,144 @@ def _limited_eager_attention_forward(
             row = scores[:, :, query_index, :]
             finite = torch.isfinite(row)
             history_original = _top2_history_keep_for_query(row, finite, _ACTIVE_TOP_FRACTION)
-            if mode_kind == "top2":
+            if mode_kind in {"sign_xnor", "sign_xnor_knorm", "sign_xnor_rerank"}:
+                candidate_fraction = parse_sign_xnor_candidate_fraction(_ACTIVE_MODE)
+                if candidate_fraction is None:
+                    raise RuntimeError(f"Invalid sign-XNOR mode: {_ACTIVE_MODE}")
+                sign_candidate = _sign_xnor_history_keep_for_query(
+                    query_states,
+                    key_states,
+                    query_index,
+                    finite,
+                    candidate_fraction,
+                    weight_by_key_norm=mode_kind == "sign_xnor_knorm",
+                )
+                if mode_kind == "sign_xnor_rerank":
+                    history_final = _topk_within_candidate_for_query(
+                        row,
+                        finite,
+                        sign_candidate,
+                        _ACTIVE_TOP_FRACTION,
+                    )
+                else:
+                    history_final = sign_candidate
+                history_final = _apply_full_head_protection(
+                    history_final,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
+            elif mode_kind == "recent_window":
+                recent_tokens = parse_recent_window_tokens(_ACTIVE_MODE)
+                if recent_tokens is None:
+                    raise RuntimeError(f"Invalid recent-window mode: {_ACTIVE_MODE}")
+                history_final = _recent_history_keep_for_query(
+                    finite,
+                    recent_tokens,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
+            elif mode_kind == "qabs_partial_rerank":
+                qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+                if qabs_params is None:
+                    raise RuntimeError(f"Invalid qabs partial-rerank mode: {_ACTIVE_MODE}")
+                dim_count, candidate_fraction = qabs_params
+                partial_candidate = _qabs_partial_candidate_keep_for_query(
+                    query_states,
+                    key_states,
+                    query_index,
+                    finite,
+                    dim_count,
+                    candidate_fraction,
+                )
+                history_final = _topk_within_candidate_for_query(
+                    row,
+                    finite,
+                    partial_candidate,
+                    _ACTIVE_TOP_FRACTION,
+                )
+                history_final = _apply_full_head_protection(
+                    history_final,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
+            elif mode_kind == "qabs_reuse_rerank":
+                qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+                if qabs_params is None:
+                    raise RuntimeError(f"Invalid qabs reuse-rerank mode: {_ACTIVE_MODE}")
+                dim_count, candidate_fraction = qabs_params
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                valid_count = int(finite[0, 0].sum().item())
+                history_count = max(0, valid_count - 1)
+                query_token = chunk_query_start + query_index
+                current_candidate = _qabs_partial_candidate_keep_for_query(
+                    query_states,
+                    key_states,
+                    query_index,
+                    finite,
+                    dim_count,
+                    candidate_fraction,
+                )
+                candidate_union = current_candidate.clone()
+                if _ACTIVE_REUSE_STATE is not None and history_count > 0:
+                    for head in range(candidate_union.shape[1]):
+                        previous_candidate, previous_final = _ACTIVE_REUSE_STATE.previous_masks(
+                            layer_idx,
+                            head,
+                            query_token,
+                            history_count,
+                            candidate_union.device,
+                        )
+                        if previous_candidate is not None:
+                            candidate_union[0, head, :history_count] |= previous_candidate
+                        if previous_final is not None:
+                            candidate_union[0, head, :history_count] |= previous_final
+                history_final = _topk_within_candidate_for_query(
+                    row,
+                    finite,
+                    candidate_union,
+                    _ACTIVE_TOP_FRACTION,
+                )
+                history_final = _apply_full_head_protection(
+                    history_final,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_CANDIDATE_STATS is not None:
+                    history_valid = finite.clone()
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_CANDIDATE_STATS.update(layer_idx, candidate_union, history_valid)
+                if _ACTIVE_LOAD_STATS is not None:
+                    history_valid = finite.clone()
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
+                if _ACTIVE_REUSE_STATE is not None and history_count > 0:
+                    _ACTIVE_REUSE_STATE.update(layer_idx, query_token, current_candidate, history_final, history_count)
+            elif mode_kind == "top2":
                 history_final = _apply_full_head_protection(
                     history_original,
                     finite,
@@ -1189,8 +1577,10 @@ def attention_mode(
     obs_state: ObservationWindowState | None = None,
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
+    reuse_state: ReuseCandidateState | None = None,
+    candidate_stats: CandidateStats | None = None,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -1202,6 +1592,8 @@ def attention_mode(
         _ACTIVE_OBS_STATE,
         _ACTIVE_OBS_MASS_STATE,
         _ACTIVE_OBS_HYBRID_STATE,
+        _ACTIVE_REUSE_STATE,
+        _ACTIVE_CANDIDATE_STATS,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
@@ -1213,6 +1605,8 @@ def attention_mode(
     _ACTIVE_OBS_STATE = obs_state
     _ACTIVE_OBS_MASS_STATE = obs_mass_state
     _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
+    _ACTIVE_REUSE_STATE = reuse_state
+    _ACTIVE_CANDIDATE_STATS = candidate_stats
     try:
         yield
     finally:
@@ -1227,6 +1621,8 @@ def attention_mode(
             _ACTIVE_OBS_STATE,
             _ACTIVE_OBS_MASS_STATE,
             _ACTIVE_OBS_HYBRID_STATE,
+            _ACTIVE_REUSE_STATE,
+            _ACTIVE_CANDIDATE_STATS,
         ) = previous
 
 
@@ -1272,7 +1668,8 @@ def compute_eval_loss(
     input_ids: torch.Tensor,
     prefill_tokens: int,
     eval_tokens: int,
-    chunk_size: int,
+    prefill_chunk_size: int,
+    eval_chunk_size: int,
     input_device: torch.device,
     mode: str,
     top_fraction: float,
@@ -1284,16 +1681,18 @@ def compute_eval_loss(
     obs_state: ObservationWindowState | None = None,
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
+    reuse_state: ReuseCandidateState | None = None,
+    candidate_stats: CandidateStats | None = None,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
     started = time.perf_counter()
-    past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, chunk_size, input_device)
+    past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, prefill_chunk_size, input_device)
     total_loss = 0.0
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
-    total_chunks = math.ceil(eval_tokens / chunk_size)
-    for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, chunk_size), start=1):
-        end = min(start + chunk_size, eval_end)
+    total_chunks = math.ceil(eval_tokens / eval_chunk_size)
+    for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, eval_chunk_size), start=1):
+        end = min(start + eval_chunk_size, eval_end)
         chunk = input_ids[:, start:end].to(input_device)
         kwargs: dict[str, Any] = {
             "input_ids": chunk,
@@ -1317,6 +1716,8 @@ def compute_eval_loss(
             obs_state,
             obs_mass_state,
             obs_hybrid_state,
+            reuse_state,
+            candidate_stats,
         ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
@@ -1463,6 +1864,9 @@ def main() -> None:
         raise ValueError("--prefill_tokens and --eval_tokens must be positive.")
     if args.chunk_size <= 0:
         raise ValueError("--chunk_size must be positive.")
+    eval_chunk_size = args.eval_chunk_size if args.eval_chunk_size is not None else args.chunk_size
+    if eval_chunk_size <= 0:
+        raise ValueError("--eval_chunk_size must be positive.")
     if not (0.0 < args.top_fraction <= 1.0):
         raise ValueError("--top_fraction must be in (0, 1].")
     if args.max_heads_per_token <= 0:
@@ -1509,6 +1913,19 @@ def main() -> None:
     for mode in modes:
         mode_kind, mode_max_heads = parse_mode_config(mode)
         protect_params = parse_protect_params(mode)
+        sign_xnor_candidate_fraction = (
+            parse_sign_xnor_candidate_fraction(mode)
+            if mode_kind in {"sign_xnor", "sign_xnor_knorm", "sign_xnor_rerank"}
+            else None
+        )
+        recent_window_tokens = parse_recent_window_tokens(mode) if mode_kind == "recent_window" else None
+        qabs_params = (
+            parse_qabs_partial_rerank_params(mode)
+            if mode_kind in {"qabs_partial_rerank", "qabs_reuse_rerank"}
+            else None
+        )
+        qabs_dim_count = qabs_params[0] if qabs_params else None
+        qabs_candidate_fraction = qabs_params[1] if qabs_params else None
         stats = (
             LoadStats(layer_count, head_count)
             if mode_kind
@@ -1523,9 +1940,17 @@ def main() -> None:
                 "observation_window",
                 "observation_all_mass",
                 "observation_hybrid",
+                "sign_xnor",
+                "sign_xnor_knorm",
+                "sign_xnor_rerank",
+                "recent_window",
+                "qabs_partial_rerank",
+                "qabs_reuse_rerank",
             }
             else None
         )
+        candidate_stats = CandidateStats(layer_count, head_count) if mode_kind == "qabs_reuse_rerank" else None
+        reuse_state = ReuseCandidateState() if mode_kind == "qabs_reuse_rerank" else None
         hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
         obs_state = (
             ObservationWindowState(
@@ -1581,6 +2006,7 @@ def main() -> None:
             args.prefill_tokens,
             args.eval_tokens,
             args.chunk_size,
+            eval_chunk_size,
             input_device,
             mode,
             args.top_fraction,
@@ -1592,6 +2018,8 @@ def main() -> None:
             obs_state,
             obs_mass_state,
             obs_hybrid_state,
+            reuse_state,
+            candidate_stats,
         )
         ppl_rows.append(
             {
@@ -1600,7 +2028,24 @@ def main() -> None:
                 "ppl": ppl,
                 "token_count": token_count,
                 "seconds": seconds,
-                "top_fraction": args.top_fraction if mode != "baseline" else "",
+                "top_fraction": (
+                    args.top_fraction
+                    if mode not in {"baseline"}
+                    and mode_kind
+                    not in {
+                        "sign_xnor",
+                        "sign_xnor_knorm",
+                        "sign_xnor_rerank",
+                        "recent_window",
+                        "qabs_partial_rerank",
+                        "qabs_reuse_rerank",
+                    }
+                    else ""
+                ),
+                "sign_xnor_candidate_fraction": sign_xnor_candidate_fraction if sign_xnor_candidate_fraction else "",
+                "recent_window_tokens": recent_window_tokens if recent_window_tokens else "",
+                "qabs_dim_count": qabs_dim_count if qabs_dim_count else "",
+                "qabs_candidate_fraction": qabs_candidate_fraction if qabs_candidate_fraction else "",
                 "max_heads_per_token": (
                     mode_max_heads
                     if mode_kind
@@ -1626,6 +2071,18 @@ def main() -> None:
                     if mode_kind == "observation_all_mass"
                     else "observation_hybrid"
                     if mode_kind == "observation_hybrid"
+                    else "sign_xnor"
+                    if mode_kind == "sign_xnor"
+                    else "sign_xnor_knorm"
+                    if mode_kind == "sign_xnor_knorm"
+                    else "sign_xnor_rerank"
+                    if mode_kind == "sign_xnor_rerank"
+                    else "recent_window"
+                    if mode_kind == "recent_window"
+                    else "qabs_partial_rerank"
+                    if mode_kind == "qabs_partial_rerank"
+                    else "qabs_reuse_rerank"
+                    if mode_kind == "qabs_reuse_rerank"
                     else ""
                 ),
                 "protected_sink_tokens": protect_params[0] if protect_params else args.protect_sink_tokens,
@@ -1657,6 +2114,18 @@ def main() -> None:
                     if mode_kind == "observation_all_mass"
                     else "observation_hybrid"
                     if mode_kind == "observation_hybrid"
+                    else "sign_xnor"
+                    if mode_kind == "sign_xnor"
+                    else "sign_xnor_knorm"
+                    if mode_kind == "sign_xnor_knorm"
+                    else "sign_xnor_rerank"
+                    if mode_kind == "sign_xnor_rerank"
+                    else "recent_window"
+                    if mode_kind == "recent_window"
+                    else "qabs_partial_rerank"
+                    if mode_kind == "qabs_partial_rerank"
+                    else "qabs_reuse_rerank"
+                    if mode_kind == "qabs_reuse_rerank"
                     else ""
                 )
                 row["max_heads_per_token"] = mode_max_heads
@@ -1664,6 +2133,34 @@ def main() -> None:
                 row["protected_recent_fraction"] = protect_params[1] if protect_params else ""
                 row["protected_recent_tokens"] = args.protect_recent_tokens
                 load_rows.append(row)
+        if candidate_stats is not None:
+            write_csv(
+                output_dir / f"{mode}_candidate_load_by_head.csv",
+                [
+                    {
+                        **row,
+                        "mode": mode,
+                        "limit_strategy": "qabs_reuse_rerank",
+                        "qabs_dim_count": qabs_dim_count if qabs_dim_count else "",
+                        "qabs_candidate_fraction": qabs_candidate_fraction if qabs_candidate_fraction else "",
+                    }
+                    for row in candidate_stats.rows()
+                ],
+                [
+                    "mode",
+                    "limit_strategy",
+                    "qabs_dim_count",
+                    "qabs_candidate_fraction",
+                    "layer",
+                    "head",
+                    "query_count",
+                    "history_token_cases",
+                    "candidate_tokens",
+                    "candidate_per_query_mean",
+                    "candidate_fraction_of_history",
+                    "max_candidate_per_query",
+                ],
+            )
         if obs_state is not None:
             for row in obs_state.rows():
                 row = dict(row)
@@ -1729,6 +2226,10 @@ def main() -> None:
             "token_count",
             "seconds",
             "top_fraction",
+            "sign_xnor_candidate_fraction",
+            "recent_window_tokens",
+            "qabs_dim_count",
+            "qabs_candidate_fraction",
             "max_heads_per_token",
             "limit_strategy",
             "protected_sink_tokens",
