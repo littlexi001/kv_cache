@@ -511,3 +511,69 @@ Interpretation:
 - `qabs8cand7reuse` is the best observed point in this single run: PPL `24.6731` with conservative proxy `0.1810`.
 - Because this is one text segment and only 512 eval tokens, treat the exact ranking as noisy. The robust conclusion is that `cand3/cand5/cand7` are worth server-scale retesting.
 - The next server sweep should prioritize `qabs8cand3reuse`, `qabs8cand5reuse`, `qabs8cand7reuse`, `qabs16cand3reuse`, `qabs16cand7reuse`, and keep `qabs16cand10reuse` / `qabs32cand10reuse` as anchors.
+
+## Results: Qabs Reuse Fast Decode Prototype
+
+Question:
+
+- Can we remove the prototype's initial full-history QK matmul and measure a more realistic speed trend?
+
+Implementation:
+
+- Added `--qabs_fast_path`.
+- Added `--disable_sparse_stats` to avoid per-token `.cpu()` synchronizations during timing.
+- Added `--log_every` to reduce progress-print overhead when using `eval_chunk_size=1`.
+- Added `scripts/run_qabs_fast_speed_server.sh` for server timing runs.
+
+Fast-path algorithm:
+
+1. Select top-`|q|` dimensions for each query/head.
+2. Compute partial-QK over full history on only those dimensions.
+3. Build dynamic candidate union from current raw qabs candidate, previous raw qabs candidate, and previous final top2.
+4. Gather only candidate K vectors and compute exact full-QK for rerank.
+5. Hard-protect sink/recent after rerank.
+6. Gather final selected K/V vectors and compute attention only on those indices.
+
+Important limitation:
+
+- This is a PyTorch/GPU gather prototype, not a fused Triton/CUDA kernel.
+- It avoids the initial full QK matmul, but still pays heavy overhead for `topk`, boolean mask compaction, padded gathers, and many small kernels.
+- Triton is not installed in the current local environment, so no Triton kernel was compiled locally.
+
+Artifact:
+
+- `outputs/speed_qabs_slow_no_stats/ppl_by_mode.csv`
+- `outputs/speed_qabs_fast_no_stats/ppl_by_mode.csv`
+
+Setup:
+
+- Local 2048-token split.
+- `prefill_tokens=1536`, `eval_tokens=512`.
+- `eval_chunk_size=1`.
+- `protect_sink_tokens=10`, `protect_recent_tokens=10`.
+- Sparse stats disabled for timing.
+- Progress logging every 128 eval tokens.
+
+Results:
+
+| Mode | Slow prototype PPL | Slow seconds | Slow tok/s | Fast prototype PPL | Fast seconds | Fast tok/s |
+|---|---:|---:|---:|---:|---:|---:|
+| baseline | 25.5495 | 45.00 | 11.38 | 25.5495 | 27.96 | 18.31 |
+| qabs8cand3reuse | 25.2084 | 117.53 | 4.36 | 25.4245 | 56.97 | 8.99 |
+| qabs8cand7reuse | 24.6731 | 117.06 | 4.37 | 24.7360 | 53.50 | 9.57 |
+
+Interpretation:
+
+- Removing the initial full QK matmul roughly halves qabs wall time in this local run.
+- The fast PyTorch prototype is still slower than baseline because candidate compaction and many small gather/topk kernels dominate at this length.
+- `qabs8cand7reuse` remains better than baseline PPL in both slow and fast prototypes.
+- Fast and slow PPL are close but not bit-identical. The fast path computes only selected/gathered scores and changes some low-level matmul/softmax ordering, so small numeric drift is expected.
+
+Kernel design needed for real speed:
+
+- A fused candidate kernel should output compact candidate indices directly, not dense bool masks.
+- Candidate union should be a packed bitset or compact sorted index union on GPU:
+  - `current_candidate_bits | previous_candidate_bits | previous_top2_bits`;
+  - or a small custom merge for sorted candidate-index lists.
+- Rerank and final attention should be fused or at least use persistent on-device buffers to avoid repeated allocation.
+- The current PyTorch fast path is the correctness and speed-trend prototype; real acceleration requires replacing mask compaction/topk/gather chains with Triton/CUDA kernels.

@@ -37,6 +37,7 @@ _ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
 _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
+_ACTIVE_QABS_FAST_PATH: bool = False
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 
 
@@ -92,6 +93,24 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=1234)
     parser.add_argument("--modes", default="baseline,top2,top2limit3score")
+    parser.add_argument(
+        "--qabs_fast_path",
+        type=str2bool,
+        default=False,
+        help="Use the experimental qabs reuse decode fast path that avoids the initial full QK matmul.",
+    )
+    parser.add_argument(
+        "--disable_sparse_stats",
+        type=str2bool,
+        default=False,
+        help="Disable sparse load/candidate CSV stats to avoid GPU sync during timing runs.",
+    )
+    parser.add_argument(
+        "--log_every",
+        type=int,
+        default=1,
+        help="Print eval progress every N chunks. Default 1 preserves previous verbose logging.",
+    )
     parser.add_argument("--obs_window_tokens", type=int, default=100)
     parser.add_argument("--obs_recent_tokens", type=int, default=100)
     parser.add_argument("--obs_target_coverage", type=float, default=0.90)
@@ -459,6 +478,7 @@ class CandidateStats:
 class ReuseCandidateState:
     def __init__(self) -> None:
         self.previous: dict[tuple[int, int], dict[str, Any]] = {}
+        self.previous_layer: dict[int, dict[str, Any]] = {}
 
     def previous_masks(
         self,
@@ -497,6 +517,42 @@ class ReuseCandidateState:
                 "candidate": candidate_keep[0, head, :history_count].detach().cpu().bool(),
                 "final": final_keep[0, head, :history_count].detach().cpu().bool(),
             }
+
+    def previous_layer_masks(
+        self,
+        layer: int,
+        query_token: int,
+        history_count: int,
+        device: torch.device,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        previous = self.previous_layer.get(layer)
+        if previous is None or previous["query_token"] != query_token - 1:
+            return None, None
+        candidate = previous["candidate"].to(device)
+        final = previous["final"].to(device)
+        if candidate.shape[-1] > history_count:
+            candidate = candidate[..., :history_count]
+        if final.shape[-1] > history_count:
+            final = final[..., :history_count]
+        if candidate.shape[-1] < history_count:
+            candidate = F.pad(candidate, (0, history_count - candidate.shape[-1]), value=False)
+        if final.shape[-1] < history_count:
+            final = F.pad(final, (0, history_count - final.shape[-1]), value=False)
+        return candidate, final
+
+    def update_layer(
+        self,
+        layer: int,
+        query_token: int,
+        candidate_keep: torch.Tensor,
+        final_keep: torch.Tensor,
+        history_count: int,
+    ) -> None:
+        self.previous_layer[layer] = {
+            "query_token": query_token,
+            "candidate": candidate_keep[..., :history_count].detach().bool(),
+            "final": final_keep[..., :history_count].detach().bool(),
+        }
 
 
 @dataclass
@@ -1208,6 +1264,127 @@ def _limit_heads_per_token_by_score_protected(
     return final_keep
 
 
+def _indices_from_keep_mask(keep: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    # Convert a dense boolean mask [batch, heads, key] into padded indices
+    # [batch, heads, max_selected]. This is a PyTorch stand-in for the compact
+    # candidate-index output a CUDA/Triton kernel should produce directly.
+    selected_counts = keep.sum(dim=-1)
+    max_selected = int(selected_counts.max().item()) if selected_counts.numel() else 0
+    if max_selected <= 0:
+        empty_indices = torch.zeros((*keep.shape[:-1], 0), dtype=torch.long, device=keep.device)
+        empty_valid = torch.zeros_like(empty_indices, dtype=torch.bool)
+        return empty_indices, empty_valid
+    positions = torch.arange(keep.shape[-1], device=keep.device, dtype=torch.long).view(1, 1, -1)
+    positions = positions.expand_as(keep)
+    masked_positions = torch.where(keep, positions, torch.full_like(positions, -1))
+    indices = torch.topk(masked_positions, k=max_selected, dim=-1, largest=True).values
+    valid = indices >= 0
+    return indices.clamp_min(0), valid
+
+
+def _qabs_reuse_fast_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> tuple[torch.Tensor, None]:
+    # Decode-only qabs-reuse path. It avoids the initial full-history QK matmul
+    # and computes exact QK only for candidate/final selected token indices.
+    qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+    if qabs_params is None:
+        raise RuntimeError(f"Invalid qabs reuse-rerank mode: {_ACTIVE_MODE}")
+    dim_count, candidate_fraction = qabs_params
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("qabs fast path only supports decode-style query_count=1.")
+    key_count = key_states.shape[-2]
+    if key_count <= 1:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    query_token = key_count - 1
+    history_count = key_count - 1
+    q = query_states[:, :, 0, :].float()
+    k_history = key_states[:, :, :history_count, :]
+
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    dim_indices = torch.topk(q.abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    q_selected = torch.gather(q, dim=-1, index=dim_indices)
+    k_dim_indices = dim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+    k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+    partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+    threshold = torch.topk(partial_scores, k=requested, dim=-1, largest=True).values[:, :, -1:]
+    current_candidate_history = partial_scores >= threshold
+
+    candidate_union_history = current_candidate_history.clone()
+    if _ACTIVE_REUSE_STATE is not None:
+        previous_candidate, previous_final = _ACTIVE_REUSE_STATE.previous_layer_masks(
+            layer_idx,
+            query_token,
+            history_count,
+            candidate_union_history.device,
+        )
+        if previous_candidate is not None:
+            candidate_union_history |= previous_candidate
+        if previous_final is not None:
+            candidate_union_history |= previous_final
+
+    candidate_indices, candidate_valid = _indices_from_keep_mask(candidate_union_history)
+    if candidate_indices.shape[-1] == 0:
+        candidate_indices = torch.zeros((batch_count, head_count, 1), dtype=torch.long, device=query_states.device)
+        candidate_valid = torch.zeros_like(candidate_indices, dtype=torch.bool)
+    candidate_gather = candidate_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    candidate_keys = torch.gather(k_history, dim=2, index=candidate_gather)
+    candidate_scores = torch.matmul(query_states[:, :, 0:1, :], candidate_keys.transpose(2, 3)).squeeze(2) * scaling
+    candidate_scores = candidate_scores.masked_fill(~candidate_valid, torch.finfo(candidate_scores.dtype).min)
+
+    keep_count = min(history_count, max(1, math.ceil(_ACTIVE_TOP_FRACTION * history_count)))
+    keep_count = min(keep_count, candidate_scores.shape[-1])
+    _, selected_candidate_positions = torch.topk(candidate_scores, k=keep_count, dim=-1, largest=True)
+    selected_history_indices = torch.gather(candidate_indices, dim=-1, index=selected_candidate_positions)
+    selected_valid = torch.gather(candidate_valid, dim=-1, index=selected_candidate_positions)
+    history_final = torch.zeros_like(candidate_union_history, dtype=torch.bool)
+    history_final.scatter_(dim=-1, index=selected_history_indices, src=selected_valid)
+
+    if _ACTIVE_PROTECT_SINK_TOKENS > 0:
+        history_final[:, :, : min(_ACTIVE_PROTECT_SINK_TOKENS, history_count)] = True
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+        history_final[:, :, recent_start:history_count] = True
+
+    if _ACTIVE_CANDIDATE_STATS is not None:
+        _ACTIVE_CANDIDATE_STATS.update(layer_idx, candidate_union_history, torch.ones_like(candidate_union_history))
+    if _ACTIVE_LOAD_STATS is not None:
+        _ACTIVE_LOAD_STATS.update(layer_idx, torch.ones_like(history_final), history_final, torch.ones_like(history_final))
+    if _ACTIVE_REUSE_STATE is not None:
+        _ACTIVE_REUSE_STATE.update_layer(layer_idx, query_token, current_candidate_history, history_final, history_count)
+
+    final_keep = torch.zeros((batch_count, head_count, key_count), dtype=torch.bool, device=query_states.device)
+    final_keep[:, :, :history_count] = history_final
+    if _ACTIVE_ALWAYS_KEEP_SELF:
+        final_keep[:, :, history_count] = True
+
+    final_indices, final_valid = _indices_from_keep_mask(final_keep)
+    final_gather = final_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    selected_keys = torch.gather(key_states, dim=2, index=final_gather)
+    selected_values = torch.gather(value_states, dim=2, index=final_gather)
+    selected_scores = torch.matmul(query_states[:, :, 0:1, :], selected_keys.transpose(2, 3)).squeeze(2) * scaling
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, 0, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        selected_scores = selected_scores + torch.gather(mask_row, dim=-1, index=final_indices)
+    selected_scores = selected_scores.masked_fill(~final_valid, torch.finfo(selected_scores.dtype).min)
+    attention_weights = F.softmax(selected_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.sum(attention_weights[:, :, :, None] * selected_values, dim=2)
+    attention_output = attention_output[:, None, :, :].contiguous()
+    return attention_output, None
+
+
 def _limited_eager_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -1224,11 +1401,25 @@ def _limited_eager_attention_forward(
         repeat_groups = query_states.shape[1] // key_states.shape[1]
         key_states = key_states.repeat_interleave(repeat_groups, dim=1)
         value_states = value_states.repeat_interleave(repeat_groups, dim=1)
+    mode_kind, mode_max_heads = parse_mode_config(_ACTIVE_MODE)
+    if (
+        _ACTIVE_QABS_FAST_PATH
+        and mode_kind == "qabs_reuse_rerank"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _qabs_reuse_fast_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+        )
     scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
         scores = scores + attention_mask[:, :, :, : scores.shape[-1]]
 
-    mode_kind, mode_max_heads = parse_mode_config(_ACTIVE_MODE)
     if mode_kind in {
         "top2",
         "limit_random",
@@ -1579,8 +1770,9 @@ def attention_mode(
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
+    qabs_fast_path: bool = False,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_QABS_FAST_PATH
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -1594,6 +1786,7 @@ def attention_mode(
         _ACTIVE_OBS_HYBRID_STATE,
         _ACTIVE_REUSE_STATE,
         _ACTIVE_CANDIDATE_STATS,
+        _ACTIVE_QABS_FAST_PATH,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
@@ -1607,6 +1800,7 @@ def attention_mode(
     _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
     _ACTIVE_REUSE_STATE = reuse_state
     _ACTIVE_CANDIDATE_STATS = candidate_stats
+    _ACTIVE_QABS_FAST_PATH = qabs_fast_path
     try:
         yield
     finally:
@@ -1623,6 +1817,7 @@ def attention_mode(
             _ACTIVE_OBS_HYBRID_STATE,
             _ACTIVE_REUSE_STATE,
             _ACTIVE_CANDIDATE_STATS,
+            _ACTIVE_QABS_FAST_PATH,
         ) = previous
 
 
@@ -1683,6 +1878,8 @@ def compute_eval_loss(
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
+    qabs_fast_path: bool = False,
+    log_every: int = 1,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
     started = time.perf_counter()
@@ -1704,7 +1901,8 @@ def compute_eval_loss(
         }
         if past_key_values is not None:
             kwargs["past_key_values"] = past_key_values
-        print(f"ppl {mode} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
+        if log_every <= 1 or chunk_idx == 1 or chunk_idx == total_chunks or chunk_idx % log_every == 0:
+            print(f"ppl {mode} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
         with attention_mode(
             mode,
             top_fraction,
@@ -1718,6 +1916,7 @@ def compute_eval_loss(
             obs_hybrid_state,
             reuse_state,
             candidate_stats,
+            qabs_fast_path,
         ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
@@ -1867,6 +2066,8 @@ def main() -> None:
     eval_chunk_size = args.eval_chunk_size if args.eval_chunk_size is not None else args.chunk_size
     if eval_chunk_size <= 0:
         raise ValueError("--eval_chunk_size must be positive.")
+    if args.log_every <= 0:
+        raise ValueError("--log_every must be positive.")
     if not (0.0 < args.top_fraction <= 1.0):
         raise ValueError("--top_fraction must be in (0, 1].")
     if args.max_heads_per_token <= 0:
@@ -1928,7 +2129,8 @@ def main() -> None:
         qabs_candidate_fraction = qabs_params[1] if qabs_params else None
         stats = (
             LoadStats(layer_count, head_count)
-            if mode_kind
+            if not args.disable_sparse_stats
+            and mode_kind
             in {
                 "top2",
                 "top2_union_all",
@@ -1949,7 +2151,11 @@ def main() -> None:
             }
             else None
         )
-        candidate_stats = CandidateStats(layer_count, head_count) if mode_kind == "qabs_reuse_rerank" else None
+        candidate_stats = (
+            CandidateStats(layer_count, head_count)
+            if mode_kind == "qabs_reuse_rerank" and not args.disable_sparse_stats
+            else None
+        )
         reuse_state = ReuseCandidateState() if mode_kind == "qabs_reuse_rerank" else None
         hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
         obs_state = (
@@ -2020,6 +2226,8 @@ def main() -> None:
             obs_hybrid_state,
             reuse_state,
             candidate_stats,
+            args.qabs_fast_path,
+            args.log_every,
         )
         ppl_rows.append(
             {
