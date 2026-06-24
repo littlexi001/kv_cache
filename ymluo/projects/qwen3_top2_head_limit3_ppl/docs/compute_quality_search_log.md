@@ -617,3 +617,10 @@ Notes:
 - `torch.utils.cpp_extension` requires `ninja`; install it on the server before trusting kernel timing.
 - If compilation or launch fails, the eval script prints one warning and falls back to the existing PyTorch qabs fast path.
 - Server timing should check `ppl_by_mode.csv` columns `qabs_fast_path` and `qabs_cuda_final_kernel` before comparing seconds.
+
+Crash fix:
+
+- The first server run hit an illegal memory access in the CUDA final attention kernel at the first qabs decode token.
+- CUDA illegal memory access poisons the CUDA context, so Python fallback after the failed launch is not reliable for this class of error.
+- Updated the extension to `qabs_final_attention_ext_v2` so server runs do not reuse the old cached build.
+- Changed the valid-mask ABI from `bool*` to `uint8_t*` and convert `valid` to `torch.uint8` before entering the extension.

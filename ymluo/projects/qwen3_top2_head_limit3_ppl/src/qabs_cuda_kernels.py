@@ -37,7 +37,7 @@ __global__ void qabs_final_attention_kernel(
     const scalar_t* __restrict__ key,
     const scalar_t* __restrict__ value,
     const int64_t* __restrict__ indices,
-    const bool* __restrict__ valid,
+    const uint8_t* __restrict__ valid,
     scalar_t* __restrict__ output,
     int batch_count,
     int head_count,
@@ -57,7 +57,7 @@ __global__ void qabs_final_attention_kernel(
   const scalar_t* k_base = key + ((batch * head_count + head) * key_count) * head_dim;
   const scalar_t* v_base = value + ((batch * head_count + head) * key_count) * head_dim;
   const int64_t* idx_row = indices + row * select_count;
-  const bool* valid_row = valid + row * select_count;
+  const uint8_t* valid_row = valid + row * select_count;
   scalar_t* out_row = output + row * head_dim;
 
   for (int s = tid; s < select_count; s += blockDim.x) {
@@ -69,7 +69,7 @@ __global__ void qabs_final_attention_kernel(
   for (int s = 0; s < select_count; ++s) {
     float local = 0.0f;
     int64_t idx = idx_row[s];
-    bool is_valid = valid_row[s] && idx >= 0 && idx < key_count;
+    bool is_valid = valid_row[s] != 0 && idx >= 0 && idx < key_count;
     if (is_valid) {
       const scalar_t* k_vec = k_base + idx * head_dim;
       for (int d = tid; d < head_dim; d += blockDim.x) {
@@ -103,7 +103,7 @@ __global__ void qabs_final_attention_kernel(
   for (int s = 0; s < select_count; ++s) {
     float local = 0.0f;
     int64_t idx = idx_row[s];
-    bool is_valid = valid_row[s] && idx >= 0 && idx < key_count;
+    bool is_valid = valid_row[s] != 0 && idx >= 0 && idx < key_count;
     if (is_valid) {
       const scalar_t* k_vec = k_base + idx * head_dim;
       for (int d = tid; d < head_dim; d += blockDim.x) {
@@ -139,7 +139,7 @@ __global__ void qabs_final_attention_kernel(
     float acc = 0.0f;
     for (int s = 0; s < select_count; ++s) {
       int64_t idx = idx_row[s];
-      bool is_valid = valid_row[s] && idx >= 0 && idx < key_count;
+      bool is_valid = valid_row[s] != 0 && idx >= 0 && idx < key_count;
       if (is_valid) {
         acc += weights[s] * static_cast<float>(v_base[idx * head_dim + d]);
       }
@@ -168,7 +168,7 @@ torch::Tensor qabs_final_attention_forward(
   TORCH_CHECK(query.scalar_type() == key.scalar_type(), "query/key dtype mismatch");
   TORCH_CHECK(query.scalar_type() == value.scalar_type(), "query/value dtype mismatch");
   TORCH_CHECK(indices.scalar_type() == at::kLong, "indices must be int64");
-  TORCH_CHECK(valid.scalar_type() == at::kBool, "valid must be bool");
+  TORCH_CHECK(valid.scalar_type() == at::kByte, "valid must be uint8");
 
   auto query_c = query.contiguous();
   auto key_c = key.contiguous();
@@ -183,6 +183,7 @@ torch::Tensor qabs_final_attention_forward(
   int select_count = static_cast<int>(indices_c.size(2));
   TORCH_CHECK(key_c.size(0) == batch_count && key_c.size(1) == head_count && key_c.size(3) == head_dim, "key shape mismatch");
   TORCH_CHECK(indices_c.size(0) == batch_count && indices_c.size(1) == head_count, "indices shape mismatch");
+  TORCH_CHECK(select_count > 0, "select_count must be positive");
 
   auto output = torch::empty({batch_count, head_count, head_dim}, query_c.options());
   int threads = 1;
@@ -200,7 +201,7 @@ torch::Tensor qabs_final_attention_forward(
         key_c.data_ptr<scalar_t>(),
         value_c.data_ptr<scalar_t>(),
         indices_c.data_ptr<int64_t>(),
-        valid_c.data_ptr<bool>(),
+        valid_c.data_ptr<uint8_t>(),
         output.data_ptr<scalar_t>(),
         batch_count,
         head_count,
@@ -218,7 +219,7 @@ torch::Tensor qabs_final_attention_forward(
 @lru_cache(maxsize=1)
 def _load_extension():
     return load_inline(
-        name="qabs_final_attention_ext",
+        name="qabs_final_attention_ext_v2",
         cpp_sources=CPP_SOURCE,
         cuda_sources=CUDA_SOURCE,
         extra_cuda_cflags=["-O3", "--use_fast_math"],
@@ -236,5 +237,6 @@ def final_attention(
     scaling: float,
 ) -> torch.Tensor:
     module = _load_extension()
-    output = module.qabs_final_attention_forward(query, key, value, indices, valid, float(scaling))
+    valid_u8 = valid.to(dtype=torch.uint8)
+    output = module.qabs_final_attention_forward(query, key, value, indices, valid_u8, float(scaling))
     return output[:, None, :, :].contiguous()
