@@ -577,3 +577,43 @@ Kernel design needed for real speed:
   - or a small custom merge for sorted candidate-index lists.
 - Rerank and final attention should be fused or at least use persistent on-device buffers to avoid repeated allocation.
 - The current PyTorch fast path is the correctness and speed-trend prototype; real acceleration requires replacing mask compaction/topk/gather chains with Triton/CUDA kernels.
+
+## Implementation: CUDA Final Sparse Attention Kernel
+
+Question:
+
+- Can we replace at least one expensive small-kernel chain in the qabs fast path with a real CUDA kernel?
+
+Implementation:
+
+- Added `src/qabs_cuda_kernels.py`.
+- Added `--qabs_cuda_final_kernel`.
+- Updated `scripts/run_qabs_fast_speed_server.sh` to enable the kernel by default for server timing.
+- The kernel fuses the final selected-token attention step:
+  1. full-QK only over the final selected indices;
+  2. stable softmax over selected tokens;
+  3. weighted V reduction.
+
+Important limitation:
+
+- This is a real CUDA extension kernel, but it only covers the final sparse attention stage.
+- Candidate generation is still PyTorch:
+  - qabs top-dim selection;
+  - partial-QK candidate scoring;
+  - topk thresholding;
+  - candidate reuse union;
+  - final top2 rerank index selection.
+- Therefore this is not yet the fully fused kernel design needed to beat baseline decisively. It should reduce part of the overhead and gives us a safe correctness bridge before fusing candidate generation.
+
+How to run:
+
+```bash
+QABS_CUDA_FINAL_KERNEL=true bash scripts/run_qabs_fast_speed_server.sh
+```
+
+Notes:
+
+- The CUDA extension is compiled lazily on first use through `torch.utils.cpp_extension`.
+- `torch.utils.cpp_extension` requires `ninja`; install it on the server before trusting kernel timing.
+- If compilation or launch fails, the eval script prints one warning and falls back to the existing PyTorch qabs fast path.
+- Server timing should check `ppl_by_mode.csv` columns `qabs_fast_path` and `qabs_cuda_final_kernel` before comparing seconds.

@@ -27,6 +27,7 @@ DEVICE="${DEVICE:-cuda}"
 DEVICE_MAP="${DEVICE_MAP:-auto}"
 ATTN_IMPLEMENTATION="${ATTN_IMPLEMENTATION:-eager}"
 LOG_EVERY="${LOG_EVERY:-100}"
+QABS_CUDA_FINAL_KERNEL="${QABS_CUDA_FINAL_KERNEL:-true}"
 
 mkdir -p "${OUTPUT_ROOT}"
 
@@ -34,6 +35,12 @@ if [[ ! -f "${TEXT_PATH}" ]]; then
   echo "Eval text not found: ${TEXT_PATH}" >&2
   echo "Set TEXT_PATH=/path/to/a/long/text/file." >&2
   exit 1
+fi
+
+if [[ "${QABS_CUDA_FINAL_KERNEL}" == "true" ]]; then
+  if ! "${PYTHON_BIN}" -c 'import torch.utils.cpp_extension as ce; raise SystemExit(0 if ce.is_ninja_available() else 1)' >/dev/null 2>&1; then
+    echo "warning: QABS_CUDA_FINAL_KERNEL=true but ninja is unavailable; eval will fall back to the PyTorch qabs path." >&2
+  fi
 fi
 
 for prefill_tokens in ${PREFILL_LENGTHS}; do
@@ -61,6 +68,7 @@ for prefill_tokens in ${PREFILL_LENGTHS}; do
     --always_keep_self true \
     --modes "${MODES}" \
     --qabs_fast_path true \
+    --qabs_cuda_final_kernel "${QABS_CUDA_FINAL_KERNEL}" \
     --disable_sparse_stats true \
     --log_every "${LOG_EVERY}" \
     --make_plots false

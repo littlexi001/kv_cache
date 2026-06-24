@@ -38,6 +38,8 @@ _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_QABS_FAST_PATH: bool = False
+_ACTIVE_QABS_CUDA_FINAL_KERNEL: bool = False
+_QABS_CUDA_FINAL_WARNED: bool = False
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 
 
@@ -98,6 +100,15 @@ def parse_args() -> argparse.Namespace:
         type=str2bool,
         default=False,
         help="Use the experimental qabs reuse decode fast path that avoids the initial full QK matmul.",
+    )
+    parser.add_argument(
+        "--qabs_cuda_final_kernel",
+        type=str2bool,
+        default=False,
+        help=(
+            "Use a lazy CUDA extension to fuse final sparse QK + softmax + V reduce in qabs fast path. "
+            "Falls back to PyTorch if the extension is unavailable."
+        ),
     )
     parser.add_argument(
         "--disable_sparse_stats",
@@ -1282,6 +1293,40 @@ def _indices_from_keep_mask(keep: torch.Tensor) -> tuple[torch.Tensor, torch.Ten
     return indices.clamp_min(0), valid
 
 
+def _maybe_cuda_final_attention(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    final_indices: torch.Tensor,
+    final_valid: torch.Tensor,
+    scaling: float,
+) -> torch.Tensor | None:
+    global _QABS_CUDA_FINAL_WARNED
+    if not _ACTIVE_QABS_CUDA_FINAL_KERNEL:
+        return None
+    if not (query_states.is_cuda and key_states.is_cuda and value_states.is_cuda):
+        return None
+    if query_states.shape[0] != 1 and attention_mask is not None:
+        return None
+    try:
+        from qabs_cuda_kernels import final_attention as qabs_cuda_final_attention
+
+        return qabs_cuda_final_attention(
+            query_states[:, :, 0, :].contiguous(),
+            key_states.contiguous(),
+            value_states.contiguous(),
+            final_indices.contiguous(),
+            final_valid.contiguous(),
+            float(scaling),
+        )
+    except Exception as exc:
+        if not _QABS_CUDA_FINAL_WARNED:
+            print(f"warning: qabs CUDA final kernel unavailable; falling back to PyTorch ({exc})", flush=True)
+            _QABS_CUDA_FINAL_WARNED = True
+        return None
+
+
 def _qabs_reuse_fast_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -1369,6 +1414,18 @@ def _qabs_reuse_fast_attention_forward(
         final_keep[:, :, history_count] = True
 
     final_indices, final_valid = _indices_from_keep_mask(final_keep)
+    cuda_attention_output = _maybe_cuda_final_attention(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    if cuda_attention_output is not None:
+        return cuda_attention_output, None
+
     final_gather = final_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
     selected_keys = torch.gather(key_states, dim=2, index=final_gather)
     selected_values = torch.gather(value_states, dim=2, index=final_gather)
@@ -1771,8 +1828,9 @@ def attention_mode(
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
     qabs_fast_path: bool = False,
+    qabs_cuda_final_kernel: bool = False,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_QABS_FAST_PATH
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -1787,6 +1845,7 @@ def attention_mode(
         _ACTIVE_REUSE_STATE,
         _ACTIVE_CANDIDATE_STATS,
         _ACTIVE_QABS_FAST_PATH,
+        _ACTIVE_QABS_CUDA_FINAL_KERNEL,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
@@ -1801,6 +1860,7 @@ def attention_mode(
     _ACTIVE_REUSE_STATE = reuse_state
     _ACTIVE_CANDIDATE_STATS = candidate_stats
     _ACTIVE_QABS_FAST_PATH = qabs_fast_path
+    _ACTIVE_QABS_CUDA_FINAL_KERNEL = qabs_cuda_final_kernel
     try:
         yield
     finally:
@@ -1818,6 +1878,7 @@ def attention_mode(
             _ACTIVE_REUSE_STATE,
             _ACTIVE_CANDIDATE_STATS,
             _ACTIVE_QABS_FAST_PATH,
+            _ACTIVE_QABS_CUDA_FINAL_KERNEL,
         ) = previous
 
 
@@ -1879,6 +1940,7 @@ def compute_eval_loss(
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
     qabs_fast_path: bool = False,
+    qabs_cuda_final_kernel: bool = False,
     log_every: int = 1,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
@@ -1917,6 +1979,7 @@ def compute_eval_loss(
             reuse_state,
             candidate_stats,
             qabs_fast_path,
+            qabs_cuda_final_kernel,
         ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
@@ -2227,6 +2290,7 @@ def main() -> None:
             reuse_state,
             candidate_stats,
             args.qabs_fast_path,
+            args.qabs_cuda_final_kernel,
             args.log_every,
         )
         ppl_rows.append(
@@ -2297,6 +2361,8 @@ def main() -> None:
                 "protected_recent_fraction": protect_params[1] if protect_params else "",
                 "protected_recent_tokens": args.protect_recent_tokens,
                 "always_keep_self": args.always_keep_self if mode != "baseline" else "",
+                "qabs_fast_path": args.qabs_fast_path if mode_kind == "qabs_reuse_rerank" else "",
+                "qabs_cuda_final_kernel": args.qabs_cuda_final_kernel if mode_kind == "qabs_reuse_rerank" else "",
             }
         )
         if stats is not None:
@@ -2444,6 +2510,8 @@ def main() -> None:
             "protected_recent_fraction",
             "protected_recent_tokens",
             "always_keep_self",
+            "qabs_fast_path",
+            "qabs_cuda_final_kernel",
         ],
     )
 
