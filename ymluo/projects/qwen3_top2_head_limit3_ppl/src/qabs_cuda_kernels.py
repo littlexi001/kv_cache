@@ -25,6 +25,7 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 
 CUDA_SOURCE = r"""
 #include <ATen/cuda/CUDAContext.h>
+#include <c10/cuda/CUDAGuard.h>
 #include <torch/extension.h>
 
 #include <cuda.h>
@@ -160,6 +161,10 @@ torch::Tensor qabs_final_attention_forward(
   TORCH_CHECK(value.is_cuda(), "value must be CUDA");
   TORCH_CHECK(indices.is_cuda(), "indices must be CUDA");
   TORCH_CHECK(valid.is_cuda(), "valid must be CUDA");
+  TORCH_CHECK(query.device() == key.device(), "query/key device mismatch");
+  TORCH_CHECK(query.device() == value.device(), "query/value device mismatch");
+  TORCH_CHECK(query.device() == indices.device(), "query/indices device mismatch");
+  TORCH_CHECK(query.device() == valid.device(), "query/valid device mismatch");
   TORCH_CHECK(query.dim() == 3, "query must have shape [batch, heads, dim]");
   TORCH_CHECK(key.dim() == 4, "key must have shape [batch, heads, key, dim]");
   TORCH_CHECK(value.sizes() == key.sizes(), "value must match key shape");
@@ -175,6 +180,7 @@ torch::Tensor qabs_final_attention_forward(
   auto value_c = value.contiguous();
   auto indices_c = indices.contiguous();
   auto valid_c = valid.contiguous();
+  c10::cuda::CUDAGuard device_guard(query_c.device());
 
   int batch_count = static_cast<int>(query_c.size(0));
   int head_count = static_cast<int>(query_c.size(1));
@@ -219,7 +225,7 @@ torch::Tensor qabs_final_attention_forward(
 @lru_cache(maxsize=1)
 def _load_extension():
     return load_inline(
-        name="qabs_final_attention_ext_v2",
+        name="qabs_final_attention_ext_v3",
         cpp_sources=CPP_SOURCE,
         cuda_sources=CUDA_SOURCE,
         extra_cuda_cflags=["-O3", "--use_fast_math"],

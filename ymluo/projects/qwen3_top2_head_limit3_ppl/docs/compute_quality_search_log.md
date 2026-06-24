@@ -624,6 +624,7 @@ Crash fix:
 - CUDA illegal memory access poisons the CUDA context, so Python fallback after the failed launch is not reliable for this class of error.
 - Updated the extension to `qabs_final_attention_ext_v2` so server runs do not reuse the old cached build.
 - Changed the valid-mask ABI from `bool*` to `uint8_t*` and convert `valid` to `torch.uint8` before entering the extension.
+- A second server run still hit illegal memory access in the same first decode step. The likely cause is `device_map=auto`: tensors for a sharded layer may live on a non-current CUDA device, while the custom extension launched on the process current device. Updated the extension to `qabs_final_attention_ext_v3`, added same-device checks, and added `CUDAGuard(query.device())` before kernel launch.
 
 ## Implementation: Shared Prefill For Mode Sweeps
 
