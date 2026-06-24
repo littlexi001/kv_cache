@@ -35,13 +35,34 @@ _ORIGINAL_QWEN3_ATTENTION_FORWARD: Any | None = None
 @dataclass
 class GateConfig:
     target_keep_ratio: float = 0.20
+    current_keep_ratio: float = 0.20
     hard_mode: str = "global_budget"
     threshold: float = 0.5
     temperature: float = 1.0
     sink_tokens_all_heads: int = 64
+    recent_tokens_all_heads: int = 256
+    min_non_sink_heads: int = 1
     z_loss_coef: float = 0.001
     budget_loss_coef: float = 0.05
     load_loss_coef: float = 0.01
+
+
+class KVHeadMLPGate(nn.Module):
+    def __init__(self, hidden_size: int, kv_heads: int, gate_hidden_size: int, dropout: float, init_bias: float) -> None:
+        super().__init__()
+        gate_hidden_size = max(1, gate_hidden_size)
+        self.net = nn.Sequential(
+            nn.LayerNorm(hidden_size),
+            nn.Linear(hidden_size, gate_hidden_size),
+            nn.SiLU(),
+            nn.Dropout(dropout),
+            nn.Linear(gate_hidden_size, kv_heads),
+        )
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.constant_(self.net[-1].bias, init_bias)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        return self.net(hidden_states)
 
 
 def setup_distributed() -> tuple[int, int, int, torch.device]:
@@ -201,16 +222,22 @@ def _repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, seq_len, head_dim)
 
 
-def add_kv_gates(model: nn.Module, config: GateConfig) -> None:
+def add_kv_gates(model: nn.Module, config: GateConfig, gate_type: str, gate_hidden_size: int, gate_dropout: float) -> None:
     hidden_size = int(model.config.hidden_size)
     kv_heads = int(model.config.num_key_value_heads)
-    init_bias = math.log(config.target_keep_ratio / max(1e-6, 1.0 - config.target_keep_ratio))
+    init_ratio = min(0.99, max(1e-4, config.current_keep_ratio))
+    init_bias = math.log(init_ratio / max(1e-6, 1.0 - init_ratio))
     for layer in model.model.layers:
         attn = layer.self_attn
         if not hasattr(attn, "kv_gate"):
-            gate = nn.Linear(hidden_size, kv_heads, bias=True)
-            nn.init.zeros_(gate.weight)
-            nn.init.constant_(gate.bias, init_bias)
+            if gate_type == "linear":
+                gate = nn.Linear(hidden_size, kv_heads, bias=True)
+                nn.init.zeros_(gate.weight)
+                nn.init.constant_(gate.bias, init_bias)
+            elif gate_type == "mlp":
+                gate = KVHeadMLPGate(hidden_size, kv_heads, gate_hidden_size, gate_dropout, init_bias)
+            else:
+                raise ValueError(f"unknown gate_type: {gate_type}")
             ref = attn.q_proj.weight
             gate = gate.to(device=ref.device, dtype=ref.dtype)
             attn.add_module("kv_gate", gate)
@@ -271,6 +298,7 @@ def install_qwen3_kv_gate_patch() -> None:
         value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)
 
         cfg: GateConfig = self.kv_gate_config
+        current_target = min(1.0, max(1e-4, float(cfg.current_keep_ratio)))
         gate_logits = self.kv_gate(hidden_states)
         gate_prob = torch.sigmoid(gate_logits / max(cfg.temperature, 1e-6))
         batch_size, seq_len, kv_head_count = gate_prob.shape
@@ -281,9 +309,11 @@ def install_qwen3_kv_gate_patch() -> None:
                 hard[:, :sink_len, :] = True
             if sink_len < seq_len:
                 non_sink_logits = gate_logits[:, sink_len:, :]
-                top1 = non_sink_logits.argmax(dim=-1)
-                hard[:, sink_len:, :].scatter_(-1, top1.unsqueeze(-1), True)
-                target_slots = int(round(cfg.target_keep_ratio * batch_size * seq_len * kv_head_count))
+                min_heads = min(max(0, cfg.min_non_sink_heads), kv_head_count)
+                if min_heads > 0:
+                    _, top_idx = torch.topk(non_sink_logits, k=min_heads, dim=-1, largest=True)
+                    hard[:, sink_len:, :].scatter_(-1, top_idx, True)
+                target_slots = int(round(current_target * batch_size * seq_len * kv_head_count))
                 target_slots = max(target_slots, int(hard.sum().item()))
                 remaining = target_slots - int(hard.sum().item())
                 if remaining > 0:
@@ -303,15 +333,12 @@ def install_qwen3_kv_gate_patch() -> None:
                 hard[:, :sink_len, :] = True
             empty = hard.sum(dim=-1) == 0
             if bool(empty.any()):
-                top1 = gate_prob.argmax(dim=-1)
+                top1 = gate_logits.argmax(dim=-1)
                 hard = hard.clone()
                 hard.scatter_(-1, top1.unsqueeze(-1), True)
         else:
             raise ValueError(f"unknown gate hard mode: {cfg.hard_mode}")
         gate_st = hard.to(gate_prob.dtype) + gate_prob - gate_prob.detach()
-        kv_gate = gate_st.transpose(1, 2).unsqueeze(-1).to(key_states.dtype)
-        key_states = key_states * kv_gate
-        value_states = value_states * kv_gate
 
         cos, sin = position_embeddings
         query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
@@ -322,10 +349,19 @@ def install_qwen3_kv_gate_patch() -> None:
         if attention_mask is not None:
             causal_mask = attention_mask[:, :, :, : key_states_repeated.shape[-2]]
             attn_weights = attn_weights + causal_mask
-        key_hard = hard.transpose(1, 2)
-        key_hard_repeated = key_hard.repeat_interleave(self.num_key_value_groups, dim=1)
-        attn_weights = attn_weights.masked_fill(~key_hard_repeated[:, :, None, :], torch.finfo(attn_weights.dtype).min)
         attn_weights = F.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        key_gate = gate_st.transpose(1, 2)
+        key_gate_repeated = key_gate.repeat_interleave(self.num_key_value_groups, dim=1)
+        query_key_gate = key_gate_repeated[:, :, None, :]
+        if cfg.recent_tokens_all_heads > 0:
+            positions = torch.arange(seq_len, device=hidden_states.device)
+            query_pos = positions[:, None]
+            key_pos = positions[None, :]
+            recent = (query_pos >= key_pos) & ((query_pos - key_pos) < cfg.recent_tokens_all_heads)
+            recent = recent[None, None, :, :]
+            query_key_gate = torch.where(recent, torch.ones_like(query_key_gate), query_key_gate)
+        attn_weights = attn_weights * query_key_gate.to(attn_weights.dtype)
+        attn_weights = attn_weights / attn_weights.sum(dim=-1, keepdim=True).clamp_min(1e-12)
         dropout = 0.0 if not self.training else self.attention_dropout
         attn_weights = F.dropout(attn_weights, p=dropout, training=self.training)
         attn_output = torch.matmul(attn_weights, value_states_repeated)
@@ -336,10 +372,11 @@ def install_qwen3_kv_gate_patch() -> None:
         prob_mean = gate_prob.float().mean()
         hard_mean = hard.float().mean()
         head_prob_mean = gate_prob.float().mean(dim=(0, 1))
-        target = torch.as_tensor(cfg.target_keep_ratio, device=gate_prob.device, dtype=torch.float32)
+        target = torch.as_tensor(current_target, device=gate_prob.device, dtype=torch.float32)
         budget_loss = ((prob_mean - target) / target.clamp_min(1e-6)).pow(2)
         load_loss = ((head_prob_mean - target) / target.clamp_min(1e-6)).pow(2).mean()
         z_loss = torch.logsumexp(gate_logits.float(), dim=-1).pow(2).mean()
+        attention_keep_ratio = (query_key_gate.detach().float().mean()).to(device=gate_prob.device)
         self._kv_gate_stats = {
             "budget_loss": budget_loss,
             "load_loss": load_loss,
@@ -347,6 +384,8 @@ def install_qwen3_kv_gate_patch() -> None:
             "prob_keep_ratio": prob_mean.detach(),
             "hard_keep_ratio": hard_mean.detach(),
             "hard_heads_per_token": (hard.float().sum(dim=-1).mean()).detach(),
+            "attention_keep_ratio": attention_keep_ratio,
+            "current_keep_ratio": torch.as_tensor(current_target, device=gate_prob.device),
             "head_load": hard.float().mean(dim=(0, 1)).detach(),
         }
         return attn_output, None
@@ -362,6 +401,8 @@ def collect_gate_losses(model: nn.Module, device: torch.device) -> dict[str, tor
     prob_ratios = []
     hard_ratios = []
     heads_per_token = []
+    attention_ratios = []
+    current_ratios = []
     head_loads = []
     for layer in raw.model.layers:
         stats = getattr(layer.self_attn, "_kv_gate_stats", None)
@@ -373,6 +414,8 @@ def collect_gate_losses(model: nn.Module, device: torch.device) -> dict[str, tor
         prob_ratios.append(stats["prob_keep_ratio"])
         hard_ratios.append(stats["hard_keep_ratio"])
         heads_per_token.append(stats["hard_heads_per_token"])
+        attention_ratios.append(stats["attention_keep_ratio"])
+        current_ratios.append(stats["current_keep_ratio"])
         head_loads.append(stats["head_load"])
     if not budget_losses:
         zero = torch.zeros((), device=device)
@@ -383,6 +426,8 @@ def collect_gate_losses(model: nn.Module, device: torch.device) -> dict[str, tor
             "prob_keep_ratio": zero,
             "hard_keep_ratio": zero,
             "hard_heads_per_token": zero,
+            "attention_keep_ratio": zero,
+            "current_keep_ratio": zero,
             "head_load": torch.zeros((1, 1), device=device),
         }
     return {
@@ -392,6 +437,8 @@ def collect_gate_losses(model: nn.Module, device: torch.device) -> dict[str, tor
         "prob_keep_ratio": torch.stack(prob_ratios).mean(),
         "hard_keep_ratio": torch.stack(hard_ratios).mean(),
         "hard_heads_per_token": torch.stack(heads_per_token).mean(),
+        "attention_keep_ratio": torch.stack(attention_ratios).mean(),
+        "current_keep_ratio": torch.stack(current_ratios).mean(),
         "head_load": torch.stack(head_loads),
     }
 
@@ -402,6 +449,23 @@ def cosine_lr(step: int, warmup_steps: int, max_steps: int, min_lr_ratio: float)
     progress = (step - warmup_steps) / max(1, max_steps - warmup_steps)
     progress = min(1.0, max(0.0, progress))
     return min_lr_ratio + 0.5 * (1.0 - min_lr_ratio) * (1.0 + math.cos(math.pi * progress))
+
+
+def keep_ratio_schedule(step: int, start_ratio: float, target_ratio: float, anneal_steps: int, start_step: int) -> float:
+    if anneal_steps <= 0 or step <= start_step:
+        return start_ratio
+    progress = min(1.0, max(0.0, (step - start_step) / anneal_steps))
+    # Cosine decay keeps the early phase gentle and approaches the target smoothly.
+    mix = 0.5 * (1.0 - math.cos(math.pi * progress))
+    return start_ratio + (target_ratio - start_ratio) * mix
+
+
+def set_gate_keep_ratio(model: nn.Module, keep_ratio: float) -> None:
+    raw = model.module if isinstance(model, DDP) else model
+    for layer in raw.model.layers:
+        cfg = getattr(layer.self_attn, "kv_gate_config", None)
+        if cfg is not None:
+            cfg.current_keep_ratio = keep_ratio
 
 
 def save_checkpoint(output_dir: Path, model: nn.Module, optimizer: torch.optim.Optimizer, step: int, args: argparse.Namespace, rank: int) -> None:
@@ -452,10 +516,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--max_grad_norm", type=float, default=1.0)
     parser.add_argument("--target_keep_ratio", type=float, default=0.20)
+    parser.add_argument("--initial_keep_ratio", type=float, default=0.50)
+    parser.add_argument("--keep_ratio_anneal_steps", type=int, default=30_000)
+    parser.add_argument("--keep_ratio_anneal_start_step", type=int, default=0)
+    parser.add_argument("--gate_type", choices=["linear", "mlp"], default="mlp")
+    parser.add_argument("--gate_hidden_size", type=int, default=256)
+    parser.add_argument("--gate_dropout", type=float, default=0.0)
     parser.add_argument("--gate_hard_mode", choices=["global_budget", "threshold"], default="global_budget")
     parser.add_argument("--gate_threshold", type=float, default=0.5)
     parser.add_argument("--gate_temperature", type=float, default=1.0)
     parser.add_argument("--gate_sink_tokens_all_heads", type=int, default=64)
+    parser.add_argument("--gate_recent_tokens_all_heads", type=int, default=256)
+    parser.add_argument("--gate_min_non_sink_heads", type=int, default=1)
     parser.add_argument("--budget_loss_coef", type=float, default=0.05)
     parser.add_argument("--load_loss_coef", type=float, default=0.01)
     parser.add_argument("--z_loss_coef", type=float, default=0.001)
@@ -541,10 +613,13 @@ def main() -> None:
 
         gate_config = GateConfig(
             target_keep_ratio=args.target_keep_ratio,
+            current_keep_ratio=args.initial_keep_ratio,
             hard_mode=args.gate_hard_mode,
             threshold=args.gate_threshold,
             temperature=args.gate_temperature,
             sink_tokens_all_heads=args.gate_sink_tokens_all_heads,
+            recent_tokens_all_heads=args.gate_recent_tokens_all_heads,
+            min_non_sink_heads=args.gate_min_non_sink_heads,
             z_loss_coef=args.z_loss_coef,
             budget_loss_coef=args.budget_loss_coef,
             load_loss_coef=args.load_loss_coef,
@@ -556,7 +631,7 @@ def main() -> None:
             trust_remote_code=True,
         )
         model.config.use_cache = False
-        add_kv_gates(model, gate_config)
+        add_kv_gates(model, gate_config, args.gate_type, args.gate_hidden_size, args.gate_dropout)
         if args.gradient_checkpointing and hasattr(model, "gradient_checkpointing_enable"):
             model.gradient_checkpointing_enable()
         if not args.train_base_model:
@@ -598,13 +673,33 @@ def main() -> None:
         if is_rank0(rank):
             print(f"world_size={world_size} device={device} tokens_per_optim_step={tokens_per_optim_step}", flush=True)
             print(f"output_dir={output_dir}", flush=True)
-            print(f"train_base_model={args.train_base_model} gate_params={sum(p.numel() for p in gate_params)}", flush=True)
+            print(
+                f"train_base_model={args.train_base_model} gate_type={args.gate_type} "
+                f"gate_params={sum(p.numel() for p in gate_params)}",
+                flush=True,
+            )
 
         for step in range(start_step + 1, args.max_steps + 1):
+            current_keep_ratio = keep_ratio_schedule(
+                step,
+                args.initial_keep_ratio,
+                args.target_keep_ratio,
+                args.keep_ratio_anneal_steps,
+                args.keep_ratio_anneal_start_step,
+            )
+            set_gate_keep_ratio(model, current_keep_ratio)
             model.train()
             optimizer.zero_grad(set_to_none=True)
             accum = {name: torch.zeros((), device=device) for name in [
-                "ce_loss", "budget_loss", "load_loss", "z_loss", "prob_keep_ratio", "hard_keep_ratio", "hard_heads_per_token"
+                "ce_loss",
+                "budget_loss",
+                "load_loss",
+                "z_loss",
+                "prob_keep_ratio",
+                "hard_keep_ratio",
+                "hard_heads_per_token",
+                "attention_keep_ratio",
+                "current_keep_ratio",
             ]}
             last_head_load = None
             step_started = time.time()
@@ -625,7 +720,16 @@ def main() -> None:
                         loss = loss / args.gradient_accumulation_steps
                     loss.backward()
                 accum["ce_loss"] += ce_loss.detach() / args.gradient_accumulation_steps
-                for key in ["budget_loss", "load_loss", "z_loss", "prob_keep_ratio", "hard_keep_ratio", "hard_heads_per_token"]:
+                for key in [
+                    "budget_loss",
+                    "load_loss",
+                    "z_loss",
+                    "prob_keep_ratio",
+                    "hard_keep_ratio",
+                    "hard_heads_per_token",
+                    "attention_keep_ratio",
+                    "current_keep_ratio",
+                ]:
                     accum[key] += gate_losses[key].detach() / args.gradient_accumulation_steps
                 last_head_load = gate_losses["head_load"].detach()
 
@@ -654,6 +758,7 @@ def main() -> None:
                         f"budget={float(reduced['budget_loss']):.4f} load={float(reduced['load_loss']):.4f} "
                         f"z={float(reduced['z_loss']):.4f} prob_keep={float(reduced['prob_keep_ratio']):.4f} "
                         f"hard_keep={float(reduced['hard_keep_ratio']):.4f} heads_tok={float(reduced['hard_heads_per_token']):.3f} "
+                        f"attn_keep={float(reduced['attention_keep_ratio']):.4f} target={float(reduced['current_keep_ratio']):.4f} "
                         f"lr={optimizer.param_groups[0]['lr']:.6g} grad={float(grad_mean):.3f} "
                         f"tok/s={toks_per_sec:.1f} elapsed_h={elapsed/3600:.2f}",
                         flush=True,
@@ -667,6 +772,8 @@ def main() -> None:
                         writer.add_scalar("gate/prob_keep_ratio", float(reduced["prob_keep_ratio"]), step)
                         writer.add_scalar("gate/hard_keep_ratio", float(reduced["hard_keep_ratio"]), step)
                         writer.add_scalar("gate/hard_heads_per_token", float(reduced["hard_heads_per_token"]), step)
+                        writer.add_scalar("gate/attention_keep_ratio", float(reduced["attention_keep_ratio"]), step)
+                        writer.add_scalar("gate/current_keep_ratio", float(reduced["current_keep_ratio"]), step)
                         writer.add_scalar("train/tokens_per_second", toks_per_sec, step)
                         writer.add_scalar("train/grad_norm", float(grad_mean), step)
                         if last_head_load is not None:

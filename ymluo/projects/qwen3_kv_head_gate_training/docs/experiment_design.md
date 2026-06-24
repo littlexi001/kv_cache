@@ -2,8 +2,9 @@
 
 ## Objective
 
-Train a KV-head gate on top of official Qwen3-0.6B and test whether the gate can
-drive average KV-head usage toward `20%` without immediate CE collapse.
+Train a KV-head gate on top of official Qwen3-0.6B and test whether a gentler
+curriculum can drive average long-term KV-head usage toward `20%` without the
+CE collapse seen when the model is forced to use 20% from the first step.
 
 ## Input
 
@@ -30,15 +31,22 @@ For each training batch:
 2. run official Qwen3 with patched eager attention;
 3. in each attention layer, compute KV-head gate logits from layer input
    hidden states;
-4. apply the default `global_budget` hard gate:
+4. compute the current keep target from the curriculum:
+   - start from `initial_keep_ratio=0.50`;
+   - anneal to `target_keep_ratio=0.20`;
+   - default anneal length is `30000` steps;
+5. apply the default `global_budget` hard gate:
    - sink tokens keep all KV heads;
    - each non-sink token keeps at least its highest-logit KV head;
    - extra token-head slots are filled by global top logits until the layer
-     batch reaches `target_keep_ratio`;
-5. mask unselected KV head-token slots;
-6. compute next-token CE;
-7. compute gate budget, load-balance, and z losses;
-8. update gate and, by default, official model parameters.
+     batch reaches `current_keep_ratio`;
+6. protect recent query-key pairs with all heads for `gate_recent_tokens_all_heads`
+   positions, default `256`;
+7. multiply softmax attention probabilities by the straight-through hard gate
+   and renormalize, instead of zeroing K/V before attention;
+8. compute next-token CE;
+9. compute gate budget, load-balance, and z losses;
+10. update gate and, by default, official model parameters.
 
 ## Metrics
 
@@ -52,6 +60,8 @@ Training logs:
 - `gate/prob_keep_ratio`
 - `gate/hard_keep_ratio`
 - `gate/hard_heads_per_token`
+- `gate/attention_keep_ratio`
+- `gate/current_keep_ratio`
 - `gate/head_load_min`
 - `gate/head_load_max`
 - `gate/head_load_mean`
@@ -62,12 +72,17 @@ Training logs:
 The first 20-hour run passes as a training-system test if:
 
 ```text
-hard_keep_ratio approaches 0.20
+current_keep_ratio follows the 0.50 -> 0.20 curriculum
+hard_keep_ratio follows current_keep_ratio
 CE remains finite and trends downward or stabilizes
 head_load_min is not near zero for most of the run
 checkpoints are saved
 streaming_data_meta.json reports many DCLM files
 ```
+
+`hard_keep_ratio` estimates long-term routed KV-cache storage. `attention_keep_ratio`
+can be higher because it includes the dense recent-window visibility used during
+training.
 
 ## Insufficient Evidence
 

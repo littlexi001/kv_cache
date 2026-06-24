@@ -45,16 +45,24 @@ torchrun \
   --max_steps "${MAX_STEPS:-1000000}" \
   --max_train_seconds "${MAX_TRAIN_SECONDS:-72000}" \
   --learning_rate "${LEARNING_RATE:-1e-5}" \
-  --gate_learning_rate "${GATE_LEARNING_RATE:-1e-4}" \
+  --gate_learning_rate "${GATE_LEARNING_RATE:-3e-4}" \
   --min_lr_ratio "${MIN_LR_RATIO:-0.1}" \
   --warmup_steps "${WARMUP_STEPS:-500}" \
   --weight_decay "${WEIGHT_DECAY:-0.01}" \
   --max_grad_norm "${MAX_GRAD_NORM:-1.0}" \
   --target_keep_ratio "${TARGET_KEEP_RATIO:-0.20}" \
+  --initial_keep_ratio "${INITIAL_KEEP_RATIO:-0.50}" \
+  --keep_ratio_anneal_steps "${KEEP_RATIO_ANNEAL_STEPS:-30000}" \
+  --keep_ratio_anneal_start_step "${KEEP_RATIO_ANNEAL_START_STEP:-0}" \
+  --gate_type "${GATE_TYPE:-mlp}" \
+  --gate_hidden_size "${GATE_HIDDEN_SIZE:-256}" \
+  --gate_dropout "${GATE_DROPOUT:-0.0}" \
   --gate_hard_mode "${GATE_HARD_MODE:-global_budget}" \
   --gate_threshold "${GATE_THRESHOLD:-0.5}" \
   --gate_temperature "${GATE_TEMPERATURE:-1.0}" \
   --gate_sink_tokens_all_heads "${GATE_SINK_TOKENS_ALL_HEADS:-64}" \
+  --gate_recent_tokens_all_heads "${GATE_RECENT_TOKENS_ALL_HEADS:-256}" \
+  --gate_min_non_sink_heads "${GATE_MIN_NON_SINK_HEADS:-1}" \
   --budget_loss_coef "${BUDGET_LOSS_COEF:-0.05}" \
   --load_loss_coef "${LOAD_LOSS_COEF:-0.01}" \
   --z_loss_coef "${Z_LOSS_COEF:-0.001}" \

@@ -20,21 +20,27 @@ queries.
 For layer `l`, token `t`, and hidden state `x[l,t]`:
 
 ```text
-logits[l,t] = W_gate[l] x[l,t]
+logits[l,t] = GateMLP[l](x[l,t])
 prob[l,t,h] = sigmoid(logits[l,t,h] / temperature)
 hard[l,t,h] = selected by the hard gate
 ```
 
-The default hard gate is `global_budget`:
+The default hard gate is `global_budget` under a keep-ratio curriculum:
 
 ```text
 1. Sink tokens keep all KV heads.
 2. Every non-sink token gets its highest-logit KV head.
 3. Remaining token-head slots are filled by global top logits until
-   target_keep_ratio is reached for the layer batch.
+   current_keep_ratio is reached for the layer batch.
 ```
 
-The target budget is:
+The schedule is:
+
+```text
+current_keep_ratio: 0.50 -> 0.20 over 30000 steps
+```
+
+The final target budget is:
 
 ```text
 E_{l,t,h}[hard[l,t,h]] ~= target_keep_ratio
@@ -56,13 +62,21 @@ The first implementation patches Hugging Face Qwen3 eager attention:
 ```text
 input hidden_states -> q_proj/k_proj/v_proj
 hidden_states -> kv_gate
-gate mask applies to K/V token-head slots
-query heads inherit the mask of their corresponding KV head group
+softmax attention weights -> straight-through hard gate -> renormalization
+query heads inherit the gate of their corresponding KV head group
 ```
 
 The implementation still stores dense K/V tensors during training. It measures
-the routed-KV training behavior and expected KV-cache slot count. It does not
-yet implement ragged cache allocation.
+the routed-KV training behavior and expected KV-cache slot count. The default
+recent window keeps nearby query-key pairs fully visible:
+
+```text
+gate_recent_tokens_all_heads = 256
+```
+
+This approximates a runtime policy where the most recent cache entries remain
+dense while older entries are routed. It does not yet implement ragged cache
+allocation.
 
 ## Loss
 

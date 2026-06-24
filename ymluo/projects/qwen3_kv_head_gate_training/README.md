@@ -34,14 +34,42 @@ hard_keep[l, t, kv_head] = selected by the hard gate
 
 Default hard gate mode is `global_budget`: each layer first protects sink
 tokens, then gives each non-sink token at least one KV head, then fills the
-remaining highest-logit token-head slots until the requested average KV budget
-is reached. This makes the hard keep ratio match `target_keep_ratio` from the
-first training step.
+remaining highest-logit token-head slots until the current average KV budget is
+reached.
 
-During training, the dense attention tensor is still used. Unselected KV
-head-token slots are masked from attention, and selected slots keep normal K/V.
-This tests whether the official model can adapt to the routed KV constraint. It
-does not yet implement a ragged KV-cache storage kernel.
+The training budget uses a curriculum by default:
+
+```text
+initial_keep_ratio = 0.50
+target_keep_ratio = 0.20
+keep_ratio_anneal_steps = 30000
+```
+
+So the final target is still 20% KV-cache slots, but the model is not forced
+into the 20% hard constraint at the first step.
+
+The default gate is now a small MLP:
+
+```text
+LayerNorm(hidden) -> Linear(hidden, 256) -> SiLU -> Linear(256, kv_heads)
+```
+
+Set `GATE_TYPE=linear` when resuming an old checkpoint that was trained with
+the original linear gate.
+
+During training, the dense attention tensor is still used. Attention
+probabilities are multiplied by a straight-through hard gate and renormalized.
+This gives the hard routing behavior in the forward pass while still allowing
+the gate to receive useful gradients from CE. Recent query-key pairs are
+protected by default:
+
+```text
+gate_recent_tokens_all_heads = 256
+```
+
+This approximates a runtime cache where the most recent tokens remain dense and
+older tokens are routed. The project still does not implement a ragged KV-cache
+storage kernel.
 
 ## Loss
 
@@ -108,6 +136,11 @@ per_device_batch_size = 1
 gradient_accumulation_steps = 8
 max_train_seconds = 72000
 target_keep_ratio = 0.20
+initial_keep_ratio = 0.50
+keep_ratio_anneal_steps = 30000
+gate_type = mlp
+gate_hidden_size = 256
+gate_recent_tokens_all_heads = 256
 gate_hard_mode = global_budget
 train_base_model = true
 ```
