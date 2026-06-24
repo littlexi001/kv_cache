@@ -624,3 +624,24 @@ Crash fix:
 - CUDA illegal memory access poisons the CUDA context, so Python fallback after the failed launch is not reliable for this class of error.
 - Updated the extension to `qabs_final_attention_ext_v2` so server runs do not reuse the old cached build.
 - Changed the valid-mask ABI from `bool*` to `uint8_t*` and convert `valid` to `torch.uint8` before entering the extension.
+
+## Implementation: Shared Prefill For Mode Sweeps
+
+Question:
+
+- Can mode sweeps avoid re-running the same prefill for every sparse method?
+
+Implementation:
+
+- Added `--reuse_prefill_cache`, default `true`.
+- Added `--baseline_last`, default `true`.
+- Prefill is now run once before the mode loop when `--reuse_prefill_cache true`.
+- Each mode clones the shared prefill KV cache and starts eval/decode from the same prefill logits.
+- `seconds` in `ppl_by_mode.csv` now measures per-mode cache clone + eval/decode time when shared prefill is enabled.
+- Added `shared_prefill_seconds` to `ppl_by_mode.csv` so total wall time can be reconstructed.
+
+Notes:
+
+- This is valid for the current experiments because sparse attention is only installed around eval/decode, while prefill is always dense/baseline.
+- Shared prefill keeps one full prefill KV cache resident and clones it for each mode. If memory becomes tight at very long contexts, set `--reuse_prefill_cache false`.
+- The server speed script now defaults to shared prefill and moves `baseline` to the end of the mode order.

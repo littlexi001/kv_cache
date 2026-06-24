@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import csv
 import json
 import math
@@ -109,6 +110,21 @@ def parse_args() -> argparse.Namespace:
             "Use a lazy CUDA extension to fuse final sparse QK + softmax + V reduce in qabs fast path. "
             "Falls back to PyTorch if the extension is unavailable."
         ),
+    )
+    parser.add_argument(
+        "--reuse_prefill_cache",
+        type=str2bool,
+        default=True,
+        help=(
+            "Run prefill once, clone the resulting KV cache for each mode, and time only cache clone + eval per mode. "
+            "This is valid because sparse modes are applied only during eval/decode."
+        ),
+    )
+    parser.add_argument(
+        "--baseline_last",
+        type=str2bool,
+        default=True,
+        help="Move baseline to the end of the mode list so sparse experiments finish first.",
     )
     parser.add_argument(
         "--disable_sparse_stats",
@@ -220,6 +236,12 @@ def parse_modes(spec: str) -> list[str]:
     if not modes:
         raise ValueError("--modes cannot be empty.")
     return modes
+
+
+def move_baseline_last(modes: list[str]) -> list[str]:
+    baselines = [mode for mode in modes if mode == "baseline"]
+    non_baselines = [mode for mode in modes if mode != "baseline"]
+    return non_baselines + baselines
 
 
 def parse_mode_config(mode: str) -> tuple[str, int | None]:
@@ -1918,6 +1940,25 @@ def prefill_cache(
     return past_key_values, last_logits
 
 
+def clone_past_key_values(past_key_values: Any) -> Any:
+    if past_key_values is None:
+        return None
+    if torch.is_tensor(past_key_values):
+        return past_key_values.detach().clone()
+    if isinstance(past_key_values, tuple):
+        return tuple(clone_past_key_values(item) for item in past_key_values)
+    if isinstance(past_key_values, list):
+        return [clone_past_key_values(item) for item in past_key_values]
+    if isinstance(past_key_values, dict):
+        return {key: clone_past_key_values(value) for key, value in past_key_values.items()}
+    to_legacy_cache = getattr(past_key_values, "to_legacy_cache", None)
+    from_legacy_cache = getattr(type(past_key_values), "from_legacy_cache", None)
+    if callable(to_legacy_cache) and callable(from_legacy_cache):
+        legacy_cache = clone_past_key_values(to_legacy_cache())
+        return from_legacy_cache(legacy_cache)
+    return copy.deepcopy(past_key_values)
+
+
 @torch.inference_mode()
 def compute_eval_loss(
     model: torch.nn.Module,
@@ -1941,11 +1982,18 @@ def compute_eval_loss(
     candidate_stats: CandidateStats | None = None,
     qabs_fast_path: bool = False,
     qabs_cuda_final_kernel: bool = False,
+    initial_past_key_values: Any | None = None,
+    initial_prev_logits: torch.Tensor | None = None,
     log_every: int = 1,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
     started = time.perf_counter()
-    past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, prefill_chunk_size, input_device)
+    if initial_past_key_values is None or initial_prev_logits is None:
+        past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, prefill_chunk_size, input_device)
+    else:
+        print(f"cloning shared prefill cache for mode: {mode}", flush=True)
+        past_key_values = clone_past_key_values(initial_past_key_values)
+        prev_logits = initial_prev_logits.detach().clone()
     total_loss = 0.0
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
@@ -2136,6 +2184,8 @@ def main() -> None:
     if args.max_heads_per_token <= 0:
         raise ValueError("--max_heads_per_token must be positive.")
     modes = parse_modes(args.modes)
+    if args.baseline_last:
+        modes = move_baseline_last(modes)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(args.seed)
@@ -2170,6 +2220,22 @@ def main() -> None:
     layer_count = int(getattr(model.config, "num_hidden_layers"))
     head_count = int(getattr(model.config, "num_attention_heads"))
     input_device = pick_input_device(model, requested_device)
+
+    shared_prefill_seconds = ""
+    shared_past_key_values: Any | None = None
+    shared_prev_logits: torch.Tensor | None = None
+    if args.reuse_prefill_cache:
+        print("starting shared prefill cache", flush=True)
+        prefill_started = time.perf_counter()
+        shared_past_key_values, shared_prev_logits = prefill_cache(
+            model,
+            input_ids,
+            args.prefill_tokens,
+            args.chunk_size,
+            input_device,
+        )
+        shared_prefill_seconds = time.perf_counter() - prefill_started
+        print(f"shared prefill cache ready: {shared_prefill_seconds:.3f}s", flush=True)
 
     ppl_rows: list[dict[str, Any]] = []
     load_rows: list[dict[str, Any]] = []
@@ -2291,6 +2357,8 @@ def main() -> None:
             candidate_stats,
             args.qabs_fast_path,
             args.qabs_cuda_final_kernel,
+            shared_past_key_values,
+            shared_prev_logits,
             args.log_every,
         )
         ppl_rows.append(
@@ -2363,6 +2431,8 @@ def main() -> None:
                 "always_keep_self": args.always_keep_self if mode != "baseline" else "",
                 "qabs_fast_path": args.qabs_fast_path if mode_kind == "qabs_reuse_rerank" else "",
                 "qabs_cuda_final_kernel": args.qabs_cuda_final_kernel if mode_kind == "qabs_reuse_rerank" else "",
+                "reuse_prefill_cache": args.reuse_prefill_cache,
+                "shared_prefill_seconds": shared_prefill_seconds,
             }
         )
         if stats is not None:
@@ -2512,6 +2582,8 @@ def main() -> None:
             "always_keep_self",
             "qabs_fast_path",
             "qabs_cuda_final_kernel",
+            "reuse_prefill_cache",
+            "shared_prefill_seconds",
         ],
     )
 
@@ -2613,6 +2685,7 @@ def main() -> None:
                     "total_tokens_used": int(input_ids.numel()),
                     "prefill_tokens": args.prefill_tokens,
                     "eval_tokens": args.eval_tokens,
+                    "shared_prefill_seconds": shared_prefill_seconds,
                     "layer_count": layer_count,
                     "head_count": head_count,
                     "modes": modes,

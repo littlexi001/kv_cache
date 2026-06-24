@@ -28,6 +28,8 @@ DEVICE_MAP="${DEVICE_MAP:-auto}"
 ATTN_IMPLEMENTATION="${ATTN_IMPLEMENTATION:-eager}"
 LOG_EVERY="${LOG_EVERY:-100}"
 QABS_CUDA_FINAL_KERNEL="${QABS_CUDA_FINAL_KERNEL:-true}"
+REUSE_PREFILL_CACHE="${REUSE_PREFILL_CACHE:-true}"
+BASELINE_LAST="${BASELINE_LAST:-true}"
 
 mkdir -p "${OUTPUT_ROOT}"
 
@@ -69,6 +71,8 @@ for prefill_tokens in ${PREFILL_LENGTHS}; do
     --modes "${MODES}" \
     --qabs_fast_path true \
     --qabs_cuda_final_kernel "${QABS_CUDA_FINAL_KERNEL}" \
+    --reuse_prefill_cache "${REUSE_PREFILL_CACHE}" \
+    --baseline_last "${BASELINE_LAST}" \
     --disable_sparse_stats true \
     --log_every "${LOG_EVERY}" \
     --make_plots false
