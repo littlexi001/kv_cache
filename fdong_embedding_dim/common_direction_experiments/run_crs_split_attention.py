@@ -167,12 +167,39 @@ def causal_prefix_unit_mean(x: torch.Tensor) -> torch.Tensor:
     return torch.where(norm > 1e-8, mean / norm.clamp_min(1e-8), torch.zeros_like(mean))
 
 
+def causal_prefix_unit_mean_with_default(x: torch.Tensor) -> torch.Tensor:
+    """Causal prefix direction with a fixed default at position 0.
+
+    The parameter-matched basis version needs a full orthonormal basis at every
+    position.  For position 0 there is no prefix, so we use the all-ones
+    direction as a fixed, non-data-dependent default.
+    """
+    u = causal_prefix_unit_mean(x)
+    default = torch.ones(x.shape[-1], dtype=x.dtype, device=x.device)
+    default = default / default.norm().clamp_min(1e-12)
+    zero = u.norm(dim=-1, keepdim=True) <= 1e-8
+    return torch.where(zero, default.view(1, 1, -1), u)
+
+
 def split_common_residual(x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     u = causal_prefix_unit_mean(x)
     coeff = (x * u).sum(dim=-1, keepdim=True)
     common = coeff * u
     residual = x - common
     return common, residual, u
+
+
+def residual_basis_from_unit(u: torch.Tensor) -> torch.Tensor:
+    """Return an orthonormal basis for the subspace orthogonal to u.
+
+    u: [..., D], assumed nonzero/unit.  Return shape [..., D, D-1], with columns
+    spanning u^\perp.  SVD is fine here because the toy dimension is tiny.
+    """
+    dim = u.shape[-1]
+    eye = torch.eye(dim, dtype=u.dtype, device=u.device)
+    projector = eye.view(*([1] * (u.ndim - 1)), dim, dim) - u.unsqueeze(-1) * u.unsqueeze(-2)
+    basis, _, _ = torch.linalg.svd(projector)
+    return basis[..., : dim - 1]
 
 
 class DenseLinear(torch.nn.Module):
@@ -215,13 +242,115 @@ class CRSLinear(torch.nn.Module):
         return self.Wc.detach(), self.Wr.detach()
 
 
+class CRSLowRankCommonLinear(torch.nn.Module):
+    """CRS with a rank-1 common expert.
+
+    For each position k:
+
+        y_k = alpha * a_c * (u_{c,k}^T h_k) + W_r (I - u_{c,k}u_{c,k}^T) h_k
+
+    The common branch has only dim output-vector parameters rather than a full
+    dim-by-dim matrix.
+    """
+
+    def __init__(self, dim: int, seed: int, init_noise: float, alpha: float):
+        super().__init__()
+        self.alpha = alpha
+        gen = torch.Generator().manual_seed(seed)
+        eye = torch.eye(dim, dtype=torch.float32) * 0.1
+        base = eye + init_noise * torch.randn(dim, dim, generator=gen)
+        self.Wr = torch.nn.Parameter(base.clone())
+        # Initialize a_c so that, at initialization, the common branch matches
+        # the identity-like base response on the all-ones direction.
+        u0 = torch.ones(dim, dtype=torch.float32) / math.sqrt(dim)
+        self.ac = torch.nn.Parameter(base @ u0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        common, residual, u = split_common_residual(x)
+        coeff = (x * u).sum(dim=-1, keepdim=True)
+        return self.alpha * coeff * self.ac.view(1, 1, -1) + residual @ self.Wr.T
+
+    def dense_equiv(self) -> torch.Tensor:
+        u0 = torch.ones_like(self.ac.detach())
+        u0 = u0 / u0.norm().clamp_min(1e-12)
+        return (self.alpha * torch.outer(self.ac.detach(), u0) + self.Wr.detach() @ (torch.eye(len(u0)) - torch.outer(u0, u0))).detach()
+
+    def effective_weight(self, u: torch.Tensor) -> torch.Tensor:
+        u = u.detach().float()
+        u = u / u.norm().clamp_min(1e-12)
+        eye = torch.eye(len(u), dtype=torch.float32)
+        return self.alpha * torch.outer(self.ac.detach().float(), u) + self.Wr.detach().float() @ (eye - torch.outer(u, u))
+
+    def branch_weights(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        u0 = torch.ones_like(self.ac.detach())
+        u0 = u0 / u0.norm().clamp_min(1e-12)
+        return torch.outer(self.ac.detach(), u0), self.Wr.detach()
+
+
+class CRSParamMatchedLinear(torch.nn.Module):
+    """Parameter-matched CRS using an explicit residual basis.
+
+    For each position k, choose an orthonormal basis [u_k, R_k] where R_k spans
+    the subspace orthogonal to u_k.  The layer computes:
+
+        s_c = u_k^T h_k
+        s_r = R_k^T h_k
+        y_k = alpha * a_c s_c + A_r s_r
+
+    Parameter count per linear layer is dim + dim*(dim-1) = dim*dim, exactly
+    matching a dense dim-by-dim matrix.
+    """
+
+    def __init__(self, dim: int, seed: int, init_noise: float, alpha: float):
+        super().__init__()
+        self.alpha = alpha
+        gen = torch.Generator().manual_seed(seed)
+        eye = torch.eye(dim, dtype=torch.float32) * 0.1
+        base = eye + init_noise * torch.randn(dim, dim, generator=gen)
+        u0 = torch.ones(dim, dtype=torch.float32) / math.sqrt(dim)
+        r0 = residual_basis_from_unit(u0.view(1, dim)).squeeze(0)
+        self.ac = torch.nn.Parameter(base @ u0)
+        self.Ar = torch.nn.Parameter(base @ r0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        u = causal_prefix_unit_mean_with_default(x)
+        r = residual_basis_from_unit(u)
+        sc = (x * u).sum(dim=-1, keepdim=True)
+        sr = torch.einsum("...d,...dr->...r", x, r)
+        return self.alpha * sc * self.ac.view(1, 1, -1) + sr @ self.Ar.T
+
+    def effective_weight(self, u: torch.Tensor) -> torch.Tensor:
+        u = u.detach().float()
+        u = u / u.norm().clamp_min(1e-12)
+        r = residual_basis_from_unit(u.view(1, len(u))).squeeze(0)
+        return self.alpha * torch.outer(self.ac.detach().float(), u) + self.Ar.detach().float() @ r.T
+
+    def dense_equiv(self) -> torch.Tensor:
+        u0 = torch.ones_like(self.ac.detach())
+        u0 = u0 / u0.norm().clamp_min(1e-12)
+        return self.effective_weight(u0)
+
+    def branch_weights(self) -> Tuple[torch.Tensor, torch.Tensor]:
+        u0 = torch.ones_like(self.ac.detach())
+        u0 = u0 / u0.norm().clamp_min(1e-12)
+        r0 = residual_basis_from_unit(u0.view(1, len(u0))).squeeze(0)
+        return torch.outer(self.ac.detach(), u0), self.Ar.detach() @ r0.T
+
+
 class ToyAttention(torch.nn.Module):
     def __init__(self, e0: torch.Tensor, cfg: Config, seed: int, variant: str, alpha: float):
         super().__init__()
         self.variant = variant
         self.E = torch.nn.Parameter(e0.clone())
         self.norm = RMSNorm(cfg.dim)
-        Linear = DenseLinear if variant == "dense" else CRSLinear
+        if variant == "dense":
+            Linear = DenseLinear
+        elif variant == "crs_lowrank":
+            Linear = CRSLowRankCommonLinear
+        elif variant == "crs_parammatched":
+            Linear = CRSParamMatchedLinear
+        else:
+            Linear = CRSLinear
         kwargs = {} if variant == "dense" else {"alpha": alpha}
         self.q = Linear(cfg.dim, seed + 101, cfg.init_noise, **kwargs)
         self.k = Linear(cfg.dim, seed + 102, cfg.init_noise, **kwargs)
@@ -431,11 +560,18 @@ def measure(model: ToyAttention, data: Dict[str, object], cfg: Config, variant: 
     _, cache = model(data["tokens"], return_cache=True)
     x_pc1 = pc1(cache["xn"])
     h_pc1 = pc1(cache["h"])
+    row["num_parameters"] = sum(p.numel() for p in model.parameters())
     row["repr_top1_energy"] = spectrum(centered(flatten(cache["h"])))["top1_energy"]
+    u_ref = None
     if "crs_residual" in cache:
         row["residual_repr_top1_energy"] = spectrum(centered(flatten(cache["crs_residual"])))["top1_energy"]
         u = cache["crs_u"]
         x = cache["xn"]
+        u_flat = flatten(u)
+        nonzero = u_flat.norm(dim=-1) > 1e-8
+        if bool(nonzero.any()):
+            u_ref = u_flat[nonzero].mean(dim=0)
+            u_ref = u_ref / u_ref.norm().clamp_min(1e-12)
         common_fraction = ((x * u).sum(dim=-1).square() / x.square().sum(dim=-1).clamp_min(1e-12)).mean()
         residual_fraction = (cache["crs_residual"].square().sum(dim=-1) / x.square().sum(dim=-1).clamp_min(1e-12)).mean()
         row["crs_common_input_energy_fraction"] = float(common_fraction)
@@ -453,10 +589,32 @@ def measure(model: ToyAttention, data: Dict[str, object], cfg: Config, variant: 
                 row[f"{name}_{branch}_{k}"] = v
             row[f"{name}_{branch}_align_x_pc1"] = sqcos(top_right(W), x_pc1)
             row[f"{name}_{branch}_align_h_pc1"] = sqcos(top_right(W), h_pc1)
+        if u_ref is not None and hasattr(layer, "effective_weight"):
+            Weff = layer.effective_weight(u_ref)
+        elif u_ref is not None and isinstance(layer, CRSLinear):
+            eye = torch.eye(len(u_ref), dtype=torch.float32)
+            Weff = layer.alpha * layer.Wc.detach().float() @ torch.outer(u_ref, u_ref) + layer.Wr.detach().float() @ (eye - torch.outer(u_ref, u_ref))
+        else:
+            Weff = layer.dense_equiv()
+        for k, v in spectrum(Weff).items():
+            row[f"{name}_effective_{k}"] = v
     Bqk = model.q.dense_equiv().T @ model.k.dense_equiv()
     for k, v in spectrum(Bqk).items():
         row[f"Bqk_combined_{k}"] = v
     row["Bqk_combined_align_x_pc1"] = sqcos(top_right(Bqk), x_pc1)
+    if u_ref is not None:
+        def eff(layer):
+            if hasattr(layer, "effective_weight"):
+                return layer.effective_weight(u_ref)
+            if isinstance(layer, CRSLinear):
+                eye = torch.eye(len(u_ref), dtype=torch.float32)
+                return layer.alpha * layer.Wc.detach().float() @ torch.outer(u_ref, u_ref) + layer.Wr.detach().float() @ (eye - torch.outer(u_ref, u_ref))
+            return layer.dense_equiv()
+        Bqk_eff = eff(model.q).T @ eff(model.k)
+    else:
+        Bqk_eff = Bqk
+    for k, v in spectrum(Bqk_eff).items():
+        row[f"Bqk_effective_{k}"] = v
     return row
 
 
@@ -473,6 +631,22 @@ def train_one(cfg: Config, variant: str, seed: int) -> List[Dict[str, object]]:
         alpha = 1.0
     elif variant == "crs_alpha05":
         model_variant = "crs"
+        reweight = False
+        alpha = cfg.alpha
+    elif variant == "crs_lowrank_alpha1":
+        model_variant = "crs_lowrank"
+        reweight = False
+        alpha = 1.0
+    elif variant == "crs_lowrank_alpha05":
+        model_variant = "crs_lowrank"
+        reweight = False
+        alpha = cfg.alpha
+    elif variant == "crs_parammatched_alpha1":
+        model_variant = "crs_parammatched"
+        reweight = False
+        alpha = 1.0
+    elif variant == "crs_parammatched_alpha05":
+        model_variant = "crs_parammatched"
         reweight = False
         alpha = cfg.alpha
     elif variant == "dense":
@@ -521,7 +695,16 @@ def rows_for(agg: List[Dict[str, object]], variant: str) -> List[Dict[str, objec
 
 
 def summarize(agg: List[Dict[str, object]], history: List[Dict[str, object]]) -> Dict[str, object]:
-    variants = ["dense", "dense_reweight", "crs_alpha1", "crs_alpha05"]
+    variants = [
+        "dense",
+        "dense_reweight",
+        "crs_alpha1",
+        "crs_alpha05",
+        "crs_lowrank_alpha1",
+        "crs_lowrank_alpha05",
+        "crs_parammatched_alpha1",
+        "crs_parammatched_alpha05",
+    ]
     summary: Dict[str, object] = {"variants": {}}
     for variant in variants:
         ar = rows_for(agg, variant)
@@ -546,6 +729,7 @@ def summarize(agg: List[Dict[str, object]], history: List[Dict[str, object]]) ->
             "final_common_accuracy": final["common_accuracy_mean"],
             "final_tail_margin": final["tail_margin_mean"],
             "final_common_margin": final["common_margin_mean"],
+            "num_parameters": final["num_parameters_mean"],
             "mean_first_stable_tail_acc_step": float(np.mean(stable_vals)) if stable_vals else None,
             "num_seeds_reached_stable_tail_acc": len(stable_vals),
             "final_conflict_ce": final["conflict_ce_mean"],
@@ -558,6 +742,9 @@ def summarize(agg: List[Dict[str, object]], history: List[Dict[str, object]]) ->
             "num_seeds_reached_conflict_kl_le_0p01": len(stable_kl001_vals),
             "final_Bqk_top1_energy": final["Bqk_combined_top1_energy_mean"],
             "final_Bqk_sigma1_over_sigma4": final["Bqk_combined_sigma1_over_sigma4_mean"],
+            "final_Bqk_effective_top1_energy": final["Bqk_effective_top1_energy_mean"],
+            "final_Bqk_effective_sigma1_over_sigma4": final["Bqk_effective_sigma1_over_sigma4_mean"],
+            "final_q_effective_sigma1_over_sigma4": final["q_effective_sigma1_over_sigma4_mean"],
             "final_q_residual_top1_energy": final["q_residual_top1_energy_mean"],
             "final_q_common_top1_energy": final["q_common_top1_energy_mean"],
             "final_crs_common_input_energy_fraction": final["crs_common_input_energy_fraction_mean"],
@@ -594,6 +781,26 @@ def summarize(agg: List[Dict[str, object]], history: List[Dict[str, object]]) ->
             and summary["variants"]["crs_alpha05"]["mean_first_stable_conflict_kl_le_0p05_step"]
             < summary["variants"]["dense"]["mean_first_stable_conflict_kl_le_0p05_step"]
         ),
+        "crs_lowrank_alpha1_tail_faster_than_dense": (
+            dense_step is not None
+            and summary["variants"]["crs_lowrank_alpha1"]["mean_first_stable_tail_acc_step"] is not None
+            and summary["variants"]["crs_lowrank_alpha1"]["mean_first_stable_tail_acc_step"] < dense_step
+        ),
+        "crs_lowrank_alpha05_tail_faster_than_dense": (
+            dense_step is not None
+            and summary["variants"]["crs_lowrank_alpha05"]["mean_first_stable_tail_acc_step"] is not None
+            and summary["variants"]["crs_lowrank_alpha05"]["mean_first_stable_tail_acc_step"] < dense_step
+        ),
+        "crs_parammatched_alpha1_tail_faster_than_dense": (
+            dense_step is not None
+            and summary["variants"]["crs_parammatched_alpha1"]["mean_first_stable_tail_acc_step"] is not None
+            and summary["variants"]["crs_parammatched_alpha1"]["mean_first_stable_tail_acc_step"] < dense_step
+        ),
+        "crs_parammatched_alpha05_tail_faster_than_dense": (
+            dense_step is not None
+            and summary["variants"]["crs_parammatched_alpha05"]["mean_first_stable_tail_acc_step"] is not None
+            and summary["variants"]["crs_parammatched_alpha05"]["mean_first_stable_tail_acc_step"] < dense_step
+        ),
     }
     return summary
 
@@ -608,7 +815,16 @@ def write_csv(path: Path, rows: Iterable[Dict[str, object]]) -> None:
 
 
 def plot(path: Path, agg: List[Dict[str, object]]) -> None:
-    variants = ["dense", "dense_reweight", "crs_alpha1", "crs_alpha05"]
+    variants = [
+        "dense",
+        "dense_reweight",
+        "crs_alpha1",
+        "crs_alpha05",
+        "crs_lowrank_alpha1",
+        "crs_lowrank_alpha05",
+        "crs_parammatched_alpha1",
+        "crs_parammatched_alpha05",
+    ]
     panels = [
         ("tail_loss_mean", "Tail CE loss"),
         ("tail_accuracy_mean", "Tail accuracy"),
@@ -618,6 +834,8 @@ def plot(path: Path, agg: List[Dict[str, object]]) -> None:
         ("common_margin_mean", "Common margin"),
         ("Bqk_combined_top1_energy_mean", "Bqk top-1 energy"),
         ("Bqk_combined_sigma1_over_sigma4_mean", "Bqk sigma1/sigma4"),
+        ("Bqk_effective_sigma1_over_sigma4_mean", "Approx effective Bqk sigma1/sigma4"),
+        ("num_parameters_mean", "parameter count"),
     ]
     fig, axes = plt.subplots(2, 4, figsize=(22, 10))
     for ax, (metric, title) in zip(axes.flat, panels):
@@ -650,7 +868,16 @@ def main() -> None:
     outdir = Path(cfg.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     rows: List[Dict[str, object]] = []
-    for variant in ["dense", "dense_reweight", "crs_alpha1", "crs_alpha05"]:
+    for variant in [
+        "dense",
+        "dense_reweight",
+        "crs_alpha1",
+        "crs_alpha05",
+        "crs_lowrank_alpha1",
+        "crs_lowrank_alpha05",
+        "crs_parammatched_alpha1",
+        "crs_parammatched_alpha05",
+    ]:
         for seed in [int(x) for x in cfg.seeds.split(",") if x.strip()]:
             print(f"running variant={variant} seed={seed}", flush=True)
             rows.extend(train_one(cfg, variant, seed))
