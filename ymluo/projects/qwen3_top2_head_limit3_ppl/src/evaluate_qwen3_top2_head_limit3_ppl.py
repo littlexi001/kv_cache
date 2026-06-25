@@ -38,6 +38,7 @@ _ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
 _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
+_ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
 _ACTIVE_QABS_FAST_PATH: bool = False
 _ACTIVE_QABS_CUDA_FINAL_KERNEL: bool = False
 _QABS_CUDA_FINAL_WARNED: bool = False
@@ -131,6 +132,12 @@ def parse_args() -> argparse.Namespace:
         type=str2bool,
         default=False,
         help="Disable sparse load/candidate CSV stats to avoid GPU sync during timing runs.",
+    )
+    parser.add_argument(
+        "--qabs_overlap_stats",
+        type=str2bool,
+        default=False,
+        help="Write qabs reuse overlap CSVs for current raw, previous raw, and previous final candidate sets.",
     )
     parser.add_argument(
         "--log_every",
@@ -505,6 +512,202 @@ class CandidateStats:
                         "max_candidate_per_query": int(self.max_candidate_per_query[layer, head]),
                     }
                 )
+        return rows
+
+
+@dataclass
+class ReuseOverlapStats:
+    layer_count: int
+    head_count: int
+
+    def __post_init__(self) -> None:
+        shape = (self.layer_count, self.head_count)
+        self.query_counts = torch.zeros(shape, dtype=torch.long)
+        self.history_token_counts = torch.zeros(shape, dtype=torch.long)
+        self.current_raw = torch.zeros(shape, dtype=torch.long)
+        self.previous_raw = torch.zeros(shape, dtype=torch.long)
+        self.previous_final = torch.zeros(shape, dtype=torch.long)
+        self.current_and_previous_raw = torch.zeros(shape, dtype=torch.long)
+        self.current_and_previous_final = torch.zeros(shape, dtype=torch.long)
+        self.previous_raw_and_previous_final = torch.zeros(shape, dtype=torch.long)
+        self.all_three = torch.zeros(shape, dtype=torch.long)
+        self.union_all = torch.zeros(shape, dtype=torch.long)
+        self.union_current_previous_raw = torch.zeros(shape, dtype=torch.long)
+        self.union_current_previous_final = torch.zeros(shape, dtype=torch.long)
+        self.union_previous_raw_previous_final = torch.zeros(shape, dtype=torch.long)
+        self.previous_final_only = torch.zeros(shape, dtype=torch.long)
+        self.previous_raw_only = torch.zeros(shape, dtype=torch.long)
+        self.current_raw_only = torch.zeros(shape, dtype=torch.long)
+        self.max_union_all_per_query = torch.zeros(shape, dtype=torch.long)
+
+    def update(
+        self,
+        layer: int,
+        current_raw: torch.Tensor,
+        previous_raw: torch.Tensor | None,
+        previous_final: torch.Tensor | None,
+    ) -> None:
+        if previous_raw is None:
+            previous_raw = torch.zeros_like(current_raw)
+        if previous_final is None:
+            previous_final = torch.zeros_like(current_raw)
+        a = current_raw.bool()
+        b = previous_raw.bool()
+        c = previous_final.bool()
+        ab = a & b
+        ac = a & c
+        bc = b & c
+        abc = ab & c
+        union_ab = a | b
+        union_ac = a | c
+        union_bc = b | c
+        union_all = union_ab | c
+        batch_count = int(a.shape[0])
+        history_count = int(a.shape[-1])
+        self.query_counts[layer] += batch_count
+        self.history_token_counts[layer] += batch_count * history_count
+        self.current_raw[layer] += a.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.previous_raw[layer] += b.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.previous_final[layer] += c.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.current_and_previous_raw[layer] += ab.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.current_and_previous_final[layer] += ac.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.previous_raw_and_previous_final[layer] += bc.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.all_three[layer] += abc.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.union_all[layer] += union_all.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.union_current_previous_raw[layer] += union_ab.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.union_current_previous_final[layer] += union_ac.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.union_previous_raw_previous_final[layer] += union_bc.sum(dim=(0, 2)).cpu().to(torch.long)
+        self.previous_final_only[layer] += (c & ~union_ab).sum(dim=(0, 2)).cpu().to(torch.long)
+        self.previous_raw_only[layer] += (b & ~union_ac).sum(dim=(0, 2)).cpu().to(torch.long)
+        self.current_raw_only[layer] += (a & ~union_bc).sum(dim=(0, 2)).cpu().to(torch.long)
+        self.max_union_all_per_query[layer] = torch.maximum(
+            self.max_union_all_per_query[layer],
+            union_all.sum(dim=2).cpu().to(torch.long).max(dim=0).values,
+        )
+
+    @staticmethod
+    def _ratio(numer: int, denom: int) -> float:
+        return numer / denom if denom else 0.0
+
+    def rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for layer in range(self.layer_count):
+            for head in range(self.head_count):
+                query_count = int(self.query_counts[layer, head])
+                history_count = int(self.history_token_counts[layer, head])
+                a = int(self.current_raw[layer, head])
+                b = int(self.previous_raw[layer, head])
+                c = int(self.previous_final[layer, head])
+                ab = int(self.current_and_previous_raw[layer, head])
+                ac = int(self.current_and_previous_final[layer, head])
+                bc = int(self.previous_raw_and_previous_final[layer, head])
+                abc = int(self.all_three[layer, head])
+                union_all = int(self.union_all[layer, head])
+                union_ab = int(self.union_current_previous_raw[layer, head])
+                union_ac = int(self.union_current_previous_final[layer, head])
+                union_bc = int(self.union_previous_raw_previous_final[layer, head])
+                c_only = int(self.previous_final_only[layer, head])
+                b_only = int(self.previous_raw_only[layer, head])
+                a_only = int(self.current_raw_only[layer, head])
+                rows.append(
+                    {
+                        "layer": layer,
+                        "head": head,
+                        "query_count": query_count,
+                        "history_token_cases": history_count,
+                        "current_raw_tokens": a,
+                        "previous_raw_tokens": b,
+                        "previous_final_tokens": c,
+                        "current_and_previous_raw": ab,
+                        "current_and_previous_final": ac,
+                        "previous_raw_and_previous_final": bc,
+                        "all_three": abc,
+                        "union_all": union_all,
+                        "union_current_previous_raw": union_ab,
+                        "union_current_previous_final": union_ac,
+                        "union_previous_raw_previous_final": union_bc,
+                        "previous_final_only_vs_current_previous_raw": c_only,
+                        "previous_raw_only_vs_current_previous_final": b_only,
+                        "current_raw_only_vs_previous_raw_previous_final": a_only,
+                        "current_raw_per_query_mean": a / query_count if query_count else 0.0,
+                        "previous_raw_per_query_mean": b / query_count if query_count else 0.0,
+                        "previous_final_per_query_mean": c / query_count if query_count else 0.0,
+                        "union_all_per_query_mean": union_all / query_count if query_count else 0.0,
+                        "union_ab_per_query_mean": union_ab / query_count if query_count else 0.0,
+                        "previous_final_unique_per_query_mean": c_only / query_count if query_count else 0.0,
+                        "previous_raw_unique_per_query_mean": b_only / query_count if query_count else 0.0,
+                        "current_raw_unique_per_query_mean": a_only / query_count if query_count else 0.0,
+                        "current_previous_raw_jaccard": self._ratio(ab, union_ab),
+                        "current_previous_final_jaccard": self._ratio(ac, union_ac),
+                        "previous_raw_previous_final_jaccard": self._ratio(bc, union_bc),
+                        "all_three_fraction_of_union": self._ratio(abc, union_all),
+                        "union_ab_fraction_of_union_all": self._ratio(union_ab, union_all),
+                        "union_ac_fraction_of_union_all": self._ratio(union_ac, union_all),
+                        "union_bc_fraction_of_union_all": self._ratio(union_bc, union_all),
+                        "previous_final_unique_fraction_of_union_all": self._ratio(c_only, union_all),
+                        "previous_raw_unique_fraction_of_union_all": self._ratio(b_only, union_all),
+                        "current_raw_unique_fraction_of_union_all": self._ratio(a_only, union_all),
+                        "previous_final_covered_by_current_previous_raw": 1.0 - self._ratio(c_only, c),
+                        "previous_raw_covered_by_current_previous_final": 1.0 - self._ratio(b_only, b),
+                        "current_raw_covered_by_previous_raw_previous_final": 1.0 - self._ratio(a_only, a),
+                        "max_union_all_per_query": int(self.max_union_all_per_query[layer, head]),
+                    }
+                )
+        return rows
+
+    def summary_rows(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+
+        def build_row(name: str, layer: int | str, selector: Any) -> dict[str, Any]:
+            query_count = int(self.query_counts[selector].sum())
+            history_count = int(self.history_token_counts[selector].sum())
+            a = int(self.current_raw[selector].sum())
+            b = int(self.previous_raw[selector].sum())
+            c = int(self.previous_final[selector].sum())
+            ab = int(self.current_and_previous_raw[selector].sum())
+            ac = int(self.current_and_previous_final[selector].sum())
+            bc = int(self.previous_raw_and_previous_final[selector].sum())
+            abc = int(self.all_three[selector].sum())
+            union_all = int(self.union_all[selector].sum())
+            union_ab = int(self.union_current_previous_raw[selector].sum())
+            union_ac = int(self.union_current_previous_final[selector].sum())
+            union_bc = int(self.union_previous_raw_previous_final[selector].sum())
+            c_only = int(self.previous_final_only[selector].sum())
+            b_only = int(self.previous_raw_only[selector].sum())
+            a_only = int(self.current_raw_only[selector].sum())
+            return {
+                "summary": name,
+                "layer": layer,
+                "query_count": query_count,
+                "history_token_cases": history_count,
+                "current_raw_per_query_mean": a / query_count if query_count else 0.0,
+                "previous_raw_per_query_mean": b / query_count if query_count else 0.0,
+                "previous_final_per_query_mean": c / query_count if query_count else 0.0,
+                "union_all_per_query_mean": union_all / query_count if query_count else 0.0,
+                "union_ab_per_query_mean": union_ab / query_count if query_count else 0.0,
+                "union_ac_per_query_mean": union_ac / query_count if query_count else 0.0,
+                "union_bc_per_query_mean": union_bc / query_count if query_count else 0.0,
+                "previous_final_unique_per_query_mean": c_only / query_count if query_count else 0.0,
+                "previous_raw_unique_per_query_mean": b_only / query_count if query_count else 0.0,
+                "current_raw_unique_per_query_mean": a_only / query_count if query_count else 0.0,
+                "current_previous_raw_jaccard": self._ratio(ab, union_ab),
+                "current_previous_final_jaccard": self._ratio(ac, union_ac),
+                "previous_raw_previous_final_jaccard": self._ratio(bc, union_bc),
+                "all_three_fraction_of_union": self._ratio(abc, union_all),
+                "union_ab_fraction_of_union_all": self._ratio(union_ab, union_all),
+                "union_ac_fraction_of_union_all": self._ratio(union_ac, union_all),
+                "union_bc_fraction_of_union_all": self._ratio(union_bc, union_all),
+                "previous_final_unique_fraction_of_union_all": self._ratio(c_only, union_all),
+                "previous_raw_unique_fraction_of_union_all": self._ratio(b_only, union_all),
+                "current_raw_unique_fraction_of_union_all": self._ratio(a_only, union_all),
+                "previous_final_covered_by_current_previous_raw": 1.0 - self._ratio(c_only, c),
+                "previous_raw_covered_by_current_previous_final": 1.0 - self._ratio(b_only, b),
+                "current_raw_covered_by_previous_raw_previous_final": 1.0 - self._ratio(a_only, a),
+            }
+
+        rows.append(build_row("all_layers_all_heads", "all", (slice(None), slice(None))))
+        for layer in range(self.layer_count):
+            rows.append(build_row("layer_all_heads", layer, (layer, slice(None))))
         return rows
 
 
@@ -1388,6 +1591,8 @@ def _qabs_reuse_fast_attention_forward(
     current_candidate_history = partial_scores >= threshold
 
     candidate_union_history = current_candidate_history.clone()
+    previous_candidate = None
+    previous_final = None
     if _ACTIVE_REUSE_STATE is not None:
         previous_candidate, previous_final = _ACTIVE_REUSE_STATE.previous_layer_masks(
             layer_idx,
@@ -1399,6 +1604,14 @@ def _qabs_reuse_fast_attention_forward(
             candidate_union_history |= previous_candidate
         if previous_final is not None:
             candidate_union_history |= previous_final
+
+    if _ACTIVE_REUSE_OVERLAP_STATS is not None:
+        _ACTIVE_REUSE_OVERLAP_STATS.update(
+            layer_idx,
+            current_candidate_history,
+            previous_candidate,
+            previous_final,
+        )
 
     candidate_indices, candidate_valid = _indices_from_keep_mask(candidate_union_history)
     if candidate_indices.shape[-1] == 0:
@@ -1849,10 +2062,11 @@ def attention_mode(
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
+    reuse_overlap_stats: ReuseOverlapStats | None = None,
     qabs_fast_path: bool = False,
     qabs_cuda_final_kernel: bool = False,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -1866,6 +2080,7 @@ def attention_mode(
         _ACTIVE_OBS_HYBRID_STATE,
         _ACTIVE_REUSE_STATE,
         _ACTIVE_CANDIDATE_STATS,
+        _ACTIVE_REUSE_OVERLAP_STATS,
         _ACTIVE_QABS_FAST_PATH,
         _ACTIVE_QABS_CUDA_FINAL_KERNEL,
     )
@@ -1881,6 +2096,7 @@ def attention_mode(
     _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
     _ACTIVE_REUSE_STATE = reuse_state
     _ACTIVE_CANDIDATE_STATS = candidate_stats
+    _ACTIVE_REUSE_OVERLAP_STATS = reuse_overlap_stats
     _ACTIVE_QABS_FAST_PATH = qabs_fast_path
     _ACTIVE_QABS_CUDA_FINAL_KERNEL = qabs_cuda_final_kernel
     try:
@@ -1899,6 +2115,7 @@ def attention_mode(
             _ACTIVE_OBS_HYBRID_STATE,
             _ACTIVE_REUSE_STATE,
             _ACTIVE_CANDIDATE_STATS,
+            _ACTIVE_REUSE_OVERLAP_STATS,
             _ACTIVE_QABS_FAST_PATH,
             _ACTIVE_QABS_CUDA_FINAL_KERNEL,
         ) = previous
@@ -1980,6 +2197,7 @@ def compute_eval_loss(
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
     candidate_stats: CandidateStats | None = None,
+    reuse_overlap_stats: ReuseOverlapStats | None = None,
     qabs_fast_path: bool = False,
     qabs_cuda_final_kernel: bool = False,
     initial_past_key_values: Any | None = None,
@@ -2026,6 +2244,7 @@ def compute_eval_loss(
             obs_hybrid_state,
             reuse_state,
             candidate_stats,
+            reuse_overlap_stats,
             qabs_fast_path,
             qabs_cuda_final_kernel,
         ):
@@ -2285,6 +2504,9 @@ def main() -> None:
             if mode_kind == "qabs_reuse_rerank" and not args.disable_sparse_stats
             else None
         )
+        reuse_overlap_stats = (
+            ReuseOverlapStats(layer_count, head_count) if mode_kind == "qabs_reuse_rerank" and args.qabs_overlap_stats else None
+        )
         reuse_state = ReuseCandidateState() if mode_kind == "qabs_reuse_rerank" else None
         hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
         obs_state = (
@@ -2355,6 +2577,7 @@ def main() -> None:
             obs_hybrid_state,
             reuse_state,
             candidate_stats,
+            reuse_overlap_stats,
             args.qabs_fast_path,
             args.qabs_cuda_final_kernel,
             shared_past_key_values,
@@ -2503,6 +2726,113 @@ def main() -> None:
                     "candidate_per_query_mean",
                     "candidate_fraction_of_history",
                     "max_candidate_per_query",
+                ],
+            )
+        if reuse_overlap_stats is not None:
+            overlap_summary_fields = [
+                "mode",
+                "limit_strategy",
+                "qabs_dim_count",
+                "qabs_candidate_fraction",
+                "summary",
+                "layer",
+                "query_count",
+                "history_token_cases",
+                "current_raw_per_query_mean",
+                "previous_raw_per_query_mean",
+                "previous_final_per_query_mean",
+                "union_all_per_query_mean",
+                "union_ab_per_query_mean",
+                "union_ac_per_query_mean",
+                "union_bc_per_query_mean",
+                "previous_final_unique_per_query_mean",
+                "previous_raw_unique_per_query_mean",
+                "current_raw_unique_per_query_mean",
+                "current_previous_raw_jaccard",
+                "current_previous_final_jaccard",
+                "previous_raw_previous_final_jaccard",
+                "all_three_fraction_of_union",
+                "union_ab_fraction_of_union_all",
+                "union_ac_fraction_of_union_all",
+                "union_bc_fraction_of_union_all",
+                "previous_final_unique_fraction_of_union_all",
+                "previous_raw_unique_fraction_of_union_all",
+                "current_raw_unique_fraction_of_union_all",
+                "previous_final_covered_by_current_previous_raw",
+                "previous_raw_covered_by_current_previous_final",
+                "current_raw_covered_by_previous_raw_previous_final",
+            ]
+            write_csv(
+                output_dir / f"{mode}_reuse_overlap_summary.csv",
+                [
+                    {
+                        **row,
+                        "mode": mode,
+                        "limit_strategy": "qabs_reuse_rerank",
+                        "qabs_dim_count": qabs_dim_count if qabs_dim_count else "",
+                        "qabs_candidate_fraction": qabs_candidate_fraction if qabs_candidate_fraction else "",
+                    }
+                    for row in reuse_overlap_stats.summary_rows()
+                ],
+                overlap_summary_fields,
+            )
+            write_csv(
+                output_dir / f"{mode}_reuse_overlap_by_head.csv",
+                [
+                    {
+                        **row,
+                        "mode": mode,
+                        "limit_strategy": "qabs_reuse_rerank",
+                        "qabs_dim_count": qabs_dim_count if qabs_dim_count else "",
+                        "qabs_candidate_fraction": qabs_candidate_fraction if qabs_candidate_fraction else "",
+                    }
+                    for row in reuse_overlap_stats.rows()
+                ],
+                [
+                    "mode",
+                    "limit_strategy",
+                    "qabs_dim_count",
+                    "qabs_candidate_fraction",
+                    "layer",
+                    "head",
+                    "query_count",
+                    "history_token_cases",
+                    "current_raw_tokens",
+                    "previous_raw_tokens",
+                    "previous_final_tokens",
+                    "current_and_previous_raw",
+                    "current_and_previous_final",
+                    "previous_raw_and_previous_final",
+                    "all_three",
+                    "union_all",
+                    "union_current_previous_raw",
+                    "union_current_previous_final",
+                    "union_previous_raw_previous_final",
+                    "previous_final_only_vs_current_previous_raw",
+                    "previous_raw_only_vs_current_previous_final",
+                    "current_raw_only_vs_previous_raw_previous_final",
+                    "current_raw_per_query_mean",
+                    "previous_raw_per_query_mean",
+                    "previous_final_per_query_mean",
+                    "union_all_per_query_mean",
+                    "union_ab_per_query_mean",
+                    "previous_final_unique_per_query_mean",
+                    "previous_raw_unique_per_query_mean",
+                    "current_raw_unique_per_query_mean",
+                    "current_previous_raw_jaccard",
+                    "current_previous_final_jaccard",
+                    "previous_raw_previous_final_jaccard",
+                    "all_three_fraction_of_union",
+                    "union_ab_fraction_of_union_all",
+                    "union_ac_fraction_of_union_all",
+                    "union_bc_fraction_of_union_all",
+                    "previous_final_unique_fraction_of_union_all",
+                    "previous_raw_unique_fraction_of_union_all",
+                    "current_raw_unique_fraction_of_union_all",
+                    "previous_final_covered_by_current_previous_raw",
+                    "previous_raw_covered_by_current_previous_final",
+                    "current_raw_covered_by_previous_raw_previous_final",
+                    "max_union_all_per_query",
                 ],
             )
         if obs_state is not None:
