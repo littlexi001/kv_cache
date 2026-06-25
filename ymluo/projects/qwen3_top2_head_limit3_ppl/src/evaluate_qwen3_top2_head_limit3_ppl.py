@@ -37,6 +37,7 @@ _ACTIVE_OBS_STATE: "ObservationWindowState | None" = None
 _ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
 _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
+_ACTIVE_SPARQ_MEAN_STATE: "SparQMeanState | None" = None
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
 _ACTIVE_QABS_FAST_PATH: bool = False
@@ -229,8 +230,11 @@ def parse_modes(spec: str) -> list[str]:
             "sign_xnor_knorm",
             "sign_xnor_rerank",
             "recent_window",
+            "qabs_candidate_keep",
             "qabs_partial_rerank",
             "qabs_reuse_rerank",
+            "sparq_attention",
+            "sparq_fast_attention",
         }
     ]
     if invalid:
@@ -270,10 +274,16 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "sign_xnor_rerank", None
     if re.fullmatch(r"recent\d+", mode):
         return "recent_window", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?keep", mode):
+        return "qabs_candidate_keep", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?rerank", mode):
         return "qabs_partial_rerank", None
-    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse", mode):
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse(?:2set|final)?", mode):
         return "qabs_reuse_rerank", None
+    if re.fullmatch(r"sparq\d+cand\d+(?:p\d+)?", mode):
+        return "sparq_attention", None
+    if re.fullmatch(r"sparqfast(?:dk)?\d+cand\d+(?:p\d+)?", mode):
+        return "sparq_fast_attention", None
     if re.fullmatch(r"obshybridt\d+n\d+(?:kt\d+kn\d+)?", mode):
         return "observation_hybrid", None
     if re.fullmatch(r"obshybridmasst\d+n\d+(?:kt\d+kn\d+)?(?:mt\d+mn\d+)?", mode):
@@ -322,12 +332,33 @@ def parse_recent_window_tokens(mode: str) -> int | None:
 
 
 def parse_qabs_partial_rerank_params(mode: str) -> tuple[int, float] | None:
-    match = re.fullmatch(r"qabs(\d+)cand(\d+(?:p\d+)?)(?:rerank|reuse)", mode)
+    match = re.fullmatch(r"qabs(\d+)cand(\d+(?:p\d+)?)(?:keep|rerank|reuse(?:2set|final)?)", mode)
     if not match:
         return None
     dim_count = int(match.group(1))
     candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
     return dim_count, candidate_fraction
+
+
+def parse_sparq_params(mode: str) -> tuple[int, float] | None:
+    match = re.fullmatch(r"sparq(?:fast(?:dk)?)?(\d+)cand(\d+(?:p\d+)?)", mode)
+    if not match:
+        return None
+    dim_count = int(match.group(1))
+    candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
+    return dim_count, candidate_fraction
+
+
+def sparq_fast_uses_double_k(mode: str) -> bool:
+    return mode.startswith("sparqfastdk")
+
+
+def qabs_reuse_uses_previous_final(mode: str) -> bool:
+    return not mode.endswith("reuse2set")
+
+
+def qabs_reuse_uses_previous_candidate(mode: str) -> bool:
+    return not mode.endswith("reusefinal")
 
 
 def parse_protect_params(mode: str) -> tuple[int, float] | None:
@@ -789,6 +820,50 @@ class ReuseCandidateState:
             "candidate": candidate_keep[..., :history_count].detach().bool(),
             "final": final_keep[..., :history_count].detach().bool(),
         }
+
+
+class SparQMeanState:
+    def __init__(self) -> None:
+        self.previous_layer: dict[int, dict[str, Any]] = {}
+        self.key_dim_layer: dict[int, dict[str, Any]] = {}
+
+    def value_mean(self, layer: int, value_states: torch.Tensor) -> torch.Tensor:
+        key_count = int(value_states.shape[-2])
+        previous = self.previous_layer.get(layer)
+        if previous is not None and previous["key_count"] == key_count - 1:
+            previous_mean = previous["mean"].to(value_states.device)
+            new_value = value_states[:, :, -1:, :].float()
+            mean = (previous_mean * float(key_count - 1) + new_value) / float(key_count)
+        else:
+            mean = value_states.float().mean(dim=2, keepdim=True)
+        self.previous_layer[layer] = {"key_count": key_count, "mean": mean.detach()}
+        return mean.to(value_states.dtype)
+
+    def key_dim_major(self, layer: int, key_states: torch.Tensor) -> torch.Tensor:
+        key_count = int(key_states.shape[-2])
+        required_shape = (*key_states.shape[:2], key_states.shape[-1])
+        previous = self.key_dim_layer.get(layer)
+        if (
+            previous is None
+            or previous["cache"].shape[:3] != required_shape
+            or previous["cache"].device != key_states.device
+            or previous["cache"].dtype != key_states.dtype
+            or previous["cache"].shape[-1] < key_count
+        ):
+            capacity = max(key_count, min(key_count * 2, key_count + 4096))
+            cache = torch.empty((*required_shape, capacity), device=key_states.device, dtype=key_states.dtype)
+            cache[..., :key_count] = key_states.transpose(-1, -2).contiguous()
+            self.key_dim_layer[layer] = {"key_count": key_count, "cache": cache}
+            return cache[..., :key_count]
+
+        cache = previous["cache"]
+        previous_count = int(previous["key_count"])
+        if previous_count == key_count - 1:
+            cache[..., previous_count:key_count] = key_states[:, :, -1:, :].transpose(-1, -2)
+        elif previous_count != key_count:
+            cache[..., :key_count] = key_states.transpose(-1, -2).contiguous()
+        previous["key_count"] = key_count
+        return cache[..., :key_count]
 
 
 @dataclass
@@ -1325,6 +1400,152 @@ def _qabs_partial_candidate_keep_for_query(
     return keep
 
 
+def _sparq_attention_output_for_query(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    query_index: int,
+    scaling: float,
+    dim_count: int,
+    candidate_fraction: float,
+    sink_tokens: int,
+    recent_tokens: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch_count, head_count, _, head_dim = query_states.shape
+    key_count = key_states.shape[-2]
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    q = query_states[:, :, query_index, :].float()
+    dim_indices = torch.topk(q.abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    q_selected = torch.gather(q, dim=-1, index=dim_indices)
+    k_indices = dim_indices[:, :, None, :].expand(-1, -1, key_count, -1)
+    k_selected = torch.gather(key_states.float(), dim=-1, index=k_indices)
+    q_abs_sum = q.abs().sum(dim=-1, keepdim=True).clamp_min(1.0e-6)
+    q_selected_abs_sum = q_selected.abs().sum(dim=-1, keepdim=True).clamp_min(1.0e-6)
+    sparq_scale = torch.sqrt(torch.tensor(float(head_dim), device=q.device) * q_selected_abs_sum / q_abs_sum)
+    approx_scores = torch.matmul(q_selected[:, :, None, :], k_selected.transpose(2, 3)).squeeze(2) / sparq_scale
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, query_index, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        approx_scores = approx_scores + mask_row
+    approx_weights = F.softmax(approx_scores, dim=-1, dtype=torch.float32)
+
+    candidate_count = min(key_count, max(1, math.ceil(candidate_fraction * key_count)))
+    _, top_indices = torch.topk(approx_weights, k=candidate_count, dim=-1, largest=True)
+    selected_keep = torch.zeros((batch_count, head_count, key_count), dtype=torch.bool, device=query_states.device)
+    selected_keep.scatter_(dim=-1, index=top_indices, src=torch.ones_like(top_indices, dtype=torch.bool))
+    if sink_tokens > 0 and key_count > 1:
+        selected_keep[:, :, : min(sink_tokens, key_count - 1)] = True
+    if recent_tokens > 0 and key_count > 1:
+        history_count = key_count - 1
+        recent_start = max(0, history_count - recent_tokens)
+        selected_keep[:, :, recent_start:history_count] = True
+    selected_keep[:, :, key_count - 1] = True
+
+    selected_indices, selected_valid = _indices_from_keep_mask(selected_keep)
+    gather_index = selected_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    selected_keys = torch.gather(key_states, dim=2, index=gather_index)
+    selected_values = torch.gather(value_states, dim=2, index=gather_index)
+    selected_scores = (
+        torch.matmul(query_states[:, :, query_index : query_index + 1, :], selected_keys.transpose(2, 3)).squeeze(2)
+        * scaling
+    )
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, query_index, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        selected_scores = selected_scores + torch.gather(mask_row, dim=-1, index=selected_indices)
+    selected_scores = selected_scores.masked_fill(~selected_valid, torch.finfo(selected_scores.dtype).min)
+    selected_weights = F.softmax(selected_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    exact_selected_output = torch.sum(selected_weights[:, :, :, None] * selected_values, dim=2)
+    alpha = torch.gather(approx_weights, dim=-1, index=selected_indices).masked_fill(~selected_valid, 0.0).sum(
+        dim=-1, keepdim=True
+    )
+    value_mean = value_states.mean(dim=2)
+    attention_output = alpha.to(query_states.dtype) * exact_selected_output + (1.0 - alpha).to(query_states.dtype) * value_mean
+    return attention_output, selected_keep
+
+
+def _sparq_fast_attention_output_for_query(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    query_index: int,
+    scaling: float,
+    dim_count: int,
+    candidate_fraction: float,
+) -> torch.Tensor:
+    batch_count, head_count, _, head_dim = query_states.shape
+    key_count = key_states.shape[-2]
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    candidate_count = min(key_count, max(1, math.ceil(candidate_fraction * key_count)))
+
+    q = query_states[:, :, query_index : query_index + 1, :]
+    abs_q = q.float().abs()
+    abs_q_hat, dim_indices = torch.topk(abs_q, k=selected_dim_count, dim=-1, largest=True, sorted=False)
+    q_selected = torch.gather(q.float(), dim=-1, index=dim_indices)
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    if _ACTIVE_SPARQ_MEAN_STATE is not None and sparq_fast_uses_double_k(_ACTIVE_MODE):
+        key_dim_major = _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, key_states)
+        k_dim_indices = dim_indices.transpose(-1, -2).expand(batch_count, head_count, selected_dim_count, key_count)
+        k_selected = torch.gather(key_dim_major.float(), dim=2, index=k_dim_indices)
+        approx_scores = torch.matmul(q_selected, k_selected)
+    else:
+        k_dim_indices = dim_indices.expand(batch_count, head_count, key_count, selected_dim_count)
+        k_selected = torch.gather(key_states.float(), dim=-1, index=k_dim_indices)
+        approx_scores = torch.matmul(q_selected, k_selected.transpose(2, 3))
+
+    q_abs_sum = abs_q.sum(dim=-1, keepdim=True).clamp_min(1.0e-6)
+    q_selected_abs_sum = abs_q_hat.sum(dim=-1, keepdim=True).clamp_min(1.0e-6)
+    divscale = torch.sqrt(torch.tensor(float(head_dim), device=q.device) * q_selected_abs_sum / q_abs_sum)
+    approx_scores = approx_scores / divscale
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, query_index : query_index + 1, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1, -1)
+        approx_scores = approx_scores + mask_row
+    approx_weights = F.softmax(approx_scores, dim=-1, dtype=torch.float32)
+
+    approx_selected_mass, top_indices = torch.topk(
+        approx_weights,
+        k=candidate_count,
+        dim=-1,
+        largest=True,
+        sorted=False,
+    )
+    gather_index = top_indices[..., None].expand(batch_count, head_count, 1, candidate_count, head_dim).squeeze(2)
+    valid_indices = torch.ones_like(top_indices.squeeze(2), dtype=torch.bool)
+    cuda_exact_output = _maybe_cuda_final_attention(
+        q,
+        key_states,
+        value_states,
+        attention_mask,
+        top_indices.squeeze(2),
+        valid_indices,
+        scaling,
+    )
+    if cuda_exact_output is not None:
+        exact_output = cuda_exact_output.transpose(1, 2)
+    else:
+        selected_keys = torch.gather(key_states, dim=2, index=gather_index)
+        selected_values = torch.gather(value_states, dim=2, index=gather_index)
+        exact_scores = torch.matmul(q, selected_keys.transpose(2, 3)) * scaling
+        if attention_mask is not None:
+            exact_scores = exact_scores + torch.gather(mask_row, dim=-1, index=top_indices)
+        exact_weights = F.softmax(exact_scores, dim=-1, dtype=torch.float32).to(q.dtype)
+        exact_output = torch.matmul(exact_weights, selected_values)
+
+    if _ACTIVE_SPARQ_MEAN_STATE is not None:
+        value_mean = _ACTIVE_SPARQ_MEAN_STATE.value_mean(layer_idx, value_states)
+    else:
+        value_mean = value_states.float().mean(dim=2, keepdim=True).to(value_states.dtype)
+    alpha = approx_selected_mass.sum(dim=-1, keepdim=True).to(q.dtype)
+    return torch.lerp(value_mean, exact_output, alpha)
+
+
 def _expand_selected_tokens_to_all_heads(original_keep: torch.Tensor) -> torch.Tensor:
     token_keep = original_keep.any(dim=1, keepdim=True)
     return token_keep.expand_as(original_keep).clone()
@@ -1600,9 +1821,9 @@ def _qabs_reuse_fast_attention_forward(
             history_count,
             candidate_union_history.device,
         )
-        if previous_candidate is not None:
+        if previous_candidate is not None and qabs_reuse_uses_previous_candidate(_ACTIVE_MODE):
             candidate_union_history |= previous_candidate
-        if previous_final is not None:
+        if previous_final is not None and qabs_reuse_uses_previous_final(_ACTIVE_MODE):
             candidate_union_history |= previous_final
 
     if _ACTIVE_REUSE_OVERLAP_STATS is not None:
@@ -1694,6 +1915,56 @@ def _limited_eager_attention_forward(
         key_states = key_states.repeat_interleave(repeat_groups, dim=1)
         value_states = value_states.repeat_interleave(repeat_groups, dim=1)
     mode_kind, mode_max_heads = parse_mode_config(_ACTIVE_MODE)
+    if mode_kind == "sparq_fast_attention":
+        if query_states.shape[-2] != 1:
+            raise RuntimeError("SparQ fast mode requires token-by-token eval; set --eval_chunk_size 1.")
+        sparq_params = parse_sparq_params(_ACTIVE_MODE)
+        if sparq_params is None:
+            raise RuntimeError(f"Invalid SparQ fast mode: {_ACTIVE_MODE}")
+        dim_count, candidate_fraction = sparq_params
+        outputs = [
+            _sparq_fast_attention_output_for_query(
+                module,
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                query_index,
+                scaling,
+                dim_count,
+                candidate_fraction,
+            )
+            for query_index in range(query_states.shape[-2])
+        ]
+        return torch.cat(outputs, dim=2).transpose(1, 2).contiguous(), None
+    if mode_kind == "sparq_attention":
+        sparq_params = parse_sparq_params(_ACTIVE_MODE)
+        if sparq_params is None:
+            raise RuntimeError(f"Invalid SparQ mode: {_ACTIVE_MODE}")
+        dim_count, candidate_fraction = sparq_params
+        outputs: list[torch.Tensor] = []
+        final_keeps: list[torch.Tensor] = []
+        for query_index in range(query_states.shape[-2]):
+            output, selected_keep = _sparq_attention_output_for_query(
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                query_index,
+                scaling,
+                dim_count,
+                candidate_fraction,
+                _ACTIVE_PROTECT_SINK_TOKENS,
+                _ACTIVE_PROTECT_RECENT_TOKENS,
+            )
+            outputs.append(output)
+            final_keeps.append(selected_keep)
+        if _ACTIVE_LOAD_STATS is not None and final_keeps:
+            layer_idx = int(getattr(module, "layer_idx", 0))
+            for selected_keep in final_keeps:
+                _ACTIVE_LOAD_STATS.update(layer_idx, torch.ones_like(selected_keep), selected_keep, torch.ones_like(selected_keep))
+        attention_output = torch.stack(outputs, dim=1).contiguous()
+        return attention_output, None
     if (
         _ACTIVE_QABS_FAST_PATH
         and mode_kind == "qabs_reuse_rerank"
@@ -1727,6 +1998,7 @@ def _limited_eager_attention_forward(
         "sign_xnor_knorm",
         "sign_xnor_rerank",
         "recent_window",
+        "qabs_candidate_keep",
         "qabs_partial_rerank",
         "qabs_reuse_rerank",
     }:
@@ -1788,10 +2060,10 @@ def _limited_eager_attention_forward(
                     if valid_count > 0:
                         history_valid[:, :, valid_count - 1] = False
                     _ACTIVE_LOAD_STATS.update(layer_idx, history_valid, history_final, history_valid)
-            elif mode_kind == "qabs_partial_rerank":
+            elif mode_kind in {"qabs_candidate_keep", "qabs_partial_rerank"}:
                 qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
                 if qabs_params is None:
-                    raise RuntimeError(f"Invalid qabs partial-rerank mode: {_ACTIVE_MODE}")
+                    raise RuntimeError(f"Invalid qabs mode: {_ACTIVE_MODE}")
                 dim_count, candidate_fraction = qabs_params
                 partial_candidate = _qabs_partial_candidate_keep_for_query(
                     query_states,
@@ -1801,12 +2073,15 @@ def _limited_eager_attention_forward(
                     dim_count,
                     candidate_fraction,
                 )
-                history_final = _topk_within_candidate_for_query(
-                    row,
-                    finite,
-                    partial_candidate,
-                    _ACTIVE_TOP_FRACTION,
-                )
+                if mode_kind == "qabs_candidate_keep":
+                    history_final = partial_candidate
+                else:
+                    history_final = _topk_within_candidate_for_query(
+                        row,
+                        finite,
+                        partial_candidate,
+                        _ACTIVE_TOP_FRACTION,
+                    )
                 history_final = _apply_full_head_protection(
                     history_final,
                     finite,
@@ -1847,9 +2122,9 @@ def _limited_eager_attention_forward(
                             history_count,
                             candidate_union.device,
                         )
-                        if previous_candidate is not None:
+                        if previous_candidate is not None and qabs_reuse_uses_previous_candidate(_ACTIVE_MODE):
                             candidate_union[0, head, :history_count] |= previous_candidate
-                        if previous_final is not None:
+                        if previous_final is not None and qabs_reuse_uses_previous_final(_ACTIVE_MODE):
                             candidate_union[0, head, :history_count] |= previous_final
                 history_final = _topk_within_candidate_for_query(
                     row,
@@ -2061,12 +2336,13 @@ def attention_mode(
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
+    sparq_mean_state: SparQMeanState | None = None,
     candidate_stats: CandidateStats | None = None,
     reuse_overlap_stats: ReuseOverlapStats | None = None,
     qabs_fast_path: bool = False,
     qabs_cuda_final_kernel: bool = False,
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_SPARQ_MEAN_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -2079,6 +2355,7 @@ def attention_mode(
         _ACTIVE_OBS_MASS_STATE,
         _ACTIVE_OBS_HYBRID_STATE,
         _ACTIVE_REUSE_STATE,
+        _ACTIVE_SPARQ_MEAN_STATE,
         _ACTIVE_CANDIDATE_STATS,
         _ACTIVE_REUSE_OVERLAP_STATS,
         _ACTIVE_QABS_FAST_PATH,
@@ -2095,6 +2372,7 @@ def attention_mode(
     _ACTIVE_OBS_MASS_STATE = obs_mass_state
     _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
     _ACTIVE_REUSE_STATE = reuse_state
+    _ACTIVE_SPARQ_MEAN_STATE = sparq_mean_state
     _ACTIVE_CANDIDATE_STATS = candidate_stats
     _ACTIVE_REUSE_OVERLAP_STATS = reuse_overlap_stats
     _ACTIVE_QABS_FAST_PATH = qabs_fast_path
@@ -2114,6 +2392,7 @@ def attention_mode(
             _ACTIVE_OBS_MASS_STATE,
             _ACTIVE_OBS_HYBRID_STATE,
             _ACTIVE_REUSE_STATE,
+            _ACTIVE_SPARQ_MEAN_STATE,
             _ACTIVE_CANDIDATE_STATS,
             _ACTIVE_REUSE_OVERLAP_STATS,
             _ACTIVE_QABS_FAST_PATH,
@@ -2196,6 +2475,7 @@ def compute_eval_loss(
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
+    sparq_mean_state: SparQMeanState | None = None,
     candidate_stats: CandidateStats | None = None,
     reuse_overlap_stats: ReuseOverlapStats | None = None,
     qabs_fast_path: bool = False,
@@ -2243,6 +2523,7 @@ def compute_eval_loss(
             obs_mass_state,
             obs_hybrid_state,
             reuse_state,
+            sparq_mean_state,
             candidate_stats,
             reuse_overlap_stats,
             qabs_fast_path,
@@ -2469,8 +2750,10 @@ def main() -> None:
         )
         recent_window_tokens = parse_recent_window_tokens(mode) if mode_kind == "recent_window" else None
         qabs_params = (
-            parse_qabs_partial_rerank_params(mode)
-            if mode_kind in {"qabs_partial_rerank", "qabs_reuse_rerank"}
+            parse_sparq_params(mode)
+            if mode_kind in {"sparq_attention", "sparq_fast_attention"}
+            else parse_qabs_partial_rerank_params(mode)
+            if mode_kind in {"qabs_candidate_keep", "qabs_partial_rerank", "qabs_reuse_rerank"}
             else None
         )
         qabs_dim_count = qabs_params[0] if qabs_params else None
@@ -2494,8 +2777,11 @@ def main() -> None:
                 "sign_xnor_knorm",
                 "sign_xnor_rerank",
                 "recent_window",
+                "qabs_candidate_keep",
                 "qabs_partial_rerank",
                 "qabs_reuse_rerank",
+                "sparq_attention",
+                "sparq_fast_attention",
             }
             else None
         )
@@ -2508,6 +2794,7 @@ def main() -> None:
             ReuseOverlapStats(layer_count, head_count) if mode_kind == "qabs_reuse_rerank" and args.qabs_overlap_stats else None
         )
         reuse_state = ReuseCandidateState() if mode_kind == "qabs_reuse_rerank" else None
+        sparq_mean_state = SparQMeanState() if mode_kind == "sparq_fast_attention" else None
         hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
         obs_state = (
             ObservationWindowState(
@@ -2576,6 +2863,7 @@ def main() -> None:
             obs_mass_state,
             obs_hybrid_state,
             reuse_state,
+            sparq_mean_state,
             candidate_stats,
             reuse_overlap_stats,
             args.qabs_fast_path,
@@ -2600,8 +2888,11 @@ def main() -> None:
                         "sign_xnor_knorm",
                         "sign_xnor_rerank",
                         "recent_window",
+                        "qabs_candidate_keep",
                         "qabs_partial_rerank",
                         "qabs_reuse_rerank",
+                        "sparq_attention",
+                        "sparq_fast_attention",
                     }
                     else ""
                 ),
@@ -2642,10 +2933,16 @@ def main() -> None:
                     if mode_kind == "sign_xnor_rerank"
                     else "recent_window"
                     if mode_kind == "recent_window"
+                    else "qabs_candidate_keep"
+                    if mode_kind == "qabs_candidate_keep"
                     else "qabs_partial_rerank"
                     if mode_kind == "qabs_partial_rerank"
                     else "qabs_reuse_rerank"
                     if mode_kind == "qabs_reuse_rerank"
+                    else "sparq_attention"
+                    if mode_kind == "sparq_attention"
+                    else "sparq_fast_attention"
+                    if mode_kind == "sparq_fast_attention"
                     else ""
                 ),
                 "protected_sink_tokens": protect_params[0] if protect_params else args.protect_sink_tokens,
@@ -2653,7 +2950,11 @@ def main() -> None:
                 "protected_recent_tokens": args.protect_recent_tokens,
                 "always_keep_self": args.always_keep_self if mode != "baseline" else "",
                 "qabs_fast_path": args.qabs_fast_path if mode_kind == "qabs_reuse_rerank" else "",
-                "qabs_cuda_final_kernel": args.qabs_cuda_final_kernel if mode_kind == "qabs_reuse_rerank" else "",
+                "qabs_cuda_final_kernel": (
+                    args.qabs_cuda_final_kernel
+                    if mode_kind in {"qabs_reuse_rerank", "sparq_fast_attention"}
+                    else ""
+                ),
                 "reuse_prefill_cache": args.reuse_prefill_cache,
                 "shared_prefill_seconds": shared_prefill_seconds,
             }
@@ -2689,10 +2990,16 @@ def main() -> None:
                     if mode_kind == "sign_xnor_rerank"
                     else "recent_window"
                     if mode_kind == "recent_window"
+                    else "qabs_candidate_keep"
+                    if mode_kind == "qabs_candidate_keep"
                     else "qabs_partial_rerank"
                     if mode_kind == "qabs_partial_rerank"
                     else "qabs_reuse_rerank"
                     if mode_kind == "qabs_reuse_rerank"
+                    else "sparq_attention"
+                    if mode_kind == "sparq_attention"
+                    else "sparq_fast_attention"
+                    if mode_kind == "sparq_fast_attention"
                     else ""
                 )
                 row["max_heads_per_token"] = mode_max_heads
