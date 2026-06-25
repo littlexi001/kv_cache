@@ -459,7 +459,110 @@ puts common and tail through the same high-gain parameter channel. The next
 existence experiment should ask whether oracle common/tail parameter separation
 improves tail learning beyond matched-capacity dense controls.
 
-## Overall claim audit after all six stages
+## Stage 7: two-phase singular-mode dynamics
+
+### What was tested
+
+This stage tests the boss document's two-phase claim in the existing
+low-dimensional tied-embedding attention toy, without loss reweighting and
+without saving checkpoints.
+
+For each condition and seed, the script records scalar diagnostics every fixed
+number of training steps:
+
+- right singular-vector drift:
+  $\sqrt{1-\langle v_1(t),v_1(t-\Delta)\rangle^2}$;
+- left singular-vector drift:
+  $\sqrt{1-\langle u_1(t),u_1(t-\Delta)\rangle^2}$;
+- top singular energy $\sigma_1(t)^2$ and increment
+  $\sigma_1(t)^2-\sigma_1(t-\Delta)^2$;
+- input alignment $\langle v_1, \mathrm{PC1}(x_{\mathrm{in}})\rangle^2$;
+- output alignment $\langle u_1, \mathrm{PC1}(x_{\mathrm{out}})\rangle^2$;
+- gain-weighted effect $\sigma_1^2\langle v_1,\mathrm{PC1}(x_{\mathrm{in}})\rangle^2$.
+
+The pass condition is not that every module must behave identically. The
+expected signature is:
+
+> after enough training, direction drift becomes much smaller than in the early
+> window, while top singular energy still has positive late increments.
+
+Artifacts:
+
+- `outputs/two_phase_singular_dynamics/aggregate.csv`
+- `outputs/two_phase_singular_dynamics/summary.json`
+- `outputs/two_phase_singular_dynamics/two_phase_dynamics.png`
+- `outputs/two_phase_singular_dynamics_long/aggregate.csv`
+- `outputs/two_phase_singular_dynamics_long/summary.json`
+- `outputs/two_phase_singular_dynamics_long/two_phase_dynamics.png`
+- `outputs/two_phase_singular_dynamics_no_o_proj/aggregate.csv`
+- `outputs/two_phase_singular_dynamics_no_o_proj/summary.json`
+- `outputs/two_phase_singular_dynamics_no_o_proj/two_phase_dynamics.png`
+
+### Main result with O projection
+
+At 2000 steps, the shared-K Zipf condition already showed positive late
+singular-gain growth, but not all directions had stabilized. For example, Wq
+passed the two-phase signature, while Bqk did not: Bqk late drift was still
+larger than early drift. This means 2000 steps was not yet a clean phase-2
+measurement for all modules.
+
+At 6000 steps, the shared-K Zipf condition became clear:
+
+| module | early right drift | late right drift | early $\Delta\sigma_1^2$ | late $\Delta\sigma_1^2$ | final top-1 energy |
+|---|---:|---:|---:|---:|---:|
+| Wq | 0.0998 | 0.00221 | 0.00256 | 0.000712 | 0.898 |
+| Wk | 0.0764 | 0.00101 | 0.00255 | 0.000712 | 0.899 |
+| Wv | 0.0363 | 0.000475 | 0.1885 | 0.0187 | 0.502 |
+| Wo | 0.00660 | 0.000445 | 0.1885 | 0.0187 | 0.502 |
+| Bqk | 0.0837 | 0.00101 | 0.000207 | 0.000582 | 0.992 |
+
+This supports the two-phase statement in the trained regime: directions become
+nearly frozen, but singular gains still grow. The Bqk bilinear is especially
+important because it becomes almost rank-1 while retaining positive late gain.
+
+### No-O-projection control
+
+The no-O-projection control is closer to the older Stage 6 setup. It also
+supports the two-phase signature in the shared-K Zipf condition:
+
+| module | early right drift | late right drift | early $\Delta\sigma_1^2$ | late $\Delta\sigma_1^2$ | final top-1 energy |
+|---|---:|---:|---:|---:|---:|
+| Wq | 0.0904 | 0.00704 | 0.0471 | 0.107 | 0.987 |
+| Wk | 0.0882 | 0.00307 | 0.0471 | 0.0757 | 0.986 |
+| Wv | 0.0174 | 0.00355 | 0.140 | 0.0754 | 0.505 |
+| Bqk | 0.0937 | 0.00308 | 0.0483 | 1.267 | 0.9999 |
+
+Here Bqk is the cleanest example of the boss theory's phase-2 effect: its
+direction drift falls by about 30x, but its late singular-energy increment is
+larger than its early increment. In plain language, the QK routing direction has
+already been found, yet cross-entropy training continues to increase its gain.
+
+### What this supports
+
+This stage supports three claims:
+
+1. The quantities in the boss proof are observable in our toy system. The
+   parameter singular vectors can be matched to module input and output
+   activation directions, and the gain-weighted effect can be tracked directly.
+2. The two-phase pattern is visible after training reaches the low-loss regime:
+   singular directions stabilize before singular values stop growing.
+3. The effect is not only an embedding phenomenon. It appears in attention
+   parameters, especially Wq/Wk and the composite Bqk routing bilinear.
+
+### What this does not prove
+
+This is not a point-by-point proof of the continuous ODE in the boss document.
+It does not show that the exact derivative formula holds at every training
+step, and it does not isolate cross-entropy from all other architectural causes.
+It shows that the measured discrete-time training dynamics have the predicted
+qualitative signature.
+
+The 2000-step partial result is also important: if the model has not entered the
+direction-saturated regime, the two-phase signature can be weak or absent for
+some modules. Therefore future tests of C3S or confidence capping must compare
+models at matched training stages, not just at matched wall-clock step.
+
+## Overall claim audit after seven stages
 
 ### Supported in this toy model
 
@@ -486,6 +589,9 @@ improves tail learning beyond matched-capacity dense controls.
     representation direction into parameter space: the QK routing bilinear
     becomes nearly rank-1 with K, aligns with the embedding common direction, and
     is functionally important for K-related and tail examples.
+11. After enough plain CE training, attention parameter directions stabilize
+    while singular gains continue to grow. This supports the two-phase
+    singular-mode story as a qualitative training-dynamics model.
 
 ### Not supported or still open
 
@@ -502,6 +608,9 @@ improves tail learning beyond matched-capacity dense controls.
 6. Stage 6 does not prove that a better parameter-space path exists. It only
    shows that dense plain training couples common and tail through shared
    high-gain parameter channels.
+7. Stage 7 does not fit the boss ODE exactly. It verifies the predicted
+   direction-drift versus gain-growth signature, not the full differential
+   equation.
 
 ### Updated working theory
 
