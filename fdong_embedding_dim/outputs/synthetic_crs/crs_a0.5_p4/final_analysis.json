@@ -1,0 +1,29 @@
+{
+  "crs_layer0_Wq_r_sigma1": 0.8086482882499695,
+  "crs_layer0_Wq_r_effrank": 12.556265830993652,
+  "crs_layer0_Wk_r_sigma1": 0.6336837410926819,
+  "crs_layer0_Wk_r_effrank": 8.119664192199707,
+  "crs_layer0_Wv_r_sigma1": 0.6292694807052612,
+  "crs_layer0_Wv_r_effrank": 7.180019855499268,
+  "crs_layer0_Wo_sigma1": 0.8390095829963684,
+  "crs_layer0_Wo_effrank": 12.954205513000488,
+  "crs_layer0_q_branch_sigma1": 0.4758584797382355,
+  "crs_layer0_q_branch_effrank": 3.4953646659851074,
+  "crs_layer0_k_branch_sigma1": 0.432932585477829,
+  "crs_layer0_k_branch_effrank": 3.2334091663360596,
+  "crs_layer0_v_branch_sigma1": 0.4795718491077423,
+  "crs_layer0_v_branch_effrank": 2.016533851623535,
+  "crs_layer0_mlp_branch_sigma1": 0.12224435061216354,
+  "crs_layer0_mlp_branch_effrank": 3.028684139251709,
+  "crs_E_sigma1": 10.570462226867676,
+  "crs_E_top5ratio": [
+    0.0365,
+    0.0359,
+    0.0354,
+    0.0351,
+    0.0344
+  ],
+  "final_K_loss": 0.0,
+  "final_R_loss": 0.0,
+  "final_loss": 0.0
+}
