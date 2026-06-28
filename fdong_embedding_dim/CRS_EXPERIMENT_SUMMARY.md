@@ -18,8 +18,6 @@
 
 3. **正反馈循环**——W 的主方向变大后，经过 W·h，输出中该方向的 scale 进一步增大，梯度中外积的贡献也更大，形成正反馈。最终参数矩阵的 σ₁ 持续增长，挤压了小奇异方向的学习空间。
 
-4. **验证了 Boss 的两阶段理论**：在合成实验中，方向先对齐（阶段 1），奇异值再快速增长（阶段 2）。且在 tied embedding 下，E 和 Q 的 top singular direction 通过 `E.weight.T` 共享梯度通道，使得 embedding 的 common direction 被额外放大。
-
 ### 1.3 核心假设
 
 如果我们能**把 common direction 从 hidden state 里拆出来**，让它单独进一个低容量分支（不参与主参数矩阵的梯度竞争），那么：
@@ -30,37 +28,75 @@
 
 ---
 
-## 二、方法设计：CRS 架构与策略矩阵
+## 二、方法设计：迭代方向拆分与冻结
 
-### 2.1 核心架构
+### 2.1 一般框架
 
-每个 TransformerBlock 的 **attention 和 MLP 均做拆分**：
+核心思想：**参数矩阵在训练中会逐渐长出主导奇异方向（对应高频 token 的方向）。每当一个方向收敛，就将其连同对应的 hidden state 分量一并从参数矩阵和输入表征中拆出并冻结。此后梯度不再往该方向推，残差矩阵在正交于已冻方向的空间里继续学习新的方向。循环往复，逐步将整个线性变换分解为「一组 frozen rank-1 分量 + 最终残差矩阵」。**
+
+形式化地，对于一个参数矩阵 `W ∈ ℝ^(d_out × d_in)`，在第 k 轮提取后：
 
 ```
-h_common[t] = cummean(h[:, :t+1], dim=1).detach()    ← 序列累积均值，切断梯度
+frozen 分支（已冻住，无梯度）：
+  V = [v₁, ..., v_k]^T       ← k 个右奇异方向，每个 (d_in,)
+  U = [σ₁·u₁, ..., σ_k·u_k]  ← 带权重的左奇异方向，(d_out × k)
 
-common_out   = W_up(W_down(h_common))                 ← rank-p bottleneck (W_down: d×p, W_up: p×d_out)
-residual_out = FullMatrix(h)                         ← 标准 attention / SwiGLU MLP
-
-output = α × common_out + β × residual_out
+forward(h):
+  s = V · h                   ← k 个投影标量
+  h_⊥ = h - V^T · s          ← 移除所有 frozen 方向上的投影
+  o_frozen = U · s           ← frozen 分支输出
+  o_residual = W^(k) · h_⊥   ← 残差分支输出（trainable）
+  return o_frozen + o_residual
 ```
 
-**关键设计点**：
-- `h_common[t] = 位置 t 的前 t 个 hidden state 均值`，而非全局 embedding 均值——随序列实时演化，捕获当前上下文的「典型方向」
-- `.detach()` 切断 common 分支的梯度回传，防止 common 分支反向影响表征学习
-- rank-p bottleneck 限制 common 分支的容量（p=4~8），防止它「学会一切」
-- α/β 分别控制两个分支的贡献比例
+关键设计：**h_⊥ 显式减去了 frozen v 方向上的投影**。因为梯度 `∂L/∂W^(k) = (∂L/∂o) ⊗ h_⊥` 中 h_⊥ 不包含 v 方向的分量，外积不会往 frozen 方向推，已被冻的方向不会长回来。
 
-### 2.2 策略空间
+### 2.2 两个具体实例化
+
+**方案 A：CRS（Common-Residual Split）—— 一轮、cummean 驱动**
+
+这是上述框架中最简化的特例：只做一轮，且 common direction 不是用 SVD 找的，而是直接用 hidden state 的**序列累积均值**（cummean）：
+
+```
+h_common[t] = cummean(h[:, :t+1], dim=1).detach()    ← 假设均值方向就是主导方向
+branch_out   = W_up(W_down(h_common))                 ← rank-p bottleneck，(p=4~8)
+residual_out = FullMatrix(h)                          ← 标准矩阵
+output       = α × branch_out + β × residual_out
+```
+
+- 仅提取一个方向（或一个 low-rank 子空间），不做多轮迭代
+- 用 cummean 替代 SVD 确定方向——计算高效，但不如 SVD 精确
+- Common 分支用 rank-p bottleneck 而非 rank-1，给一定表达空间
+
+**方案 B：迭代 SVD 拆分 —— 多轮、SVD+稳定性驱动**
+
+直接使用 SVD 找当前的 top 奇异方向，稳定性判据决定是否提取：
+
+```
+每 N 步，对每个矩阵：
+  v_now = SVD(W).Vh[0]
+  if cos(v_now, v_prev) ≥ 0.99:        ← 方向已经稳定
+    冻结 rank-1 分量 (σ₁, u₁, v₁)
+    W = W - σ₁·u₁⊗v₁^T                  ← 从参数中减去
+    forward 时 h_⊥ 减去 h·v₁ 投影        ← 从表征中移除
+  v_prev = v_now
+```
+
+- 多轮循环，可提取最多 min(d_in, d_out) 个方向
+- 每个方向都是精确低秩（rank-1）
+- 稳定性阈值控制提取节奏（cos ≥ 0.99 → 保守；cos ≥ 0.95 → 激进）
+
+### 2.3 全策略空间
 
 我们探索了一个四维策略空间：
 
 | 维度 | 取值 | 含义 |
 |---|---|---|
-| **α** | 0.3, 0.5, 0.8, 1.0 | Common 分支的贡献权重。α=0 → 退化为 baseline |
-| **β** | 1.0, 1.5, 2.0, 2.5, 3.0 | Residual 分支的放大系数。β>1 → 给残差分支额外 boost |
-| **Freeze** | None, @50, @200 | 在指定步数冻结 common 分支参数，只训残差 |
-| **Model scale** | d=128/64/32 (261K→81K→28K) | 模型容量递减，与任务难度的匹配程度不同 |
+| **方向定义** | cummean (CRS) / SVD (iterative) | 如何确定「主导方向」 |
+| **α** | 0.3, 0.5, 0.8, 1.0 | Common 分支贡献权重（仅 CRS） |
+| **β** | 1.0, 1.5, 2.0, 2.5, 3.0 | Residual 分支放大系数（仅 CRS） |
+| **提取节奏** | 固定步数 @50/@200 / 稳定性阈值 SVD / 单轮 CRS | 何时冻结方向 |
+| **Model scale** | d=128/64/32 (261K→81K→28K) | 模型容量与任务难度的匹配 |
 
 实验数据：500 token 词表（10 K + 490 R），200-5000 个固定 pattern × length 10。
 
@@ -183,6 +219,27 @@ CRS 在早期始终慢 5-17%，到末期才追平或接近。在更大模型（d
 
 **CRS 和 baseline 在充分训练后达到相同的 loss 水平**。增加数据规模只是拉长了训练时间，没有改变这个定性结论。
 
+### 4.5 迭代 SVD 拆分（方案 B）
+
+这是 2.2 节的方案 B——SVD 驱动的多轮方向拆分，与 CRS 共享同一框架但使用不同的方向定义和提取节奏。属于策略空间中 **方向定义=SVD × 提取节奏=稳定性阈值** 的组合。
+
+**实验配置**：d=32, 200 patterns, cos_threshold ∈ {0.95, 0.99}, extract_every ∈ {25, 50}。
+
+**结果**（step 2000）：
+
+| 方法 | test_R_loss | total frozen | Wq 残差 σ₁ |
+|---|---|---|---|
+| Baseline | **0.567** | 0 | 2.645 |
+| SVD e=50 cos=0.99 | 0.722 | 125 | 1.370 |
+| SVD e=25 cos=0.99 | 1.024 | 245 | 0.212 |
+| SVD e=25 cos=0.95 | 1.129 | 267 | 0.187 |
+
+**结论**：
+- **全部不如 baseline**。最好的 SVD 变体 test_R 也比 baseline 差 27%。
+- **拆得越多越差**。frozen 数 125→245→267 对应 test_R 0.72→1.02→1.13，单调退化。
+- **和 CRS freeze 实验本质相同的问题**：方向一旦冻住就无法和其余方向 co-adapt。迭代 SVD 只是把「冻一个分支」换成了「冻几十个 rank-1 分支」，破坏力更大。
+- 残差 σ₁ 被压到极低（0.19），但 prediction 更差——再次证明**谱均衡不自动等于预测能力**。
+
 ---
 
 ## 五、总评与解释
@@ -218,7 +275,51 @@ CRS 可能在以下场景发挥作用：
 
 ---
 
-## 六、文件索引
+## 六、与 Muon 优化器的对比讨论
+
+### Muon 是什么
+
+Muon（MomentUm Orthogonalized by Newton-Schulz）是 2024 年提出的优化器，核心操作是：在梯度更新前，对 **2D 参数矩阵的动量更新量** 做 Newton-Schulz 迭代，将其奇异值「打平」到全等。等价于：
+
+```
+G = momentum_update  ← 正常的动量下降方向
+U, S, V^T = SVD(G)
+G_flat = U @ V^T      ← 所有奇异值设为 1，只保留方向信息
+W = W - lr * G_flat    ← 更新时所有方向等幅
+```
+
+**Muon 的效果**：已被工业界大规模验证（Kimi.ai、CIFAR-10 速度记录、GPT-2 训练加速 1.35×），其谱均衡操作**确实**加速了收敛，且训练出的模型表征空间更平缓。
+
+### 为什么 Muon 有效，但我们的方法无效？
+
+二者的本质区别在于**操作对象**：
+
+| 维度 | 我们的方法（CRS / 迭代 SVD） | Muon 优化器 |
+|---|---|---|
+| **操作对象** | 参数矩阵 W 本身 | 梯度更新量 ΔW |
+| **操作时机** | 训练中途（事后拆分） | 每一步更新时（事前均衡） |
+| **谱均衡方式** | 物理分离大奇异方向 | 压缩梯度的谱 → 所有方向等幅更新 |
+| **冻结** | 是（拆出的方向冻住） | 否（每步重新计算） |
+| **是否有 co-adapt 破坏** | **有**（冻住的方向无法适应后续变化） | **无**（梯度打平不改变 W 的结构） |
+
+**核心差异在第三行**：Muon 打平的是**梯度的谱**而不是**权重的谱**。
+
+- Muon 说：「每一步更新时，不要让梯度的大奇异方向主导更新幅度。每个方向获得相同的更新量，由数据本身决定哪些方向应该在权重中增长。」
+- 我们说：「训练一段时间后，把权重里已经长大的方向拆走，不再让它参与后续学习。」
+
+**我们的方法把婴儿和洗澡水一起倒了**：大奇异方向之所以长大，是因为数据确实需要有这个方向。拆走它等于剥夺了模型的表达能力。Muon 的智慧在于——它不阻止任何方向长大，它只是确保**所有方向的更新机会均等**。长大的方向是数据选择的结果，不是梯度偏好的结果。
+
+**一个直观类比**：
+- Muon 像**均等的奖学金**：每个学生拿一样多的资助，让天赋决定谁脱颖而出
+- 我们的方法像**毕业制度**：学得最好的学生被提前毕业送走，剩下的学生里继续选最好的送走——最后教室里没人了
+
+### 启示
+
+我们的核心直觉「谱均衡有利于长尾学习」可能部分正确，但**实现方式错了**。不应在参数空间做结构拆分，而应在优化器层面做梯度谱均衡。一个直接的实验方向是：将 Muon 用于只有长尾 token 的子网络，或对 common 和 rare token 对应的梯度分量使用不同的谱均衡强度。
+
+---
+
+## 七、文件索引
 
 | 路径 | 说明 |
 |---|---|
@@ -227,7 +328,9 @@ CRS 可能在以下场景发挥作用：
 | `workbuddy_scripts/synthetic_crs_experiment.py` | 合成数据实验（支持 α/β/p/freeze 全配置） |
 | `workbuddy_scripts/analyze_step3000.py` | 109M 模型 step 3000 分析 |
 | `workbuddy_scripts/analyze_synthetic_checkpoints.py` | 合成实验 checkpoint SVD 演化分析 |
+| `workbuddy_scripts/iterative_svd_experiment.py` | 迭代 SVD 拆分实验 |
 | `workbuddy_scripts/accuracy_analysis.py` | K/R 准确率分项评估 |
-| `outputs/synthetic_crs/*/metrics.jsonl` | 各配置的训练曲线 |
+| `outputs/iterative_svd/*/metrics.jsonl` | 迭代 SVD 各配置的训练曲线 |
+| `outputs/synthetic_crs/*/metrics.jsonl` | CRS 各配置的训练曲线 |
 | `outputs/synthetic_crs/*/final_analysis.json` | 最终 SVD 分析结果 |
 | `outputs/small_lm_crs/*/metrics.jsonl` | 真实数据训练曲线 |
