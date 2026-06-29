@@ -349,6 +349,50 @@ Overall coverage：
 
 这些负结果说明：不能只靠 uniform budget、固定 block expansion 或手工选择 full layer 来修复 retrieval。更合理的方向是 evidence-aware calibration 或 oracle span retention，先确认保留 target key/value span 是否能恢复 compact/json/topic_table 的准确率。
 
+### 9.5 Oracle span-retention 诊断
+
+在 9.3 的 evidence span coverage 之后，进一步做了 oracle span-retention 诊断。该实验不是可部署方法，而是为了回答一个问题：
+
+> 如果最终 retained KV 中强制保留目标 key/value evidence span，下游 retrieval accuracy 是否能恢复？
+
+实验设置：
+
+- 模型：`/home/fdong/hrj/prove/Qwen3-0.6B`
+- 输出目录：`/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/oracle_span_retention_qabs5_shortctx_v1`
+- 任务格式：`compact_kv`、`json_kv`、`topic_table`、`needle_sentence`
+- 每种格式 16 个 task，每个 task 16 条 records
+- 基础 sparse mode：`qabs8cand5reuse`
+- `top_fraction=0.05`
+- `protect_sink_tokens=10`
+- `protect_recent_tokens=10`
+
+对比模式：
+
+- `baseline`：dense attention
+- `qabs8cand5reuse`：普通 QABS
+- `oracle_key_label`：普通 QABS + 在 final mask 中强制保留 target key span 和 target label span
+- `oracle_record`：普通 QABS + 在 final mask 中强制保留完整 target record 行
+
+结果：
+
+| Variant | Baseline | qabs5 | Oracle key+label | Oracle record |
+|---|---:|---:|---:|---:|
+| compact_kv | 15/16 = 93.8% | 11/16 = 68.8% | 14/16 = 87.5% | 14/16 = 87.5% |
+| json_kv | 9/16 = 56.3% | 10/16 = 62.5% | 11/16 = 68.8% | 10/16 = 62.5% |
+| topic_table | 12/16 = 75.0% | 8/16 = 50.0% | 12/16 = 75.0% | 11/16 = 68.8% |
+| needle_sentence | 9/16 = 56.3% | 7/16 = 43.8% | 12/16 = 75.0% | 11/16 = 68.8% |
+
+关键观察：
+
+- `compact_kv` 中，普通 qabs 相比 baseline 掉 4 个 task；强制保留 key+label 后恢复 3 个。
+- `topic_table` 中，普通 qabs 掉 4 个 task；强制保留 key+label 后完全恢复到 baseline。
+- `needle_sentence` 中，普通 qabs 掉 2 个 task；强制保留 key+label 后在该小样本上超过 baseline。
+- `oracle_key_label` 通常不弱于 `oracle_record`，说明需要 rescue 的主要是紧凑 key/value binding span，而不一定是整条 record。
+
+该结果基本确认：exact retrieval 掉点的主要原因不是模型完全不会做任务，也不是单纯 prompt artifact，而是 QABS final retained set 没有稳定保留目标 evidence span。
+
+因此更合理的下一步不是继续 uniform 提高 `top_fraction`，而是做 evidence-gated span rescue：默认仍使用 QABS，但在检测到 lookup-like query 时，用很小的额外预算保留候选 key/value span。
+
 ## 10. 当前结论
 
 ### 10.1 质量结论
@@ -360,6 +404,7 @@ Overall coverage：
 - 10k/20k/40k War 长上下文 PPL 均略优于 baseline。
 - 80k 仍有轻微 PPL 退化，但退化幅度可控。
 - 但同类 QABS 方法在 exact key-value retrieval 下游任务上会明显掉点，尤其 `compact_kv` 和 `json_kv`。因此不能只凭 PPL 判断方法已经可用。
+- evidence span coverage 和 oracle span-retention 已经验证：retrieval 掉点很大程度来自 final retained KV 没有保住目标 key/value span；强制保留 key+label 可以显著恢复 `compact_kv`、`topic_table`、`needle_sentence` 的准确率。
 
 ### 10.2 时间结论
 
@@ -403,10 +448,11 @@ Overall coverage：
 2. 测 `qabs8cand2reusefinal` 和 `qabs8cand4reusefinal` 的长上下文，确认 `cand3` 是否是最佳质量/时间折中。
 3. 打开 `qabs_profile=true` 对 40k 或 80k 单点做 stage profile，定量确认 topk/gather/union/final attention 各自占比。
 4. 对 `qabs8cand3reusefinal` 补跑 downstream task suite，确认它相对 `qabs8cand5reuse` 是否改善 exact KV retrieval。
-5. 跑 oracle span-retention：在 qabs candidate/final 之外强制保留 target key+label 或 full record span，验证 retrieval loss 是否可由 evidence rescue 修复。
+5. 基于 oracle span-retention 的正结果，做非 oracle 的 evidence-gated span rescue：在线检测 lookup-like query，从 key-like token、分隔符、JSON/table 字段或高 saliency token 中生成候选 key/value span，并只用很小预算强制保留少量 span。
 
 工程建议：
 
 1. 优先优化 `reusefinal` 路线，而不是 `reuse` 路线，因为 `reusefinal` 的候选集合更小，更适合 fused kernel。
 2. 优先做 compact candidate index pipeline，而不是继续调小通道数。单/双/三通道实验已经显示，降低通道数会明显伤质量，但不一定带来 wall-clock 收益。
 3. 如果无法短期写 fused kernel，可以考虑先做 layer-wise hybrid：只在 full attention 成本最高、且 qabs 质量稳定的层启用 qabs8cand3reusefinal，其余层保持 baseline。
+4. 对 exact retrieval 场景，优先实现 evidence-gated span rescue，而不是继续盲目加大 uniform token budget；oracle 结果显示 key+label span 是更有效的 rescue 单元。
