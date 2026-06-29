@@ -1,0 +1,9 @@
+case_id,label,output,blocks,avg_delta_ppl,selected_ratio,serial_total_ratio,batched_proxy_ratio,gate_s,cascade_extended,cascade_early,avg_extended_candidates,combos
+hardtopic_eval64_raw_s64,Hard-topic eval64 raw s64,server_pcic_hardtopic_b4_horizongate_s64_eval64_seed64_g0_r0_eager,4,-0.07694001520256055,1.0419574958866524,8.311310415769174,,62.009505963884294,0,0,0.0,"0,7;0,6;0,13;2,0,7,12"
+hardtopic_eval64_top2,Hard-topic eval64 top2 cascade,server_pcic_hardtopic_b4_horizongate_top2_timingv2_eval64_seed64_eager,4,-0.07694001520256055,1.0429420755293144,4.028195737820437,1.053648856042779,25.39245048072189,3,1,3.6666666666666665,"0,7;0,6;0,13;2,0,7,12"
+hardtopic_eval128_raw_s64,Hard-topic eval128 raw s64,server_pcic_hardtopic_b4_horizongate_s64_eval128_seed64_g0_r0_eager,4,0.004371199895214728,1.0432197718963747,4.689488191893116,,62.20387962576933,0,0,0.0,"0,7;2,0,7,12;0,6;0,13"
+hardtopic_eval128_top2,Hard-topic eval128 top2 cascade,server_pcic_hardtopic_b4_horizongate_top2_timingv2_eval128_seed64_eager,4,0.004371199895214728,1.0365886574241427,2.647836951537057,1.0386165063812511,27.084729248890653,1,3,3.0,"0,7;2,0,7,12;0,6;0,13"
+war_raw_s64,War raw s64,server_pcic_war_b2_horizongate_s64_seed64_g0_r0_eager,2,-2.1353107652764862,1.039270108168256,4.157276664067204,,13.119784969836473,0,0,0.0,"0,7;0,7"
+war_top2,War top2 cascade,server_pcic_war_b2_horizongate_top2_timingv2_seed64_eager,2,-2.1353107652764862,1.0378261047715334,2.5955633509292877,1.0389572563112544,6.5436484010424465,0,2,0.0,"0,7;0,7"
+monte_raw_s64,Monte raw s64,server_pcic_monte_b2_horizongate_s64_seed64_g0_r0_eager,2,-0.21921516148621478,1.0372446803082278,4.176951971799211,,13.098039133939892,0,0,0.0,"2,7;2,0"
+monte_top2,Monte top2 cascade,server_pcic_monte_b2_horizongate_top2_timingv2_seed64_eager,2,-0.21921516148621478,1.036708319186785,2.5957511980460954,1.0535084656479377,6.573191084899008,2,0,2.5,"2,7;2,0"

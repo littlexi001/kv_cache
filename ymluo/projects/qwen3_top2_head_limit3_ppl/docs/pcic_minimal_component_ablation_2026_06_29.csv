@@ -1,0 +1,17 @@
+case_id,task,ablation,path,status,blocks,avg_delta_ppl,method_ratio,gate_s,extended,early,combos
+hard_noanchor,hard,no_validation_anchor_top2,docs/pcic_corrected_gate_core_results_2026_06_29.csv:hard_top2,historical,4,0.004371,2.972,32.530,1,3,"0,7/2,0,7,12/0,6/0,13"
+hard_memoryonly,hard,memory_only_no_rescue,outputs/server_pcic_ablate_hard_memoryonly_eval128_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+hard_condanchor,hard,main_cond_rescue,docs/pcic_corrected_gate_core_results_2026_06_29.csv:hard_cond,historical,4,-0.049633,6.227,89.624,4,0,"0,6/2,0,7,12/0,6/0,6"
+hard_nohistory,hard,no_history_memory,outputs/server_pcic_ablate_hard_nohistory_eval128_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+hard_nopairwise,hard,no_pairwise_probe,outputs/server_pcic_ablate_hard_nopairwise_eval128_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+hard_minloss,hard,min_loss_no_pairwise_proxy,outputs/server_pcic_ablate_hard_minloss_eval128_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+monte_noanchor,monte,no_validation_anchor_top2,docs/pcic_corrected_gate_core_results_2026_06_29.csv:monte_top2,historical,2,-0.219215,3.388,9.913,2,0,"2,7/2,0"
+monte_condanchor,monte,main_cond_rescue,docs/pcic_corrected_gate_core_results_2026_06_29.csv:monte_cond,historical,2,-0.219215,3.392,10.011,2,0,"2,7/2,0"
+monte_memoryonly,monte,memory_only_no_rescue,outputs/server_pcic_ablate_monte_memoryonly_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+monte_nohistory,monte,no_history_memory,outputs/server_pcic_ablate_monte_nohistory_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+monte_nopairwise,monte,no_pairwise_probe,outputs/server_pcic_ablate_monte_nopairwise_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+monte_minloss,monte,min_loss_no_pairwise_proxy,outputs/server_pcic_ablate_monte_minloss_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+rulervar_noanchor,ruler_variable,no_validation_anchor_top2,docs/pcic_corrected_gate_core_results_2026_06_29.csv:ruler_variable_top2,historical,3,0.017397,3.699,24.768,2,1,"2,0/2,0,7,12/2,0"
+rulervar_memoryonly,ruler_variable,memory_only_no_rescue,outputs/server_pcic_ablate_rulervar_memoryonly_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,
+rulervar_condanchor,ruler_variable,main_cond_rescue,docs/pcic_corrected_gate_core_results_2026_06_29.csv:ruler_variable_cond,historical,3,-0.000564,5.388,41.103,3,0,"0,13/2,0/2,0"
+rulervar_nopairwise,ruler_variable,no_pairwise_probe,outputs/server_pcic_ablate_rulervar_nopairwise_seed64_eager/pcic_r_blockwise_results.csv,missing,0,,,,,,

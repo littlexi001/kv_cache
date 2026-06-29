@@ -1,0 +1,10 @@
+| combo | avg_delta_ppl | avg_delta_loss | worst_delta_ppl | output |
+| --- | ---: | ---: | ---: | --- |
+| `2,0` | 0.000036 | 0.000036 | 0.000117 | `server_pcic_rulerval_static_b2_eval96_2_0_eager` |
+| `0,13` | 0.000153 | 0.000153 | 0.000207 | `server_pcic_rulerval_static_b2_eval96_0_13_eager` |
+| `0,6` | 0.000945 | 0.000943 | 0.001403 | `server_pcic_rulerval_static_b2_eval96_0_6_eager` |
+| `2,0,7,12` | 0.003645 | 0.003632 | 0.006304 | `server_pcic_rulerval_static_b2_eval96_2_0_7_12_eager` |
+| `7,6` | 0.004309 | 0.004295 | 0.005124 | `server_pcic_rulerval_static_b2_eval96_7_6_eager` |
+| `0,7` | 0.005067 | 0.005038 | 0.010153 | `server_pcic_rulerval_static_b2_eval96_0_7_eager` |
+| `2,7` | 0.005229 | 0.005198 | 0.010350 | `server_pcic_rulerval_static_b2_eval96_2_7_eager` |
+| `7,13` | 0.008997 | 0.008910 | 0.017997 | `server_pcic_rulerval_static_b2_eval96_7_13_eager` |

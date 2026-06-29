@@ -5,6 +5,7 @@ import copy
 import csv
 import json
 import math
+import os
 import re
 import time
 from collections import Counter, defaultdict
@@ -15,6 +16,31 @@ from typing import Any
 
 import torch
 import torch.nn.functional as F
+
+
+def _install_torchvision_fake_registration_guard() -> None:
+    register_fake = getattr(torch.library, "register_fake", None)
+    if register_fake is None or getattr(register_fake, "_qabs_guarded", False):
+        return
+
+    def guarded_register_fake(op_name: str, *args: Any, **kwargs: Any):
+        decorator = register_fake(op_name, *args, **kwargs)
+
+        def guarded_decorator(fn: Any) -> Any:
+            try:
+                return decorator(fn)
+            except RuntimeError as exc:
+                if "operator torchvision::" in str(exc) and "does not exist" in str(exc):
+                    return fn
+                raise
+
+        return guarded_decorator
+
+    guarded_register_fake._qabs_guarded = True
+    torch.library.register_fake = guarded_register_fake
+
+
+_install_torchvision_fake_registration_guard()
 
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -43,6 +69,13 @@ _ACTIVE_KSIGN_STATE: "KSignIndexState | None" = None
 _ACTIVE_KDOM_STATE: "KDomIndexState | None" = None
 _ACTIVE_BREP_STATE: "BlockRepState | None" = None
 _ACTIVE_SPARQ_MEAN_STATE: "SparQMeanState | None" = None
+_FULL_HEAD_MAP_CACHE: dict[str, Any] | None = None
+_FULL_LAYER_MAP_CACHE: dict[str, Any] | None = None
+_LAYER_BUDGET_MAP_CACHE: dict[str, Any] | None = None
+_FULL_LAYER_SELECTION_CACHE: dict[tuple[str, int], set[int]] = {}
+_ACTIVE_FULL_HEAD_MAP_PATH: str = ""
+_ACTIVE_FULL_LAYER_MAP_PATH: str = ""
+_ACTIVE_LAYER_BUDGET_MAP_PATH: str = ""
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
 _ACTIVE_QABS_FAST_PATH: bool = False
@@ -57,6 +90,8 @@ _QABS_CUDA_CANDIDATE_WARNED: bool = False
 _QABS_CUDA_FULL_SCORE_WARNED: bool = False
 _QABS_CUDA_BREP_WARNED: bool = False
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
+_LAYER_BUDGET_QABS_REUSE_STATE: dict[int, dict[str, Any]] = {}
+_BATCH_ROW_INDEX_TENSOR_CACHE: dict[tuple[str, tuple[int, ...]], torch.Tensor] = {}
 
 
 def str2bool(value: str | bool) -> bool:
@@ -210,6 +245,25 @@ def parse_args() -> argparse.Namespace:
         default=True,
         help="If true, tokens not seen in the last observation window keep all original top2-selected heads.",
     )
+    parser.add_argument(
+        "--full_head_map_path",
+        default="",
+        help="Optional JSON map for fullh modes. Overrides FULL_HEAD_MAP_PATH when set.",
+    )
+    parser.add_argument(
+        "--full_layer_map_path",
+        default="",
+        help="Optional JSON map for fulll modes. Overrides FULL_LAYER_MAP_PATH/FULL_HEAD_MAP_PATH when set.",
+    )
+    parser.add_argument(
+        "--layer_budget_map_path",
+        default="",
+        help=(
+            "Optional JSON map for layerbudgetattn. Format: "
+            "{'default': {'type':'full'}, 'layers': {'0': {'type':'landmark','recent':1024,'stride':64}}}. "
+            "Layer budget types: full, recent, landmark, head_recent, synthetic."
+        ),
+    )
     parser.add_argument("--make_plots", type=str2bool, default=True)
     parser.add_argument("--plot_dpi", type=int, default=180)
     return parser.parse_args()
@@ -283,9 +337,23 @@ def parse_modes(spec: str) -> list[str]:
             "sign_xnor_knorm",
             "sign_xnor_rerank",
             "recent_window",
+            "landmark_recent_attention",
+            "full_head_recent_attention",
+            "full_layer_recent_attention",
+            "full_layer_landmark_attention",
+            "layer_budget_attention",
+            "adaptive_full_layer_recent_attention",
             "qabs_candidate_keep",
             "qabs_partial_rerank",
             "qabs_reuse_rerank",
+            "qabs_candidate_attention",
+            "qabs_periodic_candidate_attention",
+            "qabs_candidate_top2_attention",
+            "qabs_candidate_top2_hlimit_attention",
+            "qabs_candidate_top2_global_attention",
+            "qabs_shared_candidate_attention",
+            "qabs_shared_candidate_top2_attention",
+            "qabs_shared_reuse_attention",
             "lagged_reuse_rerank",
             "knorm_reservoir",
             "block_route",
@@ -297,6 +365,7 @@ def parse_modes(spec: str) -> list[str]:
             "block_group_rep_rerank",
             "block_random_rep_rerank",
             "qabs_block_oracle",
+            "synthetic_kv_attention",
             "sparq_attention",
             "sparq_fast_attention",
         }
@@ -306,7 +375,7 @@ def parse_modes(spec: str) -> list[str]:
             "Invalid modes: "
             f"{invalid}. Valid examples: baseline, top2, top2limit3, top2limit3score, "
             "top2union, obstop2fullnonmasst80kn2mn1, top2limit3gap1p0, "
-            "top2limit3protects16r1p0."
+            "top2limit3protects16r1p0, synthkv16meanattn, synthkv16massattn."
         )
     if not modes:
         raise ValueError("--modes cannot be empty.")
@@ -338,12 +407,42 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "sign_xnor_rerank", None
     if re.fullmatch(r"recent\d+", mode):
         return "recent_window", None
+    if re.fullmatch(r"landmarkr\d+s\d+attn", mode):
+        return "landmark_recent_attention", None
+    if re.fullmatch(r"fullh\d+recent\d+attn", mode):
+        return "full_head_recent_attention", None
+    if re.fullmatch(r"fulll\d+recent\d+attn", mode):
+        return "full_layer_recent_attention", None
+    if re.fullmatch(r"fulll\d+landmarkr\d+s\d+attn", mode):
+        return "full_layer_landmark_attention", None
+    if mode == "layerbudgetattn":
+        return "layer_budget_attention", None
+    if re.fullmatch(r"fullladapt\d+to\d+m\d+(?:p\d+)?recent\d+attn", mode):
+        return "adaptive_full_layer_recent_attention", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?keep", mode):
         return "qabs_candidate_keep", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?rerank", mode):
         return "qabs_partial_rerank", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse(?:2set|final)?", mode):
         return "qabs_reuse_rerank", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?top2attn", mode):
+        return "qabs_candidate_top2_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?top2hlim\d+attn", mode):
+        return "qabs_candidate_top2_hlimit_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?top2globalattn", mode):
+        return "qabs_candidate_top2_global_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?sharedr\d+attn", mode):
+        return "qabs_shared_reuse_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?sharedtop2attn", mode):
+        return "qabs_shared_candidate_top2_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?sharedattn", mode):
+        return "qabs_shared_candidate_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?r\d+attn", mode):
+        return "qabs_periodic_candidate_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?appendattn", mode):
+        return "qabs_candidate_attention", None
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?attn", mode):
+        return "qabs_candidate_attention", None
     if re.fullmatch(r"lagtop2qabs\d+cand\d+(?:p\d+)?", mode) or re.fullmatch(r"lagrefresh\d+qabs\d+cand\d+(?:p\d+)?", mode) or re.fullmatch(r"qdrift(?:maj|head|share|cos|coshead)?qabs\d+cand\d+(?:p\d+)?", mode) or re.fullmatch(r"pconf\d+(?:p\d+)?qabs\d+cand\d+(?:p\d+)?", mode):
         return "lagged_reuse_rerank", None
     if mode == "knormtop2":
@@ -366,6 +465,8 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "block_random_rep_rerank", None
     if re.fullmatch(r"qboracle\d+q\d+s\d+(?:p\d+)?cand\d+(?:p\d+)?", mode):
         return "qabs_block_oracle", None
+    if re.fullmatch(r"synthkv\d+(?:mean|mass)attn", mode):
+        return "synthetic_kv_attention", None
     if re.fullmatch(r"sparq\d+cand\d+(?:p\d+)?", mode):
         return "sparq_attention", None
     if re.fullmatch(r"sparqfast(?:dk)?\d+cand\d+(?:p\d+)?", mode):
@@ -417,13 +518,232 @@ def parse_recent_window_tokens(mode: str) -> int | None:
     return int(match.group(1))
 
 
+def parse_landmark_recent_params(mode: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"landmarkr(\d+)s(\d+)attn", mode)
+    if not match:
+        return None
+    recent_tokens = max(0, int(match.group(1)))
+    stride = max(1, int(match.group(2)))
+    return recent_tokens, stride
+
+
+def parse_full_head_recent_params(mode: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"fullh(\d+)recent(\d+)attn", mode)
+    if not match:
+        return None
+    full_heads = max(0, int(match.group(1)))
+    recent_tokens = max(0, int(match.group(2)))
+    return full_heads, recent_tokens
+
+
+def parse_full_layer_recent_params(mode: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"fulll(\d+)recent(\d+)attn", mode)
+    if not match:
+        return None
+    full_layers = max(0, int(match.group(1)))
+    recent_tokens = max(0, int(match.group(2)))
+    return full_layers, recent_tokens
+
+
+def parse_full_layer_landmark_params(mode: str) -> tuple[int, int, int] | None:
+    match = re.fullmatch(r"fulll(\d+)landmarkr(\d+)s(\d+)attn", mode)
+    if not match:
+        return None
+    full_layers = max(0, int(match.group(1)))
+    recent_tokens = max(0, int(match.group(2)))
+    landmark_stride = max(1, int(match.group(3)))
+    return full_layers, recent_tokens, landmark_stride
+
+
+def parse_adaptive_full_layer_recent_params(mode: str) -> tuple[int, int, float, int] | None:
+    match = re.fullmatch(r"fullladapt(\d+)to(\d+)m(\d+(?:p\d+)?)recent(\d+)attn", mode)
+    if not match:
+        return None
+    low_layers = max(0, int(match.group(1)))
+    high_layers = max(0, int(match.group(2)))
+    margin = float(match.group(3).replace("p", "."))
+    recent_tokens = max(0, int(match.group(4)))
+    if low_layers > high_layers:
+        raise ValueError(f"Adaptive full-layer mode requires low<=high: {mode}")
+    return low_layers, high_layers, margin, recent_tokens
+
+
+def full_head_indices_for_layer(layer_idx: int, full_heads: int, head_count: int, device: torch.device) -> torch.Tensor:
+    global _FULL_HEAD_MAP_CACHE
+    requested = min(max(0, int(full_heads)), head_count)
+    if requested <= 0:
+        return torch.empty((0,), dtype=torch.long, device=device)
+    map_path = _ACTIVE_FULL_HEAD_MAP_PATH or os.environ.get("FULL_HEAD_MAP_PATH", "")
+    heads: list[int] = []
+    if map_path:
+        if _FULL_HEAD_MAP_CACHE is None or _FULL_HEAD_MAP_CACHE.get("_path") != map_path:
+            with open(map_path, "r", encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            if isinstance(loaded, dict) and "top_heads_by_layer" in loaded:
+                loaded = loaded["top_heads_by_layer"]
+            _FULL_HEAD_MAP_CACHE = {"_path": map_path, "data": loaded}
+        loaded_data = _FULL_HEAD_MAP_CACHE["data"]
+        layer_heads: Any = None
+        if isinstance(loaded_data, dict):
+            layer_heads = loaded_data.get(str(layer_idx), loaded_data.get(layer_idx))
+        elif isinstance(loaded_data, list) and layer_idx < len(loaded_data):
+            layer_heads = loaded_data[layer_idx]
+        if isinstance(layer_heads, list):
+            heads = [int(head) for head in layer_heads if 0 <= int(head) < head_count]
+    if len(heads) < requested:
+        seen = set(heads)
+        heads.extend(head for head in range(head_count) if head not in seen)
+    return torch.tensor(heads[:requested], dtype=torch.long, device=device)
+
+
+def full_layer_indices(full_layers: int) -> set[int]:
+    global _FULL_LAYER_MAP_CACHE
+    requested = max(0, int(full_layers))
+    if requested <= 0:
+        return set()
+    map_path = _ACTIVE_FULL_LAYER_MAP_PATH or os.environ.get(
+        "FULL_LAYER_MAP_PATH",
+        _ACTIVE_FULL_HEAD_MAP_PATH or os.environ.get("FULL_HEAD_MAP_PATH", ""),
+    )
+    cache_key = (map_path, requested)
+    cached_selection = _FULL_LAYER_SELECTION_CACHE.get(cache_key)
+    if cached_selection is not None:
+        return cached_selection
+    layers: list[int] = []
+    if map_path:
+        if _FULL_LAYER_MAP_CACHE is None or _FULL_LAYER_MAP_CACHE.get("_path") != map_path:
+            with open(map_path, "r", encoding="utf-8") as handle:
+                loaded = json.load(handle)
+            layer_scores: list[tuple[float, int]] = []
+            if isinstance(loaded, dict) and isinstance(loaded.get("top_layers"), list):
+                layers = [int(layer) for layer in loaded["top_layers"]]
+            elif isinstance(loaded, dict) and isinstance(loaded.get("mean_remote_mass"), list):
+                for layer_idx, row in enumerate(loaded["mean_remote_mass"]):
+                    if isinstance(row, list):
+                        layer_scores.append((float(sum(float(value) for value in row)), layer_idx))
+                layers = [layer_idx for _, layer_idx in sorted(layer_scores, reverse=True)]
+            _FULL_LAYER_MAP_CACHE = {"_path": map_path, "layers": layers}
+        layers = list(_FULL_LAYER_MAP_CACHE.get("layers", []))
+    if len(layers) < requested:
+        seen = set(layers)
+        layers.extend(layer for layer in range(requested) if layer not in seen)
+    selected = set(layers[:requested])
+    _FULL_LAYER_SELECTION_CACHE[cache_key] = selected
+    return selected
+
+
+def _layer_budget_from_parts(
+    default_budget: dict[str, Any],
+    layer_budgets: dict[str, Any],
+    layer_idx: int,
+    map_path: str,
+) -> dict[str, Any]:
+    budget = layer_budgets.get(str(layer_idx), layer_budgets.get(layer_idx, default_budget))
+    if not isinstance(budget, dict):
+        raise ValueError(f"Layer budget for layer {layer_idx} must be an object in {map_path}")
+    return budget
+
+
+def layer_budget_for_layer(layer_idx: int) -> dict[str, Any]:
+    global _LAYER_BUDGET_MAP_CACHE
+    map_path = _ACTIVE_LAYER_BUDGET_MAP_PATH or os.environ.get("LAYER_BUDGET_MAP_PATH", "")
+    if not map_path:
+        raise RuntimeError("layerbudgetattn requires --layer_budget_map_path or LAYER_BUDGET_MAP_PATH.")
+    if _LAYER_BUDGET_MAP_CACHE is None or _LAYER_BUDGET_MAP_CACHE.get("_path") != map_path:
+        with open(map_path, "r", encoding="utf-8") as handle:
+            loaded = json.load(handle)
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Layer budget map must be a JSON object: {map_path}")
+        default_budget = loaded.get("default", {"type": "full"})
+        layer_budgets = loaded.get("layers", {})
+        if not isinstance(default_budget, dict) or not isinstance(layer_budgets, dict):
+            raise ValueError(f"Layer budget map requires object fields default/layers: {map_path}")
+        batch_maps = loaded.get("batch_maps", loaded.get("batch", []))
+        if batch_maps is None:
+            batch_maps = []
+        if not isinstance(batch_maps, list):
+            raise ValueError(f"Layer budget map batch_maps must be a list: {map_path}")
+        normalized_batch_maps: list[dict[str, Any]] = []
+        for row_idx, row_map in enumerate(batch_maps):
+            if not isinstance(row_map, dict):
+                raise ValueError(f"batch_maps[{row_idx}] must be an object in {map_path}")
+            row_default = row_map.get("default", default_budget)
+            row_layers = row_map.get("layers", {})
+            if not isinstance(row_default, dict) or not isinstance(row_layers, dict):
+                raise ValueError(f"batch_maps[{row_idx}] requires object fields default/layers in {map_path}")
+            normalized_batch_maps.append({"default": row_default, "layers": row_layers})
+        _LAYER_BUDGET_MAP_CACHE = {
+            "_path": map_path,
+            "default": default_budget,
+            "layers": layer_budgets,
+            "batch_maps": normalized_batch_maps,
+        }
+    return _layer_budget_from_parts(
+        _LAYER_BUDGET_MAP_CACHE["default"],
+        _LAYER_BUDGET_MAP_CACHE["layers"],
+        layer_idx,
+        map_path,
+    )
+
+
+def layer_budgets_for_batch(layer_idx: int, batch_count: int) -> list[dict[str, Any]] | None:
+    layer_budget_for_layer(layer_idx)
+    if _LAYER_BUDGET_MAP_CACHE is None:
+        return None
+    batch_maps = _LAYER_BUDGET_MAP_CACHE.get("batch_maps", [])
+    if not batch_maps:
+        return None
+    if len(batch_maps) != batch_count:
+        map_path = str(_LAYER_BUDGET_MAP_CACHE.get("_path", ""))
+        raise ValueError(
+            f"Layer budget batch_maps length must match batch size: got {len(batch_maps)} maps "
+            f"for batch {batch_count} in {map_path}"
+        )
+    map_path = str(_LAYER_BUDGET_MAP_CACHE.get("_path", ""))
+    return [
+        _layer_budget_from_parts(row_map["default"], row_map["layers"], layer_idx, map_path)
+        for row_map in batch_maps
+    ]
+
+
+def batch_row_index_tensor(row_indices: list[int], device: torch.device) -> torch.Tensor:
+    key = (str(device), tuple(row_indices))
+    cached = _BATCH_ROW_INDEX_TENSOR_CACHE.get(key)
+    if cached is not None:
+        return cached
+    index = torch.tensor(row_indices, dtype=torch.long, device=device)
+    _BATCH_ROW_INDEX_TENSOR_CACHE[key] = index
+    return index
+
+
 def parse_qabs_partial_rerank_params(mode: str) -> tuple[int, float] | None:
-    match = re.fullmatch(r"(?:qabs|lagtop2qabs|lagrefresh\d+qabs|qdrift(?:maj|head|share|cos|coshead)?qabs|pconf\d+(?:p\d+)?qabs)(\d+)cand(\d+(?:p\d+)?)(?:keep|rerank|reuse(?:2set|final)?)?", mode)
+    match = re.fullmatch(r"(?:qabs|lagtop2qabs|lagrefresh\d+qabs|qdrift(?:maj|head|share|cos|coshead)?qabs|pconf\d+(?:p\d+)?qabs)(\d+)cand(\d+(?:p\d+)?)(?:keep|rerank|reuse(?:2set|final)?|r\d+attn|sharedr\d+attn|sharedtop2attn|sharedattn|top2(?:hlim\d+|global)?attn|appendattn|attn)?", mode)
     if not match:
         return None
     dim_count = int(match.group(1))
     candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
     return dim_count, candidate_fraction
+
+
+def parse_qabs_top2_hlimit(mode: str) -> int | None:
+    match = re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?top2hlim(\d+)attn", mode)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def parse_qabs_shared_refresh_interval(mode: str) -> int | None:
+    match = re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?sharedr(\d+)attn", mode)
+    if not match:
+        return None
+    return max(1, int(match.group(1)))
+
+
+def parse_qabs_periodic_refresh_interval(mode: str) -> int | None:
+    match = re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?r(\d+)attn", mode)
+    if not match:
+        return None
+    return max(1, int(match.group(1)))
 
 
 
@@ -540,6 +860,13 @@ def parse_sparq_params(mode: str) -> tuple[int, float] | None:
     dim_count = int(match.group(1))
     candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
     return dim_count, candidate_fraction
+
+
+def parse_synthetic_kv_params(mode: str) -> tuple[int, str] | None:
+    match = re.fullmatch(r"synthkv(\d+)(mean|mass)attn", mode)
+    if not match:
+        return None
+    return max(1, int(match.group(1))), match.group(2)
 
 
 def sparq_fast_uses_double_k(mode: str) -> bool:
@@ -987,6 +1314,7 @@ class QabsReuseProfileStats:
         "candidate_union",
         "reuse_select_kernel",
         "candidate_full_scores",
+        "candidate_index_build",
         "final_topk",
         "final_mask_and_stats",
         "final_attention",
@@ -1229,6 +1557,34 @@ class ReuseCandidateState:
         if previous is None or previous["query_token"] != query_token - 1 or "candidate_thresholds" not in previous:
             return None
         return previous["candidate_thresholds"].to(device)
+
+    def previous_layer_indices(
+        self,
+        layer: int,
+        query_token: int,
+        history_count: int,
+        device: torch.device,
+    ) -> tuple[torch.Tensor | None, torch.Tensor | None]:
+        previous = self.previous_layer.get(layer)
+        if previous is None or previous["query_token"] != query_token - 1 or "indices" not in previous:
+            return None, None
+        indices = previous["indices"].to(device)
+        valid = previous["valid"].to(device)
+        valid = valid & (indices >= 0) & (indices < history_count)
+        return indices.clamp_min(0), valid
+
+    def update_layer_indices(
+        self,
+        layer: int,
+        query_token: int,
+        indices: torch.Tensor,
+        valid: torch.Tensor,
+    ) -> None:
+        self.previous_layer[layer] = {
+            "query_token": query_token,
+            "indices": indices.detach().long(),
+            "valid": valid.detach().bool(),
+        }
 
     def update_layer(
         self,
@@ -2391,19 +2747,15 @@ def _limit_heads_per_token_by_score_protected(
     # historical tokens keep only the max_heads selected heads with largest score.
     if max_heads <= 0:
         return torch.zeros_like(original_keep)
-    final_keep = original_keep.clone()
-    counts = original_keep.sum(dim=1)
-    over = torch.nonzero((counts > max_heads) & ~protected_keys, as_tuple=False)
-    for batch_index, key_index in over.tolist():
-        selected_heads = torch.nonzero(original_keep[batch_index, :, key_index], as_tuple=False).flatten()
-        if selected_heads.numel() <= max_heads:
-            continue
-        selected_scores = row_scores[batch_index, selected_heads, key_index]
-        _, order = torch.topk(selected_scores, k=max_heads, largest=True)
-        keep_heads = selected_heads[order]
-        final_keep[batch_index, :, key_index] = False
-        final_keep[batch_index, keep_heads, key_index] = True
-    return final_keep
+    head_count = original_keep.shape[1]
+    if max_heads >= head_count:
+        return original_keep.clone()
+    masked_scores = row_scores.masked_fill(~original_keep, torch.finfo(row_scores.dtype).min)
+    _, keep_head_indices = torch.topk(masked_scores, k=max_heads, dim=1, largest=True)
+    allowed_heads = torch.zeros_like(original_keep)
+    allowed_heads.scatter_(dim=1, index=keep_head_indices, src=torch.ones_like(keep_head_indices, dtype=torch.bool))
+    limited_keep = original_keep & allowed_heads
+    return torch.where(protected_keys[:, None, :], original_keep, limited_keep)
 
 
 def _indices_from_keep_mask(keep: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -2422,6 +2774,846 @@ def _indices_from_keep_mask(keep: torch.Tensor) -> tuple[torch.Tensor, torch.Ten
     indices = torch.topk(masked_positions, k=max_selected, dim=-1, largest=True).values
     valid = indices >= 0
     return indices.clamp_min(0), valid
+
+
+def _qabs_final_indices_from_selected(
+    selected_history_indices: torch.Tensor,
+    selected_valid: torch.Tensor,
+    history_count: int,
+    key_count: int,
+    always_keep_self: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch_count, head_count, _ = selected_history_indices.shape
+    filtered_valid = selected_valid.clone()
+    sink_end = min(_ACTIVE_PROTECT_SINK_TOKENS, history_count) if _ACTIVE_PROTECT_SINK_TOKENS > 0 else 0
+    recent_start = history_count
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+        filtered_valid &= ~((selected_history_indices >= recent_start) & (selected_history_indices < history_count))
+    if sink_end > 0:
+        filtered_valid &= selected_history_indices >= sink_end
+
+    index_parts = [selected_history_indices]
+    valid_parts = [filtered_valid]
+    if sink_end > 0:
+        sink_indices = torch.arange(sink_end, device=selected_history_indices.device, dtype=torch.long).view(1, 1, -1)
+        index_parts.append(sink_indices.expand(batch_count, head_count, -1))
+        valid_parts.append(torch.ones((batch_count, head_count, sink_end), dtype=torch.bool, device=selected_history_indices.device))
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0 and recent_start < history_count:
+        recent_start_no_overlap = max(recent_start, sink_end)
+        if recent_start_no_overlap < history_count:
+            recent_indices = torch.arange(
+                recent_start_no_overlap,
+                history_count,
+                device=selected_history_indices.device,
+                dtype=torch.long,
+            ).view(1, 1, -1)
+            index_parts.append(recent_indices.expand(batch_count, head_count, -1))
+            valid_parts.append(
+                torch.ones(
+                    (batch_count, head_count, history_count - recent_start_no_overlap),
+                    dtype=torch.bool,
+                    device=selected_history_indices.device,
+                )
+            )
+    if always_keep_self:
+        self_indices = torch.full((batch_count, head_count, 1), key_count - 1, dtype=torch.long, device=selected_history_indices.device)
+        index_parts.append(self_indices)
+        valid_parts.append(torch.ones_like(self_indices, dtype=torch.bool))
+    return torch.cat(index_parts, dim=-1), torch.cat(valid_parts, dim=-1)
+
+
+def _qabs_final_indices_append_protected(
+    selected_history_indices: torch.Tensor,
+    selected_valid: torch.Tensor,
+    history_count: int,
+    key_count: int,
+    always_keep_self: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    batch_count, head_count, _ = selected_history_indices.shape
+    index_parts = [selected_history_indices]
+    valid_parts = [selected_valid]
+    sink_end = min(_ACTIVE_PROTECT_SINK_TOKENS, history_count) if _ACTIVE_PROTECT_SINK_TOKENS > 0 else 0
+    if sink_end > 0:
+        sink_indices = torch.arange(sink_end, device=selected_history_indices.device, dtype=torch.long).view(1, 1, -1)
+        index_parts.append(sink_indices.expand(batch_count, head_count, -1))
+        valid_parts.append(torch.ones((batch_count, head_count, sink_end), dtype=torch.bool, device=selected_history_indices.device))
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+        recent_start = max(recent_start, sink_end)
+        if recent_start < history_count:
+            recent_indices = torch.arange(
+                recent_start,
+                history_count,
+                device=selected_history_indices.device,
+                dtype=torch.long,
+            ).view(1, 1, -1)
+            index_parts.append(recent_indices.expand(batch_count, head_count, -1))
+            valid_parts.append(
+                torch.ones(
+                    (batch_count, head_count, history_count - recent_start),
+                    dtype=torch.bool,
+                    device=selected_history_indices.device,
+                )
+            )
+    if always_keep_self:
+        self_indices = torch.full((batch_count, head_count, 1), key_count - 1, dtype=torch.long, device=selected_history_indices.device)
+        index_parts.append(self_indices)
+        valid_parts.append(torch.ones_like(self_indices, dtype=torch.bool))
+    return torch.cat(index_parts, dim=-1), torch.cat(valid_parts, dim=-1)
+
+
+def _recent_window_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    recent_tokens: int,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    batch_count, head_count, query_count, _ = query_states.shape
+    key_count = key_states.shape[-2]
+    if query_count != 1:
+        raise RuntimeError("recent-window fast path requires token-by-token eval; set --eval_chunk_size 1.")
+    history_count = max(0, key_count - 1)
+    sink_end = min(max(0, sink_tokens), history_count)
+    recent_start = max(0, history_count - max(0, recent_tokens))
+    recent_start = max(recent_start, sink_end)
+
+    key_parts: list[torch.Tensor] = []
+    value_parts: list[torch.Tensor] = []
+    mask_parts: list[torch.Tensor] = []
+    if sink_end > 0:
+        key_parts.append(key_states[:, :, :sink_end, :])
+        value_parts.append(value_states[:, :, :sink_end, :])
+        if attention_mask is not None:
+            mask_parts.append(attention_mask[:, :, :, :sink_end])
+    if recent_start < key_count:
+        key_parts.append(key_states[:, :, recent_start:key_count, :])
+        value_parts.append(value_states[:, :, recent_start:key_count, :])
+        if attention_mask is not None:
+            mask_parts.append(attention_mask[:, :, :, recent_start:key_count])
+    if not key_parts:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    selected_keys = torch.cat(key_parts, dim=2) if len(key_parts) > 1 else key_parts[0]
+    selected_values = torch.cat(value_parts, dim=2) if len(value_parts) > 1 else value_parts[0]
+    scores = torch.matmul(query_states, selected_keys.transpose(2, 3)) * scaling
+    if attention_mask is not None and mask_parts:
+        selected_mask = torch.cat(mask_parts, dim=-1) if len(mask_parts) > 1 else mask_parts[0]
+        if selected_mask.shape[1] == 1 and head_count != 1:
+            selected_mask = selected_mask.expand(batch_count, head_count, -1, -1)
+        scores = scores + selected_mask
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, selected_values)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
+def _landmark_recent_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    recent_tokens: int,
+    landmark_stride: int,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    batch_count, head_count, query_count, _ = query_states.shape
+    key_count = key_states.shape[-2]
+    if query_count != 1:
+        raise RuntimeError("landmark-recent attention requires token-by-token eval; set --eval_chunk_size 1.")
+    history_count = max(0, key_count - 1)
+    if history_count <= 0:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    sink_end = min(max(0, sink_tokens), history_count)
+    recent_start = max(0, history_count - max(0, recent_tokens))
+    remote_end = max(sink_end, recent_start)
+    index_parts: list[torch.Tensor] = []
+    valid_parts: list[torch.Tensor] = []
+
+    if sink_end > 0:
+        sink_indices = torch.arange(sink_end, device=query_states.device, dtype=torch.long).view(1, 1, -1)
+        index_parts.append(sink_indices.expand(batch_count, head_count, -1))
+        valid_parts.append(torch.ones((batch_count, head_count, sink_end), device=query_states.device, dtype=torch.bool))
+
+    if remote_end > sink_end:
+        stride = max(1, int(landmark_stride))
+        max_landmarks = max(1, math.ceil(remote_end / stride) + 1)
+        base = torch.arange(max_landmarks, device=query_states.device, dtype=torch.long).view(1, 1, -1) * stride
+        if head_count > 1 and stride > 1:
+            offsets = torch.div(
+                torch.arange(head_count, device=query_states.device, dtype=torch.long) * stride,
+                head_count,
+                rounding_mode="floor",
+            ).view(1, head_count, 1)
+        else:
+            offsets = torch.zeros((1, head_count, 1), device=query_states.device, dtype=torch.long)
+        landmark_indices = base + offsets
+        landmark_valid = (landmark_indices >= sink_end) & (landmark_indices < remote_end)
+        index_parts.append(landmark_indices.expand(batch_count, -1, -1))
+        valid_parts.append(landmark_valid.expand(batch_count, -1, -1))
+
+    recent_start = max(recent_start, sink_end)
+    if recent_start < history_count:
+        recent_indices = torch.arange(recent_start, history_count, device=query_states.device, dtype=torch.long).view(1, 1, -1)
+        index_parts.append(recent_indices.expand(batch_count, head_count, -1))
+        valid_parts.append(
+            torch.ones((batch_count, head_count, history_count - recent_start), device=query_states.device, dtype=torch.bool)
+        )
+
+    if _ACTIVE_ALWAYS_KEEP_SELF:
+        self_indices = torch.full((batch_count, head_count, 1), key_count - 1, device=query_states.device, dtype=torch.long)
+        index_parts.append(self_indices)
+        valid_parts.append(torch.ones_like(self_indices, dtype=torch.bool))
+
+    final_indices = torch.cat(index_parts, dim=-1)
+    final_valid = torch.cat(valid_parts, dim=-1)
+    attention_output = _qabs_attention_from_final_indices(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    return attention_output, None
+
+
+def _full_head_recent_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    full_heads: int,
+    recent_tokens: int,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    batch_count, head_count, query_count, _ = query_states.shape
+    key_count = key_states.shape[-2]
+    if query_count != 1:
+        raise RuntimeError("full-head-recent attention requires token-by-token eval; set --eval_chunk_size 1.")
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    full_head_indices = full_head_indices_for_layer(layer_idx, full_heads, head_count, query_states.device)
+    full_head_count = int(full_head_indices.numel())
+    full_head_mask = torch.zeros((head_count,), dtype=torch.bool, device=query_states.device)
+    if full_head_count > 0:
+        full_head_mask.scatter_(0, full_head_indices, True)
+    recent_head_indices = torch.arange(head_count, device=query_states.device, dtype=torch.long)[~full_head_mask]
+    output = torch.empty_like(query_states)
+
+    if full_head_count > 0:
+        full_query = query_states.index_select(dim=1, index=full_head_indices)
+        full_key = key_states.index_select(dim=1, index=full_head_indices)
+        full_value = value_states.index_select(dim=1, index=full_head_indices)
+        full_scores = torch.matmul(full_query, full_key.transpose(2, 3)) * scaling
+        if attention_mask is not None:
+            full_mask = attention_mask[:, :, :, :key_count]
+            if full_mask.shape[1] == 1 and full_head_count != 1:
+                full_mask = full_mask.expand(batch_count, full_head_count, -1, -1)
+            else:
+                full_mask = full_mask.index_select(dim=1, index=full_head_indices)
+            full_scores = full_scores + full_mask
+        full_weights = F.softmax(full_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        full_output = torch.matmul(full_weights, full_value)
+        output.index_copy_(1, full_head_indices, full_output)
+
+    if recent_head_indices.numel() > 0:
+        recent_query = query_states.index_select(dim=1, index=recent_head_indices)
+        recent_key = key_states.index_select(dim=1, index=recent_head_indices)
+        recent_value = value_states.index_select(dim=1, index=recent_head_indices)
+        history_count = max(0, key_count - 1)
+        sink_end = min(max(0, sink_tokens), history_count)
+        recent_start = max(0, history_count - max(0, recent_tokens))
+        recent_start = max(recent_start, sink_end)
+        key_parts: list[torch.Tensor] = []
+        value_parts: list[torch.Tensor] = []
+        mask_parts: list[torch.Tensor] = []
+        if sink_end > 0:
+            key_parts.append(recent_key[:, :, :sink_end, :])
+            value_parts.append(recent_value[:, :, :sink_end, :])
+            if attention_mask is not None:
+                mask_parts.append(attention_mask[:, :, :, :sink_end])
+        if recent_start < key_count:
+            key_parts.append(recent_key[:, :, recent_start:key_count, :])
+            value_parts.append(recent_value[:, :, recent_start:key_count, :])
+            if attention_mask is not None:
+                mask_parts.append(attention_mask[:, :, :, recent_start:key_count])
+        if not key_parts:
+            recent_output = recent_value[:, :, -1:, :]
+        else:
+            selected_keys = torch.cat(key_parts, dim=2) if len(key_parts) > 1 else key_parts[0]
+            selected_values = torch.cat(value_parts, dim=2) if len(value_parts) > 1 else value_parts[0]
+            recent_scores = torch.matmul(recent_query, selected_keys.transpose(2, 3)) * scaling
+            if attention_mask is not None and mask_parts:
+                selected_mask = torch.cat(mask_parts, dim=-1) if len(mask_parts) > 1 else mask_parts[0]
+                recent_head_count = head_count - full_head_count
+                if selected_mask.shape[1] == 1 and recent_head_count != 1:
+                    selected_mask = selected_mask.expand(batch_count, recent_head_count, -1, -1)
+                else:
+                    selected_mask = selected_mask.index_select(dim=1, index=recent_head_indices)
+                recent_scores = recent_scores + selected_mask
+            recent_weights = F.softmax(recent_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+            recent_output = torch.matmul(recent_weights, selected_values)
+        output.index_copy_(1, recent_head_indices, recent_output)
+
+    return output.transpose(1, 2).contiguous(), None
+
+
+def _full_layer_recent_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    full_layers: int,
+    recent_tokens: int,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    if layer_idx not in full_layer_indices(full_layers):
+        return _recent_window_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            recent_tokens,
+            sink_tokens,
+        )
+    key_count = key_states.shape[-2]
+    scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        scores = scores + attention_mask[:, :, :, :key_count]
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, value_states)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
+def _full_layer_landmark_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    full_layers: int,
+    recent_tokens: int,
+    landmark_stride: int,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    if layer_idx not in full_layer_indices(full_layers):
+        return _landmark_recent_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            recent_tokens,
+            landmark_stride,
+            sink_tokens,
+        )
+    key_count = key_states.shape[-2]
+    scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        scores = scores + attention_mask[:, :, :, :key_count]
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, value_states)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
+def _dense_decode_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> torch.Tensor:
+    key_count = key_states.shape[-2]
+    scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        scores = scores + attention_mask[:, :, :, :key_count]
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    return torch.matmul(attention_weights, value_states)
+
+
+def _pad_previous_history_mask(mask: torch.Tensor | None, history_count: int) -> torch.Tensor | None:
+    if mask is None:
+        return None
+    previous_count = int(mask.shape[-1])
+    if previous_count == history_count:
+        return mask
+    if previous_count == history_count - 1:
+        pad = torch.zeros((*mask.shape[:-1], 1), dtype=mask.dtype, device=mask.device)
+        return torch.cat([mask, pad], dim=-1)
+    return None
+
+
+def _layer_budget_qabs_reuse_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dim_count: int,
+    candidate_fraction: float,
+    top_fraction: float,
+) -> tuple[torch.Tensor, None]:
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("layer-budget qabs-reuse requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    history_count = key_count - 1
+    if history_count <= 0:
+        return value_states[:, :, -1:, :].transpose(1, 2).contiguous(), None
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    selected_dim_count = min(max(1, int(dim_count)), head_dim)
+    candidate_fraction = max(0.0, min(1.0, float(candidate_fraction)))
+    top_fraction = max(0.0, min(1.0, float(top_fraction)))
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+    final_requested = min(history_count, max(1, math.ceil(top_fraction * history_count)))
+
+    q = query_states[:, :, 0, :].float()
+    k_history = key_states[:, :, :history_count, :]
+    dim_indices = torch.topk(q.abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    q_selected = torch.gather(q, dim=-1, index=dim_indices)
+    k_dim_indices = dim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+    k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+    partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+    threshold = torch.topk(partial_scores, k=requested, dim=-1, largest=True).values[:, :, -1:]
+    current_candidate = partial_scores >= threshold
+
+    previous = _LAYER_BUDGET_QABS_REUSE_STATE.get(layer_idx, {})
+    previous_candidate = _pad_previous_history_mask(previous.get("candidate"), history_count)
+    previous_final = _pad_previous_history_mask(previous.get("final"), history_count)
+    candidate_union = current_candidate.clone()
+    if previous_candidate is not None:
+        candidate_union |= previous_candidate.to(candidate_union.device)
+    if previous_final is not None:
+        candidate_union |= previous_final.to(candidate_union.device)
+
+    candidate_indices, candidate_valid = _indices_from_keep_mask(candidate_union)
+    if candidate_indices.shape[-1] == 0:
+        candidate_indices = torch.zeros((batch_count, head_count, 1), dtype=torch.long, device=query_states.device)
+        candidate_valid = torch.zeros_like(candidate_indices, dtype=torch.bool)
+    candidate_gather = candidate_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    candidate_keys = torch.gather(k_history, dim=2, index=candidate_gather)
+    candidate_scores = torch.matmul(query_states[:, :, 0:1, :], candidate_keys.transpose(2, 3)).squeeze(2) * scaling
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, 0, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        candidate_scores = candidate_scores + torch.gather(mask_row[:, :, :history_count], dim=-1, index=candidate_indices)
+    candidate_scores = candidate_scores.masked_fill(~candidate_valid, torch.finfo(candidate_scores.dtype).min)
+    selected_positions = torch.topk(candidate_scores, k=min(final_requested, candidate_scores.shape[-1]), dim=-1, largest=True).indices
+    selected_history_indices = torch.gather(candidate_indices, dim=-1, index=selected_positions)
+    selected_valid = torch.gather(candidate_valid, dim=-1, index=selected_positions)
+
+    history_final = torch.zeros((batch_count, head_count, history_count), dtype=torch.bool, device=query_states.device)
+    history_final.scatter_(dim=-1, index=selected_history_indices.clamp_max(history_count - 1), src=selected_valid)
+    _LAYER_BUDGET_QABS_REUSE_STATE[layer_idx] = {
+        "candidate": current_candidate.detach(),
+        "final": history_final.detach(),
+    }
+
+    final_indices, final_valid = _qabs_final_indices_from_selected(
+        selected_history_indices,
+        selected_valid,
+        history_count,
+        key_count,
+        _ACTIVE_ALWAYS_KEEP_SELF,
+    )
+    attention_output = _qabs_attention_from_final_indices(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    return attention_output, None
+
+
+def _layer_budget_headmix_qabs_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    full_heads: int,
+    dim_count: int,
+    candidate_fraction: float,
+    top_fraction: float,
+) -> tuple[torch.Tensor, None]:
+    qabs_output, _ = _layer_budget_qabs_reuse_attention_forward(
+        module,
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        scaling,
+        dim_count,
+        candidate_fraction,
+        top_fraction,
+    )
+    head_count = query_states.shape[1]
+    full_head_indices = full_head_indices_for_layer(
+        int(getattr(module, "layer_idx", 0)),
+        full_heads,
+        head_count,
+        query_states.device,
+    )
+    if full_head_indices.numel() <= 0:
+        return qabs_output, None
+    output = qabs_output.transpose(1, 2).contiguous()
+    full_output = _dense_decode_attention_forward(
+        query_states.index_select(dim=1, index=full_head_indices),
+        key_states.index_select(dim=1, index=full_head_indices),
+        value_states.index_select(dim=1, index=full_head_indices),
+        attention_mask,
+        scaling,
+    )
+    output.index_copy_(1, full_head_indices, full_output)
+    return output.transpose(1, 2).contiguous(), None
+
+
+def _layer_budget_attention_forward_with_budget(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    sink_tokens: int,
+    budget: dict[str, Any],
+) -> tuple[torch.Tensor, None]:
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    budget_type = str(budget.get("type", budget.get("kind", "full"))).lower()
+    if budget_type == "full":
+        key_count = key_states.shape[-2]
+        scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+        if attention_mask is not None:
+            scores = scores + attention_mask[:, :, :, :key_count]
+        attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        attention_output = torch.matmul(attention_weights, value_states)
+        return attention_output.transpose(1, 2).contiguous(), None
+    if budget_type == "recent":
+        return _recent_window_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            max(0, int(budget.get("recent", budget.get("recent_tokens", 512)))),
+            max(0, int(budget.get("sink", sink_tokens))),
+        )
+    if budget_type == "landmark":
+        return _landmark_recent_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            max(0, int(budget.get("recent", budget.get("recent_tokens", 512)))),
+            max(1, int(budget.get("stride", budget.get("landmark_stride", 64)))),
+            max(0, int(budget.get("sink", sink_tokens))),
+        )
+    if budget_type in {"qabs", "qabs_reuse", "qabs8cand3", "qabs8cand3reuse"}:
+        return _layer_budget_qabs_reuse_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            max(1, int(budget.get("dims", budget.get("dim_count", 8)))),
+            float(budget.get("candidate_fraction", budget.get("cand", 0.03))),
+            float(budget.get("top_fraction", budget.get("top", _ACTIVE_TOP_FRACTION))),
+        )
+    if budget_type in {"headmix_qabs", "headmix_qabs_reuse", "hybrid_qabs", "hybrid_qabs_reuse"}:
+        return _layer_budget_headmix_qabs_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            max(0, int(budget.get("full_heads", budget.get("full", 0)))),
+            max(1, int(budget.get("dims", budget.get("dim_count", 8)))),
+            float(budget.get("candidate_fraction", budget.get("cand", 0.03))),
+            float(budget.get("top_fraction", budget.get("top", _ACTIVE_TOP_FRACTION))),
+        )
+    if budget_type in {"head_recent", "full_head_recent", "headfull_recent"}:
+        return _full_head_recent_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            max(0, int(budget.get("full_heads", budget.get("full", 0)))),
+            max(0, int(budget.get("recent", budget.get("recent_tokens", 512)))),
+            max(0, int(budget.get("sink", sink_tokens))),
+        )
+    if budget_type in {"synthetic", "synth", "synthetic_kv", "synthkv"}:
+        return _synthetic_kv_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            scaling,
+            max(1, int(budget.get("prototypes", budget.get("prototype_count", 16)))),
+            str(budget.get("method", "mass")).lower(),
+            max(0, int(budget.get("sink", sink_tokens))),
+            max(0, int(budget.get("recent", budget.get("recent_tokens", 512)))),
+        )
+    if budget_type in {"landmark_synthetic", "hybrid_synthetic", "hybrid_skv", "pcic_skv"}:
+        return _landmark_synthetic_kv_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            scaling,
+            max(0, int(budget.get("recent", budget.get("recent_tokens", 512)))),
+            max(1, int(budget.get("stride", budget.get("landmark_stride", 64)))),
+            max(1, int(budget.get("prototypes", budget.get("prototype_count", 16)))),
+            str(budget.get("method", "mean")).lower(),
+            max(0, int(budget.get("sink", sink_tokens))),
+        )
+    raise ValueError(f"Unsupported layer budget type for layer {layer_idx}: {budget_type}")
+
+
+def _is_mixed_dense_landmark_budget(budget: dict[str, Any]) -> bool:
+    budget_type = str(budget.get("type", budget.get("kind", "full"))).lower()
+    return budget_type in {"full", "landmark"}
+
+
+def _mixed_full_landmark_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    sink_tokens: int,
+    batch_budgets: list[dict[str, Any]],
+) -> tuple[torch.Tensor, None]:
+    batch_count, head_count, query_count, _ = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("mixed full/landmark fast path requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    history_count = max(0, key_count - 1)
+    if history_count <= 0:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    keep = torch.ones((batch_count, head_count, key_count), dtype=torch.bool, device=query_states.device)
+    position = torch.arange(key_count, device=query_states.device, dtype=torch.long).view(1, 1, -1)
+    head_indices = torch.arange(head_count, device=query_states.device, dtype=torch.long).view(1, head_count, 1)
+    for row_idx, budget in enumerate(batch_budgets):
+        budget_type = str(budget.get("type", budget.get("kind", "full"))).lower()
+        if budget_type == "full":
+            continue
+        recent_tokens = max(0, int(budget.get("recent", budget.get("recent_tokens", 512))))
+        stride = max(1, int(budget.get("stride", budget.get("landmark_stride", 64))))
+        row_sink_tokens = max(0, int(budget.get("sink", sink_tokens)))
+        sink_end = min(row_sink_tokens, history_count)
+        recent_start = max(0, history_count - recent_tokens)
+        remote_end = max(sink_end, recent_start)
+        row_keep = position < sink_end
+        if remote_end > sink_end:
+            if head_count > 1 and stride > 1:
+                offsets = torch.div(head_indices * stride, head_count, rounding_mode="floor")
+            else:
+                offsets = torch.zeros((1, head_count, 1), device=query_states.device, dtype=torch.long)
+            remote_position = position - offsets
+            landmark_keep = (
+                (position >= sink_end)
+                & (position < remote_end)
+                & (remote_position >= 0)
+                & (torch.remainder(remote_position, stride) == 0)
+            )
+            row_keep = row_keep | landmark_keep
+        recent_start = max(recent_start, sink_end)
+        if recent_start < history_count:
+            row_keep = row_keep | ((position >= recent_start) & (position < history_count))
+        if _ACTIVE_ALWAYS_KEEP_SELF:
+            row_keep = row_keep | (position == key_count - 1)
+        keep[row_idx : row_idx + 1] = row_keep
+
+    scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
+    if attention_mask is not None:
+        scores = scores + attention_mask[:, :, :, :key_count]
+    scores = scores.masked_fill(~keep.unsqueeze(2), torch.finfo(scores.dtype).min)
+    attention_weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(attention_weights, value_states)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
+def _layer_budget_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, None]:
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    batch_budgets = layer_budgets_for_batch(layer_idx, query_states.shape[0])
+    if batch_budgets is None:
+        return _layer_budget_attention_forward_with_budget(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            sink_tokens,
+            layer_budget_for_layer(layer_idx),
+        )
+    batch_count = query_states.shape[0]
+    grouped_rows: dict[str, tuple[dict[str, Any], list[int]]] = {}
+    for row_idx, row_budget in enumerate(batch_budgets):
+        budget_key = json.dumps(row_budget, sort_keys=True, separators=(",", ":"))
+        if budget_key not in grouped_rows:
+            grouped_rows[budget_key] = (row_budget, [])
+        grouped_rows[budget_key][1].append(row_idx)
+    if len(grouped_rows) == 1:
+        row_budget, row_indices = next(iter(grouped_rows.values()))
+        if len(row_indices) == batch_count:
+            return _layer_budget_attention_forward_with_budget(
+                module,
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                scaling,
+                sink_tokens,
+                row_budget,
+            )
+    if str2bool(os.environ.get("LAYER_BUDGET_MIXED_DENSE", "0")) and all(
+        _is_mixed_dense_landmark_budget(row_budget) for row_budget in batch_budgets
+    ):
+        return _mixed_full_landmark_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            sink_tokens,
+            batch_budgets,
+        )
+    group_outputs: list[tuple[torch.Tensor, torch.Tensor]] = []
+    for row_budget, row_indices in grouped_rows.values():
+        index = batch_row_index_tensor(row_indices, query_states.device)
+        group_attention_mask = (
+            attention_mask.index_select(0, index)
+            if attention_mask is not None and attention_mask.shape[0] == batch_count
+            else attention_mask
+        )
+        group_output, _ = _layer_budget_attention_forward_with_budget(
+            module,
+            query_states.index_select(0, index),
+            key_states.index_select(0, index),
+            value_states.index_select(0, index),
+            group_attention_mask,
+            scaling,
+            sink_tokens,
+            row_budget,
+        )
+        group_outputs.append((index, group_output))
+    output = torch.empty(
+        (batch_count, *group_outputs[0][1].shape[1:]),
+        dtype=group_outputs[0][1].dtype,
+        device=group_outputs[0][1].device,
+    )
+    for index, group_output in group_outputs:
+        output.index_copy_(0, index, group_output)
+    return output, None
+
+
+def _qabs_remote_recent_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    selected_history_indices: torch.Tensor,
+    selected_valid: torch.Tensor,
+    scaling: float,
+) -> torch.Tensor:
+    _, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("qabs remote-recent attention requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    history_count = key_count - 1
+    sink_end = min(_ACTIVE_PROTECT_SINK_TOKENS, history_count) if _ACTIVE_PROTECT_SINK_TOKENS > 0 else 0
+    recent_start = history_count
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+
+    remote_valid = selected_valid & (selected_history_indices >= 0) & (selected_history_indices < history_count)
+    if sink_end > 0:
+        remote_valid &= selected_history_indices >= sink_end
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        remote_valid &= ~((selected_history_indices >= recent_start) & (selected_history_indices < history_count))
+
+    q = query_states[:, :, 0, :]
+    score_parts: list[torch.Tensor] = []
+    value_parts: list[torch.Tensor] = []
+    if selected_history_indices.shape[-1] > 0:
+        remote_indices = selected_history_indices.clamp(0, max(0, history_count - 1))
+        remote_gather = remote_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+        remote_keys = torch.gather(key_states, dim=2, index=remote_gather)
+        remote_values = torch.gather(value_states, dim=2, index=remote_gather)
+        remote_scores = torch.matmul(query_states[:, :, 0:1, :], remote_keys.transpose(2, 3)).squeeze(2) * scaling
+        if attention_mask is not None:
+            mask_row = attention_mask[:, :, 0, :key_count]
+            if mask_row.shape[1] == 1 and head_count != 1:
+                mask_row = mask_row.expand(-1, head_count, -1)
+            remote_scores = remote_scores + torch.gather(mask_row, dim=-1, index=remote_indices)
+        remote_scores = remote_scores.masked_fill(~remote_valid, torch.finfo(remote_scores.dtype).min)
+        score_parts.append(remote_scores)
+        value_parts.append(remote_values)
+
+    def append_contiguous(start: int, end: int) -> None:
+        if start >= end:
+            return
+        part_keys = key_states[:, :, start:end, :]
+        part_values = value_states[:, :, start:end, :]
+        part_scores = torch.matmul(query_states[:, :, 0:1, :], part_keys.transpose(2, 3)).squeeze(2) * scaling
+        if attention_mask is not None:
+            part_mask = attention_mask[:, :, 0, start:end]
+            if part_mask.shape[1] == 1 and head_count != 1:
+                part_mask = part_mask.expand(-1, head_count, -1)
+            part_scores = part_scores + part_mask
+        score_parts.append(part_scores)
+        value_parts.append(part_values)
+
+    append_contiguous(0, sink_end)
+    if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+        append_contiguous(max(recent_start, sink_end), history_count)
+    if _ACTIVE_ALWAYS_KEEP_SELF:
+        append_contiguous(key_count - 1, key_count)
+
+    if not score_parts:
+        return value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+
+    selected_scores = torch.cat(score_parts, dim=-1) if len(score_parts) > 1 else score_parts[0]
+    selected_values = torch.cat(value_parts, dim=2) if len(value_parts) > 1 else value_parts[0]
+    attention_weights = F.softmax(selected_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.sum(attention_weights[:, :, :, None] * selected_values, dim=2)
+    return attention_output[:, None, :, :].contiguous()
 
 
 def _maybe_cuda_final_attention(
@@ -2462,6 +3654,8 @@ def _maybe_cuda_partial_scores(
     query: torch.Tensor,
     key_history: torch.Tensor,
     dim_count: int,
+    dim_indices: torch.Tensor | None = None,
+    key_dim_major: torch.Tensor | None = None,
 ) -> torch.Tensor | None:
     global _QABS_CUDA_CANDIDATE_WARNED
     if not _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL:
@@ -2469,11 +3663,19 @@ def _maybe_cuda_partial_scores(
     if not (query.is_cuda and key_history.is_cuda):
         return None
     try:
+        if dim_indices is not None and key_dim_major is not None:
+            from qabs_cuda_kernels import partial_scores_dim_major as qabs_cuda_partial_scores_dim_major
+
+            return qabs_cuda_partial_scores_dim_major(
+                query.contiguous(),
+                key_dim_major,
+                dim_indices.contiguous(),
+            )
         from qabs_cuda_kernels import partial_scores as qabs_cuda_partial_scores
 
         return qabs_cuda_partial_scores(
             query.contiguous(),
-            key_history.contiguous(),
+            key_history,
             int(dim_count),
         )
     except Exception as exc:
@@ -2578,7 +3780,7 @@ def _maybe_cuda_candidate_full_scores(
 
         return qabs_cuda_candidate_full_scores(
             query.contiguous(),
-            key_history.contiguous(),
+            key_history,
             current_candidate.contiguous(),
             previous_candidate.contiguous() if previous_candidate is not None else None,
             previous_final.contiguous() if previous_final is not None else None,
@@ -2753,7 +3955,18 @@ def _qabs_reuse_fast_attention_forward(
     else:
         q = q_raw.float()
         with profile.time_stage(layer_idx, "partial_scores", query_states.device) if profile is not None else nullcontext():
-            partial_scores = _maybe_cuda_partial_scores(q_raw, k_history, selected_dim_count)
+            key_dim_major = (
+                _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, k_history)
+                if _ACTIVE_SPARQ_MEAN_STATE is not None
+                else None
+            )
+            partial_scores = _maybe_cuda_partial_scores(
+                q_raw,
+                k_history,
+                selected_dim_count,
+                current_qdim_indices,
+                key_dim_major,
+            )
             if partial_scores is None:
                 dim_indices = current_qdim_indices
                 q_selected = torch.gather(q, dim=-1, index=dim_indices)
@@ -2977,12 +4190,13 @@ def _qabs_reuse_fast_attention_forward(
             candidate_thresholds,
         )
 
-    final_keep = torch.zeros((batch_count, head_count, key_count), dtype=torch.bool, device=query_states.device)
-    final_keep[:, :, :history_count] = history_final
-    if _ACTIVE_ALWAYS_KEEP_SELF:
-        final_keep[:, :, history_count] = True
-
-    final_indices, final_valid = _indices_from_keep_mask(final_keep)
+    final_indices, final_valid = _qabs_final_indices_from_selected(
+        selected_history_indices,
+        selected_valid,
+        history_count,
+        key_count,
+        _ACTIVE_ALWAYS_KEEP_SELF,
+    )
     with profile.time_stage(layer_idx, "final_attention", query_states.device) if profile is not None else nullcontext():
         cuda_attention_output = _maybe_cuda_final_attention(
             query_states,
@@ -3010,6 +4224,519 @@ def _qabs_reuse_fast_attention_forward(
         attention_output = torch.sum(attention_weights[:, :, :, None] * selected_values, dim=2)
         attention_output = attention_output[:, None, :, :].contiguous()
         return attention_output, None
+
+
+def _qabs_candidate_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> tuple[torch.Tensor, None]:
+    qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+    if qabs_params is None:
+        raise RuntimeError(f"Invalid qabs candidate-attention mode: {_ACTIVE_MODE}")
+    dim_count, candidate_fraction = qabs_params
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("qabs candidate-attention mode requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    if key_count <= 1:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    history_count = key_count - 1
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+    q_raw = query_states[:, :, 0, :]
+    k_history = key_states[:, :, :history_count, :]
+    profile = _ACTIVE_QABS_PROFILE_STATS
+    with profile.time_stage(layer_idx, "qdim_topk", query_states.device) if profile is not None else nullcontext():
+        current_qdim_indices = torch.topk(q_raw.float().abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    key_dim_major = (
+        _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, k_history)
+        if _ACTIVE_SPARQ_MEAN_STATE is not None
+        else None
+    )
+    with profile.time_stage(layer_idx, "partial_scores", query_states.device) if profile is not None else nullcontext():
+        partial_scores = _maybe_cuda_partial_scores(
+            q_raw,
+            k_history,
+            selected_dim_count,
+            current_qdim_indices,
+            key_dim_major,
+        )
+        if partial_scores is None:
+            q_selected = torch.gather(q_raw.float(), dim=-1, index=current_qdim_indices)
+            k_dim_indices = current_qdim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+            k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+            partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+    with profile.time_stage(layer_idx, "candidate_select", query_states.device) if profile is not None else nullcontext():
+        _, candidate_indices = torch.topk(partial_scores, k=requested, dim=-1, largest=True)
+        candidate_valid = torch.ones_like(candidate_indices, dtype=torch.bool)
+    with profile.time_stage(layer_idx, "candidate_index_build", query_states.device) if profile is not None else nullcontext():
+        if _ACTIVE_MODE.endswith("appendattn"):
+            final_indices, final_valid = _qabs_final_indices_append_protected(
+                candidate_indices,
+                candidate_valid,
+                history_count,
+                key_count,
+                _ACTIVE_ALWAYS_KEEP_SELF,
+            )
+        else:
+            final_indices, final_valid = _qabs_final_indices_from_selected(
+                candidate_indices,
+                candidate_valid,
+                history_count,
+                key_count,
+                _ACTIVE_ALWAYS_KEEP_SELF,
+            )
+    if profile is not None:
+        candidate_mask = torch.zeros((batch_count, head_count, history_count), dtype=torch.bool, device=query_states.device)
+        candidate_mask.scatter_(dim=-1, index=candidate_indices, src=candidate_valid)
+        final_history_mask = torch.zeros_like(candidate_mask)
+        final_history_mask.scatter_(
+            dim=-1,
+            index=final_indices.clamp_max(history_count - 1),
+            src=final_valid & (final_indices < history_count),
+        )
+        profile.record_masks(layer_idx, candidate_mask, candidate_mask, final_history_mask, None, "topk")
+    with profile.time_stage(layer_idx, "final_attention", query_states.device) if profile is not None else nullcontext():
+        cuda_attention_output = _maybe_cuda_final_attention(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            final_indices,
+            final_valid,
+            scaling,
+        )
+        if cuda_attention_output is not None:
+            return cuda_attention_output, None
+
+        final_gather = final_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+        selected_keys = torch.gather(key_states, dim=2, index=final_gather)
+        selected_values = torch.gather(value_states, dim=2, index=final_gather)
+        selected_scores = torch.matmul(query_states[:, :, 0:1, :], selected_keys.transpose(2, 3)).squeeze(2) * scaling
+        if attention_mask is not None:
+            mask_row = attention_mask[:, :, 0, :key_count]
+            if mask_row.shape[1] == 1 and head_count != 1:
+                mask_row = mask_row.expand(-1, head_count, -1)
+            selected_scores = selected_scores + torch.gather(mask_row, dim=-1, index=final_indices)
+        selected_scores = selected_scores.masked_fill(~final_valid, torch.finfo(selected_scores.dtype).min)
+        attention_weights = F.softmax(selected_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.sum(attention_weights[:, :, :, None] * selected_values, dim=2)
+    return attention_output[:, None, :, :].contiguous(), None
+
+
+def _qabs_periodic_candidate_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> tuple[torch.Tensor, None]:
+    qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+    refresh_interval = parse_qabs_periodic_refresh_interval(_ACTIVE_MODE)
+    if qabs_params is None or refresh_interval is None:
+        raise RuntimeError(f"Invalid qabs periodic candidate-attention mode: {_ACTIVE_MODE}")
+    dim_count, candidate_fraction = qabs_params
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("qabs periodic candidate-attention mode requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    if key_count <= 1:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+    if _ACTIVE_REUSE_STATE is None:
+        raise RuntimeError("qabs periodic candidate-attention mode requires an active reuse state.")
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    query_token = key_count - 1
+    history_count = key_count - 1
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+
+    previous_indices: torch.Tensor | None = None
+    previous_valid: torch.Tensor | None = None
+    if query_token % refresh_interval != 0:
+        previous_indices, previous_valid = _ACTIVE_REUSE_STATE.previous_layer_indices(
+            layer_idx,
+            query_token,
+            history_count,
+            query_states.device,
+        )
+    if previous_indices is not None and previous_valid is not None:
+        selected_history_indices = previous_indices
+        selected_valid = previous_valid
+        _ACTIVE_REUSE_STATE.update_layer_indices(
+            layer_idx,
+            query_token,
+            selected_history_indices,
+            selected_valid,
+        )
+    else:
+        q_raw = query_states[:, :, 0, :]
+        k_history = key_states[:, :, :history_count, :]
+        current_qdim_indices = torch.topk(q_raw.float().abs(), k=selected_dim_count, dim=-1, largest=True).indices
+        key_dim_major = (
+            _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, k_history)
+            if _ACTIVE_SPARQ_MEAN_STATE is not None
+            else None
+        )
+        partial_scores = _maybe_cuda_partial_scores(
+            q_raw,
+            k_history,
+            selected_dim_count,
+            current_qdim_indices,
+            key_dim_major,
+        )
+        if partial_scores is None:
+            q_selected = torch.gather(q_raw.float(), dim=-1, index=current_qdim_indices)
+            k_dim_indices = current_qdim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+            k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+            partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+        _, selected_history_indices = torch.topk(partial_scores, k=requested, dim=-1, largest=True)
+        selected_valid = torch.ones_like(selected_history_indices, dtype=torch.bool)
+        _ACTIVE_REUSE_STATE.update_layer_indices(
+            layer_idx,
+            query_token,
+            selected_history_indices,
+            selected_valid,
+        )
+
+    if os.environ.get("QABS_PERIODIC_FUSED_REMOTE_RECENT", "false").lower() in {"1", "true", "yes", "on"}:
+        attention_output = _qabs_remote_recent_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            selected_history_indices,
+            selected_valid,
+            scaling,
+        )
+    else:
+        final_indices, final_valid = _qabs_final_indices_from_selected(
+            selected_history_indices,
+            selected_valid,
+            history_count,
+            key_count,
+            _ACTIVE_ALWAYS_KEEP_SELF,
+        )
+        attention_output = _qabs_attention_from_final_indices(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            final_indices,
+            final_valid,
+            scaling,
+        )
+    return attention_output, None
+
+
+def _qabs_attention_from_final_indices(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    final_indices: torch.Tensor,
+    final_valid: torch.Tensor,
+    scaling: float,
+) -> torch.Tensor:
+    cuda_attention_output = _maybe_cuda_final_attention(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    if cuda_attention_output is not None:
+        return cuda_attention_output
+
+    _, head_count, _, head_dim = query_states.shape
+    key_count = key_states.shape[-2]
+    final_gather = final_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    selected_keys = torch.gather(key_states, dim=2, index=final_gather)
+    selected_values = torch.gather(value_states, dim=2, index=final_gather)
+    selected_scores = torch.matmul(query_states[:, :, 0:1, :], selected_keys.transpose(2, 3)).squeeze(2) * scaling
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, 0, :key_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        selected_scores = selected_scores + torch.gather(mask_row, dim=-1, index=final_indices)
+    selected_scores = selected_scores.masked_fill(~final_valid, torch.finfo(selected_scores.dtype).min)
+    attention_weights = F.softmax(selected_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.sum(attention_weights[:, :, :, None] * selected_values, dim=2)
+    return attention_output[:, None, :, :].contiguous()
+
+
+def _qabs_candidate_top2_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> tuple[torch.Tensor, None]:
+    qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+    if qabs_params is None:
+        raise RuntimeError(f"Invalid qabs candidate-top2 mode: {_ACTIVE_MODE}")
+    dim_count, candidate_fraction = qabs_params
+    mode_kind, _ = parse_mode_config(_ACTIVE_MODE)
+    head_limit = parse_qabs_top2_hlimit(_ACTIVE_MODE)
+    use_head_limit = mode_kind == "qabs_candidate_top2_hlimit_attention"
+    use_global_budget = mode_kind == "qabs_candidate_top2_global_attention"
+
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("qabs candidate-top2 modes require token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    if key_count <= 1:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    history_count = key_count - 1
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    candidate_count = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+    final_per_head = min(candidate_count, max(1, math.ceil(_ACTIVE_TOP_FRACTION * history_count)))
+
+    q_raw = query_states[:, :, 0, :]
+    k_history = key_states[:, :, :history_count, :]
+    current_qdim_indices = torch.topk(q_raw.float().abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    key_dim_major = (
+        _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, k_history)
+        if _ACTIVE_SPARQ_MEAN_STATE is not None
+        else None
+    )
+    partial_scores = _maybe_cuda_partial_scores(
+        q_raw,
+        k_history,
+        selected_dim_count,
+        current_qdim_indices,
+        key_dim_major,
+    )
+    if partial_scores is None:
+        q_selected = torch.gather(q_raw.float(), dim=-1, index=current_qdim_indices)
+        k_dim_indices = current_qdim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+        k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+        partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+
+    _, candidate_indices = torch.topk(partial_scores, k=candidate_count, dim=-1, largest=True)
+    candidate_gather = candidate_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+    candidate_keys = torch.gather(k_history, dim=2, index=candidate_gather)
+    candidate_scores = torch.matmul(query_states[:, :, 0:1, :], candidate_keys.transpose(2, 3)).squeeze(2) * scaling
+    if attention_mask is not None:
+        mask_row = attention_mask[:, :, 0, :history_count]
+        if mask_row.shape[1] == 1 and head_count != 1:
+            mask_row = mask_row.expand(-1, head_count, -1)
+        candidate_scores = candidate_scores + torch.gather(mask_row, dim=-1, index=candidate_indices)
+
+    if use_global_budget:
+        global_budget = min(candidate_scores.numel() // batch_count, max(1, head_count * final_per_head))
+        flat_scores = candidate_scores.reshape(batch_count, -1)
+        _, flat_positions = torch.topk(flat_scores, k=global_budget, dim=-1, largest=True)
+        flat_keep = torch.zeros_like(flat_scores, dtype=torch.bool)
+        flat_keep.scatter_(dim=-1, index=flat_positions, src=torch.ones_like(flat_positions, dtype=torch.bool))
+        candidate_keep = flat_keep.view(batch_count, head_count, candidate_count)
+        history_final = torch.zeros((batch_count, head_count, history_count), dtype=torch.bool, device=query_states.device)
+        history_final.scatter_(dim=-1, index=candidate_indices, src=candidate_keep)
+        selected_history_indices, selected_valid = _indices_from_keep_mask(history_final)
+    else:
+        selected_scores, selected_candidate_positions = torch.topk(candidate_scores, k=final_per_head, dim=-1, largest=True)
+        selected_history_indices = torch.gather(candidate_indices, dim=-1, index=selected_candidate_positions)
+        selected_valid = torch.ones_like(selected_history_indices, dtype=torch.bool)
+        if use_head_limit and head_limit is not None:
+            history_final = torch.zeros((batch_count, head_count, history_count), dtype=torch.bool, device=query_states.device)
+            history_final.scatter_(dim=-1, index=selected_history_indices, src=selected_valid)
+            selected_score_history = torch.full(
+                (batch_count, head_count, history_count),
+                torch.finfo(candidate_scores.dtype).min,
+                dtype=candidate_scores.dtype,
+                device=query_states.device,
+            )
+            selected_score_history.scatter_(dim=-1, index=selected_history_indices, src=selected_scores)
+            protected_keys = torch.zeros((batch_count, history_count), dtype=torch.bool, device=query_states.device)
+            if _ACTIVE_PROTECT_SINK_TOKENS > 0:
+                protected_keys[:, : min(_ACTIVE_PROTECT_SINK_TOKENS, history_count)] = True
+            if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+                recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+                protected_keys[:, recent_start:history_count] = True
+            history_final = _limit_heads_per_token_by_score_protected(
+                history_final,
+                selected_score_history,
+                head_limit,
+                protected_keys,
+            )
+            selected_history_indices, selected_valid = _indices_from_keep_mask(history_final)
+
+    final_indices, final_valid = _qabs_final_indices_from_selected(
+        selected_history_indices,
+        selected_valid,
+        history_count,
+        key_count,
+        _ACTIVE_ALWAYS_KEEP_SELF,
+    )
+    attention_output = _qabs_attention_from_final_indices(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    return attention_output, None
+
+
+def _qabs_shared_candidate_attention_forward(
+    module: torch.nn.Module,
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+) -> tuple[torch.Tensor, None]:
+    qabs_params = parse_qabs_partial_rerank_params(_ACTIVE_MODE)
+    if qabs_params is None:
+        raise RuntimeError(f"Invalid shared qabs candidate mode: {_ACTIVE_MODE}")
+    dim_count, candidate_fraction = qabs_params
+    mode_kind, _ = parse_mode_config(_ACTIVE_MODE)
+    use_top2_rerank = mode_kind == "qabs_shared_candidate_top2_attention"
+    refresh_interval = parse_qabs_shared_refresh_interval(_ACTIVE_MODE)
+
+    batch_count, head_count, query_count, head_dim = query_states.shape
+    if query_count != 1:
+        raise RuntimeError("shared qabs candidate modes require token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    if key_count <= 1:
+        attention_output = value_states[:, :, -1:, :].transpose(1, 2).contiguous()
+        return attention_output, None
+
+    layer_idx = int(getattr(module, "layer_idx", 0))
+    query_token = key_count - 1
+    history_count = key_count - 1
+    selected_dim_count = min(max(1, dim_count), head_dim)
+    candidate_count = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
+    final_count = min(candidate_count, max(1, math.ceil(_ACTIVE_TOP_FRACTION * history_count)))
+
+    if refresh_interval is not None and _ACTIVE_REUSE_STATE is not None and query_token % refresh_interval != 0:
+        _, previous_final = _ACTIVE_REUSE_STATE.previous_layer_masks(
+            layer_idx,
+            query_token,
+            history_count,
+            query_states.device,
+        )
+        if previous_final is not None:
+            if _ACTIVE_PROTECT_SINK_TOKENS > 0:
+                previous_final[:, :, : min(_ACTIVE_PROTECT_SINK_TOKENS, history_count)] = True
+            if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+                recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+                previous_final[:, :, recent_start:history_count] = True
+            selected_history_indices, selected_valid = _indices_from_keep_mask(previous_final)
+            final_indices, final_valid = _qabs_final_indices_from_selected(
+                selected_history_indices,
+                selected_valid,
+                history_count,
+                key_count,
+                _ACTIVE_ALWAYS_KEEP_SELF,
+            )
+            attention_output = _qabs_attention_from_final_indices(
+                query_states,
+                key_states,
+                value_states,
+                attention_mask,
+                final_indices,
+                final_valid,
+                scaling,
+            )
+            _ACTIVE_REUSE_STATE.update_layer(
+                layer_idx,
+                query_token,
+                previous_final,
+                previous_final,
+                history_count,
+            )
+            return attention_output, None
+
+    q_raw = query_states[:, :, 0, :]
+    k_history = key_states[:, :, :history_count, :]
+    current_qdim_indices = torch.topk(q_raw.float().abs(), k=selected_dim_count, dim=-1, largest=True).indices
+    key_dim_major = (
+        _ACTIVE_SPARQ_MEAN_STATE.key_dim_major(layer_idx, k_history)
+        if _ACTIVE_SPARQ_MEAN_STATE is not None
+        else None
+    )
+    partial_scores = _maybe_cuda_partial_scores(
+        q_raw,
+        k_history,
+        selected_dim_count,
+        current_qdim_indices,
+        key_dim_major,
+    )
+    if partial_scores is None:
+        q_selected = torch.gather(q_raw.float(), dim=-1, index=current_qdim_indices)
+        k_dim_indices = current_qdim_indices[:, :, None, :].expand(-1, -1, history_count, -1)
+        k_selected = torch.gather(k_history.float(), dim=-1, index=k_dim_indices)
+        partial_scores = (k_selected * q_selected[:, :, None, :]).sum(dim=-1)
+
+    shared_scores = partial_scores.max(dim=1).values
+    _, shared_candidate_indices = torch.topk(shared_scores, k=candidate_count, dim=-1, largest=True)
+    shared_candidate_indices = shared_candidate_indices[:, None, :].expand(batch_count, head_count, candidate_count)
+
+    if use_top2_rerank:
+        candidate_gather = shared_candidate_indices[:, :, :, None].expand(-1, -1, -1, head_dim)
+        candidate_keys = torch.gather(k_history, dim=2, index=candidate_gather)
+        candidate_scores = torch.matmul(query_states[:, :, 0:1, :], candidate_keys.transpose(2, 3)).squeeze(2) * scaling
+        if attention_mask is not None:
+            mask_row = attention_mask[:, :, 0, :history_count]
+            if mask_row.shape[1] == 1 and head_count != 1:
+                mask_row = mask_row.expand(-1, head_count, -1)
+            candidate_scores = candidate_scores + torch.gather(mask_row, dim=-1, index=shared_candidate_indices)
+        _, selected_candidate_positions = torch.topk(candidate_scores, k=final_count, dim=-1, largest=True)
+        selected_history_indices = torch.gather(shared_candidate_indices, dim=-1, index=selected_candidate_positions)
+    else:
+        selected_history_indices = shared_candidate_indices
+    selected_valid = torch.ones_like(selected_history_indices, dtype=torch.bool)
+    if refresh_interval is not None and _ACTIVE_REUSE_STATE is not None:
+        history_final = torch.zeros((batch_count, head_count, history_count), dtype=torch.bool, device=query_states.device)
+        history_final.scatter_(dim=-1, index=selected_history_indices, src=selected_valid)
+        if _ACTIVE_PROTECT_SINK_TOKENS > 0:
+            history_final[:, :, : min(_ACTIVE_PROTECT_SINK_TOKENS, history_count)] = True
+        if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
+            recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
+            history_final[:, :, recent_start:history_count] = True
+        _ACTIVE_REUSE_STATE.update_layer(
+            layer_idx,
+            query_token,
+            history_final,
+            history_final,
+            history_count,
+        )
+
+    final_indices, final_valid = _qabs_final_indices_from_selected(
+        selected_history_indices,
+        selected_valid,
+        history_count,
+        key_count,
+        _ACTIVE_ALWAYS_KEEP_SELF,
+    )
+    attention_output = _qabs_attention_from_final_indices(
+        query_states,
+        key_states,
+        value_states,
+        attention_mask,
+        final_indices,
+        final_valid,
+        scaling,
+    )
+    return attention_output, None
 
 
 def _kdim_posting_attention_forward(
@@ -4045,6 +5772,296 @@ def _knorm_reservoir_attention_forward(
     return attention_output[:, None, :, :].contiguous(), None
 
 
+def _synthetic_kv_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    scaling: float,
+    prototype_count: int,
+    method: str,
+    protect_sink_tokens: int,
+    protect_recent_tokens: int,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    if query_states.shape[-2] != 1:
+        raise RuntimeError("synthetic KV attention requires token-by-token eval; set --eval_chunk_size 1.")
+    key_count = key_states.shape[-2]
+    if key_count == 0:
+        raise RuntimeError("synthetic KV attention received an empty key cache.")
+
+    sink_end = min(max(0, protect_sink_tokens), key_count)
+    recent_start = max(sink_end, key_count - max(0, protect_recent_tokens))
+    remote_start = sink_end
+    remote_end = recent_start
+
+    if method == "mass":
+        score_parts: list[torch.Tensor] = []
+        value_parts: list[torch.Tensor] = []
+        if sink_end > 0:
+            sink_k = key_states[:, :, :sink_end, :]
+            sink_v = value_states[:, :, :sink_end, :]
+            score_parts.append(torch.matmul(query_states, sink_k.transpose(2, 3)) * scaling)
+            value_parts.append(sink_v[:, :, None, :, :])
+
+        remote_len = remote_end - remote_start
+        if remote_len > 0:
+            boundaries = torch.linspace(
+                0,
+                remote_len,
+                steps=min(prototype_count, remote_len) + 1,
+                device=key_states.device,
+                dtype=torch.float32,
+            ).round().to(torch.long)
+            previous_end = 0
+            for index in range(boundaries.numel() - 1):
+                start = int(boundaries[index].item())
+                end = int(boundaries[index + 1].item())
+                start = max(start, previous_end)
+                end = max(end, start + 1)
+                end = min(end, remote_len)
+                if start >= end:
+                    continue
+                key_chunk = key_states[:, :, remote_start + start : remote_start + end, :]
+                value_chunk = value_states[:, :, remote_start + start : remote_start + end, :]
+                chunk_scores = torch.matmul(query_states, key_chunk.transpose(2, 3)) * scaling
+                chunk_weights = F.softmax(chunk_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+                chunk_value = torch.sum(chunk_weights[..., None] * value_chunk[:, :, None, :, :], dim=-2)
+                chunk_logit = torch.logsumexp(chunk_scores.float(), dim=-1, keepdim=True).to(query_states.dtype)
+                score_parts.append(chunk_logit)
+                value_parts.append(chunk_value[:, :, :, None, :])
+                previous_end = end
+
+        if recent_start < key_count:
+            recent_k = key_states[:, :, recent_start:key_count, :]
+            recent_v = value_states[:, :, recent_start:key_count, :]
+            score_parts.append(torch.matmul(query_states, recent_k.transpose(2, 3)) * scaling)
+            value_parts.append(recent_v[:, :, None, :, :])
+
+        if not score_parts:
+            score_parts.append(torch.matmul(query_states, key_states[:, :, -1:, :].transpose(2, 3)) * scaling)
+            value_parts.append(value_states[:, :, None, -1:, :])
+        scores = torch.cat(score_parts, dim=-1)
+        values = torch.cat(value_parts, dim=-2)
+        weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        attention_output = torch.sum(weights[..., None] * values, dim=-2)
+        return attention_output.transpose(1, 2).contiguous(), None
+
+    parts_k: list[torch.Tensor] = []
+    parts_v: list[torch.Tensor] = []
+    if sink_end > 0:
+        parts_k.append(key_states[:, :, :sink_end, :])
+        parts_v.append(value_states[:, :, :sink_end, :])
+
+    remote_len = remote_end - remote_start
+    if remote_len > 0:
+        if remote_len <= prototype_count:
+            parts_k.append(key_states[:, :, remote_start:remote_end, :])
+            parts_v.append(value_states[:, :, remote_start:remote_end, :])
+        else:
+            boundaries = torch.linspace(
+                0,
+                remote_len,
+                steps=prototype_count + 1,
+                device=key_states.device,
+                dtype=torch.float32,
+            ).round().to(torch.long)
+            synth_k: list[torch.Tensor] = []
+            synth_v: list[torch.Tensor] = []
+            previous_end = 0
+            for index in range(prototype_count):
+                start = int(boundaries[index].item())
+                end = int(boundaries[index + 1].item())
+                start = max(start, previous_end)
+                end = max(end, start + 1)
+                end = min(end, remote_len)
+                if start >= end:
+                    continue
+                key_chunk = key_states[:, :, remote_start + start : remote_start + end, :]
+                value_chunk = value_states[:, :, remote_start + start : remote_start + end, :]
+                synth_k.append(key_chunk.mean(dim=-2, keepdim=True))
+                synth_v.append(value_chunk.mean(dim=-2, keepdim=True))
+                previous_end = end
+            if synth_k:
+                parts_k.append(torch.cat(synth_k, dim=-2))
+                parts_v.append(torch.cat(synth_v, dim=-2))
+
+    if recent_start < key_count:
+        parts_k.append(key_states[:, :, recent_start:key_count, :])
+        parts_v.append(value_states[:, :, recent_start:key_count, :])
+
+    compact_k = torch.cat(parts_k, dim=-2) if parts_k else key_states[:, :, -1:, :]
+    compact_v = torch.cat(parts_v, dim=-2) if parts_v else value_states[:, :, -1:, :]
+    scores = torch.matmul(query_states, compact_k.transpose(2, 3)) * scaling
+    weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(weights, compact_v)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
+def _landmark_synthetic_kv_attention_forward(
+    query_states: torch.Tensor,
+    key_states: torch.Tensor,
+    value_states: torch.Tensor,
+    scaling: float,
+    recent_tokens: int,
+    landmark_stride: int,
+    prototype_count: int,
+    method: str,
+    sink_tokens: int,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    if query_states.shape[-2] != 1:
+        raise RuntimeError("landmark+synthetic KV attention requires token-by-token eval; set --eval_chunk_size 1.")
+    batch_count, head_count, _, _ = query_states.shape
+    key_count = key_states.shape[-2]
+    if key_count == 0:
+        raise RuntimeError("landmark+synthetic KV attention received an empty key cache.")
+
+    history_count = max(0, key_count - 1)
+    if history_count <= 0:
+        return value_states[:, :, -1:, :].transpose(1, 2).contiguous(), None
+
+    sink_end = min(max(0, sink_tokens), history_count)
+    recent_start = max(sink_end, history_count - max(0, recent_tokens))
+    remote_start = sink_end
+    remote_end = recent_start
+
+    landmark_indices: torch.Tensor | None = None
+    if remote_end > remote_start:
+        stride = max(1, int(landmark_stride))
+        max_landmarks = max(1, math.ceil(remote_end / stride) + 1)
+        base = torch.arange(max_landmarks, device=query_states.device, dtype=torch.long).view(1, 1, -1) * stride
+        if head_count > 1 and stride > 1:
+            offsets = torch.div(
+                torch.arange(head_count, device=query_states.device, dtype=torch.long) * stride,
+                head_count,
+                rounding_mode="floor",
+            ).view(1, head_count, 1)
+        else:
+            offsets = torch.zeros((1, head_count, 1), device=query_states.device, dtype=torch.long)
+        indices = base + offsets
+        valid = (indices >= remote_start) & (indices < remote_end)
+        if valid.any():
+            landmark_indices = indices.clamp(0, max(0, key_count - 1)).expand(batch_count, -1, -1)
+
+    if method == "mass":
+        score_parts: list[torch.Tensor] = []
+        value_parts: list[torch.Tensor] = []
+        if sink_end > 0:
+            sink_k = key_states[:, :, :sink_end, :]
+            sink_v = value_states[:, :, :sink_end, :]
+            score_parts.append(torch.matmul(query_states, sink_k.transpose(2, 3)) * scaling)
+            value_parts.append(sink_v[:, :, None, :, :])
+
+        if landmark_indices is not None:
+            gather = landmark_indices[:, :, :, None].expand(-1, -1, -1, key_states.shape[-1])
+            landmark_k = torch.gather(key_states, dim=2, index=gather)
+            landmark_v = torch.gather(value_states, dim=2, index=gather)
+            score_parts.append(torch.matmul(query_states, landmark_k.transpose(2, 3)) * scaling)
+            value_parts.append(landmark_v[:, :, None, :, :])
+
+        remote_len = remote_end - remote_start
+        if remote_len > 0:
+            boundaries = torch.linspace(
+                0,
+                remote_len,
+                steps=min(prototype_count, remote_len) + 1,
+                device=key_states.device,
+                dtype=torch.float32,
+            ).round().to(torch.long)
+            previous_end = 0
+            for index in range(boundaries.numel() - 1):
+                start = int(boundaries[index].item())
+                end = int(boundaries[index + 1].item())
+                start = max(start, previous_end)
+                end = max(end, start + 1)
+                end = min(end, remote_len)
+                if start >= end:
+                    continue
+                key_chunk = key_states[:, :, remote_start + start : remote_start + end, :]
+                value_chunk = value_states[:, :, remote_start + start : remote_start + end, :]
+                chunk_scores = torch.matmul(query_states, key_chunk.transpose(2, 3)) * scaling
+                chunk_weights = F.softmax(chunk_scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+                chunk_value = torch.sum(chunk_weights[..., None] * value_chunk[:, :, None, :, :], dim=-2)
+                chunk_logit = torch.logsumexp(chunk_scores.float(), dim=-1, keepdim=True).to(query_states.dtype)
+                score_parts.append(chunk_logit)
+                value_parts.append(chunk_value[:, :, :, None, :])
+                previous_end = end
+
+        if recent_start < history_count:
+            recent_k = key_states[:, :, recent_start:history_count, :]
+            recent_v = value_states[:, :, recent_start:history_count, :]
+            score_parts.append(torch.matmul(query_states, recent_k.transpose(2, 3)) * scaling)
+            value_parts.append(recent_v[:, :, None, :, :])
+
+        if _ACTIVE_ALWAYS_KEEP_SELF:
+            self_k = key_states[:, :, -1:, :]
+            self_v = value_states[:, :, -1:, :]
+            score_parts.append(torch.matmul(query_states, self_k.transpose(2, 3)) * scaling)
+            value_parts.append(self_v[:, :, None, :, :])
+
+        if not score_parts:
+            score_parts.append(torch.matmul(query_states, key_states[:, :, -1:, :].transpose(2, 3)) * scaling)
+            value_parts.append(value_states[:, :, None, -1:, :])
+        scores = torch.cat(score_parts, dim=-1)
+        values = torch.cat(value_parts, dim=-2)
+        weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        attention_output = torch.sum(weights[..., None] * values, dim=-2)
+        return attention_output.transpose(1, 2).contiguous(), None
+
+    parts_k: list[torch.Tensor] = []
+    parts_v: list[torch.Tensor] = []
+    if sink_end > 0:
+        parts_k.append(key_states[:, :, :sink_end, :])
+        parts_v.append(value_states[:, :, :sink_end, :])
+
+    if landmark_indices is not None:
+        gather = landmark_indices[:, :, :, None].expand(-1, -1, -1, key_states.shape[-1])
+        parts_k.append(torch.gather(key_states, dim=2, index=gather))
+        parts_v.append(torch.gather(value_states, dim=2, index=gather))
+
+    remote_len = remote_end - remote_start
+    if remote_len > 0:
+        boundaries = torch.linspace(
+            0,
+            remote_len,
+            steps=min(prototype_count, remote_len) + 1,
+            device=key_states.device,
+            dtype=torch.float32,
+        ).round().to(torch.long)
+        synth_k: list[torch.Tensor] = []
+        synth_v: list[torch.Tensor] = []
+        previous_end = 0
+        for index in range(boundaries.numel() - 1):
+            start = int(boundaries[index].item())
+            end = int(boundaries[index + 1].item())
+            start = max(start, previous_end)
+            end = max(end, start + 1)
+            end = min(end, remote_len)
+            if start >= end:
+                continue
+            key_chunk = key_states[:, :, remote_start + start : remote_start + end, :]
+            value_chunk = value_states[:, :, remote_start + start : remote_start + end, :]
+            synth_k.append(key_chunk.mean(dim=-2, keepdim=True))
+            synth_v.append(value_chunk.mean(dim=-2, keepdim=True))
+            previous_end = end
+        if synth_k:
+            parts_k.append(torch.cat(synth_k, dim=-2))
+            parts_v.append(torch.cat(synth_v, dim=-2))
+
+    if recent_start < history_count:
+        parts_k.append(key_states[:, :, recent_start:history_count, :])
+        parts_v.append(value_states[:, :, recent_start:history_count, :])
+
+    if _ACTIVE_ALWAYS_KEEP_SELF:
+        parts_k.append(key_states[:, :, -1:, :])
+        parts_v.append(value_states[:, :, -1:, :])
+
+    compact_k = torch.cat(parts_k, dim=-2) if parts_k else key_states[:, :, -1:, :]
+    compact_v = torch.cat(parts_v, dim=-2) if parts_v else value_states[:, :, -1:, :]
+    scores = torch.matmul(query_states, compact_k.transpose(2, 3)) * scaling
+    weights = F.softmax(scores, dim=-1, dtype=torch.float32).to(query_states.dtype)
+    attention_output = torch.matmul(weights, compact_v)
+    return attention_output.transpose(1, 2).contiguous(), None
+
+
 def _limited_eager_attention_forward(
     module: torch.nn.Module,
     query_states: torch.Tensor,
@@ -4152,6 +6169,21 @@ def _limited_eager_attention_forward(
             attention_mask,
             scaling,
         )
+    if mode_kind == "synthetic_kv_attention":
+        synthetic_params = parse_synthetic_kv_params(_ACTIVE_MODE)
+        if synthetic_params is None:
+            raise RuntimeError(f"Invalid synthetic KV mode: {_ACTIVE_MODE}")
+        prototype_count, synthetic_method = synthetic_params
+        return _synthetic_kv_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            scaling,
+            prototype_count,
+            synthetic_method,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+            _ACTIVE_PROTECT_RECENT_TOKENS,
+        )
     if mode_kind == "sparq_fast_attention":
         if query_states.shape[-2] != 1:
             raise RuntimeError("SparQ fast mode requires token-by-token eval; set --eval_chunk_size 1.")
@@ -4216,8 +6248,186 @@ def _limited_eager_attention_forward(
             attention_mask,
             scaling,
         )
+    if (
+        _ACTIVE_QABS_FAST_PATH
+        and mode_kind == "qabs_periodic_candidate_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _qabs_periodic_candidate_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+        )
+    if (
+        _ACTIVE_QABS_FAST_PATH
+        and mode_kind == "qabs_candidate_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _qabs_candidate_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+        )
+    if (
+        _ACTIVE_QABS_FAST_PATH
+        and mode_kind
+        in {
+            "qabs_candidate_top2_attention",
+            "qabs_candidate_top2_hlimit_attention",
+            "qabs_candidate_top2_global_attention",
+        }
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _qabs_candidate_top2_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+        )
+    if (
+        _ACTIVE_QABS_FAST_PATH
+        and mode_kind
+        in {
+            "qabs_shared_candidate_attention",
+            "qabs_shared_candidate_top2_attention",
+            "qabs_shared_reuse_attention",
+        }
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _qabs_shared_candidate_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+        )
     if mode_kind == "lagged_reuse_rerank":
         raise RuntimeError("lagged reuse mode requires --qabs_fast_path true and --eval_chunk_size 1.")
+    if (
+        mode_kind == "landmark_recent_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        landmark_params = parse_landmark_recent_params(_ACTIVE_MODE)
+        if landmark_params is None:
+            raise RuntimeError(f"Invalid landmark-recent mode: {_ACTIVE_MODE}")
+        recent_tokens, landmark_stride = landmark_params
+        return _landmark_recent_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            recent_tokens,
+            landmark_stride,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
+    if (
+        mode_kind == "full_head_recent_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        full_head_params = parse_full_head_recent_params(_ACTIVE_MODE)
+        if full_head_params is None:
+            raise RuntimeError(f"Invalid full-head-recent mode: {_ACTIVE_MODE}")
+        full_heads, recent_tokens = full_head_params
+        return _full_head_recent_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            full_heads,
+            recent_tokens,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
+    if (
+        mode_kind == "full_layer_recent_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        full_layer_params = parse_full_layer_recent_params(_ACTIVE_MODE)
+        if full_layer_params is None:
+            raise RuntimeError(f"Invalid full-layer-recent mode: {_ACTIVE_MODE}")
+        full_layers, recent_tokens = full_layer_params
+        return _full_layer_recent_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            full_layers,
+            recent_tokens,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
+    if (
+        mode_kind == "full_layer_landmark_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        full_layer_landmark_params = parse_full_layer_landmark_params(_ACTIVE_MODE)
+        if full_layer_landmark_params is None:
+            raise RuntimeError(f"Invalid full-layer-landmark mode: {_ACTIVE_MODE}")
+        full_layers, recent_tokens, landmark_stride = full_layer_landmark_params
+        return _full_layer_landmark_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            full_layers,
+            recent_tokens,
+            landmark_stride,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
+    if (
+        mode_kind == "layer_budget_attention"
+        and query_states.shape[-2] == 1
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        return _layer_budget_attention_forward(
+            module,
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
+    if (
+        mode_kind == "recent_window"
+        and query_states.shape[-2] == 1
+        and _ACTIVE_LOAD_STATS is None
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        recent_tokens = parse_recent_window_tokens(_ACTIVE_MODE)
+        if recent_tokens is None:
+            raise RuntimeError(f"Invalid recent-window mode: {_ACTIVE_MODE}")
+        return _recent_window_attention_forward(
+            query_states,
+            key_states,
+            value_states,
+            attention_mask,
+            scaling,
+            recent_tokens,
+            _ACTIVE_PROTECT_SINK_TOKENS,
+        )
     scores = torch.matmul(query_states, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
         scores = scores + attention_mask[:, :, :, : scores.shape[-1]]
@@ -4237,10 +6447,11 @@ def _limited_eager_attention_forward(
         "sign_xnor_knorm",
         "sign_xnor_rerank",
         "recent_window",
-        "qabs_candidate_keep",
-        "qabs_partial_rerank",
-        "qabs_reuse_rerank",
-    }:
+            "qabs_candidate_keep",
+            "qabs_partial_rerank",
+            "qabs_reuse_rerank",
+            "qabs_candidate_attention",
+        }:
         final_keep = torch.zeros_like(scores, dtype=torch.bool)
         query_count = scores.shape[-2]
         key_count = scores.shape[-1]
@@ -4590,8 +6801,11 @@ def attention_mode(
     qabs_profile_stats: QabsReuseProfileStats | None = None,
     qabs_candidate_selection: str = "topk",
     qabs_threshold_sample_size: int = 256,
+    full_head_map_path: str = "",
+    full_layer_map_path: str = "",
+    layer_budget_map_path: str = "",
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_KNORM_STATE, _ACTIVE_BLOCK_ROUTE_STATE, _ACTIVE_KSIGN_STATE, _ACTIVE_KDOM_STATE, _ACTIVE_BREP_STATE, _ACTIVE_SPARQ_MEAN_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL, _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL, _ACTIVE_QABS_CUDA_REUSE_SELECT_KERNEL, _ACTIVE_QABS_PROFILE_STATS, _ACTIVE_QABS_CANDIDATE_SELECTION, _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_KNORM_STATE, _ACTIVE_BLOCK_ROUTE_STATE, _ACTIVE_KSIGN_STATE, _ACTIVE_KDOM_STATE, _ACTIVE_BREP_STATE, _ACTIVE_SPARQ_MEAN_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL, _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL, _ACTIVE_QABS_CUDA_REUSE_SELECT_KERNEL, _ACTIVE_QABS_PROFILE_STATS, _ACTIVE_QABS_CANDIDATE_SELECTION, _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE, _ACTIVE_FULL_HEAD_MAP_PATH, _ACTIVE_FULL_LAYER_MAP_PATH, _ACTIVE_LAYER_BUDGET_MAP_PATH, _LAYER_BUDGET_QABS_REUSE_STATE
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -4619,6 +6833,9 @@ def attention_mode(
         _ACTIVE_QABS_PROFILE_STATS,
         _ACTIVE_QABS_CANDIDATE_SELECTION,
         _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE,
+        _ACTIVE_FULL_HEAD_MAP_PATH,
+        _ACTIVE_FULL_LAYER_MAP_PATH,
+        _ACTIVE_LAYER_BUDGET_MAP_PATH,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
@@ -4646,6 +6863,11 @@ def attention_mode(
     _ACTIVE_QABS_PROFILE_STATS = qabs_profile_stats
     _ACTIVE_QABS_CANDIDATE_SELECTION = qabs_candidate_selection
     _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE = max(1, qabs_threshold_sample_size)
+    _ACTIVE_FULL_HEAD_MAP_PATH = full_head_map_path
+    _ACTIVE_FULL_LAYER_MAP_PATH = full_layer_map_path
+    _ACTIVE_LAYER_BUDGET_MAP_PATH = layer_budget_map_path
+    if mode == "layerbudgetattn":
+        _LAYER_BUDGET_QABS_REUSE_STATE = {}
     try:
         yield
     finally:
@@ -4676,6 +6898,9 @@ def attention_mode(
             _ACTIVE_QABS_PROFILE_STATS,
             _ACTIVE_QABS_CANDIDATE_SELECTION,
             _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE,
+            _ACTIVE_FULL_HEAD_MAP_PATH,
+            _ACTIVE_FULL_LAYER_MAP_PATH,
+            _ACTIVE_LAYER_BUDGET_MAP_PATH,
         ) = previous
 
 
@@ -4769,22 +6994,43 @@ def compute_eval_loss(
     qabs_profile_stats: QabsReuseProfileStats | None = None,
     qabs_candidate_selection: str = "topk",
     qabs_threshold_sample_size: int = 256,
+    full_head_map_path: str = "",
+    full_layer_map_path: str = "",
+    layer_budget_map_path: str = "",
+    adaptive_budget_stats: dict[str, Any] | None = None,
     initial_past_key_values: Any | None = None,
     initial_prev_logits: torch.Tensor | None = None,
+    clone_initial_cache: bool = True,
     log_every: int = 1,
 ) -> tuple[float, float, int, float]:
     print(f"starting mode: {mode}", flush=True)
     started = time.perf_counter()
     if initial_past_key_values is None or initial_prev_logits is None:
         past_key_values, prev_logits = prefill_cache(model, input_ids, prefill_tokens, prefill_chunk_size, input_device)
-    else:
+    elif clone_initial_cache:
         print(f"cloning shared prefill cache for mode: {mode}", flush=True)
         past_key_values = clone_past_key_values(initial_past_key_values)
         prev_logits = initial_prev_logits.detach().clone()
+    else:
+        print(f"using shared prefill cache without clone for single mode: {mode}", flush=True)
+        past_key_values = initial_past_key_values
+        prev_logits = initial_prev_logits
     total_loss = 0.0
     total_count = 0
     eval_end = prefill_tokens + eval_tokens
     total_chunks = math.ceil(eval_tokens / eval_chunk_size)
+    adaptive_full_layer_params = parse_adaptive_full_layer_recent_params(mode)
+    if adaptive_full_layer_params is not None and adaptive_budget_stats is not None:
+        adaptive_budget_stats.clear()
+        adaptive_budget_stats.update(
+            {
+                "low_tokens": 0,
+                "high_tokens": 0,
+                "margin_sum": 0.0,
+                "margin_count": 0,
+                "margin_threshold": adaptive_full_layer_params[2],
+            }
+        )
     for chunk_idx, start in enumerate(range(prefill_tokens, eval_end, eval_chunk_size), start=1):
         end = min(start + eval_chunk_size, eval_end)
         chunk = input_ids[:, start:end].to(input_device)
@@ -4800,8 +7046,24 @@ def compute_eval_loss(
             kwargs["past_key_values"] = past_key_values
         if log_every <= 1 or chunk_idx == 1 or chunk_idx == total_chunks or chunk_idx % log_every == 0:
             print(f"ppl {mode} chunk {chunk_idx}/{total_chunks}: tokens {start}-{end - 1}", flush=True)
+        attention_eval_mode = mode
+        if adaptive_full_layer_params is not None:
+            if eval_chunk_size != 1:
+                raise RuntimeError("adaptive full-layer mode requires --eval_chunk_size 1.")
+            low_layers, high_layers, margin_threshold, recent_tokens = adaptive_full_layer_params
+            top2_logits = torch.topk(prev_logits.float(), k=2, dim=-1).values
+            margin = float((top2_logits[:, 0] - top2_logits[:, 1]).mean())
+            chosen_layers = low_layers if margin >= margin_threshold else high_layers
+            if adaptive_budget_stats is not None:
+                if chosen_layers == low_layers:
+                    adaptive_budget_stats["low_tokens"] += 1
+                else:
+                    adaptive_budget_stats["high_tokens"] += 1
+                adaptive_budget_stats["margin_sum"] += margin
+                adaptive_budget_stats["margin_count"] += 1
+            attention_eval_mode = f"fulll{chosen_layers}recent{recent_tokens}attn"
         with attention_mode(
-            mode,
+            attention_eval_mode,
             top_fraction,
             max_heads_per_token,
             always_keep_self,
@@ -4827,6 +7089,9 @@ def compute_eval_loss(
             qabs_profile_stats,
             qabs_candidate_selection,
             qabs_threshold_sample_size,
+            full_head_map_path,
+            full_layer_map_path,
+            layer_budget_map_path,
         ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
@@ -5047,7 +7312,32 @@ def main() -> None:
             if mode_kind in {"sign_xnor", "sign_xnor_knorm", "sign_xnor_rerank"}
             else None
         )
-        recent_window_tokens = parse_recent_window_tokens(mode) if mode_kind == "recent_window" else None
+        landmark_params = parse_landmark_recent_params(mode) if mode_kind == "landmark_recent_attention" else None
+        full_head_params = parse_full_head_recent_params(mode) if mode_kind == "full_head_recent_attention" else None
+        full_layer_params = parse_full_layer_recent_params(mode) if mode_kind == "full_layer_recent_attention" else None
+        full_layer_landmark_params = (
+            parse_full_layer_landmark_params(mode) if mode_kind == "full_layer_landmark_attention" else None
+        )
+        adaptive_full_layer_params = (
+            parse_adaptive_full_layer_recent_params(mode)
+            if mode_kind == "adaptive_full_layer_recent_attention"
+            else None
+        )
+        recent_window_tokens = (
+            parse_recent_window_tokens(mode)
+            if mode_kind == "recent_window"
+            else landmark_params[0]
+            if landmark_params is not None
+            else full_head_params[1]
+            if full_head_params is not None
+            else full_layer_params[1]
+            if full_layer_params is not None
+            else full_layer_landmark_params[1]
+            if full_layer_landmark_params is not None
+            else adaptive_full_layer_params[3]
+            if adaptive_full_layer_params is not None
+            else None
+        )
         kdom_params = parse_kdom_params(mode) if mode_kind == "kdom_index_rerank" else None
         qbb_params = parse_qbb_params(mode) if mode_kind == "qabs_block_bound" else None
         kdim_params = parse_kdim_params(mode) if mode_kind == "kdim_posting_rerank" else None
@@ -5075,7 +7365,21 @@ def main() -> None:
             else (qboracle_params[1], qboracle_params[3])
             if qboracle_params is not None
             else parse_qabs_partial_rerank_params(mode)
-            if mode_kind in {"qabs_candidate_keep", "qabs_partial_rerank", "qabs_reuse_rerank", "lagged_reuse_rerank"}
+            if mode_kind
+            in {
+                "qabs_candidate_keep",
+                "qabs_partial_rerank",
+                "qabs_reuse_rerank",
+                "qabs_candidate_attention",
+                "qabs_periodic_candidate_attention",
+                "qabs_candidate_top2_attention",
+                "qabs_candidate_top2_hlimit_attention",
+                "qabs_candidate_top2_global_attention",
+                "qabs_shared_candidate_attention",
+                "qabs_shared_candidate_top2_attention",
+                "qabs_shared_reuse_attention",
+                "lagged_reuse_rerank",
+            }
             else None
         )
         qabs_dim_count = qabs_params[0] if qabs_params else None
@@ -5119,16 +7423,56 @@ def main() -> None:
         )
         qabs_profile_stats = (
             QabsReuseProfileStats(layer_count, head_count)
-            if args.qabs_profile and mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"}
+            if args.qabs_profile
+            and mode_kind
+            in {
+                "qabs_reuse_rerank",
+                "lagged_reuse_rerank",
+                "qabs_candidate_attention",
+                "qabs_periodic_candidate_attention",
+                "qabs_candidate_top2_attention",
+                "qabs_candidate_top2_hlimit_attention",
+                "qabs_candidate_top2_global_attention",
+                "qabs_shared_candidate_attention",
+                "qabs_shared_candidate_top2_attention",
+            }
             else None
         )
-        reuse_state = ReuseCandidateState() if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else None
+        reuse_state = (
+            ReuseCandidateState()
+            if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank", "qabs_shared_reuse_attention", "qabs_periodic_candidate_attention"}
+            else None
+        )
         knorm_state = KNormState() if mode_kind == "knorm_reservoir" else None
         block_route_state = BlockRouteState() if mode_kind == "block_route" else None
         ksign_state = KSignIndexState() if mode_kind == "ksign_index_rerank" else None
         kdom_state = KDomIndexState() if mode_kind == "kdom_index_rerank" else None
         brep_state = BlockRepState() if mode_kind == "block_rep_rerank" else None
-        sparq_mean_state = SparQMeanState() if mode_kind == "sparq_fast_attention" else None
+        sparq_mean_state = (
+            SparQMeanState()
+            if mode_kind == "sparq_fast_attention"
+            or (
+                mode_kind
+                in {
+                    "qabs_reuse_rerank",
+                    "qabs_candidate_attention",
+                    "qabs_periodic_candidate_attention",
+                    "qabs_candidate_top2_attention",
+                    "qabs_candidate_top2_hlimit_attention",
+                    "qabs_candidate_top2_global_attention",
+                    "qabs_shared_candidate_attention",
+                    "qabs_shared_candidate_top2_attention",
+                    "qabs_shared_reuse_attention",
+                    "lagged_reuse_rerank",
+                }
+                and args.qabs_fast_path
+                and args.qabs_cuda_candidate_kernel
+            )
+            else None
+        )
+        adaptive_budget_stats: dict[str, Any] | None = (
+            {} if mode_kind == "adaptive_full_layer_recent_attention" else None
+        )
         hybrid_params = parse_hybrid_params(mode) if mode_kind == "observation_hybrid" else None
         obs_state = (
             ObservationWindowState(
@@ -5212,9 +7556,28 @@ def main() -> None:
             qabs_profile_stats,
             args.qabs_candidate_selection,
             args.qabs_threshold_sample_size,
+            args.full_head_map_path,
+            args.full_layer_map_path,
+            args.layer_budget_map_path,
+            adaptive_budget_stats,
             shared_past_key_values,
             shared_prev_logits,
+            len(modes) > 1,
             args.log_every,
+        )
+        adaptive_low_tokens = (
+            int(adaptive_budget_stats.get("low_tokens", 0)) if adaptive_budget_stats is not None else ""
+        )
+        adaptive_high_tokens = (
+            int(adaptive_budget_stats.get("high_tokens", 0)) if adaptive_budget_stats is not None else ""
+        )
+        adaptive_total_tokens = (
+            int(adaptive_low_tokens) + int(adaptive_high_tokens)
+            if adaptive_budget_stats is not None
+            else 0
+        )
+        adaptive_margin_count = (
+            int(adaptive_budget_stats.get("margin_count", 0)) if adaptive_budget_stats is not None else 0
         )
         ppl_rows.append(
             {
@@ -5232,9 +7595,16 @@ def main() -> None:
                         "sign_xnor_knorm",
                         "sign_xnor_rerank",
                         "recent_window",
+                        "landmark_recent_attention",
+                        "full_head_recent_attention",
+                        "full_layer_recent_attention",
+                        "full_layer_landmark_attention",
+                        "layer_budget_attention",
+                        "adaptive_full_layer_recent_attention",
                         "qabs_candidate_keep",
                         "qabs_partial_rerank",
                         "qabs_reuse_rerank",
+                        "qabs_periodic_candidate_attention",
             "lagged_reuse_rerank",
                         "sparq_attention",
                         "sparq_fast_attention",
@@ -5279,12 +7649,34 @@ def main() -> None:
                     if mode_kind == "sign_xnor_rerank"
                     else "recent_window"
                     if mode_kind == "recent_window"
+                    else "adaptive_full_layer_recent_attention"
+                    if mode_kind == "adaptive_full_layer_recent_attention"
+                    else "full_layer_landmark_attention"
+                    if mode_kind == "full_layer_landmark_attention"
+                    else "layer_budget_attention"
+                    if mode_kind == "layer_budget_attention"
                     else "qabs_candidate_keep"
                     if mode_kind == "qabs_candidate_keep"
                     else "qabs_partial_rerank"
                     if mode_kind == "qabs_partial_rerank"
                     else "qabs_reuse_rerank"
                     if mode_kind == "qabs_reuse_rerank"
+                    else "qabs_candidate_attention"
+                    if mode_kind == "qabs_candidate_attention"
+                    else "qabs_periodic_candidate_attention"
+                    if mode_kind == "qabs_periodic_candidate_attention"
+                    else "qabs_candidate_top2_attention"
+                    if mode_kind == "qabs_candidate_top2_attention"
+                    else "qabs_candidate_top2_hlimit_attention"
+                    if mode_kind == "qabs_candidate_top2_hlimit_attention"
+                    else "qabs_candidate_top2_global_attention"
+                    if mode_kind == "qabs_candidate_top2_global_attention"
+                    else "qabs_shared_candidate_attention"
+                    if mode_kind == "qabs_shared_candidate_attention"
+                    else "qabs_shared_candidate_top2_attention"
+                    if mode_kind == "qabs_shared_candidate_top2_attention"
+                    else "qabs_shared_reuse_attention"
+                    if mode_kind == "qabs_shared_reuse_attention"
                     else "lagged_reuse_rerank"
                     if mode_kind == "lagged_reuse_rerank"
                     else "knorm_reservoir"
@@ -5317,19 +7709,62 @@ def main() -> None:
                 "protected_recent_fraction": protect_params[1] if protect_params else "",
                 "protected_recent_tokens": args.protect_recent_tokens,
                 "always_keep_self": args.always_keep_self if mode != "baseline" else "",
-                "qabs_fast_path": args.qabs_fast_path if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else "",
+                "qabs_fast_path": (
+                    args.qabs_fast_path
+                    if mode_kind
+                    in {
+                        "qabs_reuse_rerank",
+                        "qabs_candidate_attention",
+                        "qabs_periodic_candidate_attention",
+                        "qabs_candidate_top2_attention",
+                        "qabs_candidate_top2_hlimit_attention",
+                        "qabs_candidate_top2_global_attention",
+                        "qabs_shared_candidate_attention",
+                        "qabs_shared_candidate_top2_attention",
+                        "qabs_shared_reuse_attention",
+                        "lagged_reuse_rerank",
+                    }
+                    else ""
+                ),
                 "qabs_cuda_final_kernel": (
                     args.qabs_cuda_final_kernel
-                    if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank", "sparq_fast_attention"}
+                    if mode_kind
+                    in {
+                        "qabs_reuse_rerank",
+                        "qabs_candidate_attention",
+                        "qabs_periodic_candidate_attention",
+                        "qabs_candidate_top2_attention",
+                        "qabs_candidate_top2_hlimit_attention",
+                        "qabs_candidate_top2_global_attention",
+                        "qabs_shared_candidate_attention",
+                        "qabs_shared_candidate_top2_attention",
+                        "qabs_shared_reuse_attention",
+                        "lagged_reuse_rerank",
+                        "sparq_fast_attention",
+                    }
                     else ""
                 ),
                 "qabs_cuda_candidate_kernel": (
-                    args.qabs_cuda_candidate_kernel if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else ""
+                    args.qabs_cuda_candidate_kernel
+                    if mode_kind
+                    in {
+                        "qabs_reuse_rerank",
+                        "qabs_candidate_attention",
+                        "qabs_periodic_candidate_attention",
+                        "qabs_candidate_top2_attention",
+                        "qabs_candidate_top2_hlimit_attention",
+                        "qabs_candidate_top2_global_attention",
+                        "qabs_shared_candidate_attention",
+                        "qabs_shared_candidate_top2_attention",
+                        "qabs_shared_reuse_attention",
+                        "lagged_reuse_rerank",
+                    }
+                    else ""
                 ),
                 "qabs_cuda_reuse_select_kernel": (
                     args.qabs_cuda_reuse_select_kernel if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else ""
                 ),
-                "qabs_profile": args.qabs_profile if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else "",
+                "qabs_profile": args.qabs_profile if qabs_profile_stats is not None else "",
                 "qabs_candidate_selection": (
                     args.qabs_candidate_selection if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank"} else ""
                 ),
@@ -5341,6 +7776,39 @@ def main() -> None:
                 ),
                 "lagged_refresh_fraction": (
                     reuse_state.refresh_fraction() if mode_kind == "lagged_reuse_rerank" and reuse_state is not None else ""
+                ),
+                "full_head_map_path": (
+                    args.full_head_map_path if mode_kind == "full_head_recent_attention" else ""
+                ),
+                "full_layer_map_path": (
+                    args.full_layer_map_path
+                    if mode_kind
+                    in {
+                        "full_layer_recent_attention",
+                        "full_layer_landmark_attention",
+                        "adaptive_full_layer_recent_attention",
+                    }
+                    else ""
+                ),
+                "layer_budget_map_path": (
+                    args.layer_budget_map_path if mode_kind == "layer_budget_attention" else ""
+                ),
+                "adaptive_low_tokens": adaptive_low_tokens,
+                "adaptive_high_tokens": adaptive_high_tokens,
+                "adaptive_low_fraction": (
+                    float(adaptive_low_tokens) / adaptive_total_tokens
+                    if adaptive_total_tokens > 0
+                    else ""
+                ),
+                "adaptive_mean_margin": (
+                    float(adaptive_budget_stats.get("margin_sum", 0.0)) / adaptive_margin_count
+                    if adaptive_budget_stats is not None and adaptive_margin_count > 0
+                    else ""
+                ),
+                "adaptive_margin_threshold": (
+                    adaptive_budget_stats.get("margin_threshold", "")
+                    if adaptive_budget_stats is not None
+                    else ""
                 ),
                 "reuse_prefill_cache": args.reuse_prefill_cache,
                 "shared_prefill_seconds": shared_prefill_seconds,
@@ -5673,6 +8141,14 @@ def main() -> None:
             "qabs_candidate_selection",
             "qabs_threshold_sample_size",
             "lagged_refresh_fraction",
+            "full_head_map_path",
+            "full_layer_map_path",
+            "layer_budget_map_path",
+            "adaptive_low_tokens",
+            "adaptive_high_tokens",
+            "adaptive_low_fraction",
+            "adaptive_mean_margin",
+            "adaptive_margin_threshold",
             "reuse_prefill_cache",
             "shared_prefill_seconds",
         ],

@@ -1,0 +1,1819 @@
+Section 1: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 2: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 3: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 4: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 5: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 6: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 7: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 8: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 9: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 10: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 11: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 12: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 13: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 14: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 15: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 16: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 17: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 18: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 19: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 20: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 21: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 22: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 23: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 24: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 25: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 26: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 27: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 28: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 29: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 30: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 31: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 32: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 33: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 34: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 35: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 36: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 37: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 38: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 39: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 40: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 41: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 42: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 43: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 44: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 45: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 46: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 47: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 48: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 49: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 50: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 51: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 52: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 53: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 54: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 55: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 56: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 57: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 58: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 59: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 60: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 61: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 62: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 63: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 64: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 65: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 66: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 67: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 68: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 69: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 70: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 71: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 72: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 73: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 74: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 75: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 76: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 77: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 78: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 79: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 80: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 81: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 82: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 83: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 84: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 85: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 86: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 87: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 88: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 89: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 90: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 91: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 92: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 93: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 94: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 95: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 96: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 97: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 98: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 99: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 100: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 101: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 102: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 103: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 104: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 105: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 106: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 107: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 108: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 109: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 110: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 111: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 112: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 113: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 114: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 115: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 116: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 117: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 118: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 119: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 120: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 121: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 122: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 123: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 124: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 125: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 126: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 127: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 128: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 129: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 130: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 131: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 132: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 133: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 134: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 135: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 136: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 137: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 138: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 139: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 140: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 141: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 142: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 143: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 144: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 145: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 146: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 147: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 148: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 149: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 150: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 151: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 152: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 153: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 154: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 155: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 156: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 157: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 158: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 159: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 160: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 161: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 162: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 163: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 164: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 165: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 166: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 167: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 168: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 169: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 170: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 171: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 172: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 173: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 174: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 175: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 176: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 177: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 178: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 179: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 180: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 181: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 182: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 183: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 184: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 185: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 186: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 187: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 188: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 189: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 190: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 191: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 192: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 193: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 194: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 195: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 196: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 197: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 198: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 199: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 200: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 201: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 202: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 203: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 204: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 205: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 206: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 207: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 208: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 209: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 210: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 211: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 212: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 213: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 214: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 215: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 216: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 217: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 218: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 219: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 220: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 221: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 222: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 223: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 224: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 225: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 226: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 227: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 228: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 229: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 230: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 231: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 232: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 233: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 234: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 235: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 236: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 237: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 238: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 239: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 240: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 241: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 242: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 243: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 244: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 245: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 246: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 247: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 248: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 249: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 250: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 251: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 252: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 253: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 254: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 255: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 256: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 257: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 258: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 259: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 260: Software
+
+The incident report traces a latency regression from an API gateway through a queue consumer, a cache invalidation path, and a database migration.
+Engineers reproduce the bug with a deterministic fixture, add counters around the hot path, and remove a retry loop that amplified partial failures.
+The final patch keeps the public interface stable while changing ownership of the connection pool and tightening timeout propagation between services.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.

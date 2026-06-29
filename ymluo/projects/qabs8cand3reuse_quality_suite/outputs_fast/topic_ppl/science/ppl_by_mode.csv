@@ -1,0 +1,4 @@
+mode,loss,ppl,token_count,seconds,top_fraction,sign_xnor_candidate_fraction,recent_window_tokens,qabs_dim_count,qabs_candidate_fraction,kdom_key_dim_count,max_heads_per_token,limit_strategy,protected_sink_tokens,protected_recent_fraction,protected_recent_tokens,always_keep_self,qabs_fast_path,qabs_cuda_final_kernel,qabs_cuda_candidate_kernel,qabs_cuda_reuse_select_kernel,qabs_profile,qabs_candidate_selection,qabs_threshold_sample_size,lagged_refresh_fraction,reuse_prefill_cache,shared_prefill_seconds
+qabs8cand3reuse,0.06737743976501065,1.069699148984525,32,2.4609459999992396,,,,8,0.03,,,qabs_reuse_rerank,10,,10,True,True,False,False,False,False,topk,,,True,2.0751244999992196
+sparqfast8cand3,0.45313223839400507,1.5732322144606685,32,1.3670132999977795,,,,8,0.03,,,sparq_fast_attention,10,,10,True,,False,,,,,,,True,2.0751244999992196
+baseline,0.016421601801477337,1.0165571774105484,32,0.40885910000361037,,,,,,,,,10,,10,,,,,,,,,,True,2.0751244999992196

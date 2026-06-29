@@ -1,0 +1,4 @@
+output,map_count,row_counts,all_same_layers,mixed_layers,all_same_layer_fraction,avg_groups_per_layer,total_group_forwards
+server_pcic_hardtopic_b4_horizongate_condautoanchor_batched_optdispatch_eval128_seed64_eager,8,"2,4,5,8",183,41,0.8169642857142857,1.1830357142857142,265
+server_pcic_monte_b2_horizongate_condautoanchor_batched_optdispatch_seed64_eager,4,"2,3,4",96,16,0.8571428571428571,1.1428571428571428,128
+server_pcic_war_b2_horizongate_condautoanchor_batched_optdispatch_seed64_eager,2,4,48,8,0.8571428571428571,1.1428571428571428,64

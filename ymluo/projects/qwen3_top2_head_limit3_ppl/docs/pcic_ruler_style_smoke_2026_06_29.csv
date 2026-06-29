@@ -1,0 +1,7 @@
+case_id,task,mode,blocks,avg_delta_ppl,method_ratio,gate_s,extended,early,anchors,combos
+multineedle_top2,multineedle,top2,3,0.000074,2.206,11.081,3,0,,"2,0/2,0/2,0"
+multineedle_cond,multineedle,cond_auto_anchor,3,0.000074,2.781,16.650,3,0,"2,0","2,0/2,0/2,0"
+variable_top2,variable,top2,3,0.017397,2.315,11.857,2,1,,"2,0/2,0,7,12/2,0"
+variable_cond,variable,cond_auto_anchor,3,-0.000564,2.441,13.249,3,0,"2,0","0,13/2,0/2,0"
+topicswitch_top2,topicswitch,top2,3,0.000302,1.731,6.530,3,0,,"2,0/2,0/2,0"
+topicswitch_cond,topicswitch,cond_auto_anchor,3,0.000139,2.086,9.931,3,0,"2,0","0,13/2,0/2,0"

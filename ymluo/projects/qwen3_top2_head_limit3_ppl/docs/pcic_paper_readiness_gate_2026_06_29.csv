@@ -1,0 +1,10 @@
+gate,status,evidence,next_action
+method_definition,pass,"Method spec contains formal problem, Pairwise-CIC, rescue gate, and Algorithm 1.",Keep as paper Method section seed.
+fixed_online_oracle,pass,Mainline table shows conditional rescue reaches oracle on Hard-topic and online beats best fixed on Monte.,Replicate on formal LongBench/RULER subset.
+blockwise_dynamic_trace,pass,Trace table shows non-trivial combo switches across hard-topic and RULER-style variable/topic cases.,Turn trace into paper figure with block text/task positions.
+corrected_speed_accounting,pass,Corrected gate document prevents overclaiming speed and records conservative method/base ratios.,Implement fused/sparse candidate probe before claiming baseline speed.
+component_claim_boundary,pass,Component matrix separates supported claims from missing direct ablations.,Update after strict ablation suite finishes.
+strict_component_ablation,missing,"strict ok=0, strict missing=8, historical baseline rows=6.","Run ONLY_CASES P0 first, then P1/P2 if P0 supports claim."
+rescue_quality_case,pass,Hard main_cond_rescue improves over no_validation_anchor_top2 by -0.054004 ΔPPL.,Add memory_only_no_rescue comparison to isolate rescue gate itself.
+formal_benchmark,missing,"Current RULER-style results are synthetic/offline smoke, not formal RULER/LongBench.",Run formal or locally cached benchmark subset without external downloads.
+real_speed,missing,Corrected gate shows method cost remains above baseline; fused/sparse candidate probe is not done.,Implement fused/sparse probe or report speed as limitation.

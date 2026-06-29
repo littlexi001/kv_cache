@@ -5,8 +5,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 export TOKENIZERS_PARALLELISM=false
+export TRANSFORMERS_NO_VISION="${TRANSFORMERS_NO_VISION:-1}"
 
 PYTHON_BIN="${PYTHON_BIN:-python}"
+PYTHON_DIR="$(cd "$(dirname "${PYTHON_BIN}")" 2>/dev/null && pwd || true)"
+if [[ -n "${PYTHON_DIR}" && -x "${PYTHON_DIR}/ninja" ]]; then
+  export PATH="${PYTHON_DIR}:${PATH}"
+fi
 MODEL_PATH="${MODEL_PATH:-/mnt/workspace/Qwen3-0.6B}"
 TEXT_PATH="${TEXT_PATH:-/mnt/workspace/dclm/global-shard_01_of_10/local-shard_0_of_10/part-00000.txt}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-${PROJECT_DIR}/outputs/qabs_fast_speed_server}"
@@ -15,7 +20,7 @@ PREFILL_LENGTHS="${PREFILL_LENGTHS:-10000 20000 40000 60000}"
 EVAL_TOKENS="${EVAL_TOKENS:-1000}"
 CHUNK_SIZE="${CHUNK_SIZE:-8}"
 EVAL_CHUNK_SIZE="${EVAL_CHUNK_SIZE:-1}"
-MODES="${MODES:-baseline,qabs8cand3reuse,qabs8cand7reuse,qabs16cand3reuse,qabs16cand7reuse}"
+MODES="${MODES:-qabs8cand3attn,baseline}"
 
 TOP_FRACTION="${TOP_FRACTION:-0.02}"
 PROTECT_SINK_TOKENS="${PROTECT_SINK_TOKENS:-10}"
@@ -27,7 +32,9 @@ DEVICE="${DEVICE:-cuda}"
 DEVICE_MAP="${DEVICE_MAP:-auto}"
 ATTN_IMPLEMENTATION="${ATTN_IMPLEMENTATION:-eager}"
 LOG_EVERY="${LOG_EVERY:-100}"
-QABS_CUDA_FINAL_KERNEL="${QABS_CUDA_FINAL_KERNEL:-true}"
+QABS_CUDA_FINAL_KERNEL="${QABS_CUDA_FINAL_KERNEL:-false}"
+QABS_CUDA_CANDIDATE_KERNEL="${QABS_CUDA_CANDIDATE_KERNEL:-true}"
+QABS_PROFILE="${QABS_PROFILE:-false}"
 REUSE_PREFILL_CACHE="${REUSE_PREFILL_CACHE:-true}"
 BASELINE_LAST="${BASELINE_LAST:-true}"
 
@@ -71,6 +78,8 @@ for prefill_tokens in ${PREFILL_LENGTHS}; do
     --modes "${MODES}" \
     --qabs_fast_path true \
     --qabs_cuda_final_kernel "${QABS_CUDA_FINAL_KERNEL}" \
+    --qabs_cuda_candidate_kernel "${QABS_CUDA_CANDIDATE_KERNEL}" \
+    --qabs_profile "${QABS_PROFILE}" \
     --reuse_prefill_cache "${REUSE_PREFILL_CACHE}" \
     --baseline_last "${BASELINE_LAST}" \
     --disable_sparse_stats true \

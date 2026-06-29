@@ -1,0 +1,10 @@
+| combo | avg_delta_ppl | avg_delta_loss | worst_delta_ppl | output |
+| --- | ---: | ---: | ---: | --- |
+| `0,6` | -0.012719 | 0.002970 | 0.107672 | `server_pcic_hardtopic_static_b4_eval64_0_6_eager` |
+| `2,0` | 0.003316 | 0.001844 | 0.031639 | `server_pcic_hardtopic_static_b4_eval64_2_0_eager` |
+| `0,13` | 0.042066 | 0.009304 | 0.185183 | `server_pcic_hardtopic_static_b4_eval64_0_13_eager` |
+| `2,0,7,12` | 0.051028 | 0.007630 | 0.209576 | `server_pcic_hardtopic_static_b4_eval64_2_0_7_12_eager` |
+| `2,7` | 0.066519 | 0.009568 | 0.176379 | `server_pcic_hardtopic_static_b4_eval64_2_7_eager` |
+| `0,7` | 0.076412 | 0.009664 | 0.228003 | `server_pcic_hardtopic_static_b4_eval64_0_7_eager` |
+| `7,6` | 0.112183 | 0.021560 | 0.210286 | `server_pcic_hardtopic_static_b4_eval64_7_6_eager` |
+| `7,13` | 0.134968 | 0.021309 | 0.265519 | `server_pcic_hardtopic_static_b4_eval64_7_13_eager` |

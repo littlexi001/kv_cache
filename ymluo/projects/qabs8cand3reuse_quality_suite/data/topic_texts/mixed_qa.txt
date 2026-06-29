@@ -1,0 +1,1819 @@
+Section 1: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 2: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 3: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 4: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 5: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 6: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 7: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 8: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 9: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 10: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 11: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 12: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 13: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 14: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 15: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 16: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 17: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 18: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 19: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 20: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 21: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 22: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 23: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 24: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 25: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 26: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 27: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 28: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 29: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 30: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 31: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 32: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 33: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 34: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 35: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 36: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 37: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 38: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 39: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 40: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 41: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 42: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 43: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 44: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 45: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 46: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 47: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 48: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 49: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 50: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 51: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 52: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 53: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 54: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 55: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 56: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 57: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 58: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 59: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 60: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 61: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 62: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 63: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 64: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 65: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 66: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 67: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 68: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 69: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 70: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 71: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 72: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 73: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 74: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 75: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 76: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 77: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 78: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 79: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 80: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 81: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 82: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 83: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 84: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 85: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 86: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 87: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 88: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 89: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 90: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 91: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 92: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 93: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 94: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 95: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 96: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 97: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 98: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 99: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 100: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 101: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 102: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 103: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 104: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 105: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 106: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 107: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 108: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 109: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 110: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 111: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 112: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 113: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 114: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 115: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 116: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 117: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 118: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 119: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 120: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 121: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 122: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 123: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 124: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 125: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 126: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 127: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 128: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 129: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 130: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 131: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 132: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 133: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 134: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 135: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 136: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 137: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 138: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 139: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 140: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 141: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 142: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 143: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 144: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 145: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 146: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 147: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 148: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 149: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 150: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 151: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 152: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 153: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 154: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 155: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 156: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 157: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 158: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 159: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 160: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 161: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 162: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 163: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 164: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 165: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 166: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 167: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 168: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 169: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 170: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 171: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 172: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 173: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 174: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 175: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 176: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 177: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 178: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 179: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 180: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 181: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 182: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 183: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 184: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 185: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 186: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 187: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 188: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 189: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 190: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 191: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 192: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 193: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 194: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 195: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 196: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 197: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 198: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 199: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 200: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 201: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 202: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 203: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 204: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 205: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 206: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 207: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 208: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 209: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 210: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 211: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 212: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 213: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 214: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 215: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 216: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 217: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 218: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 219: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 220: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 221: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 222: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 223: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 224: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 225: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 226: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 227: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 228: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 229: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 230: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 231: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 232: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 233: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 234: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 235: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 236: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 237: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 238: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 239: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 240: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 241: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 242: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 243: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 244: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 245: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 246: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 247: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 248: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 249: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 250: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 251: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 252: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 253: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 254: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 255: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 256: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 257: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 258: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 259: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.
+
+Section 260: Mixed Qa
+
+Question: Why did the laboratory repeat the trial? Answer: The first measurement conflicted with the control sample, so the team needed a cleaner estimate.
+Question: What caused the service outage? Answer: A stale cache entry triggered repeated retries, which saturated the worker queue during peak traffic.
+Question: How did the expedition finance repairs? Answer: The captain sold part of the cargo early and used the proceeds to replace damaged rigging.
+The passage deliberately keeps a coherent local topic while changing details across repetitions, so sparse attention modes are compared on consistent but non-identical context.

@@ -15,6 +15,31 @@ from typing import Any
 import torch
 import torch.nn.functional as F
 
+
+def _install_torchvision_fake_registration_guard() -> None:
+    register_fake = getattr(torch.library, "register_fake", None)
+    if register_fake is None or getattr(register_fake, "_qabs_guarded", False):
+        return
+
+    def guarded_register_fake(op_name: str, *args: Any, **kwargs: Any):
+        decorator = register_fake(op_name, *args, **kwargs)
+
+        def guarded_decorator(fn: Any) -> Any:
+            try:
+                return decorator(fn)
+            except RuntimeError as exc:
+                if "operator torchvision::" in str(exc) and "does not exist" in str(exc):
+                    return fn
+                raise
+
+        return guarded_decorator
+
+    guarded_register_fake._qabs_guarded = True
+    torch.library.register_fake = guarded_register_fake
+
+
+_install_torchvision_fake_registration_guard()
+
 try:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 except ImportError:
@@ -108,8 +133,18 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None
         writer.writerows(rows)
 
 
-def parse_qabs_mode(mode: str) -> tuple[int, float]:
-    match = re.fullmatch(r"qabs(\d+)cand(\d+(?:p\d+)?)rerank", mode)
+@dataclass
+class QabsModeConfig:
+    dim_count: int
+    candidate_fraction: float
+    selection: str
+
+
+def parse_qabs_mode(mode: str) -> QabsModeConfig:
+    match = re.fullmatch(
+        r"qabs(\d+)cand(\d+(?:p\d+)?)(rerank|top2attn|top2globalattn|sharedattn|sharedtop2attn)",
+        mode,
+    )
     if not match:
         raise ValueError(f"Invalid qabs mode: {mode}")
     dim_count = int(match.group(1))
@@ -118,7 +153,7 @@ def parse_qabs_mode(mode: str) -> tuple[int, float]:
         raise ValueError(f"qabs dim_count must be positive: {mode}")
     if not (0.0 < candidate_fraction <= 1.0):
         raise ValueError(f"candidate fraction must be in (0, 1]: {mode}")
-    return dim_count, candidate_fraction
+    return QabsModeConfig(dim_count=dim_count, candidate_fraction=candidate_fraction, selection=match.group(3))
 
 
 @dataclass
@@ -128,6 +163,7 @@ class OverlapAccumulator:
     true_top_tokens: int = 0
     requested_candidates: int = 0
     actual_candidates: int = 0
+    selected_tokens: int = 0
     true_hits: int = 0
     selected_attention_mass_sum: float = 0.0
     candidate_attention_mass_sum: float = 0.0
@@ -139,6 +175,7 @@ class OverlapAccumulator:
         true_top_tokens: int,
         requested_candidates: int,
         actual_candidates: int,
+        selected_tokens: int,
         true_hits: int,
         selected_attention_mass: float,
         candidate_attention_mass: float,
@@ -149,6 +186,7 @@ class OverlapAccumulator:
         self.true_top_tokens += true_top_tokens
         self.requested_candidates += requested_candidates
         self.actual_candidates += actual_candidates
+        self.selected_tokens += selected_tokens
         self.true_hits += true_hits
         self.selected_attention_mass_sum += selected_attention_mass
         self.candidate_attention_mass_sum += candidate_attention_mass
@@ -162,11 +200,15 @@ class OverlapAccumulator:
             "true_top_tokens": self.true_top_tokens,
             "requested_candidates": self.requested_candidates,
             "actual_candidates": self.actual_candidates,
+            "selected_tokens": self.selected_tokens,
             "requested_candidate_fraction": (
                 self.requested_candidates / self.history_tokens if self.history_tokens else 0.0
             ),
             "actual_candidate_fraction": (
                 self.actual_candidates / self.history_tokens if self.history_tokens else 0.0
+            ),
+            "selected_token_fraction": (
+                self.selected_tokens / self.history_tokens if self.history_tokens else 0.0
             ),
             "true_top_overlap": self.true_hits / self.true_top_tokens if self.true_top_tokens else 0.0,
             "selected_attention_mass_mean": (
@@ -232,7 +274,9 @@ class QabsOverlapCollector:
         true_top_indices = torch.topk(row_scores, k=true_count, dim=-1, largest=True).indices
 
         for mode in self.modes:
-            dim_count, candidate_fraction = self.mode_params[mode]
+            mode_config = self.mode_params[mode]
+            dim_count = mode_config.dim_count
+            candidate_fraction = mode_config.candidate_fraction
             requested = min(history_count, max(1, math.ceil(candidate_fraction * history_count)))
             selected_dim_count = min(dim_count, q.shape[-1])
 
@@ -241,19 +285,42 @@ class QabsOverlapCollector:
             k_indices = dim_indices[:, None, :].expand(-1, history_count, -1)
             k_selected = torch.gather(k, dim=-1, index=k_indices)
             partial_scores = (k_selected * q_selected[:, None, :]).sum(dim=-1)
-            threshold = torch.topk(partial_scores, k=requested, dim=-1, largest=True).values[:, -1:]
-            candidate_mask = partial_scores >= threshold
+            if mode_config.selection in {"sharedattn", "sharedtop2attn"}:
+                shared_scores = partial_scores.max(dim=0, keepdim=True).values
+                threshold = torch.topk(shared_scores, k=requested, dim=-1, largest=True).values[:, -1:]
+                candidate_mask = (shared_scores >= threshold).expand_as(partial_scores)
+            else:
+                threshold = torch.topk(partial_scores, k=requested, dim=-1, largest=True).values[:, -1:]
+                candidate_mask = partial_scores >= threshold
             exact_candidate_scores = row_scores.masked_fill(~candidate_mask, torch.finfo(row_scores.dtype).min)
-            selected_indices = torch.topk(exact_candidate_scores, k=true_count, dim=-1, largest=True).indices
+            if mode_config.selection == "top2globalattn":
+                budget = min(exact_candidate_scores.numel(), max(1, self.head_count * true_count))
+                flat_scores = exact_candidate_scores.reshape(-1)
+                _, flat_positions = torch.topk(flat_scores, k=budget, dim=-1, largest=True)
+                selected_mask = torch.zeros_like(candidate_mask, dtype=torch.bool)
+                selected_mask.reshape(-1).scatter_(
+                    dim=-1,
+                    index=flat_positions,
+                    src=torch.ones_like(flat_positions, dtype=torch.bool),
+                )
+            elif mode_config.selection == "sharedattn":
+                selected_mask = candidate_mask
+            else:
+                selected_indices = torch.topk(exact_candidate_scores, k=true_count, dim=-1, largest=True).indices
+                selected_mask = torch.zeros_like(candidate_mask, dtype=torch.bool)
+                selected_mask.scatter_(
+                    dim=-1,
+                    index=selected_indices,
+                    src=torch.ones_like(selected_indices, dtype=torch.bool),
+                )
 
             for head in range(self.head_count):
                 true_idx = true_top_indices[head]
-                selected_idx = selected_indices[head]
-                selected_mask = torch.zeros(history_count, dtype=torch.bool, device=row_scores.device)
-                selected_mask[selected_idx] = True
+                selected_head_mask = selected_mask[head]
                 actual = int(candidate_mask[head].sum().item())
-                hits = int(selected_mask[true_idx].sum().item())
-                selected_mass = float(attention_weights[head, selected_idx].sum().item())
+                selected = int(selected_head_mask.sum().item())
+                hits = int(selected_head_mask[true_idx].sum().item())
+                selected_mass = float(attention_weights[head, selected_head_mask].sum().item())
                 candidate_mass = float(attention_weights[head, candidate_mask[head]].sum().item())
                 true_top_mass = float(attention_weights[head, true_idx].sum().item())
 
@@ -262,6 +329,7 @@ class QabsOverlapCollector:
                     true_count,
                     requested,
                     actual,
+                    selected,
                     hits,
                     selected_mass,
                     candidate_mass,
@@ -272,6 +340,7 @@ class QabsOverlapCollector:
                     true_count,
                     requested,
                     actual,
+                    selected,
                     hits,
                     selected_mass,
                     candidate_mass,
@@ -282,6 +351,7 @@ class QabsOverlapCollector:
                     true_count,
                     requested,
                     actual,
+                    selected,
                     hits,
                     selected_mass,
                     candidate_mass,
@@ -296,11 +366,14 @@ class QabsOverlapCollector:
                             "mode": mode,
                             "qabs_dim_count": dim_count,
                             "candidate_fraction": candidate_fraction,
+                            "selection": mode_config.selection,
                             "history_tokens": history_count,
                             "true_top_tokens": true_count,
                             "requested_candidates": requested,
                             "actual_candidates": actual,
+                            "selected_tokens": selected,
                             "actual_candidate_fraction": actual / history_count,
+                            "selected_token_fraction": selected / history_count,
                             "true_hits": hits,
                             "true_top_overlap": hits / true_count,
                             "selected_attention_mass": selected_mass,
@@ -312,13 +385,14 @@ class QabsOverlapCollector:
     def mode_rows(self) -> list[dict[str, Any]]:
         rows = []
         for mode in self.modes:
-            dim_count, candidate_fraction = self.mode_params[mode]
+            mode_config = self.mode_params[mode]
             rows.append(
                 self.by_mode[mode].row(
                     {
                         "mode": mode,
-                        "qabs_dim_count": dim_count,
-                        "candidate_fraction": candidate_fraction,
+                        "qabs_dim_count": mode_config.dim_count,
+                        "candidate_fraction": mode_config.candidate_fraction,
+                        "selection": mode_config.selection,
                     }
                 )
             )
@@ -330,14 +404,15 @@ class QabsOverlapCollector:
             for mode in self.modes:
                 acc = self.by_layer_mode.get((layer, mode))
                 if acc is not None:
-                    dim_count, candidate_fraction = self.mode_params[mode]
+                    mode_config = self.mode_params[mode]
                     rows.append(
                         acc.row(
                             {
                                 "layer": layer,
                                 "mode": mode,
-                                "qabs_dim_count": dim_count,
-                                "candidate_fraction": candidate_fraction,
+                                "qabs_dim_count": mode_config.dim_count,
+                                "candidate_fraction": mode_config.candidate_fraction,
+                                "selection": mode_config.selection,
                             }
                         )
                     )
@@ -350,15 +425,16 @@ class QabsOverlapCollector:
                 for mode in self.modes:
                     acc = self.by_layer_head_mode.get((layer, head, mode))
                     if acc is not None:
-                        dim_count, candidate_fraction = self.mode_params[mode]
+                        mode_config = self.mode_params[mode]
                         rows.append(
                             acc.row(
                                 {
                                     "layer": layer,
                                     "head": head,
                                     "mode": mode,
-                                    "qabs_dim_count": dim_count,
-                                    "candidate_fraction": candidate_fraction,
+                                    "qabs_dim_count": mode_config.dim_count,
+                                    "candidate_fraction": mode_config.candidate_fraction,
+                                    "selection": mode_config.selection,
                                 }
                             )
                         )
@@ -573,13 +649,16 @@ def main() -> None:
         "mode",
         "qabs_dim_count",
         "candidate_fraction",
+        "selection",
         "cases",
         "history_tokens",
         "true_top_tokens",
         "requested_candidates",
         "actual_candidates",
+        "selected_tokens",
         "requested_candidate_fraction",
         "actual_candidate_fraction",
+        "selected_token_fraction",
         "true_top_overlap",
         "selected_attention_mass_mean",
         "candidate_attention_mass_mean",
@@ -610,11 +689,14 @@ def main() -> None:
                 "mode",
                 "qabs_dim_count",
                 "candidate_fraction",
+                "selection",
                 "history_tokens",
                 "true_top_tokens",
                 "requested_candidates",
                 "actual_candidates",
+                "selected_tokens",
                 "actual_candidate_fraction",
+                "selected_token_fraction",
                 "true_hits",
                 "true_top_overlap",
                 "selected_attention_mass",
@@ -638,6 +720,7 @@ def main() -> None:
                 "selected_attention_mass_mean": "full-softmax attention mass on qabs final selected tokens",
                 "candidate_attention_mass_mean": "full-softmax attention mass on all qabs candidate tokens before rerank",
                 "true_top_attention_mass_mean": "full-softmax attention mass on true full-QK top2 tokens",
+                "selected_token_fraction": "final selected historical tokens / all historical tokens; global-budget modes may vary by head",
             },
         },
         "paths": {

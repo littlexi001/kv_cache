@@ -1,0 +1,16 @@
+{
+  "topic_texts": [
+    {"name": "science", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/science.txt"},
+    {"name": "finance", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/finance.txt"},
+    {"name": "software", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/software.txt"},
+    {"name": "history", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/history.txt"},
+    {"name": "literature", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/literature.txt"},
+    {"name": "mixed_qa", "path": "ymluo/projects/qabs8cand3reuse_quality_suite/data/topic_texts/mixed_qa.txt"}
+  ],
+  "needle_prompts": {
+    "manifest": "ymluo/projects/qwen3_kcache_l2_neighbor_analysis/data/needle_in_haystack/manifest.csv",
+    "lengths": [1000, 2000, 4000, 8000],
+    "depths": [0, 25, 50, 75, 100]
+  }
+}
+
