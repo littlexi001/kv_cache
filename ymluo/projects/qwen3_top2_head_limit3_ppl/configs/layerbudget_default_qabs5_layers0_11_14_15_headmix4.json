@@ -1,0 +1,42 @@
+{
+  "default": {
+    "type": "qabs8cand3reuse",
+    "dims": 8,
+    "candidate_fraction": 0.05,
+    "top_fraction": 0.05
+  },
+  "layers": {
+    "0": {
+      "type": "headmix_qabs_reuse",
+      "full_heads": 4,
+      "dims": 8,
+      "candidate_fraction": 0.05,
+      "top_fraction": 0.05
+    },
+    "11": {
+      "type": "headmix_qabs_reuse",
+      "full_heads": 4,
+      "dims": 8,
+      "candidate_fraction": 0.05,
+      "top_fraction": 0.05
+    },
+    "14": {
+      "type": "headmix_qabs_reuse",
+      "full_heads": 4,
+      "dims": 8,
+      "candidate_fraction": 0.05,
+      "top_fraction": 0.05
+    },
+    "15": {
+      "type": "headmix_qabs_reuse",
+      "full_heads": 4,
+      "dims": 8,
+      "candidate_fraction": 0.05,
+      "top_fraction": 0.05
+    }
+  },
+  "metadata": {
+    "label": "default_qabs5_layers0_11_14_15_headmix4",
+    "purpose": "influence-gated layer/head hybrid retrieval diagnostic"
+  }
+}

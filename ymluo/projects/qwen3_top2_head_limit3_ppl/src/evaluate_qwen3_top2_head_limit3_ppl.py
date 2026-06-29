@@ -78,6 +78,8 @@ _ACTIVE_FULL_LAYER_MAP_PATH: str = ""
 _ACTIVE_LAYER_BUDGET_MAP_PATH: str = ""
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
+_ACTIVE_EVIDENCE_COVERAGE_STATS: "EvidenceSpanCoverageStats | None" = None
+_ACTIVE_EVIDENCE_SPANS: dict[str, tuple[int, int]] = {}
 _ACTIVE_QABS_FAST_PATH: bool = False
 _ACTIVE_QABS_CUDA_FINAL_KERNEL: bool = False
 _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL: bool = False
@@ -92,6 +94,30 @@ _QABS_CUDA_BREP_WARNED: bool = False
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 _LAYER_BUDGET_QABS_REUSE_STATE: dict[int, dict[str, Any]] = {}
 _BATCH_ROW_INDEX_TENSOR_CACHE: dict[tuple[str, tuple[int, ...]], torch.Tensor] = {}
+
+
+def snapshot_layer_budget_qabs_reuse_state() -> dict[int, dict[str, Any]]:
+    return copy.deepcopy(_LAYER_BUDGET_QABS_REUSE_STATE)
+
+
+def restore_layer_budget_qabs_reuse_state(state: dict[int, dict[str, Any]]) -> None:
+    global _LAYER_BUDGET_QABS_REUSE_STATE
+    _LAYER_BUDGET_QABS_REUSE_STATE = copy.deepcopy(state)
+
+
+@contextmanager
+def evidence_span_coverage(
+    stats: "EvidenceSpanCoverageStats | None",
+    spans: dict[str, tuple[int, int]],
+):
+    global _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS
+    previous = (_ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS)
+    _ACTIVE_EVIDENCE_COVERAGE_STATS = stats
+    _ACTIVE_EVIDENCE_SPANS = dict(spans)
+    try:
+        yield
+    finally:
+        _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS = previous
 
 
 def str2bool(value: str | bool) -> bool:
@@ -423,7 +449,7 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "qabs_candidate_keep", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?rerank", mode):
         return "qabs_partial_rerank", None
-    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse(?:2set|final)?", mode):
+    if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse(?:2set|final)?(?:blk\d+)?", mode):
         return "qabs_reuse_rerank", None
     if re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?top2attn", mode):
         return "qabs_candidate_top2_attention", None
@@ -717,12 +743,19 @@ def batch_row_index_tensor(row_indices: list[int], device: torch.device) -> torc
 
 
 def parse_qabs_partial_rerank_params(mode: str) -> tuple[int, float] | None:
-    match = re.fullmatch(r"(?:qabs|lagtop2qabs|lagrefresh\d+qabs|qdrift(?:maj|head|share|cos|coshead)?qabs|pconf\d+(?:p\d+)?qabs)(\d+)cand(\d+(?:p\d+)?)(?:keep|rerank|reuse(?:2set|final)?|r\d+attn|sharedr\d+attn|sharedtop2attn|sharedattn|top2(?:hlim\d+|global)?attn|appendattn|attn)?", mode)
+    match = re.fullmatch(r"(?:qabs|lagtop2qabs|lagrefresh\d+qabs|qdrift(?:maj|head|share|cos|coshead)?qabs|pconf\d+(?:p\d+)?qabs)(\d+)cand(\d+(?:p\d+)?)(?:keep|rerank|reuse(?:2set|final)?(?:blk\d+)?|r\d+attn|sharedr\d+attn|sharedtop2attn|sharedattn|top2(?:hlim\d+|global)?attn|appendattn|attn)?", mode)
     if not match:
         return None
     dim_count = int(match.group(1))
     candidate_fraction = float(match.group(2).replace("p", ".")) / 100.0
     return dim_count, candidate_fraction
+
+
+def parse_qabs_reuse_block_size(mode: str) -> int | None:
+    match = re.fullmatch(r"qabs\d+cand\d+(?:p\d+)?reuse(?:2set|final)?blk(\d+)", mode)
+    if not match:
+        return None
+    return max(1, int(match.group(1)))
 
 
 def parse_qabs_top2_hlimit(mode: str) -> int | None:
@@ -1383,6 +1416,14 @@ class QabsReuseProfileStats:
             self.threshold_sums[layer] += threshold_cpu.double().sum(dim=0)
             self.threshold_counts[layer] += threshold_cpu.isfinite().sum(dim=0).to(torch.long)
         self.selection_counts[selection] += batch_count * int(current_raw.shape[1])
+        if _ACTIVE_EVIDENCE_COVERAGE_STATS is not None:
+            _ACTIVE_EVIDENCE_COVERAGE_STATS.record_masks(
+                layer,
+                current_raw,
+                union_mask,
+                final_mask,
+                _ACTIVE_EVIDENCE_SPANS,
+            )
 
     def stage_rows(self, mode: str) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -1453,6 +1494,97 @@ class QabsReuseProfileStats:
                     "calls": calls,
                     "seconds_per_call": seconds / calls if calls else 0.0,
                     "fraction_of_profiled_seconds": seconds / total_seconds if total_seconds else 0.0,
+                }
+            )
+        return rows
+
+
+class EvidenceSpanCoverageStats:
+    MASKS = ("current", "union", "final")
+    METRICS = ("any", "all")
+
+    def __init__(self, layer_count: int, head_count: int) -> None:
+        self.layer_count = layer_count
+        self.head_count = head_count
+        self.query_counts = torch.zeros((layer_count, head_count), dtype=torch.long)
+        self.counts: dict[tuple[str, str, str], torch.Tensor] = {}
+        self.span_token_counts: Counter[str] = Counter()
+
+    def _counter(self, mask_name: str, span_name: str, metric: str) -> torch.Tensor:
+        key = (mask_name, span_name, metric)
+        if key not in self.counts:
+            self.counts[key] = torch.zeros((self.layer_count, self.head_count), dtype=torch.long)
+        return self.counts[key]
+
+    def record_masks(
+        self,
+        layer: int,
+        current_raw: torch.Tensor,
+        union_mask: torch.Tensor,
+        final_mask: torch.Tensor,
+        spans: dict[str, tuple[int, int]],
+    ) -> None:
+        if not spans:
+            return
+        masks = {"current": current_raw, "union": union_mask, "final": final_mask}
+        batch_count, head_count, history_count = current_raw.shape
+        self.query_counts[layer] += batch_count
+        for span_name, (start, end) in spans.items():
+            start = max(0, int(start))
+            end = min(history_count, int(end))
+            if start >= end:
+                continue
+            token_count = end - start
+            self.span_token_counts[span_name] += batch_count * token_count
+            for mask_name, mask in masks.items():
+                span_mask = mask[:, :, start:end].detach().cpu().bool()
+                any_hit = span_mask.any(dim=-1).to(torch.long).sum(dim=0)
+                all_hit = span_mask.all(dim=-1).to(torch.long).sum(dim=0)
+                self._counter(mask_name, span_name, "any")[layer] += any_hit
+                self._counter(mask_name, span_name, "all")[layer] += all_hit
+
+    def rows(self, task_id: int, variant: str, mode: str, correct: int) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for layer in range(self.layer_count):
+            for head in range(self.head_count):
+                query_count = int(self.query_counts[layer, head])
+                for (mask_name, span_name, metric), values in sorted(self.counts.items()):
+                    hit_count = int(values[layer, head])
+                    rows.append(
+                        {
+                            "task_id": task_id,
+                            "variant": variant,
+                            "mode": mode,
+                            "correct": correct,
+                            "layer": layer,
+                            "head": head,
+                            "mask": mask_name,
+                            "span": span_name,
+                            "metric": metric,
+                            "hit_count": hit_count,
+                            "query_count": query_count,
+                            "coverage": hit_count / query_count if query_count else 0.0,
+                        }
+                    )
+        return rows
+
+    def overall_rows(self, task_id: int, variant: str, mode: str, correct: int) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        total_queries = int(self.query_counts.sum().item())
+        for (mask_name, span_name, metric), values in sorted(self.counts.items()):
+            hit_count = int(values.sum().item())
+            rows.append(
+                {
+                    "task_id": task_id,
+                    "variant": variant,
+                    "mode": mode,
+                    "correct": correct,
+                    "mask": mask_name,
+                    "span": span_name,
+                    "metric": metric,
+                    "hit_count": hit_count,
+                    "query_count": total_queries,
+                    "coverage": hit_count / total_queries if total_queries else 0.0,
                 }
             )
         return rows
@@ -2776,6 +2908,17 @@ def _indices_from_keep_mask(keep: torch.Tensor) -> tuple[torch.Tensor, torch.Ten
     return indices.clamp_min(0), valid
 
 
+def _expand_history_keep_to_aligned_blocks(keep: torch.Tensor, block_size: int | None) -> torch.Tensor:
+    if block_size is None or block_size <= 1 or keep.shape[-1] <= 1:
+        return keep
+    history_count = int(keep.shape[-1])
+    pad_count = (-history_count) % int(block_size)
+    padded = F.pad(keep, (0, pad_count), value=False) if pad_count else keep
+    block_keep = padded.view(*padded.shape[:-1], -1, int(block_size)).any(dim=-1, keepdim=True)
+    expanded = block_keep.expand(*block_keep.shape[:-1], int(block_size)).reshape(*padded.shape[:-1], padded.shape[-1])
+    return expanded[..., :history_count]
+
+
 def _qabs_final_indices_from_selected(
     selected_history_indices: torch.Tensor,
     selected_valid: torch.Tensor,
@@ -3860,6 +4003,7 @@ def _qabs_reuse_fast_attention_forward(
     mode_kind, _ = parse_mode_config(_ACTIVE_MODE)
     use_lagged_reuse = mode_kind == "lagged_reuse_rerank"
     lag_refresh_interval = parse_lag_refresh_interval(_ACTIVE_MODE)
+    block_size = parse_qabs_reuse_block_size(_ACTIVE_MODE) if mode_kind == "qabs_reuse_rerank" else None
     selected_dim_count = min(max(1, dim_count), head_dim)
     with profile.time_stage(layer_idx, "qdim_topk", query_states.device) if profile is not None else nullcontext():
         current_qdim_indices = torch.topk(q_raw.float().abs(), k=selected_dim_count, dim=-1, largest=True).indices
@@ -4038,17 +4182,21 @@ def _qabs_reuse_fast_attention_forward(
         score_protect_recent_for_kernel = 0
 
     with profile.time_stage(layer_idx, "reuse_select_kernel", query_states.device) if profile is not None else nullcontext():
-        reuse_select_result = _maybe_cuda_reuse_select(
-            q_raw,
-            key_states,
-            score_current_candidate,
-            score_previous_candidate_for_kernel,
-            score_previous_final_for_kernel,
-            _ACTIVE_PROTECT_SINK_TOKENS,
-            _ACTIVE_PROTECT_RECENT_TOKENS,
-            _ACTIVE_TOP_FRACTION,
-            _ACTIVE_ALWAYS_KEEP_SELF,
-            scaling,
+        reuse_select_result = (
+            None
+            if block_size is not None
+            else _maybe_cuda_reuse_select(
+                q_raw,
+                key_states,
+                score_current_candidate,
+                score_previous_candidate_for_kernel,
+                score_previous_final_for_kernel,
+                _ACTIVE_PROTECT_SINK_TOKENS,
+                _ACTIVE_PROTECT_RECENT_TOKENS,
+                _ACTIVE_TOP_FRACTION,
+                _ACTIVE_ALWAYS_KEEP_SELF,
+                scaling,
+            )
         )
     if reuse_select_result is not None:
         final_indices, final_valid, history_final = reuse_select_result
@@ -4145,6 +4293,9 @@ def _qabs_reuse_fast_attention_forward(
         if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
             recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
             history_final[:, :, recent_start:history_count] = True
+        if block_size is not None:
+            history_final = _expand_history_keep_to_aligned_blocks(history_final, block_size)
+            selected_history_indices, selected_valid = _indices_from_keep_mask(history_final)
         if profile is not None:
             profile_union_history = candidate_union_history
             if profile_union_history is None:

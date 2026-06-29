@@ -203,9 +203,155 @@ qabs8cand3reusefinal = 当前 raw candidate ∪ 上一步 final top2
 - 80k 上 PPL 比 baseline 差 `+1.1849`，但仍远好于 qabs4 的 `+3.7335`。
 - 时间趋势与 qabs4 类似：上下文越长，慢的比例越小；80k 时仍慢约 `17%`。
 
-## 9. 当前结论
+## 9. 下游任务性能测试
 
-### 9.1 质量结论
+这一节记录同类 QABS query-channel sparse retrieval 方法在下游任务上的表现。注意：现有下游任务主测点是 `qabs8cand5reuse` 和 `qabs8cand8`，不是 `qabs8cand3reusefinal` 的完全同参数复现；但它们使用相同的核心机制：
+
+- query 绝对值最大通道做 partial-QK candidate generation；
+- candidate union/reuse；
+- 在候选集合内 exact rerank；
+- decode 阶段 sparse attention。
+
+因此这些结果可以作为 `qabs8cand3reusefinal` 的重要风险证据：PPL 接近 baseline 并不自动代表 exact key-value retrieval 下游任务稳定。
+
+### 9.1 Broad PPL 与 KV retrieval 初测
+
+方法：`qabs8cand5reuse`，`top_fraction=0.05`，三集合复用：
+
+```text
+current candidate ∪ previous candidate ∪ previous final
+```
+
+PPL 设置：`prefill_tokens=2048`，`eval_tokens=256`，`dtype=float16`。
+
+| Dataset | Baseline PPL | qabs8cand5reuse PPL | Ratio |
+|---|---:|---:|---:|
+| hard_topic_eval_v2 | 4.6147 | 4.7197 | 1.0228 |
+| hard_topic_eval_v3 | 4.4129 | 4.5117 | 1.0224 |
+| hard_topic_eval_v4 | 4.1257 | 4.2665 | 1.0341 |
+| topic_stress_eval | 2.5155 | 2.6497 | 1.0534 |
+| War and Peace | 34.2606 | 34.0770 | 0.9946 |
+| Count of Monte Cristo | 32.1917 | 33.2323 | 1.0323 |
+
+六个数据集平均 PPL ratio 约 `1.0266`，即相对 PPL 上升约 `2.7%`。这说明同类 qabs 方法在 broad PPL 上是可行的。
+
+但在 synthetic key-value retrieval 下游任务上，初测出现明显下降：
+
+| Run | top_fraction | Approx retained KV | Baseline accuracy | qabs accuracy | Delta |
+|---|---:|---:|---:|---:|---:|
+| `downstream_kv_retrieval_qabs8cand5_tf5_v4` | 0.05 | about 6% | 17/32 = 53.1% | 14/32 = 43.8% | -9.4 pts |
+| `downstream_kv_retrieval_qabs8cand8_tf8_v5` | 0.08 | about 9% | 17/32 = 53.1% | 14/32 = 43.8% | -9.4 pts |
+
+结论：简单把 `top_fraction` 从 5% 提高到 8% 没有恢复下游 retrieval accuracy。
+
+### 9.2 Multi-task downstream suite
+
+为了确认下游掉点是否只是单一 prompt 格式问题，又测试了 6 种 A/B/C/D label scoring 任务格式：
+
+- `structured_noisy`
+- `compact_kv`
+- `natural_kv`
+- `json_kv`
+- `needle_sentence`
+- `topic_table`
+
+#### 长一点上下文：64 records/task
+
+设置：每种格式 16 个 task，每个 task 64 条 records。
+
+| Variant | Baseline | qabs5 | Delta |
+|---|---:|---:|---:|
+| structured_noisy | 6/16 = 37.5% | 1/16 = 6.3% | -31.3 pts |
+| compact_kv | 5/16 = 31.3% | 6/16 = 37.5% | +6.3 pts |
+| natural_kv | 6/16 = 37.5% | 5/16 = 31.3% | -6.3 pts |
+| json_kv | 5/16 = 31.3% | 5/16 = 31.3% | 0.0 pts |
+| needle_sentence | 8/16 = 50.0% | 8/16 = 50.0% | 0.0 pts |
+| topic_table | 11/16 = 68.8% | 8/16 = 50.0% | -18.8 pts |
+
+这组里 baseline 本身经常接近随机，适合作为 stress test，但不是很干净的质量 benchmark。
+
+#### 短上下文：16 records/task
+
+设置：每种格式 32 个 task，每个 task 16 条 records。这里 baseline 更强，更能暴露压缩造成的 retrieval 损失。
+
+| Variant | Baseline | qabs5 | Delta qabs5 | qabs8 | Delta qabs8 |
+|---|---:|---:|---:|---:|---:|
+| structured_noisy | 19/32 = 59.4% | 15/32 = 46.9% | -12.5 pts | 12/32 = 37.5% | -21.9 pts |
+| compact_kv | 29/32 = 90.6% | 18/32 = 56.3% | -34.4 pts | 21/32 = 65.6% | -25.0 pts |
+| natural_kv | 18/32 = 56.3% | 13/32 = 40.6% | -15.6 pts | 15/32 = 46.9% | -9.4 pts |
+| json_kv | 27/32 = 84.4% | 19/32 = 59.4% | -25.0 pts | 19/32 = 59.4% | -25.0 pts |
+| needle_sentence | 18/32 = 56.3% | 17/32 = 53.1% | -3.1 pts | 17/32 = 53.1% | -3.1 pts |
+| topic_table | 22/32 = 68.8% | 22/32 = 68.8% | 0.0 pts | 18/32 = 56.3% | -12.5 pts |
+
+观察：
+
+- `compact_kv` 和 `json_kv` 是最清楚的失败格式：dense baseline 强，但 qabs 掉 8-11 个 task。
+- `needle_sentence` 相对稳定，只掉 1/32。
+- `topic_table` 在 qabs5 下不掉，但 qabs8 反而掉 4/32，说明 uniform budget 增加不一定改善下游任务。
+- 下游任务格式影响很大；exact key-value binding 对 candidate selection 更敏感。
+
+### 9.3 Evidence span coverage 诊断
+
+为了验证 retrieval 失败是否来自 qabs 没保留目标证据 span，增加了 evidence span coverage 诊断。每个 task 定位三类 span：
+
+- `key`：目标查询 key；
+- `label`：目标答案 label token；
+- `record`：完整目标 record 行。
+
+然后记录 qabs mask 是否覆盖这些 span：
+
+- `current`：当前 query-channel raw candidate；
+- `union`：candidate union；
+- `final`：exact rerank 后最终保留 token。
+
+设置：`qabs8cand5reuse`，`top_fraction=0.05`，每种格式 16 个 task，每个 task 16 条 records。
+
+Accuracy：
+
+| Variant | Baseline | qabs5 |
+|---|---:|---:|
+| compact_kv | 15/16 = 93.8% | 11/16 = 68.8% |
+| json_kv | 9/16 = 56.3% | 10/16 = 62.5% |
+| needle_sentence | 9/16 = 56.3% | 7/16 = 43.8% |
+| topic_table | 12/16 = 75.0% | 8/16 = 50.0% |
+
+Overall coverage：
+
+| Variant | Final key any | Final key all | Final label any | Final record any | Union key any | Union label any | Union record any |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| compact_kv | 23.5% | 0.1% | 10.5% | 31.4% | 40.5% | 18.3% | 50.9% |
+| json_kv | 18.4% | 0.0% | 9.1% | 47.4% | 34.0% | 15.8% | 70.6% |
+| needle_sentence | 19.2% | 0.0% | 14.5% | 63.7% | 32.0% | 21.0% | 79.4% |
+| topic_table | 20.4% | 0.0% | 7.8% | 53.4% | 33.6% | 13.2% | 72.3% |
+
+结论：
+
+- final retained set 对 target key 的 `any` coverage 只有约 18-24%。
+- full key-span coverage 基本为 0。
+- label coverage 只有约 8-15%。
+- union coverage 明显高于 final coverage，说明 exact rerank/final top selection 会继续丢掉一部分 evidence。
+
+这支持一个重要判断：同类 qabs 方法的下游 retrieval loss 不只是 prompt artifact，而是 candidate/final retained tokens 经常没有保留目标证据 span。
+
+### 9.4 Retrieval-preserving hybrid 试验
+
+尝试过一些 naive retrieval-preserving hybrid 变体：
+
+| Variant | Intended retained KV | Accuracy | Result |
+|---|---:|---:|---|
+| `qabs8cand5reuse`, `top_fraction=0.05` | about 6% | 14/32 = 43.8% | current reference |
+| `qabs8cand5reuse`, `top_fraction=0.08` | about 9% | 14/32 = 43.8% | uniform larger budget did not help |
+| `qabs8cand5reuseblk8`, `top_fraction=0.01` | about 8% rough target | 13/32 = 40.6% | block expansion with too few seed tokens hurt |
+| `qabs8cand5reuseblk4`, `top_fraction=0.02` | about 8% rough target | 13/32 = 40.6% | smaller block still hurt |
+| default qabs5 + layer 13 full | about 9-10% | 12/32 = 37.5% | hand-picked middle full layer hurt |
+| default qabs5 + layer 0 full | about 9-10% | 14/32 = 43.8% | no gain over qabs |
+| default qabs5 + layers 0/11/14/15 headmix4 | about 9% rough target | 14/32 = 43.8% | no gain over qabs |
+
+这些负结果说明：不能只靠 uniform budget、固定 block expansion 或手工选择 full layer 来修复 retrieval。更合理的方向是 evidence-aware calibration 或 oracle span retention，先确认保留 target key/value span 是否能恢复 compact/json/topic_table 的准确率。
+
+## 10. 当前结论
+
+### 10.1 质量结论
 
 `qabs8cand3reusefinal` 是目前更合理的质量候选：
 
@@ -213,8 +359,9 @@ qabs8cand3reusefinal = 当前 raw candidate ∪ 上一步 final top2
 - 比 `qabs4cand1reusefinal` 在长上下文上明显更稳。
 - 10k/20k/40k War 长上下文 PPL 均略优于 baseline。
 - 80k 仍有轻微 PPL 退化，但退化幅度可控。
+- 但同类 QABS 方法在 exact key-value retrieval 下游任务上会明显掉点，尤其 `compact_kv` 和 `json_kv`。因此不能只凭 PPL 判断方法已经可用。
 
-### 9.2 时间结论
+### 10.2 时间结论
 
 当前实现还没有 wall-clock 速度收益：
 
@@ -235,7 +382,7 @@ qabs8cand3reusefinal = 当前 raw candidate ∪ 上一步 final top2
 - Python 状态维护。
 - qabs CUDA candidate kernel 对长上下文还会额外使用 key-dim-major cache，显存压力较高。
 
-### 9.3 方法定位
+### 10.3 方法定位
 
 `qabs8cand3reusefinal` 当前更适合作为质量稳定的 sparse retrieval 原型，而不是已经能直接加速的最终实现。
 
@@ -246,14 +393,17 @@ qabs8cand3reusefinal = 当前 raw candidate ∪ 上一步 final top2
 3. full-QK rerank 与 final sparse attention 尽量融合。
 4. 避免每层、每 token 频繁分配临时 tensor。
 5. 避免为 qabs candidate kernel 长期缓存大尺寸 key-dim-major layout，或改成分块/streaming partial score。
+6. 对 exact retrieval 任务加入 evidence-aware rescue：当 query 触发 lookup 行为时，额外保留 target-like key/value span 或高风险 layer/head 的证据 token。
 
-## 10. 建议下一步
+## 11. 建议下一步
 
 短期实验建议：
 
 1. 在 Monte Cristo 上补跑 `qabs8cand3reusefinal` 的 10k/20k/40k/80k，验证质量是否和 War 一样稳定。
 2. 测 `qabs8cand2reusefinal` 和 `qabs8cand4reusefinal` 的长上下文，确认 `cand3` 是否是最佳质量/时间折中。
 3. 打开 `qabs_profile=true` 对 40k 或 80k 单点做 stage profile，定量确认 topk/gather/union/final attention 各自占比。
+4. 对 `qabs8cand3reusefinal` 补跑 downstream task suite，确认它相对 `qabs8cand5reuse` 是否改善 exact KV retrieval。
+5. 跑 oracle span-retention：在 qabs candidate/final 之外强制保留 target key+label 或 full record span，验证 retrieval loss 是否可由 evidence rescue 修复。
 
 工程建议：
 

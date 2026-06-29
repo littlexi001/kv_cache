@@ -4,29 +4,29 @@ set -euo pipefail
 source /home/fdong/miniconda3/bin/activate moe
 cd /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl
 
-OUT=/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/downstream_kv_retrieval_default_qabs5_hmix4_0_11_14_15_v11
+OUT=/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/downstream_task_suite_qabs8_shortctx_v3
 mkdir -p "$OUT"
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-5}"
 export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.6}"
 export PYTORCH_CUDA_ALLOC_CONF="${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}"
 
-nohup python -u src/run_qabs_downstream_kv_retrieval.py \
+nohup python -u src/run_qabs_downstream_task_suite.py \
   --model_name_or_path /home/fdong/hrj/prove/Qwen3-0.6B \
   --output_dir "$OUT" \
-  --tasks 32 \
-  --records_per_task 64 \
+  --variants structured_noisy,compact_kv,natural_kv,json_kv,needle_sentence,topic_table \
+  --tasks_per_variant 32 \
+  --records_per_task 16 \
   --chunk_size 256 \
   --dtype float16 \
   --device cuda \
   --device_map auto \
   --attn_implementation eager \
-  --top_fraction 0.05 \
+  --top_fraction 0.08 \
   --protect_sink_tokens 10 \
   --protect_recent_tokens 10 \
-  --modes baseline,layerbudgetattn \
-  --layer_budget_map_path /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/configs/layerbudget_default_qabs5_layers0_11_14_15_headmix4.json \
-  --log_every 4 \
+  --modes baseline,qabs8cand5reuse \
+  --log_every 8 \
   > "$OUT/run.log" 2>&1 < /dev/null &
 
 echo "$!" > "$OUT/pid.txt"

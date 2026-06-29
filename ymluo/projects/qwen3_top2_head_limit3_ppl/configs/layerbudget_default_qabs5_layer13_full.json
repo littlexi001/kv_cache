@@ -1,0 +1,17 @@
+{
+  "default": {
+    "type": "qabs8cand3reuse",
+    "dims": 8,
+    "candidate_fraction": 0.05,
+    "top_fraction": 0.05
+  },
+  "layers": {
+    "13": {
+      "type": "full"
+    }
+  },
+  "metadata": {
+    "label": "default_qabs5_layer13_full",
+    "purpose": "influence-gated hybrid retrieval diagnostic"
+  }
+}

@@ -22,14 +22,19 @@ if str(SCRIPT_DIR) not in sys.path:
 from evaluate_qwen3_top2_head_limit3_ppl import (  # noqa: E402
     AutoModelForCausalLM,
     AutoTokenizer,
+    EvidenceSpanCoverageStats,
+    QabsReuseProfileStats,
     ReuseCandidateState,
     attention_mode,
     clone_past_key_values,
+    evidence_span_coverage,
     install_qwen3_attention_patch,
     model_forward,
     pick_input_device,
     prefill_cache,
+    restore_layer_budget_qabs_reuse_state,
     resolve_dtype,
+    snapshot_layer_budget_qabs_reuse_state,
 )
 
 
@@ -59,6 +64,8 @@ class Config:
     top_fraction: float
     protect_sink_tokens: int
     protect_recent_tokens: int
+    modes: str
+    layer_budget_map_path: str
     log_every: int
 
 
@@ -77,6 +84,8 @@ def parse_args() -> Config:
     parser.add_argument("--top_fraction", type=float, default=0.05)
     parser.add_argument("--protect_sink_tokens", type=int, default=10)
     parser.add_argument("--protect_recent_tokens", type=int, default=10)
+    parser.add_argument("--modes", default="baseline,qabs8cand5reuse")
+    parser.add_argument("--layer_budget_map_path", default="")
     parser.add_argument("--log_every", type=int, default=8)
     return Config(**vars(parser.parse_args()))
 
@@ -184,22 +193,27 @@ def eval_task(
     mode: str,
     context_cache: Any,
     context_prev: torch.Tensor,
+    qabs_profile_stats: QabsReuseProfileStats | None = None,
+    evidence_coverage_stats: EvidenceSpanCoverageStats | None = None,
+    evidence_spans: dict[str, tuple[int, int]] | None = None,
 ) -> dict[str, Any]:
     reuse_state = ReuseCandidateState() if mode != "baseline" else None
-    with attention_mode(
-        mode=mode,
-        top_fraction=config.top_fraction,
-        max_heads_per_token=3,
-        always_keep_self=True,
-        protect_sink_tokens=config.protect_sink_tokens,
-        protect_recent_tokens=config.protect_recent_tokens,
-        load_stats=None,
-        reuse_state=reuse_state,
-        qabs_fast_path=True,
-        qabs_cuda_final_kernel=True,
-        qabs_cuda_candidate_kernel=True,
-        qabs_cuda_reuse_select_kernel=False,
-    ):
+    with evidence_span_coverage(evidence_coverage_stats, evidence_spans or {}), attention_mode(
+            mode=mode,
+            top_fraction=config.top_fraction,
+            max_heads_per_token=3,
+            always_keep_self=True,
+            protect_sink_tokens=config.protect_sink_tokens,
+            protect_recent_tokens=config.protect_recent_tokens,
+            load_stats=None,
+            reuse_state=reuse_state,
+            qabs_fast_path=True,
+            qabs_cuda_final_kernel=True,
+            qabs_cuda_candidate_kernel=True,
+            qabs_cuda_reuse_select_kernel=False,
+            qabs_profile_stats=qabs_profile_stats,
+            layer_budget_map_path=config.layer_budget_map_path,
+        ):
         query_cache, query_prev = run_prefix(
             model,
             tokenizer,
@@ -209,12 +223,17 @@ def eval_task(
             task["query"],
         )
         state_after_query = copy.deepcopy(reuse_state) if reuse_state is not None else None
+        layer_budget_state_after_query = (
+            snapshot_layer_budget_qabs_reuse_state() if mode == "layerbudgetattn" else None
+        )
         scores: dict[str, float] = {}
         for label in LABELS:
             if reuse_state is not None:
                 reuse_state.previous_layer = copy.deepcopy(state_after_query.previous_layer)
                 reuse_state.refresh_head_count = state_after_query.refresh_head_count
                 reuse_state.refresh_case_count = state_after_query.refresh_case_count
+            if layer_budget_state_after_query is not None:
+                restore_layer_budget_qabs_reuse_state(layer_budget_state_after_query)
             scores[label] = score_option(
                 model,
                 tokenizer,
@@ -270,6 +289,9 @@ def main() -> None:
     install_qwen3_attention_patch()
     input_device = pick_input_device(model, device)
 
+    modes = [mode.strip() for mode in config.modes.split(",") if mode.strip()]
+    if "baseline" not in modes:
+        modes.insert(0, "baseline")
     rows: list[dict[str, Any]] = []
     started = time.perf_counter()
     for idx, task in enumerate(tasks, start=1):
@@ -283,7 +305,7 @@ def main() -> None:
             config.chunk_size,
             input_device,
         )
-        for mode in ["baseline", "qabs8cand5reuse"]:
+        for mode in modes:
             rows.append(eval_task(model, tokenizer, task, config, input_device, mode, context_cache, context_prev))
     seconds = time.perf_counter() - started
     fields = ["task_id", "mode", "target_key", "target_index", "target_label", "pred_label", "correct"] + [
@@ -296,7 +318,7 @@ def main() -> None:
         "accuracy": {
             mode: sum(row["correct"] for row in rows if row["mode"] == mode)
             / max(1, sum(1 for row in rows if row["mode"] == mode))
-            for mode in ["baseline", "qabs8cand5reuse"]
+            for mode in modes
         },
         "rows": rows,
     }

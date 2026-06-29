@@ -1,0 +1,13 @@
+variant,mode,correct,total,accuracy
+structured_noisy,baseline,6,16,0.375
+structured_noisy,qabs8cand5reuse,1,16,0.0625
+compact_kv,baseline,5,16,0.3125
+compact_kv,qabs8cand5reuse,6,16,0.375
+natural_kv,baseline,6,16,0.375
+natural_kv,qabs8cand5reuse,5,16,0.3125
+json_kv,baseline,5,16,0.3125
+json_kv,qabs8cand5reuse,5,16,0.3125
+needle_sentence,baseline,8,16,0.5
+needle_sentence,qabs8cand5reuse,8,16,0.5
+topic_table,baseline,11,16,0.6875
+topic_table,qabs8cand5reuse,8,16,0.5
