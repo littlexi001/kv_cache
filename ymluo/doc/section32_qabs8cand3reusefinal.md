@@ -393,6 +393,50 @@ Overall coverage：
 
 因此更合理的下一步不是继续 uniform 提高 `top_fraction`，而是做 evidence-gated span rescue：默认仍使用 QABS，但在检测到 lookup-like query 时，用很小的额外预算保留候选 key/value span。
 
+### 9.6 Top2 downstream upper-bound 对照
+
+在 QABS 下游任务掉点之后，补充测试了 `top2` 方法的 downstream task suite 表现。这里的 `top2` 指每次 query 直接根据完整 attention score 保留历史 token 的 top 2%，即 `top_fraction=0.02`。
+
+需要注意：这个 `top2` 不是便宜的可部署方法，因为它需要当前 query 的 full attention score 才能知道哪些 token 是 top 2%。因此该实验更适合作为 oracle/upper-bound 对照，用来判断“如果 evidence token 被 attention 正确选中，2% token budget 是否足够支撑下游任务”。
+
+实验设置：
+- 输出目录：`/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/downstream_task_suite_top2_shortctx_v1`
+- 任务格式：`structured_noisy`、`compact_kv`、`natural_kv`、`json_kv`、`needle_sentence`、`topic_table`
+- 每种格式 32 个 task，每个 task 16 条 records
+- 对比模式：`baseline`、`top2`
+- `top_fraction=0.02`
+- `protect_sink_tokens=10`
+- `protect_recent_tokens=10`
+
+结果：
+
+| Variant | Baseline | top2@2% | Delta |
+|---|---:|---:|---:|
+| structured_noisy | 19/32 = 59.4% | 15/32 = 46.9% | -12.5 pts |
+| compact_kv | 29/32 = 90.6% | 27/32 = 84.4% | -6.3 pts |
+| natural_kv | 18/32 = 56.3% | 22/32 = 68.8% | +12.5 pts |
+| json_kv | 27/32 = 84.4% | 26/32 = 81.3% | -3.1 pts |
+| needle_sentence | 18/32 = 56.3% | 22/32 = 68.8% | +12.5 pts |
+| topic_table | 22/32 = 68.8% | 25/32 = 78.1% | +9.4 pts |
+| **Total** | **133/192 = 69.3%** | **137/192 = 71.4%** | **+2.1 pts** |
+
+和同一短上下文 suite 上的 QABS 结果相比：
+
+| Method | Total accuracy |
+|---|---:|
+| baseline | 133/192 = 69.3% |
+| qabs8cand5reuse, `top_fraction=0.05` | 104/192 = 54.2% |
+| qabs8cand5reuse, `top_fraction=0.08` | 102/192 = 53.1% |
+| top2, `top_fraction=0.02` | 137/192 = 71.4% |
+
+关键观察：
+- `top2@2%` 的整体 accuracy 没有出现 QABS 那种大幅下滑，说明“2% token budget 本身”并不必然导致 exact retrieval 崩溃。
+- `compact_kv` 和 `json_kv` 接近 baseline，而 QABS 在这两类上明显掉点；这说明主要问题更可能是 QABS candidate/final retained set 没有稳定选中 evidence-bearing tokens。
+- `structured_noisy` 仍然掉 12.5 pts，说明 top attention mass 也不是万能的 retrieval-preserving objective。
+- `natural_kv`、`needle_sentence`、`topic_table` 在这个小样本上高于 baseline，应视为 task scoring 和样本方差信号，不能解释为压缩稳定提升模型能力。
+
+该结果支持后续把 `top2` 用作 retrieval-preserving 的 oracle reference：先用 full-attention top2 或 oracle span-retention 确认哪些 evidence token 必须被保留，再设计便宜的 evidence-gated/QABS hybrid 去近似这些 token。
+
 ## 10. 当前结论
 
 ### 10.1 质量结论

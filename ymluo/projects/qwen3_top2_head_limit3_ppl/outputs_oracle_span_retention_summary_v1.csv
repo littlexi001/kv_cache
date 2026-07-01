@@ -1,0 +1,17 @@
+variant,mode,correct,total,accuracy
+compact_kv,baseline,15,16,0.9375
+compact_kv,qabs8cand5reuse,11,16,0.6875
+compact_kv,oracle_key_label,14,16,0.875
+compact_kv,oracle_record,14,16,0.875
+json_kv,baseline,9,16,0.5625
+json_kv,qabs8cand5reuse,10,16,0.625
+json_kv,oracle_key_label,11,16,0.6875
+json_kv,oracle_record,10,16,0.625
+topic_table,baseline,12,16,0.75
+topic_table,qabs8cand5reuse,8,16,0.5
+topic_table,oracle_key_label,12,16,0.75
+topic_table,oracle_record,11,16,0.6875
+needle_sentence,baseline,9,16,0.5625
+needle_sentence,qabs8cand5reuse,7,16,0.4375
+needle_sentence,oracle_key_label,12,16,0.75
+needle_sentence,oracle_record,11,16,0.6875

@@ -80,6 +80,7 @@ _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
 _ACTIVE_EVIDENCE_COVERAGE_STATS: "EvidenceSpanCoverageStats | None" = None
 _ACTIVE_EVIDENCE_SPANS: dict[str, tuple[int, int]] = {}
+_ACTIVE_FORCE_EVIDENCE_SPANS: bool = False
 _ACTIVE_QABS_FAST_PATH: bool = False
 _ACTIVE_QABS_CUDA_FINAL_KERNEL: bool = False
 _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL: bool = False
@@ -109,15 +110,17 @@ def restore_layer_budget_qabs_reuse_state(state: dict[int, dict[str, Any]]) -> N
 def evidence_span_coverage(
     stats: "EvidenceSpanCoverageStats | None",
     spans: dict[str, tuple[int, int]],
+    force_spans: bool = False,
 ):
-    global _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS
-    previous = (_ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS)
+    global _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS, _ACTIVE_FORCE_EVIDENCE_SPANS
+    previous = (_ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS, _ACTIVE_FORCE_EVIDENCE_SPANS)
     _ACTIVE_EVIDENCE_COVERAGE_STATS = stats
     _ACTIVE_EVIDENCE_SPANS = dict(spans)
+    _ACTIVE_FORCE_EVIDENCE_SPANS = bool(force_spans)
     try:
         yield
     finally:
-        _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS = previous
+        _ACTIVE_EVIDENCE_COVERAGE_STATS, _ACTIVE_EVIDENCE_SPANS, _ACTIVE_FORCE_EVIDENCE_SPANS = previous
 
 
 def str2bool(value: str | bool) -> bool:
@@ -2919,6 +2922,19 @@ def _expand_history_keep_to_aligned_blocks(keep: torch.Tensor, block_size: int |
     return expanded[..., :history_count]
 
 
+def _force_evidence_spans_into_history_keep(keep: torch.Tensor, spans: dict[str, tuple[int, int]]) -> torch.Tensor:
+    if not spans or keep.shape[-1] <= 0:
+        return keep
+    history_count = int(keep.shape[-1])
+    forced = keep.clone()
+    for start, end in spans.values():
+        span_start = max(0, int(start))
+        span_end = min(history_count, int(end))
+        if span_start < span_end:
+            forced[:, :, span_start:span_end] = True
+    return forced
+
+
 def _qabs_final_indices_from_selected(
     selected_history_indices: torch.Tensor,
     selected_valid: torch.Tensor,
@@ -4184,7 +4200,7 @@ def _qabs_reuse_fast_attention_forward(
     with profile.time_stage(layer_idx, "reuse_select_kernel", query_states.device) if profile is not None else nullcontext():
         reuse_select_result = (
             None
-            if block_size is not None
+            if block_size is not None or _ACTIVE_FORCE_EVIDENCE_SPANS
             else _maybe_cuda_reuse_select(
                 q_raw,
                 key_states,
@@ -4293,8 +4309,12 @@ def _qabs_reuse_fast_attention_forward(
         if _ACTIVE_PROTECT_RECENT_TOKENS > 0:
             recent_start = max(0, history_count - _ACTIVE_PROTECT_RECENT_TOKENS)
             history_final[:, :, recent_start:history_count] = True
+        if _ACTIVE_FORCE_EVIDENCE_SPANS:
+            history_final = _force_evidence_spans_into_history_keep(history_final, _ACTIVE_EVIDENCE_SPANS)
         if block_size is not None:
             history_final = _expand_history_keep_to_aligned_blocks(history_final, block_size)
+            selected_history_indices, selected_valid = _indices_from_keep_mask(history_final)
+        elif _ACTIVE_FORCE_EVIDENCE_SPANS:
             selected_history_indices, selected_valid = _indices_from_keep_mask(history_final)
         if profile is not None:
             profile_union_history = candidate_union_history

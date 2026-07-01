@@ -1,0 +1,18 @@
+{
+  "model_name_or_path": "/home/fdong/hrj/prove/Qwen3-0.6B",
+  "output_dir": "/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/downstream_task_suite_top2_shortctx_v1",
+  "variants": "structured_noisy,compact_kv,natural_kv,json_kv,needle_sentence,topic_table",
+  "tasks_per_variant": 32,
+  "records_per_task": 16,
+  "seed": 202606295,
+  "chunk_size": 256,
+  "dtype": "float16",
+  "device": "cuda",
+  "device_map": "auto",
+  "attn_implementation": "eager",
+  "top_fraction": 0.02,
+  "protect_sink_tokens": 10,
+  "protect_recent_tokens": 10,
+  "modes": "baseline,top2",
+  "log_every": 8
+}

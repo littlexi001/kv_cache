@@ -1,0 +1,13 @@
+variant,mode,correct,total,accuracy
+structured_noisy,baseline,19,32,0.59375
+structured_noisy,top2,15,32,0.46875
+compact_kv,baseline,29,32,0.90625
+compact_kv,top2,27,32,0.84375
+natural_kv,baseline,18,32,0.5625
+natural_kv,top2,22,32,0.6875
+json_kv,baseline,27,32,0.84375
+json_kv,top2,26,32,0.8125
+needle_sentence,baseline,18,32,0.5625
+needle_sentence,top2,22,32,0.6875
+topic_table,baseline,22,32,0.6875
+topic_table,top2,25,32,0.78125

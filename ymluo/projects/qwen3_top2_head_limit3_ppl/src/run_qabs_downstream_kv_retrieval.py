@@ -196,9 +196,10 @@ def eval_task(
     qabs_profile_stats: QabsReuseProfileStats | None = None,
     evidence_coverage_stats: EvidenceSpanCoverageStats | None = None,
     evidence_spans: dict[str, tuple[int, int]] | None = None,
+    force_evidence_spans: bool = False,
 ) -> dict[str, Any]:
     reuse_state = ReuseCandidateState() if mode != "baseline" else None
-    with evidence_span_coverage(evidence_coverage_stats, evidence_spans or {}), attention_mode(
+    with evidence_span_coverage(evidence_coverage_stats, evidence_spans or {}, force_evidence_spans), attention_mode(
             mode=mode,
             top_fraction=config.top_fraction,
             max_heads_per_token=3,

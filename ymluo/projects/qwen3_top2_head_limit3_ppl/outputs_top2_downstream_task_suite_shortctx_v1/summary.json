@@ -1,0 +1,89 @@
+{
+  "seconds": 511.7435853991192,
+  "summary": [
+    {
+      "variant": "structured_noisy",
+      "mode": "baseline",
+      "correct": 19,
+      "total": 32,
+      "accuracy": 0.59375
+    },
+    {
+      "variant": "structured_noisy",
+      "mode": "top2",
+      "correct": 15,
+      "total": 32,
+      "accuracy": 0.46875
+    },
+    {
+      "variant": "compact_kv",
+      "mode": "baseline",
+      "correct": 29,
+      "total": 32,
+      "accuracy": 0.90625
+    },
+    {
+      "variant": "compact_kv",
+      "mode": "top2",
+      "correct": 27,
+      "total": 32,
+      "accuracy": 0.84375
+    },
+    {
+      "variant": "natural_kv",
+      "mode": "baseline",
+      "correct": 18,
+      "total": 32,
+      "accuracy": 0.5625
+    },
+    {
+      "variant": "natural_kv",
+      "mode": "top2",
+      "correct": 22,
+      "total": 32,
+      "accuracy": 0.6875
+    },
+    {
+      "variant": "json_kv",
+      "mode": "baseline",
+      "correct": 27,
+      "total": 32,
+      "accuracy": 0.84375
+    },
+    {
+      "variant": "json_kv",
+      "mode": "top2",
+      "correct": 26,
+      "total": 32,
+      "accuracy": 0.8125
+    },
+    {
+      "variant": "needle_sentence",
+      "mode": "baseline",
+      "correct": 18,
+      "total": 32,
+      "accuracy": 0.5625
+    },
+    {
+      "variant": "needle_sentence",
+      "mode": "top2",
+      "correct": 22,
+      "total": 32,
+      "accuracy": 0.6875
+    },
+    {
+      "variant": "topic_table",
+      "mode": "baseline",
+      "correct": 22,
+      "total": 32,
+      "accuracy": 0.6875
+    },
+    {
+      "variant": "topic_table",
+      "mode": "top2",
+      "correct": 25,
+      "total": 32,
+      "accuracy": 0.78125
+    }
+  ]
+}
