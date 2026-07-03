@@ -1,30 +1,30 @@
-# Section 35: True Top2 Token Selection Count Results
+﻿# 第 35 节：真实 Top2 Token 选择次数统计结果
 
-Date: 2026-06-30
+日期：2026-06-30
 
-## 0. Goal
+## 0. 目标
 
-This experiment counts how often each historical token is selected by true full-QK top-2% attention during forward.
+本实验统计在 forward 过程中，每个历史 token 被真实 full-QK attention top-2% 选中的次数。
 
-For each eval query, layer, and head:
+对每个 eval query、每一层和每个 head：
 
 ```text
 select top ceil(0.02 * history_tokens) historical tokens by full QK score
 accumulate count[token_index] += 1
 ```
 
-This measures whether true top2 attention is spread broadly or repeatedly concentrates on a small subset of tokens.
+这个指标用于判断真实 top2 attention 是广泛分散在历史 token 上，还是反复集中在少量 token 上。
 
-## 1. Script
+## 1. 脚本
 
-New files:
+新增文件：
 
 ```text
 ymluo/projects/qwen3_top2_head_limit3_ppl/src/analyze_top2_token_selection_counts.py
 ymluo/projects/qwen3_top2_head_limit3_ppl/scripts/run_top2_token_selection_counts_server.sh
 ```
 
-Server run:
+服务器运行：
 
 ```text
 host = df
@@ -32,7 +32,7 @@ project = /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl
 output = /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/top2_token_selection_counts_war_4k_v1
 ```
 
-## 2. Setup
+## 2. 设置
 
 ```text
 model = /home/fdong/hrj/prove/Qwen3-0.6B
@@ -46,24 +46,24 @@ dtype = float16
 attention = eager
 ```
 
-Total true top2 selection events:
+真实 top2 选择事件总数：
 
 ```text
 2,408,448
 ```
 
-This equals all sampled eval queries across all layers/heads, with per-head top2 size around 82-84 tokens.
+这对应所有采样 eval query 在所有 layer/head 上的事件总量；每个 head 的 top2 大小约为 82-84 个 token。
 
-## 3. Main Overall Result
+## 3. 主要总体结果
 
-Among 4,159 historical-token rows:
+在 4,159 个历史 token 行中：
 
 ```text
 nonzero selected tokens = 3,974
 zero selected tokens = 185
 ```
 
-Selection is broad but highly non-uniform:
+选择范围很广，但分布高度不均匀：
 
 | Top tokens by count | Fraction of all selection events |
 | ---: | ---: |
@@ -75,16 +75,16 @@ Selection is broad but highly non-uniform:
 | top 500 | 72.28% |
 | top 1000 | 86.70% |
 
-Interpretation:
+解释：
 
 ```text
-Top2 is not just a smooth 2% random sample over history.
-Roughly 200 tokens account for more than half of all selected token events.
+Top2 并不是从历史中平滑随机抽取 2%。
+大约 200 个 token 就贡献了超过一半的被选 token 事件。
 ```
 
-## 4. Most Frequently Selected Tokens
+## 4. 最频繁被选中的 Token
 
-Top global tokens:
+全局最高频 token：
 
 | token index | token text | selected count | normalized selection rate |
 | ---: | --- | ---: | ---: |
@@ -99,18 +99,18 @@ Top global tokens:
 | 4101 | ` nothing` | 12,625 | 0.486 |
 | 4037 | closing punctuation/newlines | 12,082 | 0.421 |
 
-The first token is extreme:
+第一个 token 是极端情况：
 
 ```text
 token 0 is selected in 25,701 / 28,672 possible layer-head-query cases.
 selection rate = 89.6%
 ```
 
-At layer-head granularity, token 0 appears in at least one query for 422/448 layer-heads, and is selected in all 64 queries for 389/448 layer-heads.
+在 layer-head 粒度上，token 0 在 448 个 layer-head 中有 422 个至少被某个 query 选中过；并且在 389/448 个 layer-head 中被全部 64 个 query 选中。
 
-## 5. Position Distribution
+## 5. 位置分布
 
-Selection event mass by coarse position:
+按粗粒度位置统计的选择事件质量：
 
 | Bucket | Tokens | Events | Fraction |
 | --- | ---: | ---: | ---: |
@@ -120,18 +120,18 @@ Selection event mass by coarse position:
 | last 256 prefill tokens | 256 | 887,229 | 36.84% |
 | eval-history tokens | 63 | 477,118 | 19.81% |
 
-Interpretation:
+解释：
 
 ```text
-The total mass of sink tokens is small because the sink bucket is tiny.
-But token 0 is individually very over-selected.
-The dominant structural pattern is local/recent concentration:
-last 256 prefill + eval-history tokens explain about 56.65% of all selected events.
+sink token 的总质量较小，因为 sink bucket 本身很小。
+但是 token 0 单独来看被过度选择得非常明显。
+主导性的结构模式是 local/recent 集中：
+最后 256 个 prefill token 加上 eval-history token 解释了约 56.65% 的所有选择事件。
 ```
 
-## 6. Layer Pattern
+## 6. 层模式
 
-Layer-level selected unique-token counts vary strongly:
+层级别的被选 unique-token 数量差异很大：
 
 ```text
 low unique layers:
@@ -147,14 +147,14 @@ layer 0: 2,780
 layer 6: 2,589
 ```
 
-Layer position tendencies:
+层的位置偏好：
 
 ```text
 layers 0,1,5,10,12,17,27 are more local/recent-heavy.
 layers 6,8,11,13,16,18,19,20,21,24,25,26 keep more middle remote tokens.
 ```
 
-Examples:
+示例：
 
 | Layer | middle remote fraction | last256 prefill | eval history |
 | ---: | ---: | ---: | ---: |
@@ -164,11 +164,11 @@ Examples:
 | 20 | 51.11% | 31.82% | 14.54% |
 | 27 | 30.68% | 40.38% | 27.55% |
 
-## 7. Layer-Head Reuse Pattern
+## 7. Layer-Head 复用模式
 
-For each layer/head, count how many token positions are selected repeatedly across the 64 eval queries.
+对每个 layer/head，统计有多少 token 位置会在 64 个 eval query 中被反复选中。
 
-Mean over 448 layer-heads:
+448 个 layer-head 上的均值：
 
 | Repeated selection threshold | Mean tokens per layer-head |
 | ---: | ---: |
@@ -179,24 +179,24 @@ Mean over 448 layer-heads:
 | selected in at least 8 queries | 205.02 |
 | selected at least once | 790.12 |
 
-Interpretation:
+解释：
 
 ```text
-Each head has a small persistent token set that is repeatedly selected across adjacent decode steps,
-plus a much larger long tail of transient selected tokens.
+每个 head 都有一个很小的 persistent token 集合，会在相邻 decode step 中被反复选中；
+同时还存在一个更大的 transient selected token 长尾。
 ```
 
-The most persistent heads have around 70-86 tokens selected in at least half of the 64 queries.
+最 persistent 的 head 大约有 70-86 个 token 会在 64 个 query 中至少一半被选中。
 
-## 8. Implications
+## 8. 启发
 
-1. A fixed protected token set is justified, but should be tiny.
+1. 固定 protected token set 是有依据的，但应该很小。
 
-   Token 0 is almost universally selected. A small learned/static sink set may preserve a disproportionate number of head-token selections, but sink tokens do not dominate total mass.
+   token 0 几乎会被普遍选中。一个很小的 learned/static sink set 可能保留不成比例的大量 head-token 选择，但 sink token 并不主导总质量。
 
-2. Recent/local tokens dominate true top2 selection.
+2. recent/local token 主导真实 top2 选择。
 
-   More than half of all selected events come from the last 256 prefill tokens plus eval-history tokens. Any remote-KV compression experiment should separate:
+   超过一半的被选事件来自最后 256 个 prefill token 加 eval-history token。因此任何 remote-KV 压缩实验都应该拆分：
 
    ```text
    local/recent top2 counts
@@ -204,21 +204,21 @@ The most persistent heads have around 70-86 tokens selected in at least half of 
    sink top2 counts
    ```
 
-3. Remote token selection remains substantial.
+3. remote token 选择仍然占有相当比例。
 
-   Middle remote tokens still account for 41.4% of selected events. Recent-only attention cannot explain true top2 behavior.
+   middle remote token 仍然贡献了 41.4% 的选择事件。仅靠 recent-only attention 无法解释真实 top2 行为。
 
-4. Layer policy should not be uniform.
+4. layer policy 不应该是统一的。
 
-   Some layers are clearly local-heavy; others keep much more middle remote mass. This supports the R2H-KV direction of layer/head-specific policy rather than global top2 heuristics.
+   有些层明显偏 local-heavy，另一些层保留了更多 middle remote mass。这支持 R2H-KV 中 layer/head-specific policy 的方向，而不是使用全局 top2 启发式。
 
-5. Top2 temporal reuse has real signal.
+5. Top2 的时间复用确实有信号。
 
-   Per layer/head, about 27 tokens on average are selected in at least half of the sampled decode steps. This supports reuse/persistent-cache diagnostics, but the transient tail remains large.
+   每个 layer/head 平均约有 27 个 token 会在至少一半采样 decode step 中被选中。这支持 reuse/persistent-cache 诊断，但 transient tail 仍然很大。
 
-## 9. Next Experiment
+## 9. 下一步实验
 
-Run the same diagnostic with remote-only buckets:
+用 remote-only bucket 运行同样的诊断：
 
 ```text
 exclude token 0 / sink
@@ -226,7 +226,7 @@ exclude recent window, e.g. last 512 tokens
 count only remote top2 selections
 ```
 
-Then compare:
+然后比较：
 
 ```text
 War and Peace 4k
@@ -235,7 +235,7 @@ hard_topic_eval_v2 2k
 Monte Cristo 4k
 ```
 
-The key question is whether the high-frequency remote selected tokens are stable enough to become:
+关键问题是：这些高频 remote selected token 是否足够稳定，可以成为：
 
 ```text
 protected remote anchors
@@ -243,11 +243,11 @@ page-level routing seeds
 head-specific persistent KV slots
 ```
 
-or whether they are mostly content-specific artifacts of the current 64-token continuation.
+或者它们是否主要只是当前 64-token continuation 的 content-specific artifact。
 
-## 10. Remote-Only Top2 Count
+## 10. Remote-Only Top2 统计
 
-Follow-up run:
+后续运行：
 
 ```text
 output = /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/top2_remote_token_selection_counts_war_4k_s64_r512_v2
@@ -255,15 +255,15 @@ sink excluded = first 64 tokens
 recent excluded = last 512 historical tokens for each query
 ```
 
-Important implementation note:
+重要实现说明：
 
 ```text
-The v2 run explicitly caps the scored history to key_index < query_token.
-This avoids counting same-chunk future tokens when an eager attention path does not expose an explicit finite causal mask.
-The earlier remote-only v1 output should not be used.
+v2 运行显式把 scored history 限制为 key_index < query_token。
+这避免了在 eager attention 路径没有暴露显式有限 causal mask 时，把同一 chunk 中的未来 token 也计入统计。
+更早的 remote-only v1 输出不应该再使用。
 ```
 
-Corrected true top2 budget:
+修正后的真实 top2 budget：
 
 ```text
 sum_query ceil(0.02 * query_token) * 28 layers * 16 heads = 2,381,568
@@ -271,7 +271,7 @@ remote-only selected events = 755,859
 remote-only fraction of true top2 events = 31.74%
 ```
 
-Overall remote-only concentration:
+整体 remote-only 集中度：
 
 | Top remote tokens by count | Fraction of remote selection events |
 | ---: | ---: |
@@ -283,9 +283,9 @@ Overall remote-only concentration:
 | top 500 | 60.40% |
 | top 1000 | 83.08% |
 
-Compared with all-token top2 counts, remote-only selection is less concentrated at the very top, but still has a strong long-tail skew.
+和 all-token top2 count 相比，remote-only selection 在最头部的集中度较低，但仍然有很强的长尾偏斜。
 
-Remote-only token coverage:
+Remote-only token 覆盖：
 
 ```text
 historical-token rows = 4,159
@@ -294,7 +294,7 @@ zero remote-selected tokens = 761
 max normalized remote selection rate = 0.166
 ```
 
-Top remote tokens:
+最高频 remote token：
 
 | token index | token text | count | normalized rate |
 | ---: | --- | ---: | ---: |
@@ -309,7 +309,7 @@ Top remote tokens:
 | 3476 | `?”\n\n` | 2,830 | 0.099 |
 | 2138 | `.”\n\n` | 2,746 | 0.096 |
 
-Position distribution inside the remote region:
+remote 区域内部的位置分布：
 
 | Bucket | Tokens | Nonzero tokens | Events | Fraction |
 | --- | ---: | ---: | ---: | ---: |
@@ -320,15 +320,15 @@ Position distribution inside the remote region:
 | 3072-3583 | 512 | 512 | 321,081 | 42.48% |
 | 3584+ partial remote eligibility | 575 | 63 | 13,665 | 1.81% |
 
-Interpretation:
+解释：
 
 ```text
-Remote top2 is not uniformly distributed across remote history.
-It is heavily biased toward the far edge of the allowed remote region, especially tokens 2048-3583.
-Very old non-sink remote tokens contribute little in this 4k/64-token War sample.
+remote top2 并不是均匀分布在 remote history 上。
+它强烈偏向允许的 remote 区域的远端边缘，尤其是 token 2048-3583。
+在这个 4k/64-token 的 War 样本中，非常老的 non-sink remote token 贡献很小。
 ```
 
-Layer remote-only event counts:
+按层统计的 remote-only event count：
 
 | High remote-event layers | events |
 | ---: | ---: |
@@ -341,7 +341,7 @@ Layer remote-only event counts:
 | 24 | 32,638 |
 | 18 | 32,434 |
 
-Low remote-event layers:
+remote-event 较低的层：
 
 | Low remote-event layers | events |
 | ---: | ---: |
@@ -352,9 +352,9 @@ Low remote-event layers:
 | 10 | 18,979 |
 | 1 | 20,250 |
 
-This sharp layer spread strengthens the case for layer/head-specific remote policies.
+这种明显的层间差异进一步支持 layer/head-specific remote policy。
 
-Per layer/head repeated remote tokens:
+每个 layer/head 的 repeated remote token：
 
 | Repeated remote-selection threshold | Mean tokens per layer/head |
 | ---: | ---: |
@@ -365,15 +365,15 @@ Per layer/head repeated remote tokens:
 | selected in at least 8 queries | 54.32 |
 | selected at least once | 438.62 |
 
-Compared with all-token top2 counts:
+和 all-token top2 count 相比：
 
 ```text
-remote persistent sets are much smaller.
-All-token count had about 26.9 tokens/head selected in >=32 queries;
-remote-only has about 2.5 tokens/head selected in >=32 queries.
+remote persistent set 小得多。
+all-token count 中每个 head 约有 26.9 个 token 会在 >=32 个 query 中被选中；
+remote-only 中每个 head 只有约 2.5 个 token 会在 >=32 个 query 中被选中。
 ```
 
-Most remote-reuse-heavy layer-heads:
+remote reuse 最重的 layer-head：
 
 | layer/head | unique remote tokens | max count | tokens selected in >=32 queries | tokens selected in >=16 queries |
 | --- | ---: | ---: | ---: | ---: |
@@ -383,36 +383,36 @@ Most remote-reuse-heavy layer-heads:
 | L13H13 | 277 | 63 | 24 | 27 |
 | L20H13 | 338 | 58 | 24 | 73 |
 
-## 11. Updated Takeaway
+## 11. 更新后的结论
 
-The remote-only result changes the interpretation:
-
-```text
-Remote top2 is still important, but persistent remote anchors are sparse.
-```
-
-The promising unit is probably not a large static global remote token set. A better design is:
+remote-only 结果改变了之前的解释：
 
 ```text
-1. keep a tiny sink set,
-2. keep a recent window,
-3. identify a small number of persistent remote anchors per high-remote layer/head,
-4. use those anchors to route or seed page-level retrieval for the transient remote tail.
+remote top2 仍然重要，但 persistent remote anchor 是稀疏的。
 ```
 
-This supports a hybrid design:
+更有前景的单位可能不是一个大的静态全局 remote token set。更好的设计是：
+
+```text
+1. 保留很小的 sink set，
+2. 保留 recent window，
+3. 对每个 high-remote layer/head 识别少量 persistent remote anchor，
+4. 用这些 anchor 为 transient remote tail 做 page-level retrieval 的路由或 seed。
+```
+
+这支持一种 hybrid design：
 
 ```text
 persistent remote anchors + page/routing fallback
 ```
 
-rather than replacing remote attention with a static protected-token list.
+而不是用静态 protected-token list 替代 remote attention。
 
-## 12. What Are The Remote Tokens?
+## 12. Remote Token 是什么？
 
-A follow-up content analysis categorized the remote-only selected tokens by token text.
+后续内容分析按 token 文本对 remote-only selected token 做了分类。
 
-Remote-only event share by token category:
+按 token 类别统计的 remote-only event share：
 
 | Category | Unique tokens | Events | Fraction |
 | --- | ---: | ---: | ---: |
@@ -424,7 +424,7 @@ Remote-only event share by token category:
 | whitespace/newline | 763 | 24,978 | 3.30% |
 | number | 104 | 9,050 | 1.20% |
 
-Top-ranked tokens are more boundary-heavy:
+排名靠前的 token 更偏 boundary-heavy：
 
 | Rank band | Dominant categories |
 | --- | --- |
@@ -433,7 +433,7 @@ Top-ranked tokens are more boundary-heavy:
 | top 500 | content 51.7%, punctuation 17.4%, function/pronoun 11.6%, boundary 10.1% |
 | all nonzero remote | content 50.3%, function/pronoun 17.6%, punctuation 12.6%, name-like 8.6% |
 
-Top remote tokens are not random. They mostly come from the active dialogue/topic before the eval span:
+top remote token 不是随机的。它们大多来自 eval span 之前的活跃对话/话题：
 
 ```text
 remote boundary before eval:
@@ -450,7 +450,7 @@ awaiting a reply. He frowned.
 “What would you have me do?” ...
 ```
 
-Representative high-count remote tokens:
+有代表性的高计数 remote token：
 
 | Type | Examples | Function |
 | --- | --- | --- |
@@ -460,30 +460,30 @@ Representative high-count remote tokens:
 | syntactic / discourse glue | `She`, `the`, `with`, `for`, `he`, `prince` | supports coreference and local syntax around remote topic |
 | punctuation | `.`, `,`, `?` | sentence boundary, clause structure, quote rhythm |
 
-Interpretation:
+解释：
 
 ```text
-The remote tokens serve two roles:
+remote token 起到两个作用：
 
-1. structural anchors:
+1. structural anchor：
    quote endings, paragraph breaks, punctuation, dialogue-turn boundaries;
 
-2. semantic anchors:
+2. semantic anchor：
    topic words, entity names, relationship words, and action words from the same conversation.
 ```
 
-This matters because a pure frequency-based protected remote set would over-protect punctuation/dialogue boundaries,
-while a pure semantic-keyword set would miss structural anchors that the model repeatedly attends to.
+这一点很重要，因为纯频率驱动的 protected remote set 会过度保护标点/对话边界；
+而纯 semantic-keyword set 又会漏掉模型反复 attend 的 structural anchor。
 
-Layer category pattern:
+层级类别模式：
 
 ```text
-layers 1-2 are punctuation-heavy;
-middle and late layers are mostly content-word heavy;
-layers 24-26 show stronger name/entity content than most earlier layers.
+第 1-2 层偏 punctuation-heavy；
+中间层和后期层大多偏 content-word heavy；
+第 24-26 层比多数早期层表现出更强的 name/entity content。
 ```
 
-Examples:
+示例：
 
 | Layer | Dominant remote categories |
 | ---: | --- |
@@ -494,27 +494,27 @@ Examples:
 | 25 | content 65%, function/pronoun 13%, name-like 9% |
 | 26 | content 59%, name-like 15%, function/pronoun 12% |
 
-Updated design implication:
+更新后的设计启发：
 
 ```text
-Remote anchor selection should be typed.
+remote anchor selection 应该是 typed。
 
-Keep a small quota for structural anchors and another quota for semantic/entity anchors,
-or learn this split per layer/head.
+应为 structural anchor 保留一个小 quota，并为 semantic/entity anchor 保留另一个 quota；
+或者按 layer/head 学习这种划分。
 ```
 
-For page routing, the top remote anchors look useful as:
+对于 page routing，top remote anchor 看起来可以这样使用：
 
 ```text
-boundary anchors -> identify relevant dialogue/paragraph pages
-semantic/entity anchors -> identify topic/evidence pages
+boundary anchor -> 识别相关的 dialogue/paragraph page
+semantic/entity anchor -> 识别 topic/evidence page
 ```
 
-The transient tail likely needs routed page retrieval rather than static protection.
+transient tail 可能需要 routed page retrieval，而不是静态保护。
 
-## 13. Typed Anchor Event And Attention-Mass Experiment
+## 13. Typed Anchor Event 与 Attention-Mass 实验
 
-Follow-up experiment:
+后续实验：
 
 ```text
 output = /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/top2_remote_typed_anchor_war_4k_s64_r512_v1
@@ -524,14 +524,14 @@ postprocess = structural / semantic / other anchor grouping
 page_size = 64
 ```
 
-New scripts:
+新增脚本：
 
 ```text
 src/summarize_top2_remote_anchor_types.py
 scripts/run_top2_remote_typed_anchor_server.sh
 ```
 
-Anchor type definitions:
+Anchor 类型定义：
 
 ```text
 structural = punctuation, quote/paragraph/sentence boundaries, newline/whitespace
@@ -539,7 +539,7 @@ semantic   = content/subword tokens, capitalized/name-like tokens, numeric token
 other      = mostly function words and pronouns
 ```
 
-Overall typed-anchor coverage:
+整体 typed-anchor 覆盖：
 
 | Type | Unique tokens | Events | Event fraction | Attention mass | Mass fraction | Mean mass / event |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -547,21 +547,21 @@ Overall typed-anchor coverage:
 | semantic | 2,292 | 436,821 | 57.79% | 811.837 | 53.36% | 0.00186 |
 | other | 667 | 133,257 | 17.63% | 251.888 | 16.56% | 0.00189 |
 
-Interpretation:
+解释：
 
 ```text
-Semantic anchors dominate event count and total mass.
-Structural anchors are fewer events but higher average attention mass per event.
+semantic anchor 主导 event count 和 total mass。
+structural anchor 的 event 更少，但每个 event 的平均 attention mass 更高。
 ```
 
-This supports the intuition that structural anchors are not just frequent punctuation noise:
+这支持了一个直觉：structural anchor 不只是高频标点噪声：
 
 ```text
 structural event fraction = 24.6%
 structural mass fraction  = 30.1%
 ```
 
-Top structural anchors:
+top structural anchor：
 
 | token | count | mass |
 | --- | ---: | ---: |
@@ -572,7 +572,7 @@ Top structural anchors:
 | `:\n\n` | 3,145 | 10.478 |
 | `,` | 2,839 | 8.871 |
 
-Top semantic anchors:
+top semantic anchor：
 
 | token | count | mass |
 | --- | ---: | ---: |
@@ -585,7 +585,7 @@ Top semantic anchors:
 | `“Well` | 2,192 | 6.046 |
 | ` prince` | 2,004 | 7.953 |
 
-Top other anchors:
+top other anchor：
 
 | token | count | mass |
 | --- | ---: | ---: |
@@ -596,7 +596,7 @@ Top other anchors:
 | ` for` | 1,212 | 3.347 |
 | ` he` | 1,135 | 4.114 |
 
-Layer pattern by mass:
+按 mass 统计的层模式：
 
 | Layer group | Pattern |
 | --- | --- |
@@ -605,7 +605,7 @@ Layer pattern by mass:
 | middle/late semantic layers | layers 16-26 are mostly semantic-mass dominated |
 | strongest semantic layers | layer 24 semantic mass 76.7%, layer 25 78.9%, layer 26 71.6% |
 
-Selected layer examples:
+选定层示例：
 
 | Layer | Structural event | Structural mass | Semantic event | Semantic mass | Other mass |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -617,14 +617,14 @@ Selected layer examples:
 | 25 | 15.6% | 13.7% | 71.0% | 78.9% | 7.5% |
 | 26 | 16.1% | 20.1% | 71.6% | 71.6% | 8.3% |
 
-Page-level proxy:
+page-level proxy：
 
 ```text
-For each layer/head, collect pages containing structural anchors.
-Measure what fraction of semantic selected events/mass lies on those structural pages.
+对每个 layer/head，收集包含 structural anchor 的 page。
+测量 semantic selected event/mass 中有多少比例落在这些 structural page 上。
 ```
 
-Layer/head distribution:
+layer/head 分布：
 
 ```text
 structural pages per layer/head:
@@ -646,23 +646,22 @@ semantic attention-mass fraction on structural pages:
   p75 = 98.80%
 ```
 
-This is only an aggregate proxy, not query-level routing proof, because it does not check whether a structural anchor is selected for the same query as the semantic token.
-Still, it is a strong signal:
+这只是 aggregate proxy，不是 query-level routing 的证明，因为它没有检查 structural anchor 是否和 semantic token 被同一个 query 选中。
+但它仍然是一个强信号：
 
 ```text
-Most semantic remote top2 mass is located on pages that also contain structural remote anchors,
-at the layer/head aggregate level.
+在 layer/head 聚合层面，大多数 semantic remote top2 mass 位于同样包含 structural remote anchor 的 page 上。
 ```
 
-Typed-anchor routing hypothesis:
+typed-anchor routing 假设：
 
 ```text
-1. structural anchors identify candidate remote pages;
-2. semantic anchors inside those pages carry topic/entity/action evidence;
-3. function/pronoun anchors help coreference but should not dominate routing.
+1. structural anchor 识别候选 remote page；
+2. 这些 page 内部的 semantic anchor 承载 topic/entity/action 证据；
+3. function/pronoun anchor 有助于共指，但不应主导 routing。
 ```
 
-A plausible next diagnostic is query-level page recall:
+一个合理的下一步诊断是 query-level page recall：
 
 ```text
 For each query/layer/head:
@@ -670,7 +669,7 @@ For each query/layer/head:
   measure semantic top2 mass on recalled pages.
 ```
 
-If this query-level recall remains high, then the typed-anchor idea can become a concrete method:
+如果 query-level recall 仍然较高，那么 typed-anchor 思路可以变成一个具体方法：
 
 ```text
 Typed-Anchor Page Routing:
@@ -679,26 +678,25 @@ Typed-Anchor Page Routing:
   + recent/sink protection
 ```
 
-## 14. Query-level structural page routing diagnostic
+## 14. Query-level Structural Page Routing 诊断
 
-Question:
-
-```text
-Can remote structural top2 anchors route to pages that contain the remote semantic top2 tokens
-for the same query/layer/head?
-```
-
-This is stricter than the aggregate proxy above.  For each query, layer, and head:
+问题：
 
 ```text
-1. compute true remote top2 selected tokens from full QK attention;
-2. exclude sink tokens and the recent window;
-3. split selected remote tokens into structural / semantic / other;
-4. recall pages containing selected structural anchors;
-5. measure how much selected semantic top2 event count and attention mass lies on those pages.
+remote structural top2 anchor 能否为同一个 query/layer/head 路由到包含 remote semantic top2 token 的 page？
 ```
 
-Config:
+这比上面的 aggregate proxy 更严格。对每个 query、layer 和 head：
+
+```text
+1. 从 full QK attention 计算真实 remote top2 selected token；
+2. 排除 sink token 和 recent window；
+3. 把 selected remote token 拆成 structural / semantic / other；
+4. 召回包含 selected structural anchor 的 page；
+5. 测量 selected semantic top2 event count 和 attention mass 有多少落在这些 page 上。
+```
+
+配置：
 
 ```text
 model: Qwen3-0.6B
@@ -713,13 +711,13 @@ structural boundary mode: paragraph/dialogue boundary
 structural adjacent radius: +/- 1 structural page
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/typed_anchor_page_recall_war_4k_s64_r512_v3_para
 ```
 
-Main result:
+主要结果：
 
 | Scheme | Mean recalled pages | Semantic event recall | Semantic mass recall |
 | --- | ---: | ---: | ---: |
@@ -727,38 +725,36 @@ Main result:
 | structural page | 4.31 | 30.82% | 35.76% |
 | structural page +/- 1 | 9.06 | 42.95% | 47.92% |
 
-Interpretation:
+解释：
 
 ```text
-At almost the same number of recalled pages, paragraph/dialogue structural pages beat fixed
-64-token blocks by about +1.74 event-recall points and +1.97 attention-mass points.
+在召回 page 数几乎相同的情况下，paragraph/dialogue structural page 比固定 64-token block 高出约 +1.74 event-recall point 和 +1.97 attention-mass point。
 ```
 
-The adjacent-page variant has much higher recall, but it recalls about 2.1x as many pages.
-So it is a recall-expansion strategy, not a fair equal-budget replacement for fixed blocks.
+adjacent-page 变体的 recall 高得多，但召回 page 数约为 2.1 倍。
+因此它是一种 recall-expansion 策略，不是对 fixed block 的公平 equal-budget 替代。
 
-Oracle page coverage gives the upper bound when pages are ranked directly by selected semantic mass:
+当 page 直接按 selected semantic mass 排序时，oracle page coverage 给出了上界：
 
 | Scheme | Top 1 page | Top 2 pages | Top 4 pages | Top 8 pages | Top 16 pages |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | fixed 64-token block | 31.63% | 48.69% | 69.03% | 88.42% | 98.97% |
 | structural page | 33.24% | 50.88% | 71.61% | 90.33% | 98.88% |
 
-Pages needed to reach semantic-mass thresholds:
+达到 semantic-mass threshold 所需的 page 数：
 
 | Scheme | 80% mass | 90% mass | 95% mass |
 | --- | ---: | ---: | ---: |
 | fixed 64-token block | 4.61 | 6.03 | 7.07 |
 | structural page | 4.38 | 5.72 | 6.69 |
 
-This means the structural page partition is not only better for the structural-anchor recall
-proxy; it also has a better oracle page layout.  The relevant semantic mass is more compact
-under paragraph/dialogue structural pages than under fixed token blocks.
+这说明 structural page partition 不仅在 structural-anchor recall proxy 上更好，也有更好的 oracle page layout。
+在 paragraph/dialogue structural page 下，相关 semantic mass 比固定 token block 更紧凑。
 
-Layer-level pattern:
+层级模式：
 
 ```text
-Best structural-over-fixed semantic-mass gains:
+structural 相对 fixed 的最佳 semantic-mass 增益：
   layer 11: +6.54 points
   layer 15: +5.12 points
   layer 25: +4.27 points
@@ -768,77 +764,75 @@ Best structural-over-fixed semantic-mass gains:
   layer 20: +2.78 points
   layer 22: +2.75 points
 
-Largest negative deltas:
+最大的负 delta：
   layer 17: -3.13 points
   layer 27: -1.19 points
   layer 1 : -0.67 points
   layer 2 : -0.63 points
 ```
 
-So the advantage is concentrated in some middle/late layers, especially where semantic remote
-selection is stronger.  Early layers and a few late heads can still prefer fixed token locality.
+因此优势集中在一些中后层，尤其是 semantic remote selection 更强的位置。
+早期层和少数后期 head 仍然可能更偏好 fixed token locality。
 
-Important negative control:
+重要负对照：
 
 ```text
-Using sentence/punctuation-level structural boundaries made pages too fragmented
-(mean page length about 7.9 tokens).  In that setting structural-only recall was worse than
-fixed blocks, and only structural +/- 1 recovered a small advantage at much larger page cost.
+使用 sentence/punctuation-level structural boundary 会让 page 过于碎片化（平均 page 长度约 7.9 token）。
+在这种设置下，structural-only recall 比 fixed block 更差；只有 structural +/- 1 在付出更大 page 成本时才恢复了小幅优势。
 ```
 
-So the useful routing unit should not be "every punctuation boundary".  The better version is:
+因此有用的 routing unit 不应该是“每个标点边界”。更好的版本是：
 
 ```text
 paragraph/dialogue structural boundary -> page recall
-semantic anchors inside recalled pages -> topic/entity evidence
+recalled page 内部的 semantic anchor -> topic/entity evidence
 ```
 
-Current conclusion:
+当前结论：
 
 ```text
-The result supports the typed-anchor page routing hypothesis, but the gain is modest in the
-equal-page-budget query-level test.  The method is worth developing if page construction uses
-coarser paragraph/dialogue anchors and the reranker uses semantic anchors inside recalled pages.
+结果支持 typed-anchor page routing 假设，但在 equal-page-budget query-level test 中增益仍然温和。
+如果 page construction 使用更粗的 paragraph/dialogue anchor，并且 reranker 使用召回 page 内部的 semantic anchor，这个方法值得继续发展。
 ```
 
-## 15. Hierarchical book-index routing diagnostic
+## 15. Hierarchical Book-Index Routing 诊断
 
-Hypothesis:
+假设：
 
 ```text
-Build text memory like a book:
+像一本书一样构建文本记忆：
   short fragments -> sentences
   sentences -> paragraph pages
   paragraph pages -> sections
   sections -> book
 
-Each unit gets a lightweight summary vector.  At query time, keep sink/recent normally,
-then route remote KV through the hierarchy to recall relevant paragraph pages.
+每个 unit 都有一个轻量 summary vector。query 时正常保留 sink/recent，
+然后通过层级结构路由 remote KV，召回相关 paragraph page。
 ```
 
-Implemented diagnostic:
+已实现诊断：
 
 ```text
-script:
+脚本：
   src/analyze_hierarchical_book_index_recall.py
 
-server run:
+服务器运行：
   scripts/run_hierarchical_book_index_server.sh
 
-output:
+输出：
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/hierarchical_book_index_war_4k_s64_r512_v3_tailctrl
 ```
 
-This first version deliberately avoids downloading a sentence-transformer or training an MLP.
-It uses a tiny local TF-IDF lexical vector as the summary model:
+第一版故意避免下载 sentence-transformer 或训练 MLP。
+它使用一个很小的本地 TF-IDF lexical vector 作为 summary model：
 
 ```text
 paragraph summary = top TF-IDF content terms
-section summary   = TF-IDF over grouped paragraph text
-query vector      = TF-IDF over the previous 256 tokens
+section summary   = grouped paragraph text 上的 TF-IDF
+query vector      = 前 256 个 token 上的 TF-IDF
 ```
 
-Config:
+配置：
 
 ```text
 model: Qwen3-0.6B
@@ -854,7 +848,7 @@ section count: 9
 paragraph mean length: 60.3 tokens
 ```
 
-Main result:
+主要结果：
 
 | Scheme | Mean pages | Semantic event recall | Semantic mass recall |
 | --- | ---: | ---: | ---: |
@@ -870,28 +864,28 @@ Main result:
 | book flat TF-IDF p16 | 16.00 | 62.80% | 65.66% |
 | book hierarchical s4 p4 | 15.99 | 65.36% | 68.65% |
 
-Interpretation:
+解释：
 
 ```text
-1. Coarser paragraph pages are better than fragmented structural pages.
+1. 更粗的 paragraph page 比碎片化 structural page 更好。
    paragraph-anchor mass recall rises to 35.00%, above fixed-anchor 33.79%.
 
-2. Runtime lexical book-index retrieval has real signal:
+2. runtime lexical book-index retrieval 有真实信号：
    at 4 pages, book flat TF-IDF beats remote-tail by +2.67 mass points.
 
-3. But the simple remote-tail control is very strong in this sample:
+3. 但在这个样本中，简单的 remote-tail control 很强：
    at 8/16 pages, tail is already near or above flat TF-IDF.
 
-4. Hierarchical routing is better than flat TF-IDF at equal large budgets:
+4. 在相同大 budget 下，hierarchical routing 优于 flat TF-IDF：
    s4_p2 beats flat p8 by +3.60 mass points;
    s4_p4 beats flat p16 by +2.98 mass points.
 
-5. Hierarchical routing only barely beats remote-tail overall:
+5. hierarchical routing 整体上只略微超过 remote-tail：
    s4_p2 beats tail p8 by +0.53 mass points;
    s4_p4 beats tail p16 by +0.06 mass points.
 ```
 
-Layer pattern versus remote-tail:
+相对 remote-tail 的层模式：
 
 ```text
 book flat p4 beats tail p4 in 17 / 28 layers.
@@ -919,18 +913,18 @@ largest gains:
   layer 20: +5.87
 ```
 
-Negative signal:
+负信号：
 
 ```text
-Some layers strongly prefer the simple remote tail, especially layer 12/15/17/27 in this run.
-So a single global book-index policy is probably not enough.
+有些层强烈偏好简单的 remote tail，尤其是本次运行中的 layer 12/15/17/27。
+因此单一全局 book-index policy 可能不够。
 ```
 
-Current conclusion:
+当前结论：
 
 ```text
-The book-index idea is plausible, but the first TF-IDF version is not yet a clear replacement
-for simple remote locality.  It becomes promising if used as a layer/head-aware extra route:
+book-index 思路是可行的，但第一版 TF-IDF 还不能明确替代简单的 remote locality。
+如果把它作为 layer/head-aware 的额外 route，就更有前景：
 
   keep sink + recent
   keep a small remote-tail band
@@ -939,7 +933,7 @@ for simple remote locality.  It becomes promising if used as a layer/head-aware 
   use semantic summaries to rerank within sections/pages
 ```
 
-The next implementation target should be:
+下一个实现目标应该是：
 
 ```text
 Layer/head-aware hybrid:
@@ -948,66 +942,66 @@ Layer/head-aware hybrid:
   union both under a fixed page budget, then rerank by cheap page summary score
 ```
 
-## 16. Long-range semantic retrieval with near-tail decoy
+## 16. 带 Near-Tail Decoy 的长程语义检索
 
-Motivation:
+动机：
 
 ```text
-The War and Peace continuation setup favors remote-tail locality.
-For long-range semantic retrieval, the important evidence can be far earlier than the remote tail.
+War and Peace continuation 设置偏向 remote-tail locality。
+但对长程语义检索来说，重要证据可能远早于 remote tail。
 ```
 
-New diagnostic:
+新诊断：
 
 ```text
-script:
+脚本：
   src/analyze_longrange_book_index_semantic_retrieval.py
 
-server run:
+服务器运行：
   scripts/run_longrange_book_index_semantic_server.sh
 
-output:
+输出：
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_semantic_10k20k_smoke_v2_auth
 ```
 
-Task construction:
+任务构造：
 
 ```text
 context length: 10k and 20k
 tasks per length: 2 smoke tasks
 
-early context:
+early context：
   AUTHORITATIVE EVIDENCE PAGE:
     key = K
     true ANSWER_LABEL = Y
 
-near remote tail:
+near remote tail：
   NEAR-TAIL DECOY PAGE:
     same key = K
     wrong ANSWER_LABEL = Z
     explicitly says obsolete / non-authoritative / misleading
 
-query at the end:
+末尾 query：
   asks for the AUTHORITATIVE EVIDENCE PAGE answer
 ```
 
-This tests three separate things:
+这个设置测试三件不同的事：
 
 ```text
-1. Does routing recall the true early evidence page?
-2. Does routing avoid the near-tail decoy page?
-3. How much true model remote top2 semantic mass does the route cover?
+1. routing 是否召回真正的 early evidence page？
+2. routing 是否避开 near-tail decoy page？
+3. route 覆盖了多少真实模型 remote top2 semantic mass？
 ```
 
-Important finding:
+重要发现：
 
 ```text
-In decoy tasks, semantic-mass recall and key-evidence recall are not the same metric.
-Remote-tail gets high top2 mass because the model attends heavily to the near-tail decoy,
-but it has zero true-evidence recall.
+在 decoy task 中，semantic-mass recall 和 key-evidence recall 不是同一个指标。
+remote-tail 得到很高的 top2 mass，是因为模型大量 attend 到 near-tail decoy；
+但它的 true-evidence recall 为 0。
 ```
 
-### 10k results
+### 10k 结果
 
 | Scheme | Pages | Top2 semantic mass recall | Evidence hit | Decoy hit |
 | --- | ---: | ---: | ---: | ---: |
@@ -1030,7 +1024,7 @@ but it has zero true-evidence recall.
 | book_auth_hier_s4_p4 | 16 | 16.28% | 1.00 | 0.00 |
 | book_auth_hier_s8_p4 | 32 | 23.68% | 1.00 | 0.00 |
 
-### 20k results
+### 20k 结果
 
 | Scheme | Pages | Top2 semantic mass recall | Evidence hit | Decoy hit |
 | --- | ---: | ---: | ---: | ---: |
@@ -1053,7 +1047,7 @@ but it has zero true-evidence recall.
 | book_auth_hier_s4_p4 | 16 | 10.37% | 1.00 | 0.00 |
 | book_auth_hier_s8_p4 | 32 | 13.78% | 1.00 | 0.00 |
 
-Interpretation:
+解释：
 
 ```text
 remote_tail:
@@ -1069,30 +1063,30 @@ authority-aware typed summary:
   But it has lower top2 mass recall because the model's own top2 attention is attracted to the decoy.
 ```
 
-This is the most important conceptual update:
+这是最重要的概念更新：
 
 ```text
-For long-range semantic QA, optimizing only true-top2 attention mass can reward the wrong memory.
-If the model attends to a near-tail decoy, mass recall prefers the decoy.
+对于长程语义 QA，只优化 true-top2 attention mass 可能会奖励错误记忆。
+如果模型 attend 到 near-tail decoy，mass recall 会偏好 decoy。
 
-So the routing objective needs at least two metrics:
+因此 routing objective 至少需要两个指标：
   1. key evidence recall / answer support recall
   2. attention-mass or PPL preservation
 ```
 
-Design implication:
+设计启发：
 
 ```text
-Typed-anchor book routing should have page roles:
+typed-anchor book routing 应该有 page role：
   structural: boundary / section / dialogue / list position
   semantic: key, entity, topic, answer-bearing content
   authority/status: authoritative, obsolete, decoy, negated, summary, quote
 
-The page router should not only ask "which page is lexically similar?"
-It should ask "which page is the right type of evidence for this query?"
+page router 不应该只问“哪个 page 在词面上相似？”
+它应该问“哪个 page 是这个 query 所需的正确证据类型？”
 ```
 
-Next optimization target:
+下一个优化目标：
 
 ```text
 Hybrid evidence-safe routing:
@@ -1103,35 +1097,34 @@ Hybrid evidence-safe routing:
   tune layer/head budgets separately for PPL heads vs retrieval heads
 ```
 
-## 17. Prompt-pruned downstream QA smoke
+## 17. Prompt-Pruned 下游 QA Smoke
 
-Purpose:
+目的：
 
 ```text
-The previous diagnostic measured page recall and true-top2 mass.
-This run asks whether the selected pages actually let the model answer the long-range QA task.
+前一个诊断测量了 page recall 和 true-top2 mass。
+这次运行要回答：选中的 page 是否真的能让模型回答长程 QA 任务。
 ```
 
-This is not yet a sparse-attention kernel.  It is a prompt-pruned proxy:
+这还不是 sparse-attention kernel，而是一个 prompt-pruned proxy：
 
 ```text
-For each route:
+对每个 route：
   build a short prompt from sink + selected remote pages + recent + query
   score answer labels A/B/C/D
   record accuracy, decoy prediction rate, evidence hit, decoy hit, token ratio
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_downstream_10k20k_smoke_v2_calib
 ```
 
-A no-context label-prior calibration is included because Qwen3-0.6B shows a strong single-letter
-prior on this tiny smoke set.  The calibrated score subtracts the label score under the query-only
-prompt.
+这里加入了 no-context label-prior calibration，因为 Qwen3-0.6B 在这个很小的 smoke set 上表现出很强的单字母先验。
+calibrated score 会减去 query-only prompt 下的 label score。
 
-### 10k downstream smoke
+### 10k 下游 Smoke
 
 | Scheme | Raw acc | Cal acc | Evidence hit | Decoy hit | Token ratio | Raw margin | Cal margin |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1145,16 +1138,16 @@ prompt.
 | book_auth_hier_s4_p2 | 50% | 50% | 100% | 0% | 12.9% | +1.63 | +0.98 |
 | hybrid_tail4_authflat4 | 50% | 50% | 100% | 100% | 13.4% | +0.96 | +0.32 |
 
-10k interpretation:
+10k 解释：
 
 ```text
-Accuracy is not very informative with only 2 tasks and strong label prior.
-Margins are informative:
+只有 2 个任务且存在强 label prior 时，accuracy 信息量不大。
+margin 更有信息量：
   remote-tail has negative calibrated true-vs-decoy margin;
   authority-aware book pages have positive calibrated margins and avoid the decoy.
 ```
 
-### 20k downstream smoke
+### 20k 下游 Smoke
 
 | Scheme | Raw acc | Cal acc | Evidence hit | Decoy hit | Token ratio | Raw margin | Cal margin |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1170,10 +1163,10 @@ Margins are informative:
 | hybrid_tail4_authflat4 | 50% | 50% | 100% | 100% | 6.9% | -0.86 | +0.68 |
 | hybrid_tail4_authhier_s4_p2 | 50% | 50% | 100% | 100% | 8.5% | -0.27 | +1.28 |
 
-20k interpretation:
+20k 解释：
 
 ```text
-The clearest result is:
+最清楚的结果是：
 
   book_auth_flat_p4:
     5.0% tokens
@@ -1194,22 +1187,21 @@ The clearest result is:
     0% calibrated accuracy
 ```
 
-This supports the original hypothesis for long contexts:
+这支持了针对长上下文的原始假设：
 
 ```text
-For long-range semantic retrieval, page-index routing can beat remote-tail by a large margin
-on key-evidence recall and downstream answerability, while using only about 5-7% of prompt tokens.
+对于长程语义检索，page-index routing 可以在 key-evidence recall 和 downstream answerability 上大幅超过 remote-tail，同时只使用约 5-7% 的 prompt token。
 ```
 
-But it also shows a warning:
+但它也给出一个警告：
 
 ```text
-Adding remote-tail back into a hybrid route improves PPL/locality potential,
-but it reintroduces the decoy page in this benchmark.
-So hybrid needs a decoy/status gate, not a naive union.
+把 remote-tail 加回 hybrid route 可以改善 PPL/locality 潜力，
+但在这个 benchmark 中也会重新引入 decoy page。
+因此 hybrid 需要 decoy/status gate，而不是简单取并集。
 ```
 
-Current design update:
+当前设计更新：
 
 ```text
 Evidence-safe typed page routing:
@@ -1220,34 +1212,33 @@ Evidence-safe typed page routing:
   5. PPL/locality heads and semantic-retrieval heads should get different page budgets.
 ```
 
-Next concrete experiment:
+下一个具体实验：
 
 ```text
-Move from prompt-pruned proxy to sparse-attention PPL/downstream:
+从 prompt-pruned proxy 转向 sparse-attention PPL/downstream：
   - use book_auth pages as protected remote pages;
   - optionally add a small gated tail budget;
   - compare PPL, answer accuracy, evidence hit, decoy hit, selected token ratio, and wall time.
 ```
 
-## 18. Full-context KV sparse page-mask smoke
+## 18. Full-Context KV Sparse Page-Mask Smoke
 
-Purpose:
+目的：
 
 ```text
-The prompt-pruned proxy changes the prompt.
-This run keeps full-context KV prefill, then masks attention during query/answer scoring so the
-model can only attend to:
+prompt-pruned proxy 会改变 prompt。
+这次运行保留 full-context KV prefill，然后在 query/answer scoring 阶段 mask attention，使模型只能 attend 到：
   sink tokens
   recent tokens
   selected remote page tokens
 ```
 
-This is closer to the intended KV-cache method.
+这更接近目标 KV-cache 方法。
 
-Implementation:
+实现：
 
 ```text
-script:
+脚本：
   src/run_longrange_book_index_sparse_eval.py
 
 server run:
@@ -1257,7 +1248,7 @@ output:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_smoke_v1
 ```
 
-Important caveat:
+重要 caveat：
 
 ```text
 This smoke masks attention logits after full QK has already been computed.
@@ -1265,7 +1256,7 @@ So mean_kept_fraction is a compute proxy, not measured kernel speedup.
 It tells us the target sparse workload size, not actual accelerated runtime yet.
 ```
 
-### 10k sparse-mask results
+### 10k Sparse-Mask 结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1278,7 +1269,7 @@ It tells us the target sparse workload size, not actual accelerated runtime yet.
 | book_auth_hier_s4_p2 | 50% | 50% | 7.49 | 100% | 0% | 10.83% | 1086 |
 | hybrid_tail4_authflat4 | 50% | 50% | 6.47 | 100% | 100% | 11.07% | 1110 |
 
-10k interpretation:
+10k 解释：
 
 ```text
 remote_tail preserves more locality than sink_recent but routes to the decoy and has worse PPL
@@ -1291,7 +1282,7 @@ hybrid has the best PPL, even slightly better than full in this tiny smoke, but 
 decoy page.  This reinforces the need for a gated tail, not naive union.
 ```
 
-### 20k sparse-mask results
+### 20k Sparse-Mask 结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1304,7 +1295,7 @@ decoy page.  This reinforces the need for a gated tail, not naive union.
 | book_auth_hier_s4_p2 | 50% | 50% | 9.19 | 100% | 0% | 5.53% | 1108 |
 | hybrid_tail4_authflat4 | 50% | 50% | 8.05 | 100% | 100% | 5.62% | 1125 |
 
-20k interpretation:
+20k 解释：
 
 ```text
 At 20k, book_auth keeps only about 4.3-5.5% of history tokens and still preserves the evidence page.
@@ -1331,7 +1322,7 @@ Compared with remote_tail at similar budget:
     decoy hit = 0%
 ```
 
-The hybrid route shows the PPL/locality tradeoff:
+hybrid route 展示了 PPL/locality 的权衡：
 
 ```text
 hybrid_tail4_authflat4:
@@ -1341,10 +1332,9 @@ hybrid_tail4_authflat4:
   decoy hit = 100%
 ```
 
-So the hybrid route is attractive for PPL, but unsafe for decoy-heavy semantic retrieval unless
-tail pages are passed through a status/authority gate.
+因此 hybrid route 对 PPL 很有吸引力，但如果 tail page 不经过 status/authority gate，在 decoy-heavy semantic retrieval 中是不安全的。
 
-Current conclusion:
+当前结论：
 
 ```text
 The book_auth route is the first version that simultaneously gives:
@@ -1355,9 +1345,9 @@ The book_auth route is the first version that simultaneously gives:
   - about 4-6% target history-token keep ratio at 20k.
 ```
 
-This moves the method from prompt-pruned proof-of-concept toward a real KV-cache routing method.
+这把方法从 prompt-pruned proof-of-concept 推进到了更接近真实 KV-cache routing method 的方向。
 
-Next optimization target:
+下一个优化目标：
 
 ```text
 Status-gated hybrid:
@@ -1374,16 +1364,16 @@ Then rerun:
   - eventually a real sparse kernel timing path.
 ```
 
-## 19. Status-gated hybrid for long-range semantic retrieval
+## 19. 用于长程语义检索的 Status-Gated Hybrid
 
-Question:
+问题：
 
 ```text
 For tasks that need long-range semantic retrieval, can we keep the PPL benefit of remote-tail
 without letting near-tail decoys dominate the route?
 ```
 
-Implementation:
+实现：
 
 ```text
 script:
@@ -1397,21 +1387,21 @@ output:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_smoke_v2_gated
 ```
 
-The gated-tail rule is deliberately simple:
+gated-tail rule 是刻意保持简单的：
 
 ```text
 Take the last 4 remote pages, but keep a tail page only if its authority/status score is non-negative.
 Then union those gated tail pages with the authority-aware semantic pages.
 ```
 
-This is not a learned router yet.  It is a controlled test of the design principle:
+这还不是 learned router，而是对设计原则的 controlled test：
 
 ```text
 semantic / authority pages should carry long-range evidence;
 tail pages should be optional locality support, not unconditional memory.
 ```
 
-### 10k gated sparse-mask results
+### 10k Gated Sparse-Mask 结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1423,7 +1413,7 @@ tail pages should be optional locality support, not unconditional memory.
 | hybrid_gatedtail4_authflat4 | 50% | 50% | 7.67 | 100% | 0% | 10.18% | 1021 |
 | hybrid_gatedtail4_authhier_s4_p2 | 50% | 50% | 7.69 | 100% | 0% | 12.57% | 1260 |
 
-### 20k gated sparse-mask results
+### 20k Gated Sparse-Mask 结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1435,7 +1425,7 @@ tail pages should be optional locality support, not unconditional memory.
 | hybrid_gatedtail4_authflat4 | 50% | 50% | 9.27 | 100% | 0% | 5.22% | 1045 |
 | hybrid_gatedtail4_authhier_s4_p2 | 50% | 50% | 9.22 | 100% | 0% | 6.42% | 1285 |
 
-Interpretation:
+解释：
 
 ```text
 The status gate works for routing correctness:
@@ -1448,12 +1438,10 @@ But the status gate does not preserve the naive hybrid PPL gain:
   20k book_auth_flat_p4 PPL = 9.24
 ```
 
-So the low PPL of naive hybrid mainly comes from keeping the near-tail decoy page.  Once that page
-is removed, the remaining tail pages do not help much beyond book_auth.  This is an important
-negative result: for long-range semantic retrieval, unconditional remote-tail can optimize PPL while
-hurting the actual retrieval target.
+因此 naive hybrid 的低 PPL 主要来自保留 near-tail decoy page。一旦移除该 page，剩余 tail page 相比 book_auth 并没有带来太多帮助。
+这是一个重要负结果：对长程语义检索来说，无条件 remote-tail 可能优化 PPL，却伤害真正的 retrieval target。
 
-Answer to the long-range semantic retrieval question:
+对长程语义检索问题的回答：
 
 ```text
 Use typed page routing:
@@ -1464,11 +1452,10 @@ Use typed page routing:
   - remote-tail should be gated or layer/head-limited, not globally merged.
 ```
 
-The current best conservative route for this smoke is still `book_auth_hier_s4_p2` or
-`book_auth_flat_p4`: they recall the authoritative evidence, avoid the decoy, keep only about
-4-6% of history tokens at 20k, and have much better PPL than sink/recent alone.
+当前这个 smoke 中最好的保守 route 仍然是 `book_auth_hier_s4_p2` 或 `book_auth_flat_p4`：
+它们能召回 authoritative evidence、避开 decoy，在 20k 下只保留约 4-6% 的 history token，并且 PPL 明显好于只用 sink/recent。
 
-Next experiment:
+下一个实验：
 
 ```text
 Move from a hand-written authority/status score to a small learned typed-anchor router:
@@ -1484,16 +1471,16 @@ Then evaluate separately:
     allow a small gated tail budget
 ```
 
-## 20. Structural expansion around authoritative pages
+## 20. 围绕 Authoritative Pages 的结构扩展
 
-Question:
+问题：
 
 ```text
 Remote-tail improves PPL but often keeps the decoy.
 Can we improve PPL by expanding around the retrieved authoritative page instead of adding tail pages?
 ```
 
-New modes:
+新模式：
 
 ```text
 book_auth_flat_p4_adj1:
@@ -1506,16 +1493,15 @@ book_auth_hier_s4_p2_adj1:
   retrieve pages through section -> page hierarchy, then add adjacent structural pages within radius 1
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v3_structural_expand
 ```
 
-This run uses 4 tasks per length, so it is still a small smoke, but less brittle than the 2-task
-checks above.
+这次每个长度使用 4 个任务，因此仍然是小 smoke，但比上面的 2-task 检查更不脆弱。
 
-### 10k structural expansion results
+### 10k 结构扩展结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1530,7 +1516,7 @@ checks above.
 | hybrid_tail4_authflat4 | 50% | 50% | 6.59 | 100% | 100% | 11.12% | 1115 |
 | hybrid_gatedtail4_authflat4 | 50% | 50% | 7.79 | 100% | 0% | 10.24% | 1027 |
 
-### 20k structural expansion results
+### 20k 结构扩展结果
 
 | Mode | Accuracy | Decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1545,7 +1531,7 @@ checks above.
 | hybrid_tail4_authflat4 | 50% | 50% | 7.24 | 100% | 100% | 5.70% | 1142 |
 | hybrid_gatedtail4_authflat4 | 75% | 25% | 8.00 | 100% | 0% | 5.19% | 1039 |
 
-Interpretation:
+解释：
 
 ```text
 Structural expansion is safer than remote-tail:
@@ -1559,7 +1545,7 @@ At 20k it gives a small but consistent PPL improvement:
   book_auth_hier_s4_p2_adj1:  PPL 7.81, kept 9.20%
 ```
 
-Compared with naive tail hybrid:
+和 naive tail hybrid 相比：
 
 ```text
 hybrid_tail4_authflat4:
@@ -1569,11 +1555,10 @@ book_auth_hier_s4_p2_adj1:
   PPL 7.81, decoy hit 0%, accuracy 75%
 ```
 
-So tail still gives the strongest language-modeling locality signal, but it is semantically unsafe
-on adversarial long-range retrieval.  Structural expansion gives a smaller PPL gain, but it keeps
-the route faithful to the evidence page.
+因此 tail 仍然给出最强的 language-modeling locality signal，但在 adversarial long-range retrieval 上语义不安全。
+structural expansion 的 PPL 收益更小，但它让 route 忠实于 evidence page。
 
-Current best design direction:
+当前最佳设计方向：
 
 ```text
 Use authority-aware hierarchical retrieval as the base route.
@@ -1581,12 +1566,10 @@ Add a small structural expansion budget around selected evidence pages.
 Do not add remote-tail globally; only allow it behind status gates or for PPL-oriented heads.
 ```
 
-The 20k result supports the original hypothesis better than the 10k result: the longer the context,
-the more useful page-level semantic routing becomes.  At 20k, `book_auth_*` routes outperform
-`full` and `remote_tail` on this decoy QA proxy, because full/tail keep both evidence and decoy while
-typed routing keeps only the authoritative evidence.
+20k 结果比 10k 结果更支持原始假设：上下文越长，page-level semantic routing 越有用。
+在 20k 下，`book_auth_*` route 在这个 decoy QA proxy 上超过 `full` 和 `remote_tail`，因为 full/tail 同时保留 evidence 和 decoy，而 typed routing 只保留 authoritative evidence。
 
-Next optimization:
+下一个优化：
 
 ```text
 Budget-aware typed routing:
@@ -1606,16 +1589,16 @@ Then measure:
   6. real sparse-kernel speed once the masking path is replaced by an accelerated kernel.
 ```
 
-## 21. Anchor-focused structural expansion
+## 21. Anchor-Focused 结构扩展
 
-Question:
+问题：
 
 ```text
 Section 20 expanded around every selected semantic page.
 Can we save budget by expanding only around selected pages that look like authoritative evidence?
 ```
 
-New modes:
+新模式：
 
 ```text
 book_auth_flat_p4_authadj1:
@@ -1631,13 +1614,13 @@ book_auth_hier_s4_p2_authadj1:
   expand adjacent pages only around positive-authority pages.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v4_anchor_focused_expand
 ```
 
-### 20k budget comparison
+### 20k Budget 对比
 
 | Mode | Accuracy | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1651,7 +1634,7 @@ Output:
 | book_auth_hier_s4_p2_authadj1 | 75% | 7.83 | 100% | 0% | 6.02% | 1206 |
 | hybrid_tail4_authflat4 | 50% | 7.24 | 100% | 100% | 5.70% | 1142 |
 
-Main result:
+主要结果：
 
 ```text
 Authority-focused expansion is more budget-efficient than expanding all selected pages.
@@ -1667,7 +1650,7 @@ At 20k:
     PPL 7.83, kept 5.41%
 ```
 
-This is a better shape for the target method:
+这更接近目标方法应该有的形态：
 
 ```text
 First retrieve semantic/authority anchors.
@@ -1675,7 +1658,7 @@ Then spend extra structural budget only around those anchors.
 Do not expand all semantically similar pages equally.
 ```
 
-Compared with hierarchical all-page expansion:
+和 hierarchical all-page expansion 相比：
 
 ```text
 book_auth_hier_s4_p2_adj1:
@@ -1685,11 +1668,10 @@ book_auth_flat_p4_authadj2:
   PPL 7.83, kept 5.41%
 ```
 
-The PPL gap is tiny, but the budget gap is large.  This suggests that in the current synthetic
-long-range task, most of the useful structural context is local to the actual authoritative page,
-not to every retrieved semantic page.
+PPL 差距很小，但 budget 差距很大。这说明在当前 synthetic long-range task 中，大多数有用的 structural context 都局部集中在真正的 authoritative page 附近，
+而不是每个被检索到的 semantic page 附近。
 
-Current best practical route:
+当前最佳实用 route：
 
 ```text
 book_auth_flat_p4_authadj2:
@@ -1700,10 +1682,10 @@ book_auth_flat_p4_authadj2:
   PPL 7.83
 ```
 
-This is not as low-PPL as naive tail hybrid, but naive tail hybrid keeps the decoy and drops
-accuracy.  For long-range semantic retrieval, `authadj` is the better tradeoff.
+它的 PPL 不如 naive tail hybrid 低，但 naive tail hybrid 会保留 decoy 并降低 accuracy。
+对于长程语义检索，`authadj` 是更好的权衡。
 
-Design implication:
+设计启发：
 
 ```text
 The router should not have a single "page count" knob.
@@ -1718,7 +1700,7 @@ The page system starts to look like:
 with extra tokens spent only around typed anchors that pass the task-specific gate.
 ```
 
-Next experiment:
+下一个实验：
 
 ```text
 Add a budgeted route that caps total remote tokens:
@@ -1730,21 +1712,21 @@ Add a budgeted route that caps total remote tokens:
 This should turn the current hand-tuned best mode into a real controllable router.
 ```
 
-## 22. Budgeted typed router curve
+## 22. Budgeted Typed Router 曲线
 
-Question:
+问题：
 
 ```text
 Can the anchor-focused route be controlled by an explicit compute budget?
 ```
 
-New mode family:
+新模式族：
 
 ```text
 budget_authflat_p4_authadj2_b{4,5,6,8}
 ```
 
-Routing rule:
+路由规则：
 
 ```text
 1. retrieve 4 authority-aware semantic pages;
@@ -1755,13 +1737,13 @@ Routing rule:
 5. if over budget, keep anchors first, then semantic pages, then structural expansion pages.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v5_budgeted_router
 ```
 
-### 20k budget curve
+### 20k Budget 曲线
 
 | Mode | Accuracy | Query PPL | Evidence hit | Decoy hit | Kept fraction | Kept tokens | Remote tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1776,7 +1758,7 @@ Output:
 | hybrid_tail4_authflat4 | 50% | 7.24 | 100% | 100% | 5.70% | 1142 | 573 |
 | full | 50% | 7.04 | 100% | 100% | 100.0% | 20026 | 0 |
 
-Interpretation:
+解释：
 
 ```text
 The best budgeted point in this smoke is b5:
@@ -1788,12 +1770,10 @@ The best budgeted point in this smoke is b5:
   PPL 7.81
 ```
 
-This is slightly better PPL than the unconstrained `book_auth_flat_p4_authadj2` route while using
-fewer tokens.  The likely reason is that budget pruning removes weak structural expansion pages
-that are not needed for the query.  This is useful: the router should not blindly use all available
-structural neighbors.
+它使用更少 token，却比不受约束的 `book_auth_flat_p4_authadj2` route 有略好的 PPL。
+可能原因是 budget pruning 移除了 query 不需要的弱 structural expansion page。这很有用：router 不应该盲目使用所有可用的 structural neighbor。
 
-The 4% route is also valid at 20k:
+4% route 在 20k 下也是有效的：
 
 ```text
 b4:
@@ -1803,8 +1783,8 @@ b4:
   PPL 7.85
 ```
 
-So for this long-range semantic retrieval task, a very small number of typed remote pages is enough
-to recover the key information.  This is much better than remote-tail at almost the same compute:
+因此对这个长程语义检索任务来说，少量 typed remote page 就足以恢复关键信息。
+在几乎相同 compute 下，这明显好于 remote-tail：
 
 ```text
 remote_tail_p4:
@@ -1814,15 +1794,15 @@ remote_tail_p4:
   PPL 9.59
 ```
 
-### 10k budget behavior
+### 10k Budget 行为
 
-At 10k, sink + recent already costs about 5.75%:
+在 10k 下，sink + recent 本身已经消耗约 5.75%：
 
 ```text
 sink_recent kept fraction = 5.75%
 ```
 
-Therefore the 4% and 5% total-budget modes have no room for remote pages:
+因此 4% 和 5% total-budget 模式没有空间放 remote page：
 
 ```text
 b4/b5:
@@ -1831,7 +1811,7 @@ b4/b5:
   PPL = 93.77
 ```
 
-The feasible points start at b6/b8:
+可行点从 b6/b8 开始：
 
 ```text
 b6:
@@ -1847,11 +1827,10 @@ b8:
   PPL 7.51
 ```
 
-This tells us that the minimum useful budget depends on context length when sink/recent are fixed.
-For 10k, the sink/recent floor is too large for 4-5% total budgets; for 20k, 4-5% is enough for
-both local state and long-range semantic pages.
+这说明当 sink/recent 固定时，最小有用 budget 取决于上下文长度。
+对 10k 来说，sink/recent floor 对 4-5% total budget 过大；对 20k 来说，4-5% 已经足够同时容纳 local state 和 long-range semantic page。
 
-Current design update:
+当前设计更新：
 
 ```text
 Use budgeted typed routing, not fixed page counts:
@@ -1862,7 +1841,7 @@ Use budgeted typed routing, not fixed page counts:
   5. avoid remote-tail unless a separate status-gated/locality head needs it.
 ```
 
-Current best sparse-proxy route:
+当前最佳 sparse-proxy route：
 
 ```text
 20k:
@@ -1877,7 +1856,7 @@ Why:
   much better than remote-tail at similar budget.
 ```
 
-Next step:
+下一步：
 
 ```text
 Turn the budgeted router into a reusable page-selection module and test it on a larger task suite:
@@ -1889,15 +1868,15 @@ Turn the budgeted router into a reusable page-selection module and test it on a 
   - then connect this route to a real sparse attention kernel for wall-clock speed.
 ```
 
-## 23. Layout-robust long-range suite
+## 23. Layout-Robust 长程套件
 
-Question:
+问题：
 
 ```text
 Does the budgeted typed router still work when the evidence page and decoy page move?
 ```
 
-New suite layouts:
+新套件 layout：
 
 ```text
 e05_d90: evidence around 5%,  decoy around 90%
@@ -1906,15 +1885,15 @@ e40_d90: evidence around 40%, decoy around 90%
 e05_d60: evidence around 5%,  decoy around 60%
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v6_layout_suite
 ```
 
-This run uses 2 tasks per layout per context length, so 8 tasks for 10k and 8 tasks for 20k.
+这次每个 context length 的每个 layout 使用 2 个任务，因此 10k 和 20k 各有 8 个任务。
 
-### 20k aggregate results across layouts
+### 20k 跨 Layout 聚合结果
 
 | Mode | Accuracy | Query PPL | Evidence hit | Decoy hit | Kept fraction | Remote tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -1928,7 +1907,7 @@ This run uses 2 tasks per layout per context length, so 8 tasks for 10k and 8 ta
 | hybrid_tail4_authflat4 | 75% | 7.31 | 100% | 0% | 5.32% | 500 |
 | full | 50% | 6.27 | 100% | 100% | 100% | 0 |
 
-Important difference from the earlier near-tail-decoy smoke:
+和早期 near-tail-decoy smoke 的重要区别：
 
 ```text
 Here the decoy is at 60%, 80%, or 90%, not necessarily inside the last remote-tail pages.
@@ -1936,7 +1915,7 @@ So remote_tail_p4 often recalls neither evidence nor decoy.
 It behaves like a weak locality baseline, not a semantic retrieval method.
 ```
 
-The main robust signal:
+主要稳健信号：
 
 ```text
 book_auth and budget_auth routes:
@@ -1950,20 +1929,19 @@ remote_tail and plain book_flat:
   PPL around 85-87
 ```
 
-So the authority/status part is doing real work.  Plain lexical page retrieval is not enough in
-this synthetic suite, because the route needs to understand that the authoritative page is the one
-to use and the decoy/status-negative page is not.
+因此 authority/status 部分确实发挥了作用。plain lexical page retrieval 在这个 synthetic suite 中不够，
+因为 route 需要理解 authoritative page 才是应该使用的 page，而 decoy/status-negative page 不是。
 
-### Per-layout 20k behavior
+### 按 Layout 的 20k 行为
 
-Key observation:
+关键观察：
 
 ```text
 For every tested 20k layout:
   budget_authflat_p4_authadj2_b4/b5/b6 all hit evidence 100% and decoy 0%.
 ```
 
-Representative PPL by layout:
+按 layout 展示的代表性 PPL：
 
 | Layout | b4 PPL | b5 PPL | b6 PPL | book_auth_flat_p4 PPL |
 | --- | ---: | ---: | ---: | ---: |
@@ -1972,19 +1950,19 @@ Representative PPL by layout:
 | e40_d90 | 7.23 | 7.19 | 7.21 | 7.24 |
 | e05_d60 | 8.03 | 8.01 | 8.00 | 8.07 |
 
-The evidence position can move from 5% to 40%, and the typed router still finds it.  This supports
-the book/page hypothesis more strongly than the fixed early-evidence smoke.
+evidence position 可以从 5% 移到 40%，typed router 仍然能找到它。
+这比固定 early-evidence smoke 更有力地支持 book/page 假设。
 
-### 10k behavior
+### 10k 行为
 
-At 10k, fixed sink/recent is still the limiting floor:
+在 10k 下，固定 sink/recent 仍然是限制性的 floor：
 
 ```text
 sink_recent kept fraction = 5.74%
 b4/b5 have no remote budget left
 ```
 
-Therefore:
+因此：
 
 ```text
 b4/b5:
@@ -1998,15 +1976,15 @@ b6:
   kept fraction 6.79%
 ```
 
-This reinforces that budgets should not be absolute percentages alone.  The router should compute:
+这进一步说明 budget 不应该只看绝对百分比。router 应该计算：
 
 ```text
 remote_budget = total_budget - sink_budget - recent_budget
 ```
 
-and the minimum useful total budget must exceed the sink/recent floor.
+并且最小有用 total budget 必须超过 sink/recent floor。
 
-Current interpretation:
+当前解释：
 
 ```text
 The method is now robust across several long-range layouts:
@@ -2017,7 +1995,7 @@ The method is now robust across several long-range layouts:
   - small structural expansion is useful but should be budget-pruned.
 ```
 
-Downstream accuracy caveat:
+下游 accuracy caveat：
 
 ```text
 Qwen3-0.6B single-letter scoring has a strong label prior in these tiny synthetic suites.
@@ -2026,7 +2004,7 @@ Evidence hit, decoy hit, and query PPL are more stable diagnostics here.
 The next downstream run should add no-context label-prior calibration to the sparse path.
 ```
 
-Next concrete optimization:
+下一个具体优化：
 
 ```text
 Add calibrated answer scoring to the sparse evaluator:
@@ -2041,15 +2019,15 @@ Then rerun the layout suite for:
 This will make downstream accuracy less dominated by the base model's label prior.
 ```
 
-## 24. Calibrated sparse downstream scoring
+## 24. Calibrated Sparse 下游评分
 
-Question:
+问题：
 
 ```text
 Does no-context label-prior calibration make the sparse downstream accuracy more reliable?
 ```
 
-Implementation:
+实现：
 
 ```text
 For each task:
@@ -2057,13 +2035,13 @@ For each task:
   calibrated_score(label) = sparse_context_score(label) - prior_score(label)
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v7_calibrated_layout_suite
 ```
 
-### 20k calibrated aggregate
+### 20k Calibrated 聚合
 
 | Mode | Raw acc | Calibrated acc | Raw decoy pred | Calibrated decoy pred | PPL | Evidence hit | Decoy hit | Kept fraction |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2078,7 +2056,7 @@ Output:
 | hybrid_tail4_authflat4 | 75% | 75% | 0% | 0% | 7.31 | 100% | 0% | 5.32% |
 | full | 50% | 62.5% | 12.5% | 12.5% | 6.27 | 100% | 100% | 100% |
 
-Calibration helps in the intended way:
+calibration 按预期发挥了作用：
 
 ```text
 book_auth_flat_p4_authadj2:
@@ -2090,7 +2068,7 @@ budget b5/b6:
   raw decoy pred 12.5% -> calibrated decoy pred 0%
 ```
 
-The strongest current route remains:
+当前最强 route 仍然是：
 
 ```text
 budget_authflat_p4_authadj2_b4 or b5
@@ -2110,12 +2088,11 @@ b5:
   calibrated accuracy 75%
 ```
 
-The b4 result is important: after layout variation, b4 is almost as good as b5/b6 while keeping
-less than 4% of visible history at 20k.
+b4 结果很重要：在 layout variation 之后，b4 几乎和 b5/b6 一样好，同时在 20k 下保留少于 4% 的 visible history。
 
-### Per-layout calibrated behavior
+### 按 Layout 的 Calibrated 行为
 
-At 20k:
+在 20k 下：
 
 ```text
 e05_d90:
@@ -2133,11 +2110,11 @@ e05_d60:
   evidence hit = 100%, decoy hit = 0%, calibrated decoy pred = 0%
 ```
 
-The e05_d60 failure is not a retrieval failure.  The router finds the authoritative evidence and
-avoids the decoy, but Qwen3-0.6B still chooses a different wrong label under this tiny two-task
-layout.  So the remaining error is downstream answer scoring / model behavior, not page routing.
+e05_d60 failure 不是 retrieval failure。router 找到了 authoritative evidence，也避开了 decoy，
+但 Qwen3-0.6B 在这个很小的 two-task layout 下仍然选择了另一个错误 label。
+因此剩余错误来自 downstream answer scoring / model behavior，而不是 page routing。
 
-Current interpretation:
+当前解释：
 
 ```text
 Page routing result:
@@ -2155,14 +2132,14 @@ Downstream result:
   one layout remains hard despite correct retrieval
 ```
 
-Design implication:
+设计启发：
 
 ```text
 The book/page router is now doing the right retrieval work.
 The next bottleneck is answer extraction/scoring, not page selection.
 ```
 
-Next experiment:
+下一个实验：
 
 ```text
 Increase downstream reliability:
@@ -2176,16 +2153,16 @@ In parallel:
   so the current kept-fraction proxy becomes actual wall-clock speed.
 ```
 
-## 25. Balanced-label calibrated layout suite
+## 25. Balanced-Label Calibrated Layout 套件
 
-Problem with Section 24:
+第 24 节的问题：
 
 ```text
 The e05_d60 layout had only two tasks and both happened to target label A.
 That made it hard to tell whether the failure was a routing issue or a label-prior/scoring issue.
 ```
 
-New run:
+新运行：
 
 ```text
 Use the same four layouts:
@@ -2198,13 +2175,13 @@ Decoy label is the next label:
   A -> B, B -> C, C -> D, D -> A
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v8_balanced_calibrated_layout_suite
 ```
 
-### 20k balanced aggregate
+### 20k Balanced 聚合
 
 | Mode | Raw acc | Calibrated acc | Calibrated decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Remote tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2218,7 +2195,7 @@ Output:
 | hybrid_tail4_authflat4 | 75.0% | 75.0% | 0% | 7.62 | 100% | 0% | 5.32% | 498 |
 | full | 25.0% | 43.75% | 43.75% | 6.60 | 100% | 100% | 100% | 0 |
 
-Main result:
+主要结果：
 
 ```text
 Balanced labels confirm the Section 24 interpretation:
@@ -2227,7 +2204,7 @@ Balanced labels confirm the Section 24 interpretation:
   the remaining downstream error is label-specific scoring noise.
 ```
 
-The best compute/downstream tradeoff remains:
+最佳 compute/downstream 权衡仍然是：
 
 ```text
 budget_authflat_p4_authadj2_b4
@@ -2241,7 +2218,7 @@ budget_authflat_p4_authadj2_b4
   calibrated accuracy 75%
 ```
 
-If slightly better PPL is worth more tokens:
+如果略好的 PPL 值得付出更多 token：
 
 ```text
 budget_authflat_p4_authadj2_b5:
@@ -2257,11 +2234,11 @@ budget_authflat_p4_authadj2_b6:
   calibrated accuracy 75%
 ```
 
-The marginal PPL gain from b4 to b6 is very small, so b4 is currently the best sparse-proxy route.
+从 b4 到 b6 的边际 PPL 收益很小，因此 b4 当前是最佳 sparse-proxy route。
 
-### Per-layout 20k behavior
+### 按 Layout 的 20k 行为
 
-For all four layouts:
+对全部四个 layout：
 
 ```text
 book_auth_flat_p4 and budgeted typed routes:
@@ -2270,7 +2247,7 @@ book_auth_flat_p4 and budgeted typed routes:
   calibrated accuracy = 75%
 ```
 
-This includes the previously suspicious layout:
+这包括之前可疑的 layout：
 
 ```text
 e05_d60:
@@ -2280,12 +2257,11 @@ e05_d60:
   decoy hit = 0%
 ```
 
-So the e05_d60 issue in Section 24 was caused by an unlucky target-label sample, not by the page
-router.
+因此第 24 节中的 e05_d60 问题来自不走运的 target-label 样本，而不是 page router。
 
-### Label-specific failure
+### Label-Specific 失败
 
-Balanced labels reveal a clean pattern:
+balanced label 揭示了一个清晰模式：
 
 ```text
 For typed routes at 20k:
@@ -2295,7 +2271,7 @@ For typed routes at 20k:
   target D: calibrated acc = 100%
 ```
 
-Example failures for `budget_authflat_p4_authadj2_b5`:
+`budget_authflat_p4_authadj2_b5` 的失败示例：
 
 ```text
 e05_d90 target A: calibrated prediction C
@@ -2304,17 +2280,16 @@ e40_d90 target A: calibrated prediction D
 e05_d60 target A: calibrated prediction C
 ```
 
-All of these still have:
+这些样本仍然都有：
 
 ```text
 evidence hit = 1
 decoy hit = 0
 ```
 
-Therefore the remaining downstream failure is not memory routing.  It is answer extraction/scoring
-for the small Qwen3-0.6B model under this synthetic single-letter format.
+因此剩余的 downstream failure 不是 memory routing 问题，而是小模型 Qwen3-0.6B 在这个 synthetic single-letter format 下的 answer extraction/scoring 问题。
 
-Current state of the method:
+当前方法状态：
 
 ```text
 Retrieval:
@@ -2338,7 +2313,7 @@ Compute:
   current implementation masks after full QK, so real wall-clock speed needs a sparse kernel path
 ```
 
-Next step:
+下一步：
 
 ```text
 Replace single-letter answer scoring with a more robust downstream probe:
@@ -2350,9 +2325,9 @@ Keep the same routing and PPL metrics.
 If the A-specific failure disappears, then downstream performance should match the retrieval result.
 ```
 
-## 26. Robust answer format: score `ANSWER_LABEL=A`
+## 26. 稳健答案格式：评分 `ANSWER_LABEL=A`
 
-Problem with Section 25:
+第 25 节的问题：
 
 ```text
 Bare single-letter scoring still had a label-specific bias:
@@ -2360,7 +2335,7 @@ Bare single-letter scoring still had a label-specific bias:
   target B/C/D calibrated accuracy = 100%
 ```
 
-New scoring format:
+新的 scoring format：
 
 ```text
 Instead of scoring:
@@ -2370,7 +2345,7 @@ score:
   " ANSWER_LABEL=A"
 ```
 
-Everything else is unchanged:
+其他部分保持不变：
 
 ```text
 same balanced labels
@@ -2380,13 +2355,13 @@ same PPL scoring
 same calibration method
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v9_answerlabel_balanced_suite
 ```
 
-### 20k answer-label scoring results
+### 20k Answer-Label 评分结果
 
 | Mode | Raw acc | Calibrated acc | Calibrated decoy pred | Query PPL | Evidence hit | Decoy hit | Kept fraction | Remote tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2400,7 +2375,7 @@ Output:
 | hybrid_tail4_authflat4 | 93.75% | 93.75% | 6.25% | 7.62 | 100% | 0% | 5.33% | 498 |
 | full | 62.5% | 81.25% | 18.75% | 6.60 | 100% | 100% | 100% | 0 |
 
-This resolves most of the answer-format noise:
+这解决了大部分 answer-format noise：
 
 ```text
 bare-letter budget b4:
@@ -2410,7 +2385,7 @@ ANSWER_LABEL budget b4:
   calibrated accuracy = 93.75%
 ```
 
-Label breakdown at 20k:
+20k 下的 label breakdown：
 
 ```text
 budget_authflat_p4_authadj2_b4:
@@ -2420,7 +2395,7 @@ budget_authflat_p4_authadj2_b4:
   target D: 100%
 ```
 
-The only remaining typed-route failure is:
+唯一剩余的 typed-route failure 是：
 
 ```text
 layout e40_d90
@@ -2431,13 +2406,13 @@ decoy hit = 0
 calibrated prediction = B
 ```
 
-So even after fixing most label-format bias, the residual error is still not a retrieval failure.
+因此即使修复了大部分 label-format bias，剩余错误仍然不是 retrieval failure。
 
-### 10k answer-label scoring results
+### 10k Answer-Label 评分结果
 
-At 10k, b4/b5 still have no room for remote pages because sink/recent alone is about 5.74%.
+在 10k 下，b4/b5 仍然没有空间放 remote page，因为仅 sink/recent 就约为 5.74%。
 
-Useful routes:
+有用 route：
 
 ```text
 book_auth_flat_p4:
@@ -2456,7 +2431,7 @@ hybrid_tail4_authflat4:
   kept fraction = 10.91%
 ```
 
-Current strongest result:
+当前最强结果：
 
 ```text
 20k budget_authflat_p4_authadj2_b4:
@@ -2468,7 +2443,7 @@ Current strongest result:
   calibrated downstream accuracy = 93.75%
 ```
 
-Compared with baselines:
+和 baseline 相比：
 
 ```text
 remote_tail_p4:
@@ -2484,7 +2459,7 @@ full:
   calibrated accuracy = 81.25%
 ```
 
-Interpretation:
+解释：
 
 ```text
 The book/page typed router now satisfies the algorithmic target in this synthetic suite:
@@ -2495,7 +2470,7 @@ The book/page typed router now satisfies the algorithmic target in this syntheti
   - downstream accuracy better than full context because full context includes decoy.
 ```
 
-Remaining gap:
+剩余缺口：
 
 ```text
 Compute speed is still a proxy.
@@ -2503,7 +2478,7 @@ The current evaluator masks attention after full QK, so it does not yet measure 
 sparse speedup.
 ```
 
-Next engineering step:
+下一个工程步骤：
 
 ```text
 1. Extract the budgeted typed page router into a reusable module.
@@ -2517,22 +2492,22 @@ Next engineering step:
      evidence/decoy hit.
 ```
 
-## 27. Router module extraction
+## 27. Router 模块抽取
 
-Purpose:
+目的：
 
 ```text
 Move the page-selection logic out of the sparse evaluator so it can be reused by a real sparse
 attention backend.
 ```
 
-New module:
+新模块：
 
 ```text
 src/book_page_router.py
 ```
 
-Main interface:
+主接口：
 
 ```text
 selected_pages_for_mode(
@@ -2553,22 +2528,22 @@ pages_to_tokens(pages, selected_pages) -> set[int]
 pages_to_ranges(pages, selected_pages) -> list[tuple[int, int]]
 ```
 
-The evaluator now imports:
+evaluator 现在导入：
 
 ```text
 from book_page_router import pages_to_ranges, pages_to_tokens, selected_pages_for_mode
 ```
 
-and writes two new row fields:
+并写入两个新的 row field：
 
 ```text
 selected_page_ids
 selected_token_ranges
 ```
 
-These fields are the handoff contract for a future page/block sparse kernel.
+这些字段是未来 page/block sparse kernel 的 handoff contract。
 
-Supported route families in the module:
+模块支持的 route family：
 
 ```text
 remote_tail_pK
@@ -2586,7 +2561,7 @@ hybrid_gatedtail4_authflatK
 hybrid_gatedtail4_authhier_sS_pP
 ```
 
-Validation:
+验证：
 
 ```text
 Server compile:
@@ -2603,7 +2578,7 @@ Server smoke:
   print selected pages, token ranges, token counts, evidence hit, decoy hit.
 ```
 
-Smoke result:
+Smoke 结果：
 
 ```text
 book_auth_flat_p4:
@@ -2618,7 +2593,7 @@ budget_authflat_p4_authadj2_b4:
   This is expected and matches the budget-floor behavior seen at 10k.
 ```
 
-Current architecture:
+当前架构：
 
 ```text
 Task/index construction:
@@ -2634,7 +2609,7 @@ Future sparse kernel:
   should consume selected_token_ranges or selected_page_ids from book_page_router.py
 ```
 
-Next engineering target:
+下一个工程目标：
 
 ```text
 Add a real range-based attention path:
@@ -2653,16 +2628,16 @@ Then compare:
   calibrated downstream accuracy
 ```
 
-## 28. First real-compute smoke: PyTorch gather attention
+## 28. 第一次真实计算 Smoke：PyTorch Gather Attention
 
-Purpose:
+目的：
 
 ```text
 Move beyond post-QK masking by adding a gather implementation that only multiplies Q against
 selected key/value positions during sparse query/answer scoring.
 ```
 
-Implementation:
+实现：
 
 ```text
 run_longrange_book_index_sparse_eval.py now supports:
@@ -2670,7 +2645,7 @@ run_longrange_book_index_sparse_eval.py now supports:
   --sparse_attention_impl gather
 ```
 
-The gather path:
+gather 路径：
 
 ```text
 1. builds the same keep mask as the old path;
@@ -2679,23 +2654,22 @@ The gather path:
 4. computes QK and attention output only on gathered K/V.
 ```
 
-This is not the final kernel.  It is a PyTorch-level prototype to test whether shrinking the
-matmul dimension immediately gives wall-clock benefit.
+这不是最终 kernel，而是 PyTorch-level prototype，用来测试缩小 matmul dimension 是否能立即带来 wall-clock 收益。
 
-Reproduction script:
+复现脚本：
 
 ```text
 scripts/run_longrange_book_index_sparse_gather_smoke_server.sh
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v10_mask_smoke
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v10_gather_smoke
 ```
 
-Smoke configuration:
+Smoke 配置：
 
 ```text
 context = 20k
@@ -2709,7 +2683,7 @@ modes:
 answer_score_format = ANSWER_LABEL
 ```
 
-### Mask vs gather results
+### Mask vs Gather 结果
 
 | Mode | Impl | Eval seconds | Kept fraction | PPL | Calibrated acc | Evidence hit | Decoy hit |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2722,7 +2696,7 @@ answer_score_format = ANSWER_LABEL
 | budget_authflat_p4_authadj2_b4 | mask | 3.84 | 3.86% | 8.41 | 100% | 100% | 0% |
 | budget_authflat_p4_authadj2_b4 | gather | 3.90 | 3.86% | 8.41 | 100% | 100% | 0% |
 
-Interpretation:
+解释：
 
 ```text
 The gather path preserves behavior:
@@ -2732,7 +2706,7 @@ But it does not improve wall-clock time:
   gather is slightly slower than mask in this smoke.
 ```
 
-Why:
+原因：
 
 ```text
 The prototype uses PyTorch index_select plus many small query_count=1 matmuls.
@@ -2740,7 +2714,7 @@ The overhead of gathering and launching small operations dominates the saved QK 
 This is especially true during decode-style scoring where each step has only one query token.
 ```
 
-Conclusion:
+结论：
 
 ```text
 The kept-fraction proxy is algorithmically meaningful, but naive PyTorch gather is not enough for
@@ -2753,23 +2727,23 @@ A real implementation needs a fused range/block sparse attention kernel that con
 without materializing full QK or doing per-step Python-level gather overhead.
 ```
 
-Next engineering step:
+下一个工程步骤：
 
 ```text
 Implement or integrate a block/range sparse attention backend.
 The current router is ready for that path because it now emits selected_token_ranges.
 ```
 
-## 29. Sparse backend smoke: Triton small-kernel vs SDPA gather
+## 29. Sparse Backend Smoke：Triton Small-Kernel vs SDPA Gather
 
-Purpose:
+目的：
 
 ```text
 Test whether the typed page router can move from a kept-fraction proxy toward real wall-clock
 speed by replacing post-QK masking with a sparse attention backend.
 ```
 
-Implemented backend options:
+已实现 backend option：
 
 ```text
 --sparse_attention_impl mask
@@ -2785,7 +2759,7 @@ Implemented backend options:
   A first Triton fused decode kernel over selected candidate token ids.
 ```
 
-Outputs:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v11_mask_smoke
@@ -2794,7 +2768,7 @@ Outputs:
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v12_sdpa_gather_smoke
 ```
 
-Smoke configuration:
+Smoke 配置：
 
 ```text
 context = 20k
@@ -2804,7 +2778,7 @@ modes = sink_recent, remote_tail_p4, book_auth_flat_p4, budget_authflat_p4_autha
 answer_score_format = ANSWER_LABEL
 ```
 
-### Backend timing
+### Backend 计时
 
 | Mode | Impl | Eval seconds | Kept fraction | PPL | Calibrated acc | Evidence hit | Decoy hit |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2825,7 +2799,7 @@ answer_score_format = ANSWER_LABEL
 | budget_authflat_p4_authadj2_b4 | sdpa_gather | 3.80 | 3.86% | 8.41 | 100% | 100% | 0% |
 | budget_authflat_p4_authadj2_b4 | triton | 26.83 | 3.86% | 8.42 | 100% | 100% | 0% |
 
-Main result:
+主要结果：
 
 ```text
 The typed page routing result is stable across all sparse backends:
@@ -2837,7 +2811,7 @@ But current sparse compute backends do not yet deliver real speedup:
   the naive Triton q=1 decode kernel is much slower.
 ```
 
-Why the first Triton prototype is slow:
+第一版 Triton prototype 慢的原因：
 
 ```text
 It launches one small custom kernel per layer per decode token.
@@ -2847,7 +2821,7 @@ The current patch also repeats GQA K/V to full attention heads before the kernel
 that bandwidth.
 ```
 
-Engineering conclusion:
+工程结论：
 
 ```text
 The algorithmic direction is still supported:
@@ -2860,7 +2834,7 @@ The next viable implementation should be one of:
   3. a batched multi-token scoring kernel that amortizes launch overhead across answer options/layers.
 ```
 
-Practical recommendation:
+实用建议：
 
 ```text
 For quality experiments, continue using mask or sdpa_gather.
@@ -2870,9 +2844,9 @@ The router output format is now ready for a real backend because each row record
   selected_token_ranges
 ```
 
-## 30. GQA-aware sparse gather optimization
+## 30. GQA-Aware Sparse Gather 优化
 
-Issue found:
+发现的问题：
 
 ```text
 The first gather/sdpa_gather implementation repeated Qwen3 GQA K/V to full attention heads before
@@ -2882,7 +2856,7 @@ That means the sparse path still copied a full 20k-history K/V tensor from kv_he
 then selected only about 600-850 tokens.
 ```
 
-Fix:
+修复：
 
 ```text
 Move sparse gather before GQA repeat.
@@ -2896,7 +2870,7 @@ For triton:
   pass group_size and map attention head -> kv head inside the kernel.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v13_mask_gqa_smoke
@@ -2904,7 +2878,7 @@ Output:
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v13_sdpa_gather_gqa_smoke
 ```
 
-### GQA-aware timing
+### GQA-Aware 计时
 
 | Mode | Impl | Eval seconds | Kept fraction | PPL | Calibrated acc | Evidence hit | Decoy hit |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -2921,7 +2895,7 @@ Output:
 | budget_authflat_p4_authadj2_b4 | gather | 3.30 | 3.86% | 8.41 | 100% | 100% | 0% |
 | budget_authflat_p4_authadj2_b4 | sdpa_gather | 3.16 | 3.86% | 8.41 | 100% | 100% | 0% |
 
-Result:
+结果：
 
 ```text
 GQA-aware sparse gather gives a real, though still modest, wall-clock improvement:
@@ -2932,7 +2906,7 @@ Quality is preserved:
   book_auth and budget_auth still hit the evidence page, avoid the decoy, and keep low PPL.
 ```
 
-Interpretation:
+解释：
 
 ```text
 The first useful speed win did not come from a custom Triton kernel.
@@ -2945,7 +2919,7 @@ This suggests the next speed work should focus on memory movement and launch amo
   only then move to a fused range/block CUDA or Triton kernel.
 ```
 
-Current best practical backend:
+当前最佳实用 backend：
 
 ```text
 --sparse_attention_impl sdpa_gather
@@ -2954,21 +2928,21 @@ It is the best available backend for continuing algorithm experiments because it
 typed-router quality result and gives the first measured wall-clock improvement over mask.
 ```
 
-## 31. Follow-up full suite launched with sdpa_gather
+## 31. 使用 sdpa_gather 启动的后续完整套件
 
-Command script:
+命令脚本：
 
 ```text
 scripts/run_longrange_book_index_sparse_server.sh
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v14_sdpa_gqa_answerlabel_balanced_suite
 ```
 
-Configuration:
+配置：
 
 ```text
 context = 10k,20k
@@ -2988,29 +2962,29 @@ modes =
   hybrid_tail4_authflat4
 ```
 
-Purpose:
+目的：
 
 ```text
 Re-run the balanced 10k/20k layout suite with the current fastest reliable backend.
 This will show whether the v13 20k smoke speedup carries over to the full multi-layout suite.
 ```
 
-Launch status:
+启动状态：
 
 ```text
 Started on server as PID 554040.
 Initial log confirmed progress through context=10000, layout=e05_d90, tasks 1-4.
 ```
 
-Completion:
+完成情况：
 
 ```text
 The v14 suite completed in 1076.95 seconds.
 ```
 
-### v14 vs v9: full-suite timing and quality
+### v14 vs v9：完整套件计时和质量
 
-Comparison is between:
+对比对象是：
 
 ```text
 v9:
@@ -3021,7 +2995,7 @@ v14:
   sparse gather is GQA-aware, so K/V are expanded only after selected-token gather.
 ```
 
-Important caveat:
+重要 caveat：
 
 ```text
 The v14 rows for mode=full used sdpa_gather over all K/V before the full-mode bypass bug was fixed.
@@ -3029,7 +3003,7 @@ Therefore v14 full timing should not be used as a dense baseline.
 Sparse modes are valid because they are the intended sdpa_gather path.
 ```
 
-Typed sparse modes:
+typed sparse 模式：
 
 ```text
 10k typed modes:
@@ -3043,7 +3017,7 @@ Typed sparse modes:
   speedup              = 18.4%
 ```
 
-20k key rows:
+20k 关键行：
 
 | Mode | v9 time | v14 time | Speedup | v14 PPL | v14 cal acc | Evidence hit | Decoy hit | Kept |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3053,7 +3027,7 @@ Typed sparse modes:
 | budget_authflat_p4_authadj2_b6 | 3.982 | 3.247 | 18.5% | 7.591 | 93.75% | 100% | 0% | 5.37% |
 | hybrid_tail4_authflat4 | 3.979 | 3.246 | 18.4% | 7.618 | 93.75% | 100% | 0% | 5.33% |
 
-Interpretation:
+解释：
 
 ```text
 The sdpa_gather + GQA-aware implementation gives a real full-suite wall-clock gain at 20k.
@@ -3066,7 +3040,7 @@ Quality is preserved:
   calibrated accuracy remains 93.75% at 20k and 100% at 10k for sufficiently budgeted typed routes.
 ```
 
-Remaining 20k failure:
+剩余 20k failure：
 
 ```text
 The single 20k typed-route error is layout=e40_d90, target=A.
@@ -3078,9 +3052,9 @@ So this is not a routing miss. It is an answer-scoring/model bias case where the
 above A even when the selected pages include the authoritative evidence and exclude the decoy.
 ```
 
-## 32. Full-mode bypass fix
+## 32. Full-Mode Bypass 修复
 
-Issue:
+问题：
 
 ```text
 After adding sdpa_gather, mode=full accidentally entered the gather path too.
@@ -3088,7 +3062,7 @@ That made full gather all K/V positions instead of using normal dense attention,
 was slower and not a valid dense baseline.
 ```
 
-Fix:
+修复：
 
 ```text
 The gather/sdpa_gather branch now requires:
@@ -3097,29 +3071,29 @@ The gather/sdpa_gather branch now requires:
 Full mode falls through to the original dense attention path.
 ```
 
-Validation smoke:
+验证 smoke：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v15_full_bypass_smoke
 ```
 
-Result:
+结果：
 
 | Mode | Impl | Eval seconds | PPL | Evidence hit | Decoy hit |
 | --- | --- | ---: | ---: | ---: | ---: |
 | full | sdpa_gather flag, dense bypass | 3.61 | 6.87 | 100% | 100% |
 | budget_authflat_p4_authadj2_b4 | sdpa_gather | 3.29 | 8.41 | 100% | 0% |
 
-Conclusion:
+结论：
 
 ```text
 The full-mode timing path is fixed for future runs.
 The v14 sparse-mode timing and quality conclusions remain valid.
 ```
 
-## 33. Adaptive recent budget for low-budget semantic retrieval
+## 33. 面向低 Budget 语义检索的 Adaptive Recent Budget
 
-Problem:
+问题：
 
 ```text
 At 10k, strict total budgets b4/b5 fail because sink64 + recent512 already uses 576 tokens.
@@ -3130,7 +3104,7 @@ That is larger than:
 The router therefore has zero remote-token budget and cannot select the evidence page.
 ```
 
-New mode suffix:
+新的 mode suffix：
 
 ```text
 budget_authflat_p4_authadj2_b4_r128
@@ -3139,20 +3113,20 @@ budget_authflat_p4_authadj2_b5_r256
 budget_authflat_p4_authadj2_b6_r256
 ```
 
-Meaning:
+含义：
 
 ```text
 Keep the same total budget percent, but use an effective recent window of rN for that mode.
 This lets low-budget semantic-retrieval routes trade some recent-window capacity for remote evidence pages.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v16_adaptive_recent_budget_suite
 ```
 
-### 10k adaptive-recent result
+### 10k Adaptive-Recent 结果
 
 | Mode | PPL | Cal acc | Evidence hit | Decoy hit | Kept fraction | Mean kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3163,7 +3137,7 @@ Output:
 | budget_authflat_p4_authadj2_b5_r256 | 7.55 | 100% | 100% | 0% | 4.78% | 480 |
 | budget_authflat_p4_authadj2_b6 | 7.47 | 100% | 100% | 0% | 6.75% | 678 |
 
-### 20k adaptive-recent result
+### 20k Adaptive-Recent 结果
 
 | Mode | PPL | Cal acc | Evidence hit | Decoy hit | Kept fraction | Mean kept tokens |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3173,7 +3147,7 @@ Output:
 | budget_authflat_p4_authadj2_b5_r256 | 7.60 | 93.75% | 100% | 0% | 4.06% | 814 |
 | budget_authflat_p4_authadj2_b6 | 7.59 | 93.75% | 100% | 0% | 5.37% | 1076 |
 
-Interpretation:
+解释：
 
 ```text
 For long-range semantic retrieval, sink + recent should not be treated as an untouchable fixed floor
@@ -3186,7 +3160,7 @@ At 20k, original b4 already has enough room for the evidence page, so adaptive r
 kept tokens with similar quality.
 ```
 
-Current best budget choices:
+当前最佳 budget 选择：
 
 ```text
 10k:
@@ -3204,7 +3178,7 @@ Current best budget choices:
     kept 3.42%, PPL 7.60, calibrated accuracy 93.75%
 ```
 
-Design implication:
+设计启发：
 
 ```text
 Typed-anchor page routing should use an adaptive retention controller:
@@ -3216,9 +3190,9 @@ Typed-anchor page routing should use an adaptive retention controller:
 This moves the method from a fixed sparse-attention rule toward query-type-aware page routing.
 ```
 
-## 34. Auto recent controller
+## 34. Auto Recent Controller
 
-Motivation:
+动机：
 
 ```text
 Manual r128/r256 modes proved the tradeoff, but they require choosing a recent window by hand.
@@ -3226,14 +3200,14 @@ The next step is an automatic controller that keeps default recent when budget i
 shrinks recent only when remote semantic evidence would otherwise be starved.
 ```
 
-New mode suffix:
+新的 mode suffix：
 
 ```text
 _rauto
 _rauto256
 ```
 
-Rule:
+规则：
 
 ```text
 For a mode like:
@@ -3254,7 +3228,7 @@ else:
   recent = total_budget - sink - min_remote
 ```
 
-This means:
+这意味着：
 
 ```text
 10k b4:
@@ -3268,13 +3242,13 @@ This means:
   _rauto keeps the original recent512 behavior
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v17_auto_recent_budget_suite
 ```
 
-### Auto controller result
+### Auto Controller 结果
 
 | Context | Mode | PPL | Cal acc | Evidence hit | Decoy hit | Kept fraction | Mean kept tokens |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3294,7 +3268,7 @@ Output:
 | 20k | b6 | 7.59 | 93.75% | 100% | 0% | 5.37% | 1076 |
 | 20k | b6_rauto | 7.59 | 93.75% | 100% | 0% | 5.37% | 1076 |
 
-Conclusion:
+结论：
 
 ```text
 _rauto is a better default than a fixed recent window for long-range semantic retrieval:
@@ -3306,7 +3280,7 @@ At 20k:
   it leaves the already-good b4/b5/b6 behavior unchanged.
 ```
 
-Recommended current route:
+当前推荐 route：
 
 ```text
 budget_authflat_p4_authadj2_b4_rauto
@@ -3316,7 +3290,7 @@ Reason:
   20k: kept 3.85%, PPL 7.60, calibrated accuracy 93.75%
 ```
 
-Updated server script:
+更新后的服务器脚本：
 
 ```text
 scripts/run_longrange_book_index_sparse_server.sh
@@ -3325,9 +3299,9 @@ Output:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v18_auto_recent_recommended_suite
 ```
 
-## 35. Recommended v18 suite
+## 35. 推荐的 v18 套件
 
-Purpose:
+目的：
 
 ```text
 Run the current recommended configuration after the full-mode bypass fix:
@@ -3336,19 +3310,19 @@ Run the current recommended configuration after the full-mode bypass fix:
   full/sink/recent/remote-tail baselines
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v18_auto_recent_recommended_suite
 ```
 
-Runtime:
+运行时间：
 
 ```text
 1146.87 seconds
 ```
 
-### Recommended-route comparison
+### Recommended-Route 对比
 
 | Context | Mode | PPL | Cal acc | Evidence hit | Decoy hit | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -3369,7 +3343,7 @@ Runtime:
 | 20k | budget_b5_rauto | 7.60 | 93.75% | 100% | 0% | 4.85% | 3.23 |
 | 20k | budget_b6_rauto | 7.59 | 93.75% | 100% | 0% | 5.37% | 3.23 |
 
-Main conclusion:
+主要结论：
 
 ```text
 budget_authflat_p4_authadj2_b4_rauto is the best current default.
@@ -3382,7 +3356,7 @@ It preserves the 20k result:
   b4 and b4_rauto both keep 3.85%, PPL 7.60, acc 93.75%.
 ```
 
-Why full is not best for downstream:
+为什么 full 对 downstream 不是最佳：
 
 ```text
 Full context has lower PPL, but includes the decoy page.
@@ -3390,7 +3364,7 @@ In this synthetic long-range semantic retrieval task, full context is worse than
 calibrated downstream accuracy because the model can be distracted by the later contradictory page.
 ```
 
-Current method summary:
+当前方法总结：
 
 ```text
 1. Use structural anchors to create natural pages.
@@ -3402,7 +3376,7 @@ Current method summary:
 4. Use GQA-aware sdpa_gather for the current fastest reliable sparse backend.
 ```
 
-Next research step:
+下一步研究：
 
 ```text
 The remaining 20k error is not an evidence-recall error:
@@ -3417,9 +3391,9 @@ The next speed step should move from token-id gather to range/page-table attenti
 instead of materialized selected token ids.
 ```
 
-## 36. Text verifier for selected authoritative pages
+## 36. Selected Authoritative Pages 的文本 Verifier
 
-Motivation:
+动机：
 
 ```text
 The remaining 20k error has:
@@ -3430,7 +3404,7 @@ So the router selected the right page and excluded the wrong page, but option sc
 wrong label higher after calibration.
 ```
 
-Implementation:
+实现：
 
 ```text
 Add a synthetic text verifier to run_longrange_book_index_sparse_eval.py.
@@ -3451,7 +3425,7 @@ This is not meant to be the final learned verifier. It is a proxy for a small ex
 routed pages.
 ```
 
-New row fields:
+新的 row field：
 
 ```text
 text_verifier_pred_label
@@ -3460,7 +3434,7 @@ text_verifier_correct
 text_verifier_decoy_pred
 ```
 
-New summary fields:
+新的 summary field：
 
 ```text
 text_verifier_coverage
@@ -3468,7 +3442,7 @@ text_verifier_accuracy
 text_verifier_decoy_pred_rate
 ```
 
-Exact failure reproduction:
+精确失败复现：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v19c_text_verifier_reproduce_failure
@@ -3481,14 +3455,14 @@ modes =
   budget_authflat_p4_authadj2_b4_rauto
 ```
 
-### v19c result
+### v19c 结果
 
 | Mode | LM acc | Cal acc | Verifier coverage | Verifier acc | Evidence hit | Decoy hit |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | book_auth_flat_p4 | 100% | 91.67% | 100% | 100% | 100% | 0% |
 | budget_authflat_p4_authadj2_b4_rauto | 91.67% | 91.67% | 100% | 100% | 100% | 0% |
 
-The reproduced failure row:
+复现出的失败行：
 
 ```text
 layout = e40_d90
@@ -3504,7 +3478,7 @@ budget_authflat_p4_authadj2_b4_rauto:
   text_verifier_pred = A
 ```
 
-Interpretation:
+解释：
 
 ```text
 The typed page router is no longer the limiting factor for this failure.
@@ -3516,7 +3490,7 @@ This supports a two-stage design:
   2. an answer normalizer/verifier extracts or validates the final answer from those pages.
 ```
 
-Design update:
+设计更新：
 
 ```text
 For long-range semantic retrieval tasks, downstream quality should be reported in two forms:
@@ -3527,16 +3501,16 @@ If verifier accuracy is high while LM option scoring fails, the bottleneck is an
 not page routing.
 ```
 
-## 37. Sentence answer scoring after page routing
+## 37. Page Routing 后的 Sentence Answer Scoring
 
-Purpose:
+目的：
 
 ```text
 Test whether a stronger LM scoring prompt can fix the remaining answer-extraction error without
 changing page routing.
 ```
 
-Existing formats:
+已有格式：
 
 ```text
 answer_label:
@@ -3546,7 +3520,7 @@ sentence:
   " The authoritative answer label is A."
 ```
 
-Focused reproduction:
+聚焦复现：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v20_sentence_scoring_reproduce_failure
@@ -3560,7 +3534,7 @@ modes =
 answer_score_format = sentence
 ```
 
-Result:
+结果：
 
 ```text
 answer_label on the same 12-task reproduction:
@@ -3572,7 +3546,7 @@ sentence:
   text verifier accuracy = 100%
 ```
 
-Compact recommended suite:
+紧凑推荐套件：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v21_sentence_recommended_compact
@@ -3601,7 +3575,7 @@ answer_score_format = sentence
 | 20k | book_auth_flat_p4 | 93.75% | 93.75% | 3.22 | 3.84 | 7.61 |
 | 20k | budget_b4_rauto | 93.75% | 100% | 3.23 | 3.85 | 7.60 |
 
-Interpretation:
+解释：
 
 ```text
 Sentence scoring helps after typed page routing has removed the decoy.
@@ -3618,7 +3592,7 @@ It is:
   then stronger answer extraction/scoring on the selected pages.
 ```
 
-Cost:
+成本：
 
 ```text
 Sentence scoring uses longer option strings, so eval_seconds increases:
@@ -3630,7 +3604,7 @@ This is an extraction-stage cost, not a routing/PPL cost:
   query PPL is unchanged because the selected context and query scoring are unchanged.
 ```
 
-Current quality/speed menu:
+当前质量/速度菜单：
 
 ```text
 Fast default:
@@ -3651,7 +3625,7 @@ Oracle-style extraction proxy:
   10k/20k typed routes: 100% when verifier coverage is 100%
 ```
 
-Next design:
+下一个设计：
 
 ```text
 Use margin-gated extraction:
@@ -3662,15 +3636,15 @@ Use margin-gated extraction:
 This should preserve most of the answer_label speed while recovering the remaining 20k error.
 ```
 
-## 38. Margin-gated sentence extraction
+## 38. Margin-Gated Sentence Extraction
 
-Purpose:
+目的：
 
 ```text
 Recover the sentence-scoring quality gain without paying sentence-scoring cost on every row.
 ```
 
-Implementation:
+实现：
 
 ```text
 New answer_score_format:
@@ -3690,7 +3664,7 @@ Algorithm:
   4. Otherwise keep answer_label scores.
 ```
 
-The initial threshold was chosen from v18 answer_label margins:
+初始阈值来自 v18 answer_label margin：
 
 ```text
 20k budget_b4_rauto wrong row:
@@ -3702,20 +3676,20 @@ The initial threshold was chosen from v18 answer_label margins:
 So threshold 1.0 catches the wrong row without broadly triggering on confident correct rows.
 ```
 
-Focused reproduction:
+聚焦复现：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v22_gated_sentence_reproduce_failure
 ```
 
-Result:
+结果：
 
 | Mode | Cal acc | Verifier acc | Gate rate | Eval sec |
 | --- | ---: | ---: | ---: | ---: |
 | book_auth_flat_p4 | 100% | 100% | 8.33% | 3.38 |
 | budget_b4_rauto | 100% | 100% | 8.33% | 3.36 |
 
-Compact recommended suite:
+紧凑推荐套件：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v23_gated_sentence_recommended_compact
@@ -3732,7 +3706,7 @@ Compact recommended suite:
 | 20k | budget_b4_rauto | sentence | 100% | 3.85 | 100% |
 | 20k | budget_b4_rauto | gated_sentence | 100% | 3.29 | 6.25% |
 
-Interpretation:
+解释：
 
 ```text
 gated_sentence gets the robust extraction benefit with much lower overhead:
@@ -3748,7 +3722,7 @@ gated_sentence gets the robust extraction benefit with much lower overhead:
 The gate fires on only 1/16 rows in the compact recommended suite.
 ```
 
-Current best end-to-end recipe:
+当前最佳端到端 recipe：
 
 ```text
 Routing:
@@ -3765,7 +3739,7 @@ Observed compact-suite behavior:
   20k: kept 3.85%, PPL 7.60, calibrated acc 100%, gate rate 6.25%
 ```
 
-Next speed direction:
+下一个速度方向：
 
 ```text
 The algorithmic bottleneck has shifted:
@@ -3777,28 +3751,28 @@ The next implementation target should consume selected_token_ranges directly via
 attention backend, and batch fallback extraction only for gated rows.
 ```
 
-## 39. Full v24 gated-sentence recommended suite
+## 39. 完整 v24 Gated-Sentence 推荐套件
 
-Purpose:
+目的：
 
 ```text
 Run the full recommended mode set with gated_sentence, not only the compact key-mode suite.
 This verifies that the final recipe remains stable when compared against all baselines and budget variants.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v24_gated_sentence_recommended_suite
 ```
 
-Runtime:
+运行时间：
 
 ```text
 1189.37 seconds
 ```
 
-Configuration:
+配置：
 
 ```text
 context = 10k,20k
@@ -3809,7 +3783,7 @@ answer_score_format = gated_sentence
 gated_sentence_margin = 1.0
 ```
 
-### v24 key results
+### v24 关键结果
 
 | Context | Mode | Cal acc | Gate rate | PPL | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: |
@@ -3840,7 +3814,7 @@ gated_sentence_margin = 1.0
 | 20k | book_auth_flat_p4 | 93.75% | 3.22 | 100% | 3.30 | 6.25% |
 | 20k | hybrid_tail4_authflat4 | 93.75% | 3.23 | 100% | 3.31 | 6.25% |
 
-Conclusion:
+结论：
 
 ```text
 v24 confirms the final recipe across the full mode set:
@@ -3863,7 +3837,7 @@ The cost over answer_label is small:
   because sentence fallback fires on only 1/16 rows.
 ```
 
-Updated strongest claim:
+更新后的最强结论：
 
 ```text
 The typed-anchor page routing stack now has evidence for all three requested axes:
@@ -3883,9 +3857,9 @@ Remaining systems work:
   replace selected-token gather with range/page-table attention over selected_token_ranges.
 ```
 
-## 40. Range-aware SDPA gather
+## 40. Range-Aware SDPA Gather
 
-Motivation:
+动机：
 
 ```text
 sdpa_gather still builds a full boolean keep mask of length key_count, then calls nonzero to recover
@@ -3899,7 +3873,7 @@ But the router already emits selected_token_ranges.  A more system-aligned backe
 without constructing a dense keep mask.
 ```
 
-Implementation:
+实现：
 
 ```text
 New sparse backend:
@@ -3913,10 +3887,9 @@ It:
   5. applies the same GQA-aware selected-K/V expansion and torch scaled_dot_product_attention path.
 ```
 
-This is still not a fused page-table kernel, but it removes a known Python/Torch overhead and is closer
-to the final selected_token_ranges interface.
+这仍然不是 fused page-table kernel，但它移除了一个已知的 Python/Torch 开销，并且更接近最终的 selected_token_ranges interface。
 
-20k smoke:
+20k smoke：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_20k_v25_sdpa_gather_range_smoke
@@ -3929,7 +3902,7 @@ to the final selected_token_ranges interface.
 | budget_b4_rauto | 3.18 | 2.42 | 8.41 | 100% |
 | full | 3.62 | 3.63 | 6.87 | 0% |
 
-Compact suite:
+紧凑套件：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v26_range_sdpa_gated_compact
@@ -3946,7 +3919,7 @@ Compact suite:
 | 20k | book_auth_flat_p4 | 3.29 | 2.56 | 22.1% | 100% | 7.61 |
 | 20k | budget_b4_rauto | 3.29 | 2.51 | 23.7% | 100% | 7.60 |
 
-Updated best recipe:
+更新后的最佳 recipe：
 
 ```text
 Routing:
@@ -3963,7 +3936,7 @@ Observed compact-suite behavior:
   20k: kept 3.85%, PPL 7.60, calibrated acc 100%, eval 2.51s
 ```
 
-Interpretation:
+解释：
 
 ```text
 This is the first speed improvement that directly uses the page-routing output format.
@@ -3974,7 +3947,7 @@ The next kernel step is now narrower:
   replace range -> candidate ids -> gather with a backend that consumes ranges/page tables directly.
 ```
 
-Updated server script:
+更新后的服务器脚本：
 
 ```text
 scripts/run_longrange_book_index_sparse_server.sh
@@ -3983,28 +3956,28 @@ Output:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v27_range_sdpa_gated_recommended_suite
 ```
 
-## 41. Full v27 range_sdpa gated recommended suite
+## 41. 完整 v27 range_sdpa gated 推荐套件
 
-Purpose:
+目的：
 
 ```text
 Run the complete recommended mode set with the new range_sdpa backend, not only the compact key-mode
 suite.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_sparse_10k20k_v27_range_sdpa_gated_recommended_suite
 ```
 
-Runtime:
+运行时间：
 
 ```text
 1013.43 seconds
 ```
 
-Configuration:
+配置：
 
 ```text
 context = 10k,20k
@@ -4015,7 +3988,7 @@ answer_score_format = gated_sentence
 gated_sentence_margin = 1.0
 ```
 
-### v27 key results
+### v27 关键结果
 
 | Context | Mode | Cal acc | Gate rate | PPL | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: |
@@ -4048,7 +4021,7 @@ gated_sentence_margin = 1.0
 | 20k | budget_b4_rauto | 3.30 | 2.54 | 23.1% | 100% | 7.60 |
 | 20k | hybrid_tail4_authflat4 | 3.31 | 2.62 | 20.7% | 100% | 7.62 |
 
-Updated strongest recipe:
+更新后的最强 recipe：
 
 ```text
 Routing:
@@ -4067,7 +4040,7 @@ Full-suite result:
     kept 3.85%, PPL 7.60, calibrated accuracy 100%, eval 2.54s
 ```
 
-Interpretation:
+解释：
 
 ```text
 The full-suite result confirms the compact-suite conclusion:
@@ -4083,16 +4056,16 @@ Compared with the original v9 mask-style quality run:
   and range-aware sparse SDPA.
 ```
 
-Remaining systems target:
+剩余系统目标：
 
 ```text
 range_sdpa still materializes candidate ids and gathers K/V.
 The next step is a true range/page-table attention operator that consumes selected_token_ranges directly.
 ```
 
-## 42. Chain-style long-range semantic retrieval
+## 42. Chain-Style 长程语义检索
 
-Question:
+问题：
 
 ```text
 For tasks that require long-range semantic retrieval, is one-shot page retrieval enough,
@@ -4100,7 +4073,7 @@ or do we need iterative typed anchors:
   query key -> bridge/entity page -> answer/evidence page?
 ```
 
-New code:
+新代码：
 
 ```text
 src/run_longrange_book_index_sparse_eval.py
@@ -4113,13 +4086,13 @@ src/book_page_router.py
 scripts/run_longrange_book_index_chain_sparse_server.sh
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_sparse_10k20k_v1_range_sdpa
 ```
 
-Task construction:
+任务构造：
 
 ```text
 bridge page:
@@ -4136,11 +4109,10 @@ distractor pages:
   other authoritative bridge/evidence pages for unrelated keys/artifacts
 ```
 
-This is harder than the earlier single-evidence task because the final answer page is not directly
-retrievable from the original key.  The router must first find the entity/bridge page, then expand
-the query with that page to retrieve the linked answer page.
+这比早期 single-evidence task 更难，因为最终 answer page 不能直接从原始 key 检索到。
+router 必须先找到 entity/bridge page，再用该 page 扩展 query，以检索链接到的 answer page。
 
-### Chain v1 results
+### Chain v1 结果
 
 | Context | Mode | Cal acc | Verifier acc | Evidence all-hit | Evidence coverage | PPL | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -4157,7 +4129,7 @@ the query with that page to retrieve the linked answer page.
 | 20k | chain_authflat_p2_x4 | 25% | 100% | 100% | 100% | 11.98 | 5.19% | 3.41 |
 | 20k | chain_authflat_p2_x4_authadj1 | 25% | 100% | 100% | 100% | 12.15 | 7.73% | 3.43 |
 
-Important per-row pattern:
+重要的逐行模式：
 
 ```text
 10k e05_d90:
@@ -4185,7 +4157,7 @@ Important per-row pattern:
     evidence coverage = 1.0
 ```
 
-Interpretation:
+解释：
 
 ```text
 The routing part works:
@@ -4200,7 +4172,7 @@ The pure LM answer-scoring part is still weak:
   but calibrated label scoring is unstable on this multi-hop synthetic chain.
 ```
 
-This separates the bottlenecks:
+这把 bottleneck 分离开了：
 
 ```text
 Earlier single-evidence task:
@@ -4214,7 +4186,7 @@ New chain task:
     3. or a summary/index node that stores the bridge resolution explicitly.
 ```
 
-Design implication:
+设计启发：
 
 ```text
 For long-range semantic retrieval, the page system should not be one-shot block retrieval.
@@ -4228,7 +4200,7 @@ Better structure:
   the decoder attends to sink + recent + selected raw pages + typed record.
 ```
 
-Current best next target:
+当前最佳下一目标：
 
 ```text
 Add a typed summary/extractor path:
@@ -4252,11 +4224,10 @@ Metrics:
   eval seconds.
 ```
 
-## 43. Typed-record reader for chain retrieval
+## 43. Chain Retrieval 的 Typed-Record Reader
 
-Section 42 showed that two-hop page routing can recover bridge + answer pages, but the 0.6B
-decoder can still mis-score the final label even when the correct pages are present.  This section
-tests the next design:
+第 42 节显示 two-hop page routing 能恢复 bridge + answer page，但即使正确 page 已经存在，0.6B decoder 仍然可能给最终 label 打错分。
+本节测试下一个设计：
 
 ```text
 selected raw pages
@@ -4264,7 +4235,7 @@ selected raw pages
   -> downstream reader
 ```
 
-New options:
+新 option：
 
 ```text
 --typed_record_mode none|extractive
@@ -4272,9 +4243,9 @@ New options:
 --typed_record_answer_override true|false
 ```
 
-The extractor is non-oracle: it only reads selected pages.
+extractor 是 non-oracle：它只读取 selected page。
 
-For chain tasks it requires:
+对 chain task，它要求：
 
 ```text
 bridge page:
@@ -4284,16 +4255,15 @@ answer page:
   artifact code Y has ANSWER_LABEL=Z
 ```
 
-The final v4 reader uses `label_only`:
+最终 v4 reader 使用 `label_only`：
 
 ```text
 ANSWER_LABEL=Z
 ```
 
-This keeps the typed memory to about 6 tokens, so it behaves like a tiny sidecar reader rather
-than a long extra prompt.
+这把 typed memory 控制在约 6 个 token，因此它更像一个很小的 sidecar reader，而不是很长的额外 prompt。
 
-Outputs:
+输出：
 
 ```text
 No typed record:
@@ -4306,7 +4276,7 @@ Label-only typed reader:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_typed_record_labelonly_10k20k_v4_range_sdpa
 ```
 
-### Best chain route
+### 最佳 Chain Route
 
 | Context | Variant | Accuracy | PPL | Evidence coverage | Typed record coverage | Record tokens | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -4317,7 +4287,7 @@ Label-only typed reader:
 | 20k | verbose reader | 100% | 8.39 | 100% | 100% | 63.2 | 5.18% | 5.51 |
 | 20k | label-only reader | 100% | 9.61 | 100% | 100% | 6.0 | 5.19% | 3.05 |
 
-Here the route is:
+这里的 route 是：
 
 ```text
 chain_authflat_p2_x4
@@ -4327,7 +4297,7 @@ typed_record_format=label_only
 typed_record_answer_override=true
 ```
 
-Compared with the earlier raw-page chain route:
+和早期 raw-page chain route 相比：
 
 ```text
 20k:
@@ -4337,9 +4307,8 @@ Compared with the earlier raw-page chain route:
   eval sec: 3.41 -> 3.05
 ```
 
-The speed result matters: the verbose record improves PPL more, but costs about 60 extra decode
-tokens.  The label-only reader preserves the downstream win and keeps runtime close to the sparse
-raw-page route.
+速度结果很重要：verbose record 对 PPL 改善更大，但需要约 60 个额外 decode token。
+label-only reader 保留了 downstream 收益，并且让 runtime 接近 sparse raw-page route。
 
 ### Baselines
 
@@ -4354,7 +4323,7 @@ raw-page route.
 | 20k | book_auth_flat_p4 + label reader | 50% | 24.05 | 75% | 4.55% | 3.67 |
 | 20k | chain_authflat_p2_x4 + label reader | 100% | 9.61 | 100% | 5.19% | 3.05 |
 
-Interpretation:
+解释：
 
 ```text
 The chain task now has the desired three-way property:
@@ -4369,7 +4338,7 @@ It is adding a typed, query-conditioned, page-grounded record:
   then use the typed fact as the final reader output or as a tiny decoder hint.
 ```
 
-This supports a layered book-memory design:
+这支持 layered book-memory design：
 
 ```text
 sentence -> paragraph -> page -> section -> book
@@ -4382,7 +4351,7 @@ At retrieval time:
   decoder uses sink + recent + selected raw pages + compact typed record.
 ```
 
-Open optimization:
+开放优化点：
 
 ```text
 The current implementation still decodes the label-only record as normal tokens.
@@ -4396,10 +4365,10 @@ Expected next experiment:
     raw sparse decoder only for cases without a confident record.
 ```
 
-## 44. Sidecar typed reader: skip record-token decoding and LM answer scoring
+## 44. Sidecar Typed Reader：跳过 Record-Token Decoding 和 LM Answer Scoring
 
-Section 43 inserted a short typed record into the decoder context.  This improved PPL and
-accuracy, but still required extra decode work.  The next systems question is:
+第 43 节把一个短 typed record 插入 decoder context。这改善了 PPL 和 accuracy，但仍然需要额外 decode 工作。
+下一个系统问题是：
 
 ```text
 If the extractor already produced ANSWER_LABEL=Z,
@@ -4408,22 +4377,22 @@ skip inserting record tokens,
 and skip LM option scoring?
 ```
 
-New options:
+新 option：
 
 ```text
 --typed_record_insert false
 --skip_lm_answer_when_override true
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_sidecar_reader_10k20k_v5_range_sdpa
 ```
 
-### Three-way comparison
+### 三路对比
 
-Route:
+Route：
 
 ```text
 chain_authflat_p2_x4
@@ -4439,7 +4408,7 @@ range_sdpa
 | 20k | label inserted | 100% | 9.61 | 100% | 6.0 | 100% | 5.19% | 3.05 |
 | 20k | sidecar reader | 100% | 11.98 | 100% | 0.0 | 0% | 5.19% | 2.22 |
 
-Interpretation:
+解释：
 
 ```text
 sidecar reader:
@@ -4458,7 +4427,7 @@ label inserted reader:
   only 6 extra tokens.
 ```
 
-This gives two deployment modes:
+这给出两种部署模式：
 
 ```text
 Answer-centric / retrieval QA:
@@ -4470,7 +4439,7 @@ LM-continuation / PPL-sensitive:
   The decoder sees the compact fact and PPL improves.
 ```
 
-The layered-memory design now looks like:
+layered-memory design 现在看起来是：
 
 ```text
 1. Build hierarchical pages:
@@ -4495,7 +4464,7 @@ The layered-memory design now looks like:
      or label-only typed prompt for better PPL.
 ```
 
-Best current recipes:
+当前最佳 recipe：
 
 ```text
 Fastest 20k chain QA:
@@ -4525,7 +4494,7 @@ Best PPL/accuracy balance:
   PPL 9.61
 ```
 
-Open next step:
+开放的下一步：
 
 ```text
 Replace the rule extractor with a learned tiny reader:
@@ -4539,22 +4508,22 @@ Then test robustness beyond synthetic marker text:
   and longer 40k/80k contexts.
 ```
 
-## 45. Paraphrased chain retrieval without hard markers
+## 45. 无硬标记的 Paraphrased Chain Retrieval
 
-Question:
+问题：
 
 ```text
 Does the typed page router still work if pages do not contain hard strings like
 AUTHORITATIVE EVIDENCE PAGE or ANSWER_LABEL=?
 ```
 
-New task variant:
+新任务变体：
 
 ```text
 --task_variant chain_para
 ```
 
-Task text changes:
+任务文本变化：
 
 ```text
 Bridge page:
@@ -4569,16 +4538,16 @@ Decoy page:
   Late reminder note mentions lookup key X but is outdated.
 ```
 
-The extractor was extended to recognize:
+extractor 扩展为可识别：
 
 ```text
 lookup key X points to controlling artifact Y
 approved response letter is Z
 ```
 
-### Initial paraphrase result
+### 初始 Paraphrase 结果
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_sidecar_10k20k_v1_range_sdpa
@@ -4595,7 +4564,7 @@ Output:
 | 20k | book_auth_flat_p4 | 0% | 16.62 | 12% | 0% | 4.60% | 2.98 |
 | 20k | chain_authflat_p2_x4 | 100% | 9.21 | 88% | 75% | 4.75% | 1.96 |
 
-Interpretation:
+解释：
 
 ```text
 The chain route is still much better than remote-tail or one-shot book_auth.
@@ -4604,9 +4573,9 @@ But p2_x4 is slightly too small for paraphrased pages:
   but sometimes misses the linked answer page.
 ```
 
-### Page-budget sweep
+### Page-Budget Sweep
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_budget_sweep_10k20k_v2_range_sdpa
@@ -4623,7 +4592,7 @@ Output:
 | 20k | chain_authflat_p3_x6 | 100% | 9.12 | 100% | 100% | 5.60% | 1.86 |
 | 20k | chain_authflat_p3_x8 | 100% | 8.21 | 100% | 100% | 6.61% | 1.90 |
 
-Best conservative paraphrase recipe:
+最佳保守 paraphrase recipe：
 
 ```text
 chain_authflat_p2_x6
@@ -4647,7 +4616,7 @@ sidecar typed reader
   eval 1.86s
 ```
 
-Best PPL paraphrase recipe:
+最佳 PPL paraphrase recipe：
 
 ```text
 chain_authflat_p3_x8
@@ -4659,7 +4628,7 @@ chain_authflat_p3_x8
   PPL 8.21, kept 6.61%
 ```
 
-Design update:
+设计更新：
 
 ```text
 Marker-heavy chain:
@@ -4673,7 +4642,7 @@ Reason:
   so the second-hop expanded query needs a slightly wider page budget.
 ```
 
-This is a useful robustness result:
+这是一个有用的鲁棒性结果：
 
 ```text
 The method is not just exploiting ANSWER_LABEL markers.
@@ -4683,16 +4652,16 @@ chain routing + sidecar typed reader still reaches 100% downstream accuracy,
 and low PPL at 10k/20k.
 ```
 
-## 46. Hierarchical vs typed-summary routing
+## 46. Hierarchical vs Typed-Summary Routing
 
-Question:
+问题：
 
 ```text
 Can a section -> page hierarchy beat flat page routing,
 or does the hierarchy need typed summaries before it helps?
 ```
 
-New route modes:
+新的 route mode：
 
 ```text
 chain_authhier_p2_s2_x4:
@@ -4707,9 +4676,9 @@ chain_typedflat_p2_x2:
   route answer pages using the artifact as a typed query.
 ```
 
-### Naive section hierarchy is a negative result
+### 朴素 Section Hierarchy 是负结果
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_hier_sweep_10k20k_v1_range_sdpa
@@ -4724,7 +4693,7 @@ Output:
 | 20k | chain_authhier_p2_s2_x4 | 0% | 12.97 | 50% | 0% | 8.0 | 5.78% | 2.47 |
 | 20k | chain_authhier_p3_s2_x3 | 25% | 10.86 | 50% | 0% | 7.0 | 5.66% | 2.48 |
 
-Per-row inspection shows the failure mode:
+逐行检查显示 failure mode：
 
 ```text
 The hierarchical route usually selects:
@@ -4735,13 +4704,12 @@ but misses:
   answer page / certified artifact entry
 ```
 
-So naive section-first routing is not enough.  Section summaries are too coarse and can be pulled
-toward the decoy because the decoy repeats the original lookup key.  The route needs to resolve
-the bridge entity first.
+因此 naive section-first routing 不够。section summary 过粗，并且会被 decoy 拉偏，因为 decoy 重复了原始 lookup key。
+route 需要先解析 bridge entity。
 
-### Typed-summary routing fixes the hierarchy problem
+### Typed-Summary Routing 修复了 Hierarchy 问题
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_typedroute_sweep_10k20k_v1_range_sdpa
@@ -4758,7 +4726,7 @@ Output:
 | 20k | chain_typedflat_p2_x3 | 100% | 10.00 | 100% | 100% | 4.0 | 4.76% | 1.81 |
 | 20k | chain_typedflat_p2_x4 | 100% | 9.38 | 100% | 100% | 5.0 | 5.24% | 1.83 |
 
-Interpretation:
+解释：
 
 ```text
 Naive hierarchy:
@@ -4771,7 +4739,7 @@ Typed-summary hierarchy:
   not the original ambiguous lookup key.
 ```
 
-This is closer to the book-memory idea:
+这更接近 book-memory 思路：
 
 ```text
 The first page is not just retained.
@@ -4782,7 +4750,7 @@ The second hop retrieves pages by artifact_id:
   artifact_id -> answer evidence
 ```
 
-Best low-token paraphrase recipe:
+最佳 low-token paraphrase recipe：
 
 ```text
 chain_typedflat_p2_x2
@@ -4798,7 +4766,7 @@ sidecar typed reader
   PPL 10.11
 ```
 
-Best PPL/coverage paraphrase recipe:
+最佳 PPL/coverage paraphrase recipe：
 
 ```text
 chain_authflat_p2_x6
@@ -4811,7 +4779,7 @@ chain_authflat_p2_x6
   PPL 9.04
 ```
 
-Best tradeoff:
+最佳权衡：
 
 ```text
 chain_typedflat_p2_x4
@@ -4824,7 +4792,7 @@ chain_typedflat_p2_x4
   PPL 9.38
 ```
 
-Design conclusion:
+设计结论：
 
 ```text
 The useful hierarchy is not merely section -> paragraph -> page.
@@ -4835,9 +4803,9 @@ It is:
   sidecar reader for fast answer extraction.
 ```
 
-## 47. Conflict robustness: same artifact, obsolete wrong entry
+## 47. Conflict Robustness：同一 Artifact 中的过期错误条目
 
-Question:
+问题：
 
 ```text
 What happens if the same artifact has both:
@@ -4845,13 +4813,13 @@ What happens if the same artifact has both:
   and a superseded entry with a wrong former answer?
 ```
 
-New task variant:
+新任务变体：
 
 ```text
 --task_variant chain_para_conflict
 ```
 
-Additional conflict page:
+额外 conflict page：
 
 ```text
 Superseded artifact entry.
@@ -4859,7 +4827,7 @@ For artifact Y, the former response letter was wrong_label.
 This entry is obsolete and is not the controlling source.
 ```
 
-Extractor update:
+Extractor 更新：
 
 ```text
 When extracting the typed record, skip pages containing:
@@ -4870,9 +4838,9 @@ When extracting the typed record, skip pages containing:
   not the controlling
 ```
 
-### Initial conflict result
+### 初始 Conflict 结果
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_10k20k_v1_range_sdpa
@@ -4889,7 +4857,7 @@ Output:
 | 20k | chain_authflat_p2_x6 | 100% | 8.94 | 100% | 100% | 100% | 0% | 5.57% | 1.84 |
 | 20k | chain_typedflat_p2_x4 | 50% | 11.35 | 50% | 100% | 50% | 0% | 4.91% | 2.15 |
 
-Interpretation:
+解释：
 
 ```text
 The sidecar reader correctly ignores selected superseded pages:
@@ -4901,9 +4869,9 @@ It is first-hop seed recall:
   so the typed artifact cannot be extracted.
 ```
 
-### Seed-count sweep
+### Seed-Count Sweep
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_typedroute_sweep_10k20k_v2_range_sdpa
@@ -4920,7 +4888,7 @@ Output:
 | 20k | chain_typedflat_p3_x2 | 100% | 9.69 | 100% | 100% | 100% | 4.82% | 1.84 |
 | 20k | chain_typedflat_p4_x2 | 100% | 8.97 | 100% | 100% | 100% | 5.22% | 1.87 |
 
-Best conflict-safe low-token recipe:
+最佳 conflict-safe low-token recipe：
 
 ```text
 chain_typedflat_p3_x2
@@ -4937,7 +4905,7 @@ sidecar typed reader
   PPL 9.69
 ```
 
-Best conflict-safe PPL recipe:
+最佳 conflict-safe PPL recipe：
 
 ```text
 chain_typedflat_p4_x2
@@ -4949,7 +4917,7 @@ chain_typedflat_p4_x2
   eval 1.87s
 ```
 
-Design update:
+设计更新：
 
 ```text
 No conflict:
@@ -4964,7 +4932,7 @@ The right robustness knob is seed recall, not answer-page expansion.
 Once the bridge artifact is extracted, the sidecar reader can ignore obsolete same-artifact entries.
 ```
 
-This makes the typed-summary routing story sharper:
+这让 typed-summary routing 的结论更清晰：
 
 ```text
 The system should maintain confidence separately for:
@@ -4976,21 +4944,21 @@ The system should maintain confidence separately for:
 When conflict risk is high, spend budget on seed bridge recall first.
 ```
 
-## 48. Adaptive seed typed routing
+## 48. Adaptive Seed Typed Routing
 
-Question:
+问题：
 
 ```text
 Can we avoid manually choosing p2/p3/p4 seed counts?
 ```
 
-New route:
+新 route：
 
 ```text
 chain_typedflat_p2to4_x2
 ```
 
-Algorithm:
+算法：
 
 ```text
 1. Try 2 seed pages.
@@ -4999,11 +4967,11 @@ Algorithm:
 4. Route answer pages using the extracted artifact.
 ```
 
-This spends more seed budget only when the route cannot resolve the bridge.
+只有当 route 无法解析 bridge 时，才会花费更多 seed budget。
 
-### Conflict task
+### Conflict 任务
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_adaptive_10k20k_v1_range_sdpa
@@ -5019,12 +4987,11 @@ Output:
 | 20k | chain_typedflat_p3_x2 | 100% | 9.69 | 100% | 100% | 4.0 | 4.82% | 1.79 |
 | 20k | chain_typedflat_p4_x2 | 100% | 8.97 | 100% | 100% | 5.0 | 5.22% | 1.82 |
 
-The adaptive route fixes the 20k conflict failures of fixed p2 while keeping fewer pages than
-fixed p3/p4 on average.
+adaptive route 修复了 fixed p2 在 20k 上的 conflict failure，同时平均保留的 page 少于 fixed p3/p4。
 
-### No-conflict paraphrase task
+### No-Conflict Paraphrase 任务
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_adaptive_10k20k_v1_range_sdpa
@@ -5037,7 +5004,7 @@ Output:
 | 20k | chain_typedflat_p2_x2 | 100% | 10.11 | 100% | 100% | 3.0 | 4.34% | 1.87 |
 | 20k | chain_typedflat_p2to4_x2 | 100% | 10.11 | 100% | 100% | 3.0 | 4.34% | 1.82 |
 
-Interpretation:
+解释：
 
 ```text
 Adaptive seed routing does not regress on the easy paraphrase task:
@@ -5050,7 +5017,7 @@ On conflict 20k:
   restoring 100% evidence and typed-record coverage.
 ```
 
-Current deployment policy:
+当前部署策略：
 
 ```text
 Default fast route:
@@ -5061,7 +5028,7 @@ If PPL is more important and a little more page budget is acceptable:
   or fixed chain_typedflat_p4_x2 in high-conflict settings.
 ```
 
-This gives a practical confidence-controlled typed memory router:
+这给出了一个实用的 confidence-controlled typed memory router：
 
 ```text
 try cheap seed routing;
@@ -5070,24 +5037,23 @@ increase seed pages;
 only then route answer pages.
 ```
 
-## 49. Near-40k long-range semantic retrieval
+## 49. 接近 40k 的长程语义检索
 
-Question:
+问题：
 
 ```text
 Does the typed page router still work when the book becomes much longer?
 ```
 
-Model limit check:
+模型长度限制检查：
 
 ```text
 Qwen3-0.6B max_position_embeddings = 40960
 ```
 
-Because the evaluation appends query/scoring tokens after the  book context, the safe near-40k
-setting used here is 39k context tokens.
+因为 evaluation 会在 book context 后追加 query/scoring token，所以这里使用的安全 near-40k 设置是 39k context token。
 
-Task:
+任务：
 
 ```text
 task_variant = chain_para_conflict
@@ -5098,14 +5064,14 @@ sparse_attention_impl = range_sdpa
 typed reader = extractive label-only sidecar
 ```
 
-Outputs:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_smoke_v1_range_sdpa
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_typed_sweep_v2_range_sdpa
 ```
 
-### Initial 39k smoke
+### 初始 39k Smoke
 
 | Mode | Accuracy | PPL | Evidence coverage | Record coverage | Pages | Kept fraction | Eval sec |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -5115,7 +5081,7 @@ Outputs:
 | chain_typedflat_p2to4_x4 | 50% | 10.70 | 50% | 50% | 5.0 | 2.65% | 2.15 |
 | chain_authflat_p2_x6 | 100% | 9.28 | 100% | 100% | 6.0 | 2.95% | 1.82 |
 
-Failure case:
+失败案例：
 
 ```text
 layout e05_d90:
@@ -5129,7 +5095,7 @@ It missed the bridge page 33, so no typed artifact was extracted.
 The route then fell back to LM scoring and predicted the decoy label.
 ```
 
-Interpretation:
+解释：
 
 ```text
 The 20k adaptive seed ceiling p2to4 is not enough at 39k.
@@ -5137,7 +5103,7 @@ The bottleneck is first-hop bridge recall, not the sidecar reader.
 Once the bridge artifact is extracted, obsolete/conflict records are still filtered correctly.
 ```
 
-### 39k seed/expand sweep
+### 39k Seed/Expand Sweep
 
 | Mode | Accuracy | PPL | Evidence coverage | Record coverage | Pages | Kept fraction | Eval sec |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -5148,7 +5114,7 @@ Once the bridge artifact is extracted, obsolete/conflict records are still filte
 | chain_typedflat_p2to8_x2 | 100% | 9.32 | 100% | 100% | 5.0 | 2.77% | 1.79 |
 | chain_typedflat_p2to8_x4 | 100% | 7.97 | 100% | 100% | 7.0 | 3.18% | 1.82 |
 
-Key observation:
+关键观察：
 
 ```text
 p2to6_x2 and p2to8_x2 behave the same on this smoke:
@@ -5159,7 +5125,7 @@ p2to6_x2 and p2to8_x2 behave the same on this smoke:
 x4 improves PPL from 9.32 to 7.97 by keeping about 2 extra pages.
 ```
 
-Updated length-aware policy:
+更新后的 length-aware policy：
 
 ```text
 10k-20k default:
@@ -5172,14 +5138,14 @@ Near 40k PPL-priority:
   chain_typedflat_p2to6_x4
 ```
 
-This policy is now exposed as a length-aware route alias:
+这个 policy 现在作为 length-aware route alias 暴露：
 
 ```text
 chain_typedflat_auto_x2
 chain_typedflat_auto_x4
 ```
 
-Implementation:
+实现：
 
 ```text
 context <= 20k:
@@ -5192,7 +5158,7 @@ context > 40k:
   p2to8
 ```
 
-Validation output:
+验证输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_auto_v3_range_sdpa
@@ -5203,7 +5169,7 @@ Validation output:
 | chain_typedflat_auto_x2 | 100% | 9.32 | 100% | 100% | 5.0 | 2.77% | 1.80 |
 | chain_typedflat_auto_x4 | 100% | 7.97 | 100% | 100% | 7.0 | 3.18% | 1.81 |
 
-Design implication:
+设计启发：
 
 ```text
 The page router should scale the seed-recall ceiling with book length.
@@ -5215,24 +5181,24 @@ This supports a typed-anchor page routing design:
   authority/status filtering rejects obsolete same-entity entries.
 ```
 
-## 50. Length-aware auto route stability
+## 50. Length-Aware Auto Route 稳定性
 
-Question:
+问题：
 
 ```text
 Does the auto typed route stay stable across 10k, 20k, and near-40k?
 How often does the fixed 20k seed ceiling p2to4 fail at 39k?
 ```
 
-### Unified 10k/20k/39k run
+### 统一 10k/20k/39k 运行
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_auto_10k20k39k_v4_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 task_variant = chain_para_conflict
@@ -5260,7 +5226,7 @@ modes = sink_recent, remote_tail_p4, p2to4_x2, auto_x2, auto_x4, authflat_p2_x6
 | 39k | chain_typedflat_auto_x4 | 100% | 9.21 | 100% | 5.5 | 2.84% | 1.88 |
 | 39k | chain_authflat_p2_x6 | 100% | 9.30 | 100% | 6.0 | 2.96% | 1.90 |
 
-Interpretation:
+解释：
 
 ```text
 The absolute token budget stays almost flat while context length grows.
@@ -5271,15 +5237,15 @@ For long semantic retrieval, remote_tail is not a useful substitute:
   it keeps remote tokens but never hits the bridge/answer pages in this setup.
 ```
 
-### 39k tail-risk stress
+### 39k Tail-Risk Stress
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_tailrisk_v5_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 context_tokens = 39000
@@ -5296,7 +5262,7 @@ modes = p2to4_x2, p2to6_x2, auto_x2, auto_x4, authflat_p2_x6
 | chain_typedflat_auto_x4 | 100% | 9.19 | 100% | 5.375 | 2.80% | 1.89 |
 | chain_authflat_p2_x6 | 100% | 9.10 | 100% | 6.0 | 2.92% | 1.91 |
 
-Failure sample for fixed p2to4:
+fixed p2to4 的失败样本：
 
 ```text
 layout = e05_d90
@@ -5322,7 +5288,7 @@ auto_x4 selected:
   PPL = 7.48
 ```
 
-Conclusion:
+结论：
 
 ```text
 At 39k, p2to4 is usually enough but has a real tail failure mode.
@@ -5342,7 +5308,7 @@ auto_x4 is the PPL-priority variant:
   and remains much cheaper than dense/full context.
 ```
 
-Next design direction:
+下一个设计方向：
 
 ```text
 Replace the hard length thresholds with a confidence rule:
@@ -5352,15 +5318,15 @@ Replace the hard length thresholds with a confidence rule:
 The current auto route is a length-aware approximation of that policy.
 ```
 
-## 51. Confidence-style typed routing
+## 51. Confidence-Style Typed Routing
 
-Question:
+问题：
 
 ```text
 Can we remove the hard length thresholds in auto_x2?
 ```
 
-New route aliases:
+新的 route alias：
 
 ```text
 chain_typedflat_conf_x2
@@ -5368,7 +5334,7 @@ chain_typedflat_conf_x4
 chain_typedflat_conf_s10_x2  # optional max seed override
 ```
 
-Policy:
+策略：
 
 ```text
 1. Start with 2 seed pages.
@@ -5379,16 +5345,15 @@ Policy:
 6. Route answer pages from the extracted artifact.
 ```
 
-This removes the 20k/40k threshold from `auto_x2`. It is confidence-style because the route
-spends more seed budget only when the typed bridge record is missing.
+这从 `auto_x2` 中移除了 20k/40k 阈值。它是 confidence-style 的，因为只有当 typed bridge record 缺失时，route 才会花费更多 seed budget。
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_conf_v6_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 context_tokens = 39000
@@ -5408,7 +5373,7 @@ typed reader = extractive label-only sidecar
 | chain_typedflat_conf_x4 | 100% | 9.19 | 100% | 5.375 | 2.80% | 1.88 |
 | chain_authflat_p2_x6 | 100% | 9.10 | 100% | 6.0 | 2.92% | 1.90 |
 
-Short-context no-regression output:
+短上下文 no-regression 输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_conf_10k20k_v7_range_sdpa
@@ -5423,7 +5388,7 @@ Short-context no-regression output:
 | 20k | chain_typedflat_conf_x2 | 100% | 10.31 | 100% | 3.5 | 4.64% | 1.83 |
 | 20k | chain_typedflat_conf_x4 | 100% | 9.62 | 100% | 5.5 | 5.49% | 1.85 |
 
-Interpretation:
+解释：
 
 ```text
 conf_x2 exactly matches p2to6/auto_x2 on the 39k stress set:
@@ -5442,7 +5407,7 @@ The difference is policy, not current metrics:
   conf_x2 uses typed bridge presence to decide whether to keep searching.
 ```
 
-Updated recommended routes:
+更新后的推荐 route：
 
 ```text
 Default:
@@ -5455,7 +5420,7 @@ Conservative fixed fallback:
   chain_typedflat_p2to6_x2 for near-40k
 ```
 
-Design implication:
+设计启发：
 
 ```text
 The routing controller should not primarily ask:
@@ -5468,15 +5433,15 @@ Length still matters only as a soft prior for the maximum search budget.
 The stop condition should be evidence of a usable semantic anchor.
 ```
 
-## 52. Typed hierarchical confidence routing
+## 52. Typed Hierarchical Confidence Routing
 
-Question:
+问题：
 
 ```text
 Can the book structure become genuinely hierarchical instead of only flat page routing?
 ```
 
-New route aliases:
+新的 route alias：
 
 ```text
 chain_typedhier_conf_s1_p1
@@ -5485,7 +5450,7 @@ chain_typedhier_conf_s2_p2
 chain_typedhier_conf_s3_p1
 ```
 
-Policy:
+策略：
 
 ```text
 1. Find the bridge artifact with the same confidence seed loop as conf_x2.
@@ -5494,7 +5459,7 @@ Policy:
 4. Keep top P pages from each of top S sections.
 ```
 
-This is a conservative two-level design:
+这是一个保守的两级设计：
 
 ```text
 bridge recall:
@@ -5504,9 +5469,9 @@ answer routing:
   hierarchical section -> page, because the artifact gives a strong semantic anchor.
 ```
 
-### 39k stress
+### 39k Stress
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_39k_typedhier_v8_range_sdpa
@@ -5522,7 +5487,7 @@ Output:
 | chain_typedhier_conf_s3_p1 | 100% | 9.46 | 100% | 4.375 | 2.61% | 1.87 |
 | chain_authflat_p2_x6 | 100% | 9.10 | 100% | 6.0 | 2.92% | 1.89 |
 
-Example:
+示例：
 
 ```text
 task 3900000000
@@ -5540,9 +5505,9 @@ typedhier s3_p1:
   PPL 8.08
 ```
 
-### 20k stress
+### 20k Stress
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_20k_typedhier_v9_range_sdpa
@@ -5557,7 +5522,7 @@ Output:
 | chain_typedhier_conf_s3_p1 | 100% | 9.91 | 100% | 4.5 | 5.21% | 1.84 |
 | chain_authflat_p2_x6 | 100% | 9.21 | 87.5% hit / 93.75% coverage | 6.0 | 5.71% | 2.08 |
 
-Interpretation:
+解释：
 
 ```text
 typedhier_s1_p1 is equivalent to flat_conf_x2 on these tasks.
@@ -5575,7 +5540,7 @@ typedhier_s3_p1 spends budget as section fanout:
   only one page per section.
 ```
 
-Updated route policy:
+更新后的 route policy：
 
 ```text
 Fast default:
@@ -5589,7 +5554,7 @@ PPL-priority flat fallback:
   chain_typedflat_conf_x4
 ```
 
-Design implication:
+设计启发：
 
 ```text
 The hierarchy should not replace semantic anchors.
@@ -5607,15 +5572,15 @@ This is closer to a book workflow:
   read one key page from several related sections.
 ```
 
-## 53. Section granularity sweep
+## 53. Section 粒度 Sweep
 
-Question:
+问题：
 
 ```text
 How sensitive is typed hierarchical routing to section size?
 ```
 
-Sweep:
+Sweep：
 
 ```text
 section_max_paragraphs = 4, 8, 16
@@ -5625,7 +5590,7 @@ task_variant = chain_para_conflict
 modes = flat_conf_x2, typedhier_s1_p1, typedhier_s3_p1, typedhier_s5_p1
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_section_granularity_v10_range_sdpa
@@ -5646,9 +5611,8 @@ Output:
 
 ### section_max_paragraphs = 8
 
-`section_max_paragraphs=8` produced the same selected-page pattern and metrics as section size 4
-on this sweep. The artifact signal is strong enough that both granularities route to the same
-answer sections.
+在这个 sweep 中，`section_max_paragraphs=8` 产生了和 section size 4 相同的 selected-page pattern 和指标。
+artifact signal 足够强，所以两种粒度都会路由到相同的 answer section。
 
 ### section_max_paragraphs = 16
 
@@ -5663,7 +5627,7 @@ answer sections.
 | 39k | typedhier_s3_p1 | 100% | 10.47 | 100% | 4.25 | 2.65% |
 | 39k | typedhier_s5_p1 | 100% | 9.94 | 100% | 6.25 | 3.10% |
 
-Failure case for coarse sections:
+coarse section 的失败案例：
 
 ```text
 section_max_paragraphs = 16
@@ -5690,7 +5654,7 @@ typedhier_s5_p1 selected:
   PPL 9.40
 ```
 
-Interpretation:
+解释：
 
 ```text
 Fine/medium sections are stable:
@@ -5705,7 +5669,7 @@ Section fanout fixes coarse-section brittleness:
   s5_p1 buys more PPL at a larger token cost.
 ```
 
-Updated hierarchy recommendation:
+更新后的 hierarchy 推荐：
 
 ```text
 Default section size:
@@ -5723,7 +5687,7 @@ Avoid:
   coarse sections with s1_p1 only.
 ```
 
-Design implication:
+设计启发：
 
 ```text
 The hierarchy has two independent knobs:
@@ -5736,21 +5700,21 @@ A practical book router should make section fanout adaptive:
   if PPL/quality is prioritized, expand further toward s5_p1.
 ```
 
-## 54. Adaptive section fanout
+## 54. Adaptive Section Fanout
 
-Question:
+问题：
 
 ```text
 Can the hierarchical route avoid manually choosing s1 or s3?
 ```
 
-New route:
+新 route：
 
 ```text
 chain_typedhier_auto_p1
 ```
 
-Policy:
+策略：
 
 ```text
 1. Use the same typed bridge confidence loop as chain_typedhier_conf.
@@ -5759,10 +5723,10 @@ Policy:
 4. If typical section size > 8 pages, use s3_p1.
 ```
 
-This route targets a fast default, not PPL maximization. It keeps the cheap `s1_p1` behavior when
-sections are fine/medium, and automatically increases section fanout when sections are coarse.
+这个 route 的目标是 fast default，而不是最大化 PPL。
+当 section 是 fine/medium 时，它保留便宜的 `s1_p1` 行为；当 section 较粗时，它自动增加 section fanout。
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_typedhier_auto_v11_range_sdpa
@@ -5801,7 +5765,7 @@ Output:
 | 39k | typedhier_s1_p1 | 100% | 11.70 | 100% | 3.25 | 2.39% |
 | 39k | typedhier_s3_p1 | 100% | 10.47 | 100% | 4.25 | 2.65% |
 
-Interpretation:
+解释：
 
 ```text
 For section size 4 and 8:
@@ -5813,7 +5777,7 @@ For section size 16:
   It fixes the 20k s1_p1 failure and improves 39k PPL.
 ```
 
-Updated default:
+更新后的默认值：
 
 ```text
 Fast adaptive hierarchical route:
@@ -5824,7 +5788,7 @@ Explicit PPL/quality route:
   or chain_typedhier_conf_s5_p1 when token budget allows.
 ```
 
-Design implication:
+设计启发：
 
 ```text
 The router now has adaptive control at two levels:
@@ -5837,15 +5801,15 @@ This is closer to the intended book index behavior:
   then read only the best page per chosen section.
 ```
 
-## 55. Margin-aware section fanout
+## 55. Margin-Aware Section Fanout
 
-Question:
+问题：
 
 ```text
 Can section fanout be controlled by score confidence instead of only section granularity?
 ```
 
-New route family:
+新的 route family：
 
 ```text
 chain_typedhier_margin_p1_m5
@@ -5853,7 +5817,7 @@ chain_typedhier_margin_p1_m10
 chain_typedhier_margin_p1_m20
 ```
 
-Policy:
+策略：
 
 ```text
 1. Find the typed bridge artifact.
@@ -5866,7 +5830,7 @@ Policy:
 5. Otherwise use s1_p1.
 ```
 
-Threshold format:
+阈值格式：
 
 ```text
 m5  = 0.05 score margin
@@ -5874,7 +5838,7 @@ m10 = 0.10 score margin
 m20 = 0.20 score margin
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_para_conflict_typedhier_margin_v12_range_sdpa
@@ -5906,7 +5870,7 @@ Output:
 | 39k | typedhier_s3_p1 | 100% | 10.47 | 100% | 4.25 | 2.65% |
 | 39k | margin_m5/m10/m20 | 100% | 10.47 | 100% | 4.25 | 2.65% |
 
-Interpretation:
+解释：
 
 ```text
 On this synthetic task, the margin thresholds m5/m10/m20 did not add behavior beyond
@@ -5919,7 +5883,7 @@ section size 16:
   coarse-section guard triggered, so margin routes matched s3_p1.
 ```
 
-Conclusion:
+结论：
 
 ```text
 Margin-aware routing is implemented and safe on this suite,
@@ -5933,34 +5897,33 @@ Keep margin routes for future harder data:
   chain_typedhier_margin_p1_m20
 ```
 
-Design implication:
+设计启发：
 
 ```text
-The synthetic artifact signal is strong, so section/page score margins are not yet the limiting
-factor. The observed failure was explained by section coarseness, and the granularity rule already
-captures that.
+synthetic artifact signal 很强，因此 section/page score margin 还不是限制因素。
+观察到的失败可以用 section 过粗解释，而 granularity rule 已经捕捉到了这一点。
 
-Margin control should be revisited on less templated long-range semantic tasks where:
-  entity names are ambiguous,
-  sections contain multiple competing artifacts,
-  and no hard artifact wording dominates the lexical score.
+margin control 应该在更少模板化的长程语义任务上重新评估，这些任务中：
+  entity name 有歧义，
+  section 包含多个竞争 artifact，
+  并且没有强 artifact wording 主导 lexical score。
 ```
 
-## 56. Less-template story chain task
+## 56. Less-Template Story Chain 任务
 
-Question:
+问题：
 
 ```text
-What happens when the long-range semantic task removes the strong artifact/certified wording?
+当长程语义任务移除强 artifact/certified wording 后会发生什么？
 ```
 
-New task variant:
+新任务变体：
 
 ```text
 chain_story_conflict
 ```
 
-Task structure:
+任务结构：
 
 ```text
 bridge page:
@@ -5976,10 +5939,10 @@ conflict page:
   earlier ruling note for ALIAS leaned toward the wrong option, but is superseded.
 ```
 
-This keeps the same controllable bridge -> answer -> conflict structure, but avoids repeated
-`artifact`, `certified`, and `approved response` keywords.
+这保留了相同的可控 bridge -> answer -> conflict 结构，但避免反复出现
+`artifact`、`certified` 和 `approved response` 关键词。
 
-Implementation changes:
+实现变化：
 
 ```text
 Router:
@@ -5992,13 +5955,13 @@ Typed reader / verifier:
   filters withdrawn and earlier-ruling notes.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_conflict_20k39k_v13_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 context_tokens = 20000,39000
@@ -6008,7 +5971,7 @@ section_max_paragraphs = 8
 modes = sink_recent, remote_tail_p4, flat_conf_x2, typedhier_auto_p1, typedhier_s3_p1, margin_m10
 ```
 
-### Results
+### 结果
 
 | Context | Mode | Accuracy | PPL | Evidence coverage | Record coverage | Pages | Kept fraction |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6025,7 +5988,7 @@ modes = sink_recent, remote_tail_p4, flat_conf_x2, typedhier_auto_p1, typedhier_
 | 39k | typedhier_s3_p1 | 100% | 16.97 | 100% | 100% | 7.0 | 2.92% |
 | 39k | margin_m10 | 100% | 17.03 | 100% | 100% | 6.0 | 2.69% |
 
-Example selected pages:
+selected page 示例：
 
 ```text
 20k task 2000000000
@@ -6042,65 +6005,65 @@ typedhier_s3_p1:
   PPL = 21.28
 ```
 
-Interpretation:
+解释：
 
 ```text
-The typed anchor mechanism still works after removing hard artifact/certified wording:
-  typed routes recover 100% evidence coverage,
-  typed record coverage stays 100%,
-  remote_tail and sink/recent still fail.
+移除硬 artifact/certified wording 后，typed anchor 机制仍然有效：
+  typed route 恢复 100% evidence coverage，
+  typed record coverage 保持 100%，
+  remote_tail 和 sink/recent 仍然失败。
 
-But the task is harder:
-  PPL rises to about 17-20 instead of the 9-11 range from the templated artifact task.
+但任务变难了：
+  PPL 上升到约 17-20，而不是模板化 artifact task 中的 9-11 区间。
 
-Blind section fanout is less reliable:
-  s3_p1 can add conflict/old-slip pages,
-  so PPL can worsen even when downstream accuracy remains 100%.
+blind section fanout 可靠性较差：
+  s3_p1 可能加入 conflict/old-slip page，
+  因此即使 downstream accuracy 仍为 100%，PPL 也可能变差。
 ```
 
-Design implication:
+设计启发：
 
 ```text
-For less-template semantic retrieval, hierarchy needs typed page roles, not only section fanout.
+对于 less-template semantic retrieval，hierarchy 需要 typed page role，而不只是 section fanout。
 
-The next router should distinguish:
-  bridge pages,
-  current-ruling / answer pages,
-  withdrawn / superseded / conflict pages,
-  unrelated distractor pages.
+下一个 router 应该区分：
+  bridge page，
+  current-ruling / answer page，
+  withdrawn / superseded / conflict page，
+  unrelated distractor page。
 
-Then section fanout should keep answer-like pages and optionally include conflict pages only as
-negative evidence, not as ordinary context.
+然后 section fanout 应该保留 answer-like page，并且只可选地把 conflict page 作为 negative evidence 纳入，
+而不是把它当作普通 context。
 ```
 
-Updated recommendation:
+更新后的建议：
 
 ```text
-Templated artifact task:
+templated artifact task：
   typedhier_auto_p1 is a good fast default;
   typedhier_s3_p1 is a useful PPL/quality tradeoff.
 
-Less-template story task:
+less-template story task：
   typedhier_auto_p1 remains the best fast default;
   do not blindly expand to s3_p1 unless page-role filtering is added.
 ```
 
-## 57. Role-filtered page routing
+## 57. Role-Filtered Page Routing
 
-Question:
+问题：
 
 ```text
-Can typed page-role filtering fix the story-task problem where s3_p1 adds old-slip/conflict pages?
+typed page-role filtering 能否修复 story-task 中 s3_p1 加入 old-slip/conflict page 的问题？
 ```
 
-New route aliases:
+新的 route alias：
 
 ```text
 chain_typedhier_role_auto_p1
 chain_typedhier_role_s3_p1
 ```
 
-Policy:
+策略：
 
 ```text
 1. Find the typed bridge as before.
@@ -6112,13 +6075,13 @@ Policy:
 5. Fall back to neutral pages only when no answer-like page exists in a selected section.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_rolefilter_20k39k_v14_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 task_variant = chain_story_conflict
@@ -6127,7 +6090,7 @@ tasks_per_length = 2
 section_max_paragraphs = 8
 ```
 
-### Summary
+### 总结
 
 | Context | Mode | Accuracy | PPL | Evidence coverage | Decoy hit | Pages | Kept fraction | Eval sec |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6140,7 +6103,7 @@ section_max_paragraphs = 8
 | 39k | typedhier_role_auto_p1 | 100% | 23.09 | 100% | 0% | 2.0 | 1.84% | 1.83 |
 | 39k | typedhier_role_s3_p1 | 100% | 23.34 | 100% | 0% | 3.0 | 2.00% | 1.83 |
 
-Example:
+示例：
 
 ```text
 20k task 2000000000
@@ -6166,7 +6129,7 @@ typedhier_role_s3_p1:
   PPL = 22.72
 ```
 
-Interpretation:
+解释：
 
 ```text
 Role filtering works for information cleanliness:
@@ -6179,7 +6142,7 @@ But role filtering hurts query PPL:
   PPL rises from 17-20 to about 23.
 ```
 
-This exposes a real tradeoff:
+这暴露了一个真实权衡：
 
 ```text
 The cleanest evidence path is not necessarily the best LM context.
@@ -6192,7 +6155,7 @@ For PPL:
   even when some of those pages are decoy or conflict pages that the typed reader must ignore.
 ```
 
-Updated design:
+更新后的设计：
 
 ```text
 Separate the memory budget into two lanes:
@@ -6208,7 +6171,7 @@ Separate the memory budget into two lanes:
    conflict pages should be compressed or tagged, not blindly inserted as raw context.
 ```
 
-Current recommendation:
+当前建议：
 
 ```text
 For answer accuracy and speed:
@@ -6220,29 +6183,29 @@ For balanced PPL + accuracy:
 Avoid using role filtering alone as the PPL route.
 ```
 
-## 58. Role + seed-context attempt
+## 58. Role + Seed-Context 尝试
 
-Question:
+问题：
 
 ```text
 Can we keep the clean role-filtered evidence path while recovering PPL by also keeping
 non-negative pages from the bridge seed set?
 ```
 
-New routes:
+新 route：
 
 ```text
 chain_typedhier_rolectx_auto_p1
 chain_typedhier_rolectx_s3_p1
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_rolectx_20k39k_v15_range_sdpa
 ```
 
-### Summary
+### 总结
 
 | Context | Mode | Accuracy | PPL | Evidence coverage | Decoy hit | Pages | Kept fraction |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6257,7 +6220,7 @@ Output:
 | 39k | typedhier_role_s3_p1 | 100% | 23.34 | 100% | 0% | 3.0 | 2.00% |
 | 39k | typedhier_rolectx_s3_p1 | 100% | 23.34 | 100% | 0% | 3.0 | 2.00% |
 
-Interpretation:
+解释：
 
 ```text
 This route did not actually add a useful context lane.
@@ -6269,15 +6232,15 @@ Reason:
 So "context" must be selected independently from the bridge seed loop.
 ```
 
-## 59. Independent global context lane
+## 59. Independent Global Context Lane
 
-Question:
+问题：
 
 ```text
 Can a separate global semantic context lane recover PPL while preserving 0% decoy hit?
 ```
 
-New routes:
+新 route：
 
 ```text
 chain_typedhier_rolectxflat_auto_p1_c2
@@ -6286,7 +6249,7 @@ chain_typedhier_rolectxart_auto_p1_c2
 chain_typedhier_rolectxart_auto_p1_c4
 ```
 
-Definitions:
+定义：
 
 ```text
 rolectxflat:
@@ -6298,14 +6261,14 @@ rolectxart:
   context lane = top-N non-negative global pages from the discovered alias/artifact
 ```
 
-Outputs:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_rolectxflat_20k39k_v16_range_sdpa
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_rolectxart_20k39k_v17_range_sdpa
 ```
 
-### Summary
+### 总结
 
 | Context | Mode | Accuracy | PPL | Evidence coverage | Decoy hit | Pages | Kept fraction |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6322,7 +6285,7 @@ Outputs:
 | 39k | rolectxart_c2 | 100% | 18.87 | 100% | 0% | 4.0 | 2.19% |
 | 39k | rolectxart_c4 | 100% | 18.38 | 100% | 0% | 6.0 | 2.52% |
 
-Interpretation:
+解释：
 
 ```text
 Independent context selection works mechanically:
@@ -6336,7 +6299,7 @@ But the PPL gain is limited:
   but is unstable at 20k and can worsen when c4 adds weakly related pages.
 ```
 
-Example:
+示例：
 
 ```text
 20k e05 task 2000000000
@@ -6367,49 +6330,48 @@ rolectxart_c4:
   PPL = 15.65
 ```
 
-Design implication:
+设计启发：
 
 ```text
-Global semantic context is too noisy without a learned or better structured page summary.
+如果没有 learned 或结构更好的 page summary，global semantic context 太 noisy。
 
-For long semantic retrieval, context lane should not be just "top lexical pages".
-It needs either:
-  learned summaries/embeddings,
-  typed page summaries,
-  or constraints from the hierarchical section structure.
+对于长程语义检索，context lane 不应该只是“top lexical pages”。
+它需要以下至少一种机制：
+  learned summaries/embeddings，
+  typed page summaries，
+  或来自 hierarchical section structure 的约束。
 ```
 
-## 60. Section-local context lane
+## 60. Section-Local Context Lane
 
-Question:
+问题：
 
 ```text
-Can a hierarchical section-local context lane recover the useful context pages from auto_p1
-without keeping conflict/decoy pages?
+hierarchical section-local context lane 能否在不保留 conflict/decoy page 的情况下，恢复 auto_p1 中有用的 context page？
 ```
 
-New routes:
+新 route：
 
 ```text
 chain_typedhier_rolectxsec_auto_p1_c2
 chain_typedhier_rolectxsec_auto_p1_c4
 ```
 
-Policy:
+策略：
 
 ```text
-1. Evidence lane keeps role-filtered bridge + current answer pages.
-2. Use the discovered alias/artifact to rank sections.
-3. Add top-N non-negative, non-answer pages from the selected sections.
+1. evidence lane 保留经过 role-filter 的 bridge + current answer page。
+2. 使用发现的 alias/artifact 对 section 排序。
+3. 从选中的 section 中加入 top-N 个 non-negative、non-answer page。
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_rolectxsec_20k39k_v18_range_sdpa
 ```
 
-### Summary
+### 总结
 
 | Context | Mode | Accuracy | PPL | Evidence coverage | Decoy hit | Pages | Kept fraction |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6422,7 +6384,7 @@ Output:
 | 39k | rolectxsec_c2 | 100% | 19.50 | 100% | 0% | 4.0 | 2.15% |
 | 39k | rolectxsec_c4 | 100% | 19.64 | 100% | 0% | 6.0 | 2.45% |
 
-Example:
+示例：
 
 ```text
 20k e05 task 2000000000
@@ -6446,52 +6408,51 @@ rolectxsec_c4:
   PPL = 22.33
 ```
 
-Interpretation:
+解释：
 
 ```text
-Section-local context is clean but too local:
-  it mostly adds pages adjacent to the answer page,
-  not the broader topical pages that help LM PPL.
+section-local context 很干净，但太 local：
+  它主要加入 answer page 附近的 page，
+  而不是有助于 LM PPL 的更广 topical page。
 
-So the useful PPL context in auto_p1 is not simply "near the answer page".
-It is broader, cross-section topic context, even though the same route also pulls in conflict pages.
+因此 auto_p1 中有用的 PPL context 并不只是“靠近 answer page”。
+它是更广的、跨 section 的 topic context，尽管同一个 route 也会拉入 conflict page。
 ```
 
-Updated design conclusion:
+更新后的设计结论：
 
 ```text
-Typed evidence lane is solved for this synthetic story task:
-  bridge + current answer page gives 100% evidence coverage and 100% accuracy with 0% decoy hit.
+对这个 synthetic story task 来说，typed evidence lane 已经解决：
+  bridge + current answer page 给出 100% evidence coverage、100% accuracy，并且 decoy hit 为 0%。
 
-The unsolved part is the PPL/context lane:
-  auto_p1 gives best PPL but includes conflict pages;
-  role-only is clean and fast but hurts PPL;
-  global lexical context is noisy;
-  section-local context is too narrow.
+尚未解决的是 PPL/context lane：
+  auto_p1 给出最佳 PPL，但包含 conflict page；
+  role-only 干净且快速，但损害 PPL；
+  global lexical context noisy；
+  section-local context 太窄。
 
-The next useful design is a typed context page summary:
-  keep broad topic pages,
-  but insert them as compressed/tagged summaries,
-  and explicitly mark conflict/withdrawn pages as non-current instead of dropping them or inserting raw text.
+下一个有用设计是 typed context page summary：
+  保留 broad topic page，
+  但把它们作为 compressed/tagged summary 插入，
+  并显式把 conflict/withdrawn page 标记为 non-current，而不是直接丢弃它们或插入 raw text。
 ```
 
-## 61. Typed summary context lane
+## 61. Typed Summary Context Lane
 
-Question:
+问题：
 
 ```text
-Can we keep raw attention clean and still recover PPL by inserting a compressed,
-typed summary of broader context pages?
+能否保持 raw attention 干净，同时通过插入更广上下文 page 的压缩 typed summary 来恢复 PPL？
 ```
 
-Implementation:
+实现：
 
 ```text
 --typed_record_format summary
 --typed_summary_source_mode <route>
 ```
 
-This separates two page sets:
+这会分离两组 page：
 
 ```text
 raw sparse pages:
@@ -6502,7 +6463,7 @@ typed summary source pages:
   inserted before the query.
 ```
 
-For the main clean route:
+对于主要 clean route：
 
 ```text
 raw pages = chain_typedhier_role_auto_p1
@@ -6514,7 +6475,7 @@ summary pages = chain_typedhier_auto_p1 or chain_typedhier_conf_s3_p1
   conflict/withdrawn pages are tagged as status=non_current
 ```
 
-Outputs:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_typedsummary_20k39k_v19_range_sdpa
@@ -6522,9 +6483,9 @@ Outputs:
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_typedsummary_s3source_20k39k_v21_range_sdpa
 ```
 
-### Long summary attempt
+### Long Summary 尝试
 
-The first summary format kept too many background bridge lines:
+第一版 summary format 保留了太多 background bridge line：
 
 | Context | Mode | Summary source | Accuracy | PPL | Record tokens | Raw pages | Decoy hit | Eval sec |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6533,16 +6494,16 @@ The first summary format kept too many background bridge lines:
 | 39k | auto_p1 | auto_p1 | 100% | 13.81 | 320 | 6.0 | 100% | 14.87 |
 | 39k | role_auto_p1 | auto_p1 | 100% | 18.19 | 320 | 2.0 | 0% | 14.33 |
 
-Interpretation:
+解释：
 
 ```text
-PPL improves, but the record is too long.
-Average eval time rises from about 4s to about 14s.
+PPL 有改善，但 record 太长。
+平均 eval time 从约 4s 上升到约 14s。
 ```
 
-### Compressed summary
+### Compressed Summary
 
-The summary was then compressed to keep only:
+随后把 summary 压缩为只保留：
 
 ```text
 target bridge,
@@ -6551,13 +6512,13 @@ withdrawn badge note,
 superseded alias note if present.
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_typedsummary_compact_20k39k_v20_range_sdpa
 ```
 
-Results:
+结果：
 
 | Context | Mode | Summary source | Accuracy | PPL | Record tokens | Raw pages | Decoy hit | Eval sec | Kept fraction |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6566,7 +6527,7 @@ Results:
 | 39k | auto_p1 | auto_p1 | 100% | 14.13 | 178 | 6.0 | 100% | 9.38 | 2.72% |
 | 39k | role_auto_p1 | auto_p1 | 100% | 17.11 | 178 | 2.0 | 0% | 8.81 | 1.84% |
 
-Compared with compact label-only typed memory from Section 60:
+和第 60 节的 compact label-only typed memory 相比：
 
 ```text
 20k role_auto_p1:
@@ -6580,7 +6541,7 @@ Compared with compact label-only typed memory from Section 60:
   decoy_hit stays 0%
 ```
 
-Example summary:
+summary 示例：
 
 ```text
 Typed memory summary: lookup_key=LR2000000000-TJFGVPBA; BRIDGE_ALIAS=RIVER-Y45JVZ; ANSWER_LABEL=C.
@@ -6590,25 +6551,24 @@ Typed memory summary: lookup_key=LR2000000000-TJFGVPBA; BRIDGE_ALIAS=RIVER-Y45JV
 Rule: answer only from status=current; ignore status=non_current as answers.
 ```
 
-### S3-source summary
+### S3-Source Summary
 
-Then the summary source was expanded to `chain_typedhier_conf_s3_p1`, which often includes the
-superseded alias page as well as the withdrawn badge note.
+随后把 summary source 扩展为 `chain_typedhier_conf_s3_p1`，它通常会同时包含 superseded alias page 和 withdrawn badge note。
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_typedsummary_s3source_20k39k_v21_range_sdpa
 ```
 
-Results:
+结果：
 
 | Context | Mode | Summary source | Accuracy | PPL | Record tokens | Raw pages | Decoy hit | Eval sec |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | 20k | role_auto_p1 | s3_p1 | 100% | 19.22 | 209 | 2.0 | 0% | 10.02 |
 | 39k | role_auto_p1 | s3_p1 | 100% | 17.12 | 211 | 2.0 | 0% | 10.30 |
 
-Example:
+示例：
 
 ```text
 Typed memory summary: lookup_key=LR2000000000-TJFGVPBA; BRIDGE_ALIAS=RIVER-Y45JVZ; ANSWER_LABEL=C.
@@ -6619,70 +6579,70 @@ Typed memory summary: lookup_key=LR2000000000-TJFGVPBA; BRIDGE_ALIAS=RIVER-Y45JV
 Rule: answer only from status=current; ignore status=non_current as answers.
 ```
 
-Interpretation:
+解释：
 
 ```text
-This is the first route that cleanly separates the roles:
+这是第一个能够清晰分离不同角色的 route：
 
-1. Raw evidence lane:
-   bridge + current answer page only.
-   It keeps raw remote attention small and avoids raw decoy/conflict exposure.
+1. raw evidence lane：
+   只包含 bridge + current answer page。
+   它让 raw remote attention 保持很小，并避免 raw decoy/conflict 暴露。
 
-2. Typed summary context lane:
-   broader pages are allowed,
-   but conflict/withdrawn pages are converted into status=non_current facts.
+2. typed summary context lane：
+   允许更广的 page，
+   但 conflict/withdrawn page 会被转换成 status=non_current fact。
 
-This recovers a large part of the PPL lost by role filtering while preserving:
-  100% accuracy,
-  100% evidence coverage,
-  0% raw decoy hit,
-  about 2 raw remote pages.
+这恢复了 role filtering 损失的大部分 PPL，同时保持：
+  100% accuracy，
+  100% evidence coverage，
+  0% raw decoy hit，
+  约 2 个 raw remote page。
 ```
 
-Current recommendation:
+当前建议：
 
 ```text
-Best PPL:
+最佳 PPL：
   auto_p1 + typed summary
-  but raw decoy pages are still present.
+但 raw decoy page 仍然存在。
 
-Best clean tradeoff:
+最佳 clean tradeoff：
   raw route = chain_typedhier_role_auto_p1
   summary source = chain_typedhier_auto_p1
   typed_record_format = summary
 
-More complete conflict explanation:
+更完整的 conflict explanation：
   raw route = chain_typedhier_role_auto_p1
   summary source = chain_typedhier_conf_s3_p1
-  It improves 20k PPL slightly but costs more summary tokens.
+它略微改善 20k PPL，但需要更多 summary token。
 ```
 
-Design update:
+设计更新：
 
 ```text
-The "book page" method should not only retrieve pages.
-It should retrieve page roles and page summaries.
+“book page” 方法不应该只检索 page。
+它还应该检索 page role 和 page summary。
 
-A practical architecture is:
-  sink + recent raw tokens,
-  clean typed evidence raw pages,
-  compressed typed summaries for broader context/conflict pages.
+一个实际架构是：
+  sink + recent raw token，
+  clean typed evidence raw page，
+  用于 broader context/conflict page 的 compressed typed summary。
 
-This is closer to the target:
-  compute is controlled by a small raw evidence lane,
-  PPL is helped by summaries,
-  downstream answer is protected by status=current / status=non_current typing.
+这更接近目标：
+  compute 由很小的 raw evidence lane 控制，
+  PPL 由 summary 帮助，
+  downstream answer 由 status=current / status=non_current typing 保护。
 ```
 
-## 62. Summary compression and answer stability
+## 62. Summary Compression 与答案稳定性
 
-Question:
+问题：
 
 ```text
-Can the typed summary be shortened without losing PPL or downstream answer stability?
+能否在不损失 PPL 或 downstream answer stability 的情况下缩短 typed summary？
 ```
 
-The previous `summary` format worked, but was still expensive:
+之前的 `summary` format 有效，但仍然偏贵：
 
 ```text
 ~177-211 inserted record tokens,
@@ -6690,7 +6650,7 @@ The previous `summary` format worked, but was still expensive:
 100% model-side answer accuracy.
 ```
 
-This section tests shorter formats on the clean raw route:
+本节在 clean raw route 上测试更短的 format：
 
 ```text
 raw route = chain_typedhier_role_auto_p1
@@ -6699,7 +6659,7 @@ raw decoy hit = 0%
 summary source = chain_typedhier_auto_p1 or chain_typedhier_conf_s3_p1
 ```
 
-Outputs:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_minisummary_autosource_20k39k_v22_range_sdpa
@@ -6714,7 +6674,7 @@ Outputs:
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_answerlinesummary_s3source_20k39k_v31_range_sdpa
 ```
 
-### Formats
+### 格式
 
 `mini_summary`:
 
@@ -6753,7 +6713,7 @@ Withdrawn badge option A has status=non_current.
 Use the current status only.
 ```
 
-### Results
+### 结果
 
 | Context | Format | Source | PPL | Record tokens | Eval sec | Model acc | Cal model acc | Raw pages | Raw decoy hit |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6780,49 +6740,49 @@ Use the current status only.
 | 39k | answerline | s3 | 14.68 | 89 | 6.03 | 100% | 100% | 2.0 | 0% |
 | 39k | summary | s3 | 17.12 | 211 | 10.30 | 100% | 100% | 2.0 | 0% |
 
-Interpretation:
+解释：
 
 ```text
-The record has two different jobs:
+record 有两个不同任务：
 
-1. Lower query PPL:
-   natural language helps most.
-   short_summary gives very low PPL, but model answer accuracy is unstable.
+1. 降低 query PPL：
+   自然语言帮助最大。
+   short_summary 给出很低 PPL，但 model answer accuracy 不稳定。
 
-2. Preserve downstream answer stability:
-   explicit ANSWER_LABEL=...; status=current is important.
-   lite_summary is stable but too field-like, so PPL is worse.
+2. 保持 downstream answer stability：
+   显式 `ANSWER_LABEL=...; status=current` 很重要。
+   lite_summary 很稳定，但过于 field-like，所以 PPL 更差。
 ```
 
-The best balance is `answerline_summary`:
+最佳平衡是 `answerline_summary`：
 
 ```text
-It puts the answer anchor first:
+它先放 answer anchor：
   ANSWER_LABEL=C; status=current.
 
-Then it gives a short natural sentence for the route:
+然后用一句短自然语言描述 route：
   badge -> river-name -> current ruling.
 
-Then it tags conflicts as non_current.
+最后把 conflict 标记为 non_current。
 ```
 
-Why it works:
+为什么有效：
 
 ```text
-Compared with short_summary:
-  keeps almost the same PPL benefit,
-  but fixes model-side answer accuracy.
+和 short_summary 相比：
+  几乎保留相同 PPL 收益，
+  但修复了 model-side answer accuracy。
 
-Compared with lite_summary:
-  keeps ANSWER_LABEL/status anchors,
-  but uses natural language enough to reduce PPL.
+和 lite_summary 相比：
+  保留 ANSWER_LABEL/status anchor，
+  同时使用足够自然语言来降低 PPL。
 
-Compared with full summary:
-  much fewer tokens and faster,
-  while preserving model-side answer accuracy in this small run.
+和 full summary 相比：
+  token 少得多，也更快，
+  同时在这个小运行中保持 model-side answer accuracy。
 ```
 
-Current best clean route:
+当前最佳 clean route：
 
 ```text
 raw route:
@@ -6836,7 +6796,7 @@ summary source:
   chain_typedhier_conf_s3_p1 if explicit superseded-alias context is desired.
 ```
 
-Current best clean metrics:
+当前最佳 clean metric：
 
 ```text
 answerline_summary + auto source:
@@ -6848,7 +6808,7 @@ answerline_summary + s3 source:
   39k: PPL 14.68, record 89 tokens, eval 6.03s, model acc 100%, raw decoy 0%
 ```
 
-Updated architecture:
+更新后的架构：
 
 ```text
 1. Structural page routing:
@@ -6862,23 +6822,23 @@ Updated architecture:
    summarize them as current/non_current facts,
    insert a short answerline summary before the query.
 
-This is now closer to the desired target:
-  raw KV compute is small,
-  PPL is competitive with broader raw retrieval,
-  downstream answer stability is preserved,
-  conflict/decoy pages are not exposed as raw attention context.
+这现在更接近期望目标：
+  raw KV compute 很小，
+  PPL 可以和更广的 raw retrieval 竞争，
+  downstream answer stability 得以保留，
+  conflict/decoy page 不会作为 raw attention context 暴露。
 ```
 
-## 63. Answerline stability and production speed
+## 63. Answerline 稳定性与生产速度
 
-Question:
+问题：
 
 ```text
-Does the best clean route remain stable on more tasks and at 10k/20k/39k?
-Can production mode skip LM option scoring once the typed summary has an answer?
+最佳 clean route 在更多任务以及 10k/20k/39k 上是否仍然稳定？
+当 typed summary 已经有答案时，production mode 能否跳过 LM option scoring？
 ```
 
-Best clean route:
+最佳 clean route：
 
 ```text
 raw route = chain_typedhier_role_auto_p1
@@ -6887,13 +6847,13 @@ typed_summary_source_mode = chain_typedhier_auto_p1
 sparse_attention_impl = range_sdpa
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_answerline_stability_10k20k39k_v32_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 context_tokens = 10000,20000,39000
@@ -6904,7 +6864,7 @@ modes = auto_p1, role_auto_p1, s3_p1
 skip_lm_answer_when_override = false
 ```
 
-### Stability results
+### 稳定性结果
 
 | Context | Mode | Accuracy | Model acc | Cal model acc | PPL | Record tokens | Raw pages | Evidence coverage | Raw decoy hit | Eval sec | Kept fraction |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6918,48 +6878,48 @@ skip_lm_answer_when_override = false
 | 39k | s3_p1 | 100% | 100% | 100% | 13.01 | 72 | 6.75 | 100% | 100% | 5.93 | 2.89% |
 | 39k | role_auto_p1 | 100% | 100% | 100% | 13.09 | 72 | 2.0 | 100% | 0% | 5.66 | 1.89% |
 
-Interpretation:
+解释：
 
 ```text
-The answerline route is stable in this larger small-scale run:
-  final accuracy = 100%;
-  model-side answer accuracy = 100%;
-  calibrated model-side answer accuracy = 100%;
-  evidence coverage = 100%;
-  raw decoy hit = 0% for role_auto_p1;
-  raw selected pages stay at 2.0.
+answerline route 在这个更大的小规模运行中是稳定的：
+  final accuracy = 100%；
+  model-side answer accuracy = 100%；
+  calibrated model-side answer accuracy = 100%；
+  evidence coverage = 100%；
+  role_auto_p1 的 raw decoy hit = 0%；
+  raw selected page 保持在 2.0。
 ```
 
-Compared with raw broader routes:
+和更广的 raw route 相比：
 
 ```text
-auto_p1 and s3_p1 still expose raw conflict/decoy pages:
+auto_p1 和 s3_p1 仍然暴露 raw conflict/decoy page：
   decoy hit = 100%.
 
-role_auto_p1 avoids raw conflict/decoy pages:
+role_auto_p1 避免 raw conflict/decoy page：
   decoy hit = 0%.
 
-With answerline_summary, the PPL gap is now small:
-  10k role_auto_p1 PPL is slightly better than auto_p1;
-  20k role_auto_p1 is only slightly worse than auto_p1;
-  39k role_auto_p1 is close to auto_p1.
+使用 answerline_summary 后，PPL 差距已经很小：
+  10k role_auto_p1 PPL 略好于 auto_p1；
+  20k role_auto_p1 只略差于 auto_p1；
+  39k role_auto_p1 接近 auto_p1。
 ```
 
-### Production speed test
+### 生产速度测试
 
-Question:
+问题：
 
 ```text
-If the typed summary already contains ANSWER_LABEL, can production inference skip LM option scoring?
+如果 typed summary 已经包含 ANSWER_LABEL，production inference 能否跳过 LM option scoring？
 ```
 
-Output:
+输出：
 
 ```text
 /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_answerline_skipscore_10k20k39k_v33_range_sdpa
 ```
 
-Setup:
+设置：
 
 ```text
 same tasks as v32
@@ -6967,7 +6927,7 @@ mode = chain_typedhier_role_auto_p1
 skip_lm_answer_when_override = true
 ```
 
-Results:
+结果：
 
 | Context | PPL | Accuracy | Raw pages | Raw decoy hit | Eval sec with scoring | Eval sec skip scoring | Speedup |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -6975,24 +6935,24 @@ Results:
 | 20k | 18.16 | 100% | 2.0 | 0% | 5.15 | 4.35 | 1.18x |
 | 39k | 13.09 | 100% | 2.0 | 0% | 5.66 | 4.40 | 1.28x |
 
-Interpretation:
+解释：
 
 ```text
-Skipping option scoring does not change PPL or final accuracy because:
-  query PPL is still scored;
-  the final answer comes from the typed answerline record;
-  LM option scoring is only used for diagnostic model-side accuracy.
+跳过 option scoring 不会改变 PPL 或 final accuracy，因为：
+  query PPL 仍然会被评分；
+  final answer 来自 typed answerline record；
+  LM option scoring 只用于诊断 model-side accuracy。
 
-Production mode can therefore use:
+因此 production mode 可以使用：
   skip_lm_answer_when_override = true
 
-Research/evaluation mode should keep:
+research/evaluation mode 应该保留：
   skip_lm_answer_when_override = false
 
-because it verifies whether the model itself would select the right answer from the typed summary.
+因为它可以验证模型本身是否会从 typed summary 中选出正确答案。
 ```
 
-Updated recommendation:
+更新后的建议：
 
 ```text
 Evaluation setting:
@@ -7002,28 +6962,27 @@ Evaluation setting:
   skip_lm_answer_when_override = false
 
 Production-like setting:
-  same route and summary,
+相同 route 和 summary，
   skip_lm_answer_when_override = true
 ```
 
-Current best architecture:
+当前最佳架构：
 
 ```text
-1. Keep sink + recent.
-2. Use structural/typed routing to keep only clean raw evidence pages.
-3. Use broader page routing only to build a typed answerline summary.
-4. Insert the answerline summary before the query.
-5. In production, use the typed answerline as the answer and skip option scoring.
+1. 保留 sink + recent。
+2. 使用 structural/typed routing，只保留 clean raw evidence page。
+3. 只把更广的 page routing 用于构建 typed answerline summary。
+4. 在 query 前插入 answerline summary。
+5. 在 production 中，使用 typed answerline 作为答案并跳过 option scoring。
 ```
 
-## 64. Overnight exploration summary
+## 64. 夜间探索总结
 
-This section summarizes the overnight work from role-filtered page routing through typed
-answerline summaries.
+本节总结从 role-filtered page routing 到 typed answerline summary 的夜间实验。
 
-### Starting point
+### 起点
 
-Before this set of experiments, the best story-conflict routes had a clear tradeoff:
+在这组实验之前，最佳 story-conflict route 有明显权衡：
 
 ```text
 typedhier_auto_p1:
@@ -7038,7 +6997,7 @@ typedhier_role_auto_p1:
   but PPL became much worse.
 ```
 
-Representative earlier result:
+早期代表性结果：
 
 | Context | Route | PPL | Raw pages | Raw decoy hit | Evidence coverage |
 | ---: | --- | ---: | ---: | ---: | ---: |
@@ -7047,29 +7006,29 @@ Representative earlier result:
 | 39k | auto_p1 | 17.03 | 6.0 | 100% | 100% |
 | 39k | role_auto_p1 | 23.09 | 2.0 | 0% | 100% |
 
-The goal was to keep the clean raw evidence path while recovering PPL.
+目标是在恢复 PPL 的同时，保持 clean raw evidence path。
 
-### Experiments run
+### 已运行实验
 
-The overnight run explored four designs:
+夜间运行探索了四种设计：
 
 ```text
-1. Seed-context lane
-   Keep non-negative pages from the bridge seed set.
+1. seed-context lane
+   从 bridge seed set 中保留 non-negative page。
 
-2. Independent raw context lane
-   Add extra neutral context pages from query/artifact/section retrieval.
+2. independent raw context lane
+   从 query/artifact/section retrieval 中加入额外 neutral context page。
 
-3. Typed summary context lane
-   Do not expose broader pages as raw attention;
-   summarize them into current/non_current typed facts.
+3. typed summary context lane
+   不把更广的 page 暴露为 raw attention；
+   而是把它们总结成 current/non_current typed fact。
 
-4. Answerline summary
-   Compress the typed summary into a short natural-language record with an explicit
-   ANSWER_LABEL=...; status=current line.
+4. answerline summary
+   把 typed summary 压缩成短自然语言 record，并显式包含
+   `ANSWER_LABEL=...; status=current` 行。
 ```
 
-Main output directories:
+主要输出目录：
 
 ```text
 v15 seed context:
@@ -7093,19 +7052,19 @@ v32-v33 stability and production-speed:
   /home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_answerline_skipscore_10k20k39k_v33_range_sdpa
 ```
 
-### What failed
+### 失败点
 
-Seed-context did not help:
+seed-context 没有帮助：
 
 ```text
 rolectx_auto_p1 produced the same selected pages and PPL as role_auto_p1.
 
-Reason:
+原因：
   bridge seeds are optimized to discover the alias/artifact,
   not to provide broader topical context.
 ```
 
-Independent raw context pages were also not enough:
+independent raw context page 也不够：
 
 ```text
 rolectxflat:
@@ -7121,16 +7080,16 @@ rolectxsec:
   but too local around the answer page and did not recover useful broad context.
 ```
 
-Key negative result:
+关键负结果：
 
 ```text
-Adding more raw pages is not the right abstraction.
-The model benefits from broader context, but raw conflict pages can pollute answer selection.
+加入更多 raw page 不是正确抽象。
+模型确实受益于更广 context，但 raw conflict page 会污染 answer selection。
 ```
 
-### What worked
+### 有效点
 
-Typed summary context worked:
+typed summary context 有效：
 
 ```text
 raw evidence lane:
@@ -7141,7 +7100,7 @@ typed summary lane:
   but compress conflict/withdrawn pages into status=non_current facts.
 ```
 
-The best final format is `answerline_summary`:
+最终最佳格式是 `answerline_summary`：
 
 ```text
 Typed memory summary: ANSWER_LABEL=C; status=current.
@@ -7151,22 +7110,22 @@ Withdrawn badge option A has status=non_current.
 Use the current status only.
 ```
 
-Why this format works:
+这个格式为什么有效：
 
 ```text
-The first line gives a strong answer anchor:
+第一行给出强 answer anchor：
   ANSWER_LABEL=C; status=current.
 
-The following sentence is natural enough to help PPL:
+后续句子足够自然，因此有助于 PPL：
   badge -> alias -> current ruling.
 
-Conflict facts remain visible but typed:
+conflict fact 仍然可见，但被 typed：
   status=non_current.
 ```
 
-### Best current result
+### 当前最佳结果
 
-Best clean evaluation route:
+最佳 clean evaluation route：
 
 ```text
 raw route = chain_typedhier_role_auto_p1
@@ -7176,7 +7135,7 @@ sparse_attention_impl = range_sdpa
 skip_lm_answer_when_override = false
 ```
 
-Stability result on 10k/20k/39k, 8 tasks per length:
+10k/20k/39k 上的稳定性结果，每个长度 8 个任务：
 
 | Context | PPL | Final acc | Model acc | Raw pages | Raw decoy hit | Evidence coverage | Eval sec |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -7184,7 +7143,7 @@ Stability result on 10k/20k/39k, 8 tasks per length:
 | 20k | 18.16 | 100% | 100% | 2.0 | 0% | 100% | 5.15 |
 | 39k | 13.09 | 100% | 100% | 2.0 | 0% | 100% | 5.66 |
 
-Compared with broader raw `auto_p1` under the same answerline-summary setting:
+和相同 answerline-summary 设置下更广的 raw `auto_p1` 相比：
 
 | Context | auto_p1 PPL | role_auto_p1 + answerline PPL | auto_p1 raw decoy hit | role_auto_p1 raw decoy hit |
 | ---: | ---: | ---: | ---: | ---: |
@@ -7192,39 +7151,39 @@ Compared with broader raw `auto_p1` under the same answerline-summary setting:
 | 20k | 17.95 | 18.16 | 100% | 0% |
 | 39k | 12.85 | 13.09 | 100% | 0% |
 
-Interpretation:
+解释：
 
 ```text
-PPL is close to the broader raw route,
-but raw conflict/decoy pages are removed from attention.
+PPL 接近更广的 raw route，
+但 raw conflict/decoy page 从 attention 中被移除了。
 
-This is the best tradeoff found so far:
-  clean raw evidence,
-  low raw page count,
-  stable answer accuracy,
-  PPL close to broader retrieval.
+这是目前找到的最佳权衡：
+  clean raw evidence，
+  raw page count 低，
+  answer accuracy 稳定，
+  PPL 接近更广 retrieval。
 ```
 
-### Baseline clarification
+### Baseline 口径说明
 
-The main PPL baseline in the overnight experiments is not full dense forward.
+夜间实验中的主要 PPL baseline 不是 full dense forward。
 
-The comparisons mean:
+这些比较的含义是：
 
 ```text
-PPL baseline:
+PPL baseline：
   chain_typedhier_auto_p1
-  This is a broader sparse page retrieval route that keeps raw conflict/decoy pages.
+这是一个更广的 sparse page retrieval route，会保留 raw conflict/decoy page。
 
-Clean baseline:
+clean baseline：
   chain_typedhier_role_auto_p1 without typed summary
-  This is clean but high-PPL.
+它很干净，但 PPL 高。
 
-Production speed baseline:
+production speed baseline：
   same clean route with LM option scoring enabled.
 ```
 
-The production speed comparison is:
+production speed 的比较是：
 
 ```text
 skip_lm_answer_when_override=false
@@ -7232,23 +7191,23 @@ vs
 skip_lm_answer_when_override=true
 ```
 
-It is not:
+它不是：
 
 ```text
 sparse route vs full dense prefill/forward.
 ```
 
-Reason:
+原因：
 
 ```text
-The evaluator still builds the full-context KV cache first.
-The measured eval_seconds cover typed-record/query/answer scoring under the sparse query path,
-not a production fused sparse-prefill system.
+evaluator 仍然会先构建 full-context KV cache。
+测得的 eval_seconds 覆盖的是 sparse query path 下的 typed-record/query/answer scoring，
+不是 production fused sparse-prefill system。
 ```
 
-### Production-like speed
+### 类生产速度
 
-With the same answerline route, skipping LM option scoring gives:
+在相同 answerline route 下，跳过 LM option scoring 得到：
 
 | Context | With option scoring | Skip option scoring | Speedup | PPL | Accuracy |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -7256,45 +7215,45 @@ With the same answerline route, skipping LM option scoring gives:
 | 20k | 5.15s | 4.35s | 1.18x | 18.16 | 100% |
 | 39k | 5.66s | 4.40s | 1.28x | 13.09 | 100% |
 
-This speedup is from avoiding the diagnostic option scoring step.
+这个加速来自避免 diagnostic option scoring step。
 
-### Method summary
+### 方法总结
 
-The current method is:
-
-```text
-1. Keep sink + recent.
-
-2. Build book-like pages and sections.
-
-3. Use structural/typed routing to find:
-   bridge page,
-   current answer page.
-
-4. Keep only those clean evidence pages as raw remote attention.
-
-5. Use broader routing only to read extra pages for summary construction.
-
-6. Convert broader context into an answerline summary:
-   current facts stay current,
-   withdrawn/superseded/conflict facts become non_current.
-
-7. Insert that summary before the query.
-```
-
-Conceptually:
+当前方法是：
 
 ```text
-Raw KV memory:
-  small and clean.
+1. 保留 sink + recent。
 
-Typed page-summary memory:
-  broader and safer.
+2. 构建 book-like page 和 section。
+
+3. 使用 structural/typed routing 找到：
+   bridge page，
+   current answer page。
+
+4. 只把这些 clean evidence page 作为 raw remote attention 保留。
+
+5. 只把更广 routing 用于读取额外 page 以构建 summary。
+
+6. 把更广 context 转成 answerline summary：
+   current fact 保持 current，
+   withdrawn/superseded/conflict fact 变成 non_current。
+
+7. 把该 summary 插入 query 前。
 ```
 
-### Current recommendation
+概念上：
 
-For evaluation:
+```text
+raw KV memory：
+  小且干净。
+
+typed page-summary memory：
+  更广且更安全。
+```
+
+### 当前建议
+
+用于 evaluation：
 
 ```text
 --modes chain_typedhier_role_auto_p1
@@ -7306,7 +7265,7 @@ For evaluation:
 --sparse_attention_impl range_sdpa
 ```
 
-For production-like speed:
+用于 production-like speed：
 
 ```text
 same settings,
@@ -7314,29 +7273,2902 @@ but set:
 --skip_lm_answer_when_override true
 ```
 
-### Remaining gaps
+### 剩余缺口
 
-This is still not the final answer to the broader goal:
+这仍然不是更大目标的最终答案：
 
 ```text
-1. The current evidence is synthetic story-conflict retrieval.
-   It should be tested on more realistic long-document QA / multi-hop semantic retrieval.
+1. 当前证据来自 synthetic story-conflict retrieval。
+   还应该在更真实的 long-document QA / multi-hop semantic retrieval 上测试。
 
-2. The summary builder is rule-based/extractive.
-   A learned small summarizer or MLP/NLP router has not been tested yet.
+2. summary builder 是 rule-based/extractive。
+   还没有测试 learned small summarizer 或 MLP/NLP router。
 
-3. The speed numbers are query-path eval seconds.
-   They are not full dense-vs-sparse end-to-end serving numbers.
+3. 速度数字是 query-path eval seconds。
+   它们不是 full dense-vs-sparse 的端到端 serving 数字。
 
-4. Full dense baseline was not rerun in the latest v32/v33 suite.
-   It should be added if we need a direct full-forward comparison.
+4. 最新 v32/v33 suite 没有重新跑 full dense baseline。
+   如果需要直接 full-forward 对比，应该补上。
 ```
 
-Next useful experiments:
+下一批有用实验：
 
 ```text
-1. Add full and sink_recent to the answerline suite for explicit dense/sparse baseline comparison.
-2. Run answerline_summary on a less synthetic long-document QA task.
-3. Replace rule summaries with learned page summaries and compare PPL/accuracy/token cost.
-4. Test larger task counts to reduce variance in 10k/20k/39k.
+1. 在 answerline suite 中加入 full 和 sink_recent，做显式 dense/sparse baseline 对比。
+2. 在更少 synthetic 的 long-document QA 任务上运行 answerline_summary。
+3. 用 learned page summary 替代 rule summary，并比较 PPL/accuracy/token cost。
+4. 测试更大的任务数量，以降低 10k/20k/39k 上的方差。
+```
+
+## 65. Full / Sink Baseline 补充实验
+
+这次补跑的目标是补上最新 answerline suite 缺失的 `full` 和 `sink_recent` baseline，方便和当前最佳 clean route 直接比较。
+
+输出目录：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/longrange_book_index_chain_story_full_sink_baseline_10k20k39k_v34_range_sdpa
+```
+
+## 70. Chain TypedHier + Answerline + Range-SDPA 扩展测试
+
+这组实验专门针对当前最好的组合：
+
+```text
+mode = chain_typedhier_role_auto_p1
+typed_record_format = answerline_summary
+typed_summary_source_mode = chain_typedhier_auto_p1
+sparse_attention_impl = range_sdpa
+```
+
+补充测试了三件事：
+
+```text
+1. 原生 chain_story_conflict 长程任务上的 query PPL、accuracy、速度。
+2. 同任务同 seed 的 pure full baseline，用来区分“full 本身”和“answerline 插入”的效果。
+3. MMLU-style sanity check：无长上下文、长噪声 full、长噪声 routed top1 的多选准确率、gold-label PPL、速度。
+```
+
+### 原生长程任务设置
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/chain_typedhier_answerline_range_sdpa_more_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/chain_story_pure_full_baseline_more_20260702
+```
+
+运行设置：
+
+```text
+task_variant = chain_story_conflict
+context_tokens = 10000,20000,39000
+suite_layouts = e05_d90,e20_d80,e35_d70
+tasks_per_length = 6
+balanced_labels = true
+answer_score_format = gated_sentence
+score_query_ppl = true
+score_calibrated = true
+```
+
+这里有三个对照口径：
+
+```text
+pure full:
+  full context，没有 typed answerline。
+
+full + answerline:
+  full context，但插入同一个 answerline_summary。
+
+typed sparse:
+  chain_typedhier_role_auto_p1 + answerline_summary + range_sdpa。
+```
+
+### 原生任务结果
+
+| Context | Method | Acc | Cal acc | Query PPL | Eval sec | Kept frac | Decoy hit |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10k | pure full | 38.9% | 11.1% | 20.12 | 2.77 | 100.00% | 100% |
+| 10k | full + answerline | 100% | 72.2% | 16.10 | 5.78 | 100.00% | 100% |
+| 10k | typed sparse | 100% | 94.4% | 17.54 | 5.23 | 7.57% | 0% |
+| 20k | pure full | 22.2% | 27.8% | 20.27 | 3.60 | 100.00% | 100% |
+| 20k | full + answerline | 100% | 88.9% | 16.90 | 7.41 | 100.00% | 100% |
+| 20k | typed sparse | 100% | 94.4% | 18.21 | 5.21 | 3.80% | 0% |
+| 39k | pure full | 16.7% | 16.7% | 18.76 | 4.98 | 100.00% | 100% |
+| 39k | full + answerline | 100% | 94.4% | 14.43 | 10.26 | 100.00% | 100% |
+| 39k | typed sparse | 100% | 77.8% | 14.29 | 5.06 | 1.87% | 0% |
+
+### 原生任务解释
+
+```text
+1. pure full 在 chain_story_conflict 上很差：
+   10k/20k/39k accuracy = 38.9% / 22.2% / 16.7%。
+   主要原因是 full context 同时看到 current evidence 和 late conflict/decoy。
+
+2. answerline_summary 是质量提升的关键：
+   full + answerline 三个长度都到 100% accuracy。
+
+3. typed sparse 和 full + answerline 的区别在速度和干扰隔离：
+   - typed sparse 只保留约 7.57% / 3.80% / 1.87% 的 KV。
+   - decoy hit 从 full 的 100% 降到 0%。
+   - 20k 和 39k 上 eval seconds 明显快于 full + answerline。
+
+4. 速度对比：
+   - 10k: typed sparse 5.23s，full+answerline 5.78s，略快。
+   - 20k: typed sparse 5.21s，full+answerline 7.41s，快约 1.42x。
+   - 39k: typed sparse 5.06s，full+answerline 10.26s，快约 2.03x。
+
+5. PPL 对比：
+   typed sparse 的 query PPL 在 39k 上略好于 full+answerline：
+   14.29 vs 14.43。
+   在 10k/20k 上 full+answerline 的 PPL 更低，但 typed sparse 的 calibrated acc 更高或相近。
+```
+
+因此，针对这个原生长程冲突任务，可以说：
+
+```text
+chain_typedhier_role_auto_p1 + answerline_summary + range_sdpa
+在保持 100% raw accuracy 的同时，明显减少 KV、隔离 decoy，并在 20k/39k 上比 full+answerline 更快。
+```
+
+### MMLU-Style Sanity Check
+
+新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_mmlu_long_context_sanity.py
+```
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/mmlu_long_context_sanity_5subj_20260702
+```
+
+测试设置：
+
+```text
+subjects = computer_security, high_school_geography, philosophy, public_relations, high_school_statistics
+split = test
+max_per_subject = 20
+total_questions = 100
+fewshot = 0
+distractor_pages = 24
+```
+
+模式说明：
+
+```text
+mmlu_direct:
+  标准 MMLU zero-shot option scoring。
+
+mmlu_long_full_noise:
+  在 MMLU query 前加约 1k token 的无关长噪声上下文，再 full scoring。
+
+mmlu_routed_noise_top1:
+  从无关长噪声页里按 query entity/keyword 召回 top1 背景页，再 scoring。
+  注意：这不是原生 answerline 方法，因为 MMLU 没有证据页可抽 answerline。
+
+oracle_answerline_upper_bound:
+  直接插入 gold ANSWER_LABEL，只用于检查 scoring 管线，不作为真实方法结果。
+```
+
+### MMLU 总体结果
+
+| Mode | Acc | Gold-label PPL | Total sec | Visible tokens |
+| --- | ---: | ---: | ---: | ---: |
+| mmlu_direct | 45.0% | 15.58 | 2.82 | 82.2 |
+| mmlu_long_full_noise | 52.0% | 6.84 | 3.00 | 1157.5 |
+| mmlu_routed_noise_top1 | 48.0% | 4.28 | 4.51 | 134.0 |
+| oracle_answerline_upper_bound | 54.0% | 5.14 | 3.24 | 95.2 |
+
+### MMLU 分科结果
+
+| Subject | Direct acc | Long full acc | Routed top1 acc | Direct PPL | Long full PPL | Routed PPL |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| computer_security | 65% | 55% | 60% | 8.67 | 4.90 | 3.06 |
+| high_school_geography | 30% | 65% | 45% | 25.18 | 5.11 | 4.25 |
+| philosophy | 50% | 55% | 55% | 9.03 | 5.62 | 3.43 |
+| public_relations | 40% | 50% | 45% | 27.80 | 11.57 | 5.99 |
+| high_school_statistics | 40% | 35% | 35% | 16.72 | 9.17 | 5.40 |
+
+### MMLU 解释
+
+MMLU 结果不能直接说明 typed-answerline 方法有效或无效，因为原始 MMLU 没有 long-context evidence page：
+
+```text
+1. mmlu_routed_noise_top1 的 PPL 最低：
+   4.28，比 direct 15.58 和 long full 6.84 都低。
+
+2. 但 accuracy 没有最高：
+   routed top1 = 48%，long full = 52%，direct = 45%。
+   说明 gold-label PPL 和 option ranking 仍可能不一致。
+
+3. routed top1 的 visible tokens 很少：
+   134 tokens vs long full 1157 tokens。
+
+4. 当前 routed top1 wall time 反而慢：
+   4.51s vs long full 3.00s。
+   原因还是 Python token loop，没有 batch prefill / fused serving。
+
+5. oracle answerline 只有 54%，说明 Qwen3-0.6B 在这个 option-scoring prompt 下不会稳定服从
+   `ANSWER_LABEL=X`；所以不能把 oracle answerline 当作真实上界或最终质量。
+```
+
+当前结论：
+
+```text
+MMLU 不是 chain_typedhier_role_auto_p1 + answerline_summary 的自然适配任务。
+
+这个方法的强项是“长上下文里存在可定位 evidence/current page，需要过滤 decoy/conflict”的任务；
+原始 MMLU 更接近模型内部知识测试，没有可检索 evidence page，因此只能作为通用能力/抗长噪声 sanity check。
+
+如果要把它扩展到 MMLU 类通用任务，需要引入外部知识页、检索库或 learned semantic summary，
+否则 answerline_summary 没有可靠来源。
+```
+
+## 71. Typed Memory Router V1 通用长上下文实验
+
+这一节实现了一个更通用的 memory router 第一版，不再固定使用 `chain_story_conflict` 的手写链路，而是先判断任务类型，再选择不同的 typed memory 策略。
+
+新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_typed_memory_router_v1_suite.py
+```
+
+### 方法
+
+`typed_memory_router_v1` 的流程：
+
+```text
+1. 按自然段切 page。
+2. 抽取 page 的 entity / keyword / current-vs-old status。
+3. 根据 query 判断任务类型：
+   - temporal_fact: 当前属性，过滤 old profile。
+   - multihop_bridge: 先找 project -> artifact，再找 artifact -> action。
+   - summary_theme: 找 project 的 current reports，统计 theme。
+   - compare_score: 找 current scorecards，比较 priority_score。
+4. 把选中的 page 压成 typed memory records。
+5. 用短 typed memory prompt 做 A/B/C/D option scoring。
+```
+
+和之前 Vertical V1 不同，这版修了速度实现：
+
+```text
+router prompt 用 batch forward / prefill 跑，不再逐 token Python loop。
+```
+
+### 服务器输出
+
+短上下文版本：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/typed_memory_router_v1_generic_20260702
+```
+
+长上下文版本：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/typed_memory_router_v1_generic_long_20260702
+```
+
+### 约 2k Tokens 结果
+
+运行设置：
+
+```text
+tasks_per_variant = 12
+distractor_pages = 36
+variants = temporal_fact,multihop_bridge,summary_theme,compare_score
+```
+
+| Variant | Full acc | Router acc | Full PPL | Router PPL | Full sec | Router sec | Full tokens | Router tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ALL | 68.8% | 85.4% | 4.66 | 2.74 | 0.498 | 0.177 | 1927.4 | 260.7 |
+| temporal_fact | 66.7% | 100% | 4.12 | 1.52 | 0.526 | 0.175 | 1860.5 | 156.6 |
+| multihop_bridge | 66.7% | 75.0% | 6.62 | 3.58 | 0.485 | 0.179 | 1898.1 | 299.5 |
+| summary_theme | 91.7% | 91.7% | 2.34 | 2.31 | 0.491 | 0.177 | 1998.3 | 254.7 |
+| compare_score | 50.0% | 75.0% | 7.40 | 4.46 | 0.488 | 0.178 | 1952.9 | 332.0 |
+
+解释：
+
+```text
+1. Router 总体 accuracy 从 68.8% 提到 85.4%。
+2. Gold-label PPL 从 4.66 降到 2.74。
+3. Visible tokens 从 1927 降到 261。
+4. Total time 从 0.498s 降到 0.177s，约 2.8x faster。
+5. 这说明 batch prompt 后，typed memory router 已经能在端到端 wall time 上超过 full baseline。
+```
+
+### 约 6.5k Tokens 结果
+
+运行设置：
+
+```text
+tasks_per_variant = 8
+distractor_pages = 128
+variants = temporal_fact,multihop_bridge,summary_theme,compare_score
+```
+
+| Variant | Full acc | Router acc | Full PPL | Router PPL | Full sec | Router sec | Full tokens | Router tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| ALL | 59.4% | 71.9% | 5.90 | 3.27 | 1.270 | 0.177 | 6540.5 | 264.5 |
+| temporal_fact | 62.5% | 100% | 3.75 | 1.46 | 1.317 | 0.174 | 6472.9 | 158.1 |
+| multihop_bridge | 87.5% | 75.0% | 5.35 | 3.37 | 1.261 | 0.179 | 6515.9 | 302.5 |
+| summary_theme | 62.5% | 87.5% | 4.20 | 2.25 | 1.265 | 0.177 | 6615.8 | 259.3 |
+| compare_score | 25.0% | 25.0% | 14.40 | 10.32 | 1.238 | 0.180 | 6557.5 | 338.1 |
+
+解释：
+
+```text
+1. 上下文变长后，router 的速度优势更明显：
+   1.270s -> 0.177s，约 7.2x faster。
+
+2. Router 仍然提升总体 accuracy：
+   59.4% -> 71.9%。
+
+3. Router 仍然降低 PPL：
+   5.90 -> 3.27。
+
+4. temporal_fact 和 summary_theme 表现最好。
+   说明 current 状态过滤、主题页聚合已经有明显效果。
+
+5. multihop_bridge 在长上下文下 accuracy 低于 full：
+   87.5% -> 75.0%。
+   可能原因是 artifact route 的规则有时选到了不完整 page 组合。
+
+6. compare_score 是当前短板：
+   accuracy 只有 25%，虽然 PPL 改善。
+   这说明规则版 typed summary 对数值比较不够鲁棒，需要更明确的 symbolic executor 或 learned parser。
+```
+
+### 当前结论
+
+```text
+Typed Memory Router V1 已经比单一 answerline 更通用：
+它能覆盖当前属性、多跳桥接、跨页主题汇总、数值比较四类任务。
+
+在 2k 和 6.5k 上，它都显著减少 tokens、降低 PPL，并且端到端更快。
+
+但它还不是最终通用长上下文推理：
+1. 数值比较 compare_score 需要 symbolic parser。
+2. 多跳 bridge 需要更稳的 bridge->answer page chaining。
+3. 当前任务仍是 synthetic，需要 LongBench/RULER/InfiniteBench 等公开 benchmark。
+4. 当前 router 是规则版，下一步应训练 learned router / learned summarizer。
+```
+
+## 72. 普通长上下文前向：20k Prefill + 5k Continuation PPL/速度
+
+这一节专门回答一个问题：
+
+```text
+typed-anchor / page-routing 这条线，能不能用于普通长上下文语言模型前向，
+而不是只用于 KV 检索、needle、answerline 这种带显式答案页的任务？
+```
+
+这里测试的是更接近普通 LM continuation 的设置：
+
+```text
+给模型前 20k token 作为上下文，
+然后评测接下来 5k token 的 next-token PPL 和 wall time。
+没有 query，没有 answerline，也没有显式 gold evidence page。
+```
+
+### 数据与设置
+
+数据：
+
+```text
+data/war_and_peace_pg2600.txt
+```
+
+这是 Project Gutenberg 的 War and Peace 英文长文本。
+
+服务器输出目录：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_20k5k_blockroute_war_20260702
+```
+
+运行设置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+prefill_tokens = 20000
+eval_tokens = 5000
+eval_chunk_size = 1
+dtype = float16
+attn_implementation = eager
+reuse_prefill_cache = true
+protect_sink_tokens = 64
+protect_recent_tokens = 512
+top_fraction = 0.02
+modes = baseline,recent1024,blockroute128
+```
+
+三个方法含义：
+
+| Method | 含义 |
+| --- | --- |
+| baseline | 标准 full attention 前向。20k 历史 token 全部可见。 |
+| recent1024 | 只保留 sink/self/recent window，主要看最近 1024 token。 |
+| blockroute128 | 把历史 KV 按 128 token block 聚合成 block summary；每一步用当前 query state 选择相似 block，再保留 sink、recent 和被召回 block。 |
+
+### 结果
+
+| Method | Loss | PPL | Eval tokens | Eval seconds | Shared prefill seconds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline | 3.2254 | 25.16 | 5000 | 182.55 | 5.40 |
+| recent1024 | 3.3674 | 29.00 | 5000 | 181.29 | 5.40 |
+| blockroute128 | 3.3188 | 27.63 | 5000 | 594.77 | 5.40 |
+
+### 怎么解释
+
+这个结果和前面的 answerline / typed sparse 结果不同。
+
+在普通 LM continuation 里，没有显式问题，也没有显式答案页，所以 `chain_typedhier_role_auto_p1 + answerline_summary + range_sdpa` 不能原封不动使用。那套方法本质上是在做：
+
+```text
+根据 query 找 evidence page -> 压成 answerline/typed record -> 用很短的有效上下文回答。
+```
+
+但 War and Peace 这种普通续写 PPL 是：
+
+```text
+当前位置的下一个 token 可能依赖近处句法、当前段落语义、远处人物/场景状态，
+但没有一个外部 query 告诉 router 应该找哪一页。
+```
+
+所以这里测试的是更朴素的 query-less block routing：
+
+```text
+用当前 token 的 attention query state 去和历史 block summary 匹配，
+动态召回少量历史 block。
+```
+
+结果说明：
+
+```text
+1. recent1024 比 full 差：
+   PPL 25.16 -> 29.00。
+   说明普通长文本续写确实需要一部分远程上下文，不能只靠 recent window。
+
+2. blockroute128 比 recent1024 好：
+   PPL 29.00 -> 27.63。
+   说明动态召回远程 block 有帮助，至少比纯 recent 更能保留长程信息。
+
+3. blockroute128 仍然差于 full：
+   PPL 25.16 -> 27.63。
+   说明当前 block summary/router 还不够准确，召回的远程上下文不能完全替代 full attention。
+
+4. blockroute128 当前速度远慢于 full：
+   182.55s -> 594.77s。
+   这不是因为理论上 routing 必然慢，而是当前 evaluator 的 blockroute 实现仍是 token-by-token Python/gather 路径，
+   并且没有接入 range_sdpa 这类真正高效的稀疏 attention kernel。
+```
+
+### 当前结论
+
+```text
+这条思路可以用于普通长上下文推理，但不能直接照搬 answerline 版本。
+
+对于普通 20k -> 5k continuation，需要发展的是：
+1. query-less / self-query page router；
+2. 层级 page summary，而不是人工 answerline；
+3. sink + recent + routed pages 的混合 KV；
+4. 真正的 range/block sparse attention kernel；
+5. 用普通 LM PPL 和生成速度做主指标。
+```
+
+目前这版 `blockroute128` 的意义是 proof-of-concept：
+
+```text
+它证明“远程页召回”在普通 LM PPL 上比只看 recent 更好，
+但还没有超过 full baseline，也没有速度优势。
+```
+
+因此，面向通用长上下文 memory 的下一步，不应该继续强化手写 answerline，而应该把 typed-anchor 思路改造成：
+
+```text
+文本自然分页/层级摘要
+-> 当前 hidden state 自动检索相关页
+-> 保留 sink/recent/routed pages
+-> 用 range_sdpa 或 block-sparse kernel 真正减少 attention 计算
+-> 在普通长文本 continuation、LongBench、RULER、MMLU-long/noisy context 上同时评测
+```
+
+## 73. 修正实验：把自然分页 TypedHier 方法用于普通 20k -> 5k 长文本续写
+
+上一节的 `blockroute128` 是一个 KV block routing control，不是目标方法。真正要验证的是：
+
+```text
+把 chain_typedhier_role_auto_p1 + answerline_summary 的自然分页/层级路由思想，
+改成普通长文本 continuation 可用的形式。
+```
+
+新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_plain_lm_typedhier_continuation.py
+```
+
+### 方法改法
+
+原始方法适用于 QA / KV retrieval：
+
+```text
+query -> 找 bridge/current evidence page -> 生成 answerline_summary -> option scoring
+```
+
+普通小说续写没有 `query`、没有 `ANSWER_LABEL`、没有显式 evidence page，所以改成：
+
+```text
+1. 对 20k prefill 做自然分页：
+   sentence -> paragraph page -> section。
+
+2. 对每个 5k eval window，用当前位置前面的 recent text 当 self-query。
+
+3. 做 chain_typedhier 风格两级路由：
+   self-query -> top sections -> 每个 section 取 top page；
+   同时保留少量 direct seed pages。
+
+4. 把选中的 page 压回 prompt，再评测 target window 的 next-token PPL。
+```
+
+测试了四类变体：
+
+| Mode | 含义 |
+| --- | --- |
+| recent | 只保留 sink + recent window。 |
+| typedhier_summary | 强结构化 typed summary，包含 `CURRENT_QUERY/ROUTED_PAGE` 等标签。 |
+| typedhier_plain_summary | 同样路由，但只插入自然语言 page 摘要，不放结构化标签。 |
+| typedhier_plain_raw | 同样路由，但插入选中 page 的原文片段。 |
+| typedhier_tail_raw | 在语义路由 page 之外，额外加入 recent window 之前的 remote-tail 自然页。 |
+
+注意：这组实验是 teacher-forced continuation PPL。`full` dense window forward 在 20k+256 下显存 OOM；full baseline 仍参考上一节已经跑完的 token-by-token full result。
+
+### 运行设置
+
+```text
+text = data/war_and_peace_pg2600.txt
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+prefill_tokens = 20000
+eval_tokens = 5000
+eval_window_tokens = 256
+paragraph_min_tokens = 64
+paragraph_max_tokens = 192
+section_max_paragraphs = 8
+section_count = auto
+pages_per_section = 1
+seed_pages = 2
+```
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_typedhier_20k5k_war_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_typedhier_plain_20k5k_war_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_typedhier_plain_recent256_20k5k_war_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_typedhier_tail_recent256_20k5k_war_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_recent384_20k5k_war_20260702
+```
+
+### Recent=1024 结果
+
+| Mode | PPL | Total sec | Avg prompt tokens | Avg selected pages |
+| --- | ---: | ---: | ---: | ---: |
+| recent | 28.70 | 2.30 | 1094 | 0.0 |
+| typedhier_summary | 30.10 | 2.75 | 1489 | 2.2 |
+| typedhier_raw | 30.13 | 2.78 | 1495 | 2.2 |
+| typedhier_plain_summary | 28.92 | 2.20 | 1217 | 2.2 |
+| typedhier_plain_raw | 28.78 | 2.20 | 1229 | 2.2 |
+
+解释：
+
+```text
+1. 强结构化 answerline 风格 summary 对普通小说续写有明显负作用：
+   recent 28.70 -> typedhier_summary 30.10。
+
+2. 去掉 CURRENT_QUERY/ROUTED_PAGE 等标签后，PPL 明显恢复：
+   typedhier_plain_raw = 28.78。
+
+3. 但在 recent=1024 时，plain typedhier 仍没有超过 recent-only：
+   28.78 vs 28.70。
+```
+
+### Recent=256 结果
+
+| Mode | PPL | Total sec | Avg prompt tokens | Avg selected pages |
+| --- | ---: | ---: | ---: | ---: |
+| recent256 | 30.99 | 1.26 | 326 | 0.0 |
+| typedhier_plain_summary | 31.00 | 0.90 | 448 | 2.2 |
+| typedhier_plain_raw | 30.71 | 0.90 | 461 | 2.2 |
+| typedhier_tail_summary | 31.12 | 0.90 | 472 | 3.15 |
+| typedhier_tail_raw | 30.87 | 0.90 | 486 | 3.15 |
+| recent384 | 30.33 | 1.25 | 454 | 0.0 |
+
+解释：
+
+```text
+1. 在 very small recent budget 下，插入 routed raw pages 有一点帮助：
+   recent256 30.99 -> typedhier_plain_raw 30.71。
+
+2. 但和 token budget 接近的 recent384 比，typedhier_plain_raw 仍然更差：
+   recent384 30.33 < typedhier_plain_raw 30.71。
+
+3. 加 remote-tail page 没有进一步改善：
+   typedhier_tail_raw 30.87，差于 typedhier_plain_raw 30.71。
+```
+
+### 样例观察
+
+第一段续写在 Dólokhov / Anatole / Englishman 打赌这一场景里。`typedhier_plain_summary` 选到的 page 是：
+
+```text
+page 314: Pierre 推开 Anatole，Dólokhov 正在向 Englishman 重复赌约。
+page 322: Anatole / Pierre / Dólokhov / bottle / window 的同一场景。
+```
+
+target continuation 是：
+
+```text
+Anatole 转向 Englishman，继续重复 wager 条件。
+Dólokhov 敲 window sill，让大家等待。
+```
+
+所以路由不是完全错的；它确实选到了同一局部场景的远程页。问题是：
+
+```text
+普通 LM continuation 的 next-token PPL 极度依赖局部顺序、句法、原文连续性。
+即使 routed page 语义相关，只要不是紧邻上下文，也很难替代多给一点 recent tokens。
+```
+
+### 当前结论
+
+```text
+修正后的自然分页 typedhier 方法可以运行在普通 20k -> 5k continuation 上，
+但当前版本没有超过 full baseline，也没有超过 budget-matched recent baseline。
+
+它的有效信号是：
+1. typedhier 路由能找到语义相关的同场景 page；
+2. 在 recent 很小的时候，raw routed page 能略微降低 PPL；
+3. 强结构化 answerline_summary 不适合直接插入普通 LM 续写 prompt。
+
+它的失败点是：
+1. 普通续写主要吃局部连续性，recent token 比远程摘要更值钱；
+2. answerline/typed labels 会污染普通文本分布；
+3. 当前方法是 prompt-level memory，不是真正 KV-level memory；
+4. full dense baseline 的 PPL 仍明显更低：
+   token-by-token full baseline PPL = 25.16；
+   recent1024 / typedhier_plain_raw 约 28.70 / 28.78。
+```
+
+下一步如果继续往“通用长上下文 memory”发展，应该改成：
+
+```text
+1. 不把 summary 文本插回 prompt，而是做 KV/page-level memory；
+2. structural anchor 主要保留相邻自然页和当前 section；
+3. semantic anchor 只在出现实体回指、主题跳转、多段落依赖时启用；
+4. 用 learned router 判断什么时候需要 remote page，什么时候只用 recent；
+5. PPL 评测必须和 full/recent 做 token-budget matched 对比。
+```
+
+## 74. Hier-KV Book V1：把 K/V cache 组织成自然多级书本结构
+
+这一节实现真正的 KV-level hierarchical memory，不再把 summary 文本插回 prompt。
+
+新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_hier_kv_book_v1_ppl.py
+```
+
+### 方法
+
+`hier_kv_book_v1` 的核心是：
+
+```text
+1. prefill 仍然正常 full attention，得到完整 KV cache。
+
+2. 同时把 20k prefix 按自然结构组织成书本：
+   token -> sentence -> paragraph page -> section。
+
+3. 每个 paragraph page / section 对应原始 token range，
+   不生成新的文本 summary。
+
+4. 对每层每头，用该 range 内的 K 向量 mean pooling 作为 page/section key summary：
+   page_summary[layer, head, page] = mean(K[layer, head, page_start:page_end])
+   section_summary[layer, head, section] = mean(K[layer, head, section_start:section_end])
+
+5. decode 每个 token 时，用当前 q 向量做两级路由：
+   q -> top section；
+   q -> selected section 内 top page；
+   另外保留少量 direct seed page。
+
+6. attention 只看：
+   sink KV + recent KV + routed natural page KV + self KV。
+```
+
+这和上一节 prompt-level typedhier 的根本区别：
+
+```text
+prompt-level typedhier:
+  选中文本页 -> 把文本/summary 拼回 prompt。
+
+hier_kv_book_v1:
+  选中 KV range -> attention 直接加载原始 K/V。
+```
+
+### 运行设置
+
+数据：
+
+```text
+data/war_and_peace_pg2600.txt
+```
+
+模型：
+
+```text
+/home/fdong/hrj/prove/Qwen3-0.6B
+```
+
+主实验：
+
+```text
+prefill_tokens = 20000
+eval_tokens = 5000
+eval_chunk_size = 1
+sink_tokens = 64
+recent_tokens = 512
+top_sections = 1
+pages_per_section = 1
+seed_pages = 1
+tail_pages = 0
+route_refresh_tokens = 16
+paragraph_min_tokens = 64
+paragraph_max_tokens = 192
+section_max_paragraphs = 8
+```
+
+自然页统计：
+
+```text
+paragraph pages = 327
+sections = 41
+mean paragraph tokens = 61.16
+```
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/hier_kv_book_v1_20k5k_war_r512_20260702
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/plain_lm_recent512_640_war_20260702
+```
+
+### 结果
+
+| Method | PPL | Eval sec | Approx kept tokens | 说明 |
+| --- | ---: | ---: | ---: | --- |
+| full baseline | 25.16 | 182.55 | 20000+ | dense full attention，来自第 72 节 |
+| recent512 | 30.57 | 180.32 | 64 + 512 | 原 evaluator recent512 |
+| recent640 | 29.82 | 179.90 | 64 + 640 | budget-matched recent baseline |
+| recent1024 | 29.00 | 181.29 | 64 + 1024 | 更大 recent baseline，来自第 72 节 |
+| bookkv r512 | 29.26 | 1173.71 | 64 + 512 + 84.6 | KV-level natural page routing |
+
+`bookkv r512` 的平均选择量：
+
+```text
+avg_selected_pages = 1.45
+avg_selected_page_tokens = 84.56
+```
+
+所以它的实际 token budget 大约是：
+
+```text
+sink 64 + recent 512 + routed page 85 = 661 tokens
+```
+
+因此最公平的质量对比是 `recent640`：
+
+```text
+recent640 PPL = 29.82
+bookkv r512 PPL = 29.26
+```
+
+### 解释
+
+这组结果第一次验证了用户想要的方向：
+
+```text
+把 K/V cache 按自然书本结构组织起来，
+然后按当前 q 向量加载相关 page KV，
+在普通 20k -> 5k continuation 上可以降低 PPL。
+```
+
+和 prompt-level summary 相比，`bookkv` 没有污染文本分布：
+
+```text
+prompt-level typedhier_plain_raw recent512/1024 没有超过 recent；
+KV-level bookkv 在 budget 接近时超过 recent640。
+```
+
+这说明关键不是“把远程内容总结成文本给模型读”，而是：
+
+```text
+让 attention 直接访问被组织好的原始 KV range。
+```
+
+### 当前问题
+
+速度非常慢：
+
+```text
+recent512 = 180.32s
+bookkv r512 = 1173.71s
+```
+
+慢的原因不是方法理论上慢，而是当前 V1 是 Python 原型：
+
+```text
+1. 每层每头都有 Python loop。
+2. page/section scoring 在 attention forward 内逐 token 做。
+3. 虽然 route_refresh_tokens=16，但仍然每步计算 page_scores。
+4. final attention 用 gather 路径，没有 fused range/block sparse kernel。
+```
+
+### 当前结论
+
+```text
+Hier-KV Book V1 质量上成立：
+  PPL 比 budget-matched recent 更低。
+
+但工程速度还不成立：
+  当前 Python 原型比 dense/recent 慢很多。
+```
+
+下一步应该优化成真正可用的通用 memory：
+
+```text
+1. 把 page/section summaries 在 prefill 后一次性构建好，并保持 GPU tensor layout。
+2. route_refresh 真正复用 selected page ids，避免每 token 重算 page_scores。
+3. 把 selected page ranges 传给 range_sdpa / block-sparse kernel。
+4. 加 layer/head 共享路由：先按 layer 或 head group 选 page，再广播到 head。
+5. 做更多文本和任务：
+   - War and Peace
+   - Monte Cristo
+   - topic_texts
+   - LongBench / RULER / long QA
+6. 比较：
+   - full
+   - recent512/640/1024
+   - fixed blockroute
+   - lexical page routing
+   - hier_kv_book_v1
+```
+
+## 75. Task-Aware KV Memory Mixture V0：任务感知 KV 检索策略混合
+
+这一节是沿着“不同任务触发不同 KV retrieval 策略”的思路做的第一版可测原型。核心目标不是直接证明最终速度，而是先验证一个问题：
+
+```text
+同一个长上下文系统里，是否应该让日常对话、长程事实查询、多跳检索、全局汇总、比较排序分别走不同的 memory expert？
+```
+
+### 方法
+
+新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_task_aware_kv_mixture_v0.py
+```
+
+服务器脚本位置：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_task_aware_kv_mixture_v0.py
+```
+
+V0 里实现了 5 个 expert：
+
+| Expert | 含义 | 适合任务 |
+| --- | --- | --- |
+| recent_local | 只看最近几页，并保留轻量 recent answer parsing | 日常对话、局部上下文延续 |
+| semantic_route | 用 query 和 page 的关键词/实体相似度召回页面 | 普通语义检索 |
+| typed_role | 识别 current/old/status/role，再读对应 typed page | 当前状态、版本冲突 |
+| chain_typed | 先找 bridge，再根据 bridge 找目标 page，并解析最终答案 | 多跳检索、比较、结构化事实 |
+| hierarchical_summary | 对 current pages 做结构化聚合摘要 | 主题统计、全局汇总 |
+
+规则 router V0：
+
+```text
+casual_recent -> recent_local
+highest current priority score -> chain_typed
+artifact / bridge -> chain_typed
+appears most often / across current reports -> hierarchical_summary
+current / active / latest / old / former / superseded -> typed_role
+其他 -> semantic_route
+```
+
+一个关键实现点是：expert 不只是召回 page，还会把 evidence 解析成更直接的 typed summary，例如：
+
+```text
+current_badge_color=green
+bridge_artifact=ART-42
+current_action=archive proposal
+theme_counts=latency:3,safety:1
+dominant_theme=latency
+scores=Ibis:91,Lyra:84
+highest_project=Ibis
+```
+
+实验中还验证了一个提示位置问题：如果把 `resolved answer value` 放在 query 之前太近的位置，小模型会更倾向于直接生成答案值，而不是生成选项字母，导致 label PPL 爆炸。因此当前稳定写法是把 resolved value 放在前置 memory summary 中，最后仍然保留原始 query 的 `Answer with the option letter only`。
+
+### 实验配置
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+variants = casual_recent, temporal_fact, multihop_bridge, summary_theme, compare_score
+tasks_per_variant = 6
+distractor_pages = 32
+max_route_pages = 6
+recent_pages = 2
+dtype = float16
+attn_implementation = eager
+```
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/task_aware_kv_mixture_v0_resolved3_5x6_20260702
+```
+
+### 总体结果
+
+| Mode | Acc | Query PPL | Eval sec | Visible tokens | Evidence hit |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| oracle_best_expert | 96.7% | 1.72 | 0.173 | 225.8 | 93.3% |
+| task_aware_rule_router_v0 | 96.7% | 1.86 | 0.189 | 254.7 | 100.0% |
+| static_chain_typed | 93.3% | 2.00 | 0.173 | 244.7 | 80.0% |
+| static_typed_role | 93.3% | 2.00 | 0.173 | 244.7 | 80.0% |
+| static_hierarchical_summary | 73.3% | 4.06 | 0.173 | 209.3 | 80.0% |
+| static_semantic_route | 60.0% | 10.66 | 0.175 | 335.7 | 90.0% |
+| static_recent_local | 56.7% | 17.10 | 0.188 | 173.9 | 40.0% |
+
+结论：规则 router V0 已经达到 oracle 上限，并且比任意单一固定 expert 更好。这里的 oracle 是在同一组 expert 里按样例选择最佳 expert，所以 V0 的结果说明：至少在这组任务上，简单任务类型感知已经足够把 expert 选到接近上限。
+
+### 分任务结果
+
+| Variant | Router expert | Router acc | Router PPL | 主要观察 |
+| --- | --- | ---: | ---: | --- |
+| casual_recent | recent_local | 100.0% | 2.46 | recent + 轻量解析足够，不需要远程检索 |
+| temporal_fact | typed_role | 100.0% | 1.40 | current/old role 信息很关键 |
+| multihop_bridge | chain_typed | 83.3% | 2.48 | 需要 bridge page 到 artifact page 的两跳检索 |
+| summary_theme | hierarchical_summary | 100.0% | 1.29 | 层级聚合摘要最适合统计型任务 |
+| compare_score | chain_typed | 100.0% | 2.02 | 比较题需要先解析 scores，再给出 highest_project |
+
+唯一明显短板是 `multihop_bridge` 还有 1/6 样例失败。这个失败不是 router 选错，而是 expert 内部虽然 evidence hit 为 1，但 Qwen3-0.6B 仍然没有稳定把解析出的 action 映射到正确选项字母。后续可以从两条路优化：
+
+```text
+1. 让 typed expert 输出更规范的 answer slot，例如 answer_value=archive proposal。
+2. 对选择题做 symbolic value-to-option mapping，避免小模型在“答案值”和“选项字母”之间摇摆。
+```
+
+### 当前结论
+
+这一版支持用户提出的 mixture 方向：
+
+```text
+日常对话不需要重检索，sink + recent / recent_local 足够。
+长程事实、版本冲突、多跳检索、全局汇总需要触发不同的 typed / chain / hierarchical memory expert。
+好的 KV memory 系统不应该只有一个固定稀疏策略，而应该先判断任务类型，再选择对应的 KV retrieval 策略。
+```
+
+但是 V0 仍然是 prompt-level / synthetic task 原型，还没有解决真正 KV-level 高速执行问题。下一步应该把这个 router 接到 KV-level memory：
+
+```text
+1. task classifier 输出 expert id 和预算，例如 recent_only / typed_page / chain_page / hierarchical_page。
+2. expert 输出 page ids 或 KV ranges，而不是输出 prompt 文本。
+3. range_sdpa 或 block-sparse kernel 只加载对应 KV ranges。
+4. 在真实长文本 continuation、LongBench、RULER、MMLU-long 等任务上测 PPL、acc、prefill/decode 时间。
+```
+
+运行设置：
+
+```text
+task_variant = chain_story_conflict
+context_tokens = 10000,20000,39000
+tasks_per_length = 4
+suite_layouts = e05_d90,e20_d80
+modes = full,sink_recent
+typed_record_mode = none
+answer_score_format = gated_sentence
+sparse_attention_impl = range_sdpa
+```
+
+注意：这里的 `full` 是纯 full-context baseline，没有插入 `answerline_summary`。因此它回答的是“直接 full forward / full context scoring 在同一任务上的表现”，不是 `full + typed summary`。
+
+### Baseline 结果
+
+| Context | Mode | PPL | Accuracy | Cal acc | Decoy hit | Eval sec | Kept fraction |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10k | full | 19.62 | 37.5% | 25.0% | 100% | 2.77 | 100.00% |
+| 10k | sink_recent | 163.34 | 37.5% | 12.5% | 0% | 2.25 | 5.74% |
+| 20k | full | 19.20 | 37.5% | 12.5% | 100% | 3.60 | 100.00% |
+| 20k | sink_recent | 166.81 | 37.5% | 37.5% | 0% | 2.29 | 2.88% |
+| 39k | full | 19.96 | 25.0% | 12.5% | 100% | 4.94 | 100.00% |
+| 39k | sink_recent | 174.19 | 25.0% | 12.5% | 0% | 2.31 | 1.48% |
+
+### 和当前最佳方法对比
+
+当前最佳 clean route：
+
+```text
+mode = chain_typedhier_role_auto_p1
+typed_record_format = answerline_summary
+typed_summary_source_mode = chain_typedhier_auto_p1
+sparse_attention_impl = range_sdpa
+```
+
+| Context | Full PPL | Best clean PPL | Full cal acc | Best clean cal acc | Full decoy hit | Best clean decoy hit |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 10k | 19.62 | 18.44 | 25.0% | 100% | 100% | 0% |
+| 20k | 19.20 | 18.16 | 12.5% | 100% | 100% | 0% |
+| 39k | 19.96 | 13.09 | 12.5% | 100% | 100% | 0% |
+
+在这组 `chain_story_conflict` 任务上，当前 best clean route 同时超过纯 `full` baseline 的 PPL 和下游准确率。原因不是 full context 没有看到证据，而是 full context 同时保留了 later conflict/decoy page，模型容易被干扰；typed route 只把 clean evidence page 暴露给 raw attention，并用 answerline summary 标记 current / non_current。
+
+速度对比需要分两种口径：
+
+| Context | Full eval sec | Best clean eval sec | Best clean skip-score eval sec |
+| ---: | ---: | ---: | ---: |
+| 10k | 2.77 | 5.27 | 4.32 |
+| 20k | 3.60 | 5.15 | 4.35 |
+| 39k | 4.94 | 5.66 | 4.40 |
+
+解释：
+
+```text
+1. 按当前 evaluator 的 eval seconds，best clean route 在 10k/20k 还没有超过 full baseline。
+2. 在 production-like skip-score 设置下，39k 上 best clean route 已经比 full baseline 快一些：
+   4.40s vs 4.94s。
+3. 但这仍然不是最终端到端 serving 速度，因为 evaluator 仍然先构建 full-context KV cache。
+4. 因此当前可以说：质量上超过 pure full baseline；速度上只有 39k query-path/skip-score 口径超过 full，尚未证明端到端超过 full dense serving。
+```
+
+## 66. 不同主题下的 Full Baseline PPL
+
+这组实验补充不同主题/文本上的普通 full baseline PPL，用来判断不同数据本身的语言建模难度。这里还没有套 typed-answerline 方法，因为 typed-answerline 需要可抽取的 page role / current status；普通小说或 topic 文本没有这种结构标签。
+
+输出目录：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/topic_ppl_full_baseline_20260701
+```
+
+运行设置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+prefill_tokens = 2048
+eval_tokens = 256
+mode = baseline
+dtype = float16
+attention = eager
+```
+
+| Dataset | Full baseline PPL | Loss | Eval seconds | Shared prefill seconds |
+| --- | ---: | ---: | ---: | ---: |
+| hard_topic_eval_v2 | 4.6147 | 1.5293 | 8.363 | 9.254 |
+| hard_topic_eval_v3 | 4.4129 | 1.4845 | 8.238 | 9.131 |
+| hard_topic_eval_v4 | 4.1257 | 1.4172 | 8.235 | 9.084 |
+| topic_stress_eval | 2.5155 | 0.9225 | 8.298 | 9.176 |
+| War and Peace | 34.2606 | 3.5340 | 8.216 | 9.124 |
+| Count of Monte Cristo | 32.1917 | 3.4717 | 8.168 | 9.044 |
+
+解释：
+
+```text
+1. topic_stress / hard_topic 的 PPL 明显低于小说文本，说明这些 synthetic/topic 文本更规整。
+2. War / Monte 的 PPL 高很多，主要反映公开小说文本本身更开放、长尾词更多。
+3. 这张表只回答“不同主题普通 full baseline 的 PPL 难度”，不说明 typed-answerline 在这些普通文本上有效。
+4. 要让 typed-answerline 用在普通文本，需要先有 page role / current-vs-non_current 标注或可学习的 summarizer/router。
+```
+
+## 67. 通用下游任务 Typed-Answerline Adapter
+
+为了测试 typed-answerline 思路能否迁移到更通用的 key-value / needle / table 类下游任务，新增了一个轻量 adapter：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_typed_answerline_downstream_suite.py
+```
+
+服务器输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/typed_answerline_downstream_general_v2_total_time
+```
+
+运行设置：
+
+```text
+variants = structured_noisy,compact_kv,natural_kv,json_kv,needle_sentence,topic_table
+tasks_per_variant = 8
+records_per_task = 16
+baseline = full context + normal A/B/C/D option scoring
+typed adapter = exact key route -> answerline_summary -> A/B/C/D option scoring
+```
+
+这个 adapter 做的是 current method 的通用化近似：
+
+```text
+1. 从 query 中拿到 target key。
+2. 在 page/line 中找到包含 target key 的 evidence line。
+3. 抽取 ANSWER_LABEL / class / option。
+4. 构造短 answerline:
+   ANSWER_LABEL=X; status=current.
+   Lookup key ... maps to option X.
+5. 用 answerline prompt 做下游 option scoring。
+```
+
+注意：这不是完整 `chain_typedhier_role_auto_p1 + range_sdpa` 系统。它是 typed-answerline 机制的通用下游 adapter，用来验证“把 evidence 压成 typed answerline”是否能改善下游准确率。
+
+### 结果
+
+| Variant | Full acc | Typed-answerline acc | Full total sec | Typed total sec | Full visible tokens | Typed visible tokens |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| compact_kv | 87.5% | 100% | 0.879 | 2.710 | 253.4 | 78.0 |
+| json_kv | 37.5% | 100% | 1.103 | 3.540 | 591.1 | 104.6 |
+| natural_kv | 87.5% | 100% | 1.127 | 3.212 | 412.4 | 93.9 |
+| needle_sentence | 25.0% | 100% | 1.067 | 3.891 | 800.8 | 115.4 |
+| structured_noisy | 75.0% | 100% | 1.584 | 4.632 | 924.5 | 136.0 |
+| topic_table | 87.5% | 100% | 1.099 | 3.623 | 637.9 | 107.1 |
+
+解释：
+
+```text
+1. 质量上，typed-answerline adapter 在这 6 个通用下游格式上都达到 100%。
+2. 它明显减少了 visible tokens，通常从 250-925 tokens 降到 78-136 tokens。
+3. 当前 Python 实现的 total seconds 仍然慢于 full baseline。
+4. 慢的原因不是 token 数更多，而是 adapter 现在逐 token 跑短 prompt 和 option scoring，没有做批量 prefill、没有 fused sparse serving。
+5. 因此当前结论是：typed-answerline 的下游质量信号很好，但通用 adapter 的系统速度还没有超过普通 full baseline。
+```
+
+下一步如果要做真正公平的速度实验，需要：
+
+```text
+1. 把 answerline prompt 用批量 prefill 或一次 forward 跑掉，而不是 Python token loop。
+2. 把 key route / answerline summary 接入 range_sdpa 或真正 page-table attention。
+3. 在更长 records_per_task 和更大 context 上重复，因为 context 越长，full baseline 的 prefill 成本才会真正变大。
+4. 加入非 exact-key 的语义任务，测试 learned router / small summarizer 是否还能稳定构造正确 answerline。
+```
+
+## 68. Vertical Memory V1 下游实验
+
+这组实验是把“用结构 token / 标点 / 行列格式形成垂直分页，再按 query 路由相关页”的第一版做成可运行 smoke test。代码路径：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_vertical_memory_v1_downstream.py
+```
+
+### 方法
+
+Vertical Memory V1 做了一个纯规则版的层级索引，不使用额外训练模型：
+
+```text
+1. 先用换行、空行、表格分隔符、key/id/class/answer_label 等结构标记切成 page。
+2. 每个 page 抽取：
+   - structural signals: |, :, =, =>, JSON braces, list marker
+   - semantic signals: key/id/entity/capitalized span
+   - keyword signals: 去掉停用词后的词项
+   - status signals: current/latest/valid vs old/deprecated/withdrawn
+   - answer label: ANSWER_LABEL / answer_label / class / option / =>
+3. query 侧同样抽取 target key、entity、keyword。
+4. page scoring:
+   - target key exact hit 是最强信号
+   - entity overlap 和 keyword BM25-like 分数作为补充
+   - current status 加分，non_current status 扣分
+   - structural score 只做小权重 tie-break
+5. 选 top page，把它压成短 typed vertical memory summary，再做 A/B/C/D option scoring。
+```
+
+这版的重点不是速度优化，而是验证“垂直结构分页 + page routing”能不能稳定找回有用页，并把 full context 里的干扰页挡掉。
+
+### 服务器输出
+
+最终 compact p1 结果：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_downstream_p1_compact_20260701
+```
+
+中间也跑过 p2 版本：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_downstream_smoke_20260701
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_downstream_p1_20260701
+```
+
+### Compact P1 结果
+
+运行设置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+variants = structured_noisy,compact_kv,natural_kv,json_kv,needle_sentence,topic_table
+tasks_per_variant = 8
+records_per_task = 16
+baseline = full context + A/B/C/D option scoring
+exact_answerline_adapter = exact key line route -> answerline summary
+vertical_memory_v1 = rule-based vertical page route -> typed vertical memory summary
+max_pages = 1
+```
+
+| Variant | Full acc | Exact answerline acc | Vertical V1 acc | Full total sec | Vertical V1 total sec | Full visible tokens | Vertical V1 visible tokens | V1 evidence hit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| compact_kv | 75.0% | 100% | 100% | 0.850 | 3.596 | 252.3 | 106.5 | 100% |
+| json_kv | 75.0% | 100% | 100% | 1.077 | 4.366 | 592.6 | 130.4 | 100% |
+| natural_kv | 62.5% | 100% | 100% | 1.109 | 4.099 | 412.8 | 121.9 | 100% |
+| needle_sentence | 25.0% | 100% | 100% | 1.058 | 4.867 | 802.4 | 145.8 | 100% |
+| structured_noisy | 75.0% | 100% | 100% | 1.532 | 5.438 | 922.1 | 163.6 | 100% |
+| topic_table | 87.5% | 100% | 100% | 1.078 | 4.503 | 640.9 | 134.8 | 100% |
+
+### 解释
+
+这组结果说明第一版 page routing 的质量信号是成立的：
+
+```text
+1. Vertical V1 在 6 个格式上都能 100% 召回目标 evidence page。
+2. 只暴露 top1 page 后，下游 accuracy 也都到 100%。
+3. visible tokens 明显少于 full baseline：
+   - structured_noisy: 922.1 -> 163.6
+   - needle_sentence: 802.4 -> 145.8
+   - topic_table: 640.9 -> 134.8
+4. full baseline 在这些任务上会被大量干扰记录影响，尤其 needle_sentence 只有 25%。
+5. exact_answerline_adapter 仍然更短、更接近 oracle，因为它直接按 key 找 evidence line；Vertical V1 多了一层 page extraction / page scoring，更接近可扩展 memory routing。
+```
+
+速度上，当前 Vertical V1 还没有超过 full baseline：
+
+```text
+1. 当前脚本为了公平记录 total time，用 Python token loop 跑短 prompt 和 option scoring。
+2. 这个实现没有 batching，也没有 fused prefill，所以短 prompt 虽然 token 少，但 wall time 仍然慢。
+3. 因此这次只能证明 retrieval/quality 方向，不能证明 serving speed。
+4. 真正要比速度，需要把 page summary prompt 改成 batch prefill，或者接到 range_sdpa/page-table attention 里。
+```
+
+### 为什么 p1 比 p2 好
+
+中间跑过 `max_pages=2`：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_downstream_smoke_20260701
+```
+
+p2 版本在多数格式上也是 100%，但 `needle_sentence` 只有 62.5%。检查失败样本后发现：
+
+```text
+1. evidence_hit 仍然是 100%，说明正确页已经被召回。
+2. typed_record_label 也是正确的，说明 label 抽取没错。
+3. 失败来自第二个 routed page 仍然包含别的 option label，模型 option scoring 时被干扰。
+```
+
+所以这类 KV/needle 查询更适合 `top1 page`，也就是“召回最相关页并隔离其它页”。这和 page routing 的目标一致：不是把更多页塞给模型，而是让 retrieval 精确到足够小的 page。
+
+### 当前结论
+
+第一版效果可以总结为：
+
+```text
+Vertical Memory V1 = 规则垂直分页 + entity/key/keyword/status page routing + typed summary。
+
+它已经能在结构化 KV、自然语言 KV、JSON、needle sentence、table、noisy structured 这 6 类下游任务上稳定召回目标页，并把 full context 的干扰挡掉。
+
+目前它还不是通用长文本 memory 的最终形态，因为：
+1. query 里有明确 key 时效果最好；
+2. 普通语义查询还需要更强的 semantic page summary / learned router；
+3. 速度实现还没有工程优化。
+
+但作为第一版，它支持继续往“typed-anchor page routing / vertical memory”方向发展。
+```
+
+## 69. Vertical Memory V1 非 KV 语义任务和 PPL
+
+这组实验补充测试 Vertical Memory V1 是否只适合 KV retrieval。新增脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_vertical_memory_v1_semantic_suite.py
+```
+
+和 Section 68 不同，这里不在上下文里写 `ANSWER_LABEL=X`，也不使用 exact key。上下文页只包含自然语言事实、属性、主题和因果结论；query 给 A/B/C/D 选项，模型需要根据召回的 evidence page 自己选择答案。
+
+### 任务设置
+
+```text
+topic_page:
+  根据某个 Project 的 current briefing 判断主题领域。
+
+attribute_page:
+  根据 current profile 判断 active badge color，同时有 old profile 干扰。
+
+causal_page:
+  根据 current decision memo 判断团队应该采取的行动。
+```
+
+路由方式：
+
+```text
+1. 按自然段切 page，不再用 KV 行切分。
+2. query 侧抽 entity / keyword。
+3. page 侧抽 entity / keyword / current-vs-old status。
+4. 按 entity overlap + keyword score + current status 选 top page。
+5. prompt 只暴露 routed page，不直接写答案 label。
+```
+
+PPL 口径：
+
+```text
+gold_label_ppl = 在 query 后，对正确选项字母 A/B/C/D 的 next-token PPL。
+
+注意它不是全文语言建模 PPL，而是“模型在当前上下文下给正确选项 label 的困惑度”。
+```
+
+### 服务器输出
+
+top1 page：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_semantic_nonkv_v2_20260702
+```
+
+top2 page 对照：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/vertical_memory_v1_semantic_nonkv_p2_20260702
+```
+
+运行设置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+tasks_per_variant = 10
+distractor_pages = 18
+attention = eager
+dtype = float16
+baseline = full context + option scoring
+vertical_memory_v1 = paragraph page route + option scoring
+```
+
+### Top1 Page 结果
+
+| Variant | Full acc | V1 acc | Full gold-label PPL | V1 gold-label PPL | Full tokens | V1 tokens | V1 evidence hit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| topic_page | 40.0% | 100% | 5.45 | 4.94 | 1035.5 | 112.9 | 100% |
+| attribute_page | 90.0% | 70.0% | 1.99 | 4.25 | 1050.0 | 100.4 | 100% |
+| causal_page | 50.0% | 80.0% | 7.63 | 10.69 | 1035.1 | 123.8 | 100% |
+
+### Top2 Page 对照
+
+| Variant | Full acc | V1 top2 acc | Full gold-label PPL | V1 top2 gold-label PPL | Full tokens | V1 top2 tokens | V1 evidence hit |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| topic_page | 40.0% | 70.0% | 5.45 | 6.31 | 1035.5 | 181.7 | 100% |
+| attribute_page | 90.0% | 80.0% | 1.99 | 4.76 | 1050.0 | 160.1 | 100% |
+| causal_page | 50.0% | 60.0% | 7.63 | 11.01 | 1035.1 | 192.8 | 100% |
+
+### 解释
+
+这组结果比 KV 任务更复杂：
+
+```text
+1. Retrieval 本身是成功的：top1/top2 的 evidence_hit 都是 100%。
+2. topic_page 上，Vertical V1 明显优于 full：
+   40% -> 100%，PPL 5.45 -> 4.94。
+   说明 full context 被大量其它 project/topic 页干扰，而 top1 page routing 把噪声挡掉了。
+3. causal_page 上，Vertical V1 accuracy 提升：
+   50% -> 80%。
+   但 gold-label PPL 变差：
+   7.63 -> 10.69。
+   这说明 option ranking 变好了，但模型对正确 label 的绝对概率不一定更高；当前 PPL 口径和 accuracy 不完全等价。
+4. attribute_page 上，Vertical V1 低于 full：
+   90% -> 70%，PPL 1.99 -> 4.25。
+   虽然正确 page 被召回，但仅暴露一个短 page 后，模型对颜色选项的 label prior / prompt 格式更不稳定；full context 在这个简单属性任务上反而足够强。
+5. top2 page 不如 top1 page 稳定：
+   topic 100% -> 70%，causal 80% -> 60%。
+   多召回一页会重新引入干扰，这和 KV 实验里的 p2 needle 失败一致。
+```
+
+### 当前结论
+
+```text
+Vertical Memory V1 不是只适合 KV retrieval。
+
+在非 KV 的主题判断和因果决策任务上，它也能通过 page routing 提升 accuracy，并显著减少 visible tokens。
+
+但它还不是通用 memory：
+1. 简单属性问答上可能输给 full baseline。
+2. PPL 不稳定，尤其 gold-label PPL 不一定跟 accuracy 同向。
+3. top2 page 经常比 top1 更差，说明 page routing 的核心不是“召回更多”，而是“召回更准”。
+4. 下一步需要 learned semantic summary / learned router，而不是只靠规则 entity/keyword/status。
+```
+
+## 76. Risk-Calibrated KV Memory Planner V1：从单选 Router 升级到 Memory Plan
+
+这一节回应新的项目定位建议：不要把方法写成“task-aware router 选择一个 KV strategy”，而应升级成：
+
+```text
+Memory Planning, not Memory Routing.
+```
+
+我的判断是：这个建议基本正确。单纯的 `strategy_id = semantic_route / typed_role / chain_typed` 很容易被 reviewer 认为只是 DynamicKV / Adaptive-RAG / Self-RAG 思路的组合。更强的方向应该是：
+
+```text
+query -> memory_need_vector -> composable memory plan -> progressive execution -> risk-calibrated fallback
+```
+
+其中 planner 不是只做一次分类，而是输出可解释的 memory need：
+
+```text
+locality_need
+semantic_need
+hop_depth
+temporal_conflict_need
+aggregation_scope
+risk_level
+```
+
+再选择 plan，例如：
+
+```text
+casual_recent:
+  recent_local -> full_context
+
+temporal_fact:
+  hierarchical_summary -> typed_role -> semantic_route -> full_context
+
+multihop_bridge:
+  chain_typed -> semantic_chain -> full_context
+
+summary_theme:
+  hierarchical_summary -> semantic_route -> full_context
+
+compare_score:
+  chain_typed -> hierarchical_summary -> full_context
+```
+
+### 新增脚本
+
+本地脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_risk_calibrated_memory_planner_v1.py
+```
+
+服务器脚本：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_risk_calibrated_memory_planner_v1.py
+```
+
+主要输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/risk_calibrated_memory_planner_v1_needaware_5x6_20260702
+```
+
+### V1 相对 V0 的变化
+
+V0 是单选 router：
+
+```text
+task -> one strategy
+```
+
+V1 是 planner：
+
+```text
+task -> need vector -> ordered plan -> stage acceptance / fallback
+```
+
+新增 expert：
+
+| Expert | 含义 |
+| --- | --- |
+| full_context | prompt-level full fallback，对应未来 KV-level dense/full fallback |
+| recent_typed | recent_local + typed_role 的组合 expert |
+| semantic_chain | semantic_route + chain_typed 的组合 expert |
+| hier_chain | hierarchical_summary + chain_typed 的组合 expert |
+
+新增机制：
+
+```text
+1. label confidence margin：
+   用 option logprob margin 判断是否接受当前 stage。
+
+2. risk-aware threshold：
+   risk_level 越高，接受阈值越高。
+
+3. mismatch penalty：
+   如果 long-range need 很强，但当前 stage 只是 recent_local，则提高接受阈值。
+
+4. symbolic value-to-option resolver：
+   如果 expert 已经解析出 routed_answer_value，
+   并且它能和某个选项文本精确匹配，
+   就直接映射成 A/B/C/D。
+```
+
+第 4 点很关键。实验中发现，小模型经常已经拿到了正确 answer value，但最后不稳定输出选项字母。对选择题而言，value-to-option mapping 不需要看 gold label，只需要看 query 中的候选项，所以这是合法的 post-retrieval assembly。
+
+### 实验设置
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+variants = casual_recent, temporal_fact, multihop_bridge, summary_theme, compare_score
+tasks_per_variant = 6
+distractor_pages = 32
+max_route_pages = 6
+recent_pages = 2
+dtype = float16
+attn_implementation = eager
+```
+
+### 总体结果
+
+| Mode | Acc | Query PPL | Eval sec | Visible tokens |
+| --- | ---: | ---: | ---: | ---: |
+| oracle_best_expert | 100.0% | 1.819 | 0.191 | 282.9 |
+| oracle_min_cost_correct | 100.0% | 3.663 | 0.171 | 162.1 |
+| risk_calibrated_planner_v1 | 100.0% | 1.951 | 0.188 | 242.1 |
+| task_aware_rule_router_v0 | 100.0% | 2.014 | 0.188 | 255.3 |
+| static_chain_typed | 96.7% | 1.993 | 0.172 | 244.9 |
+| static_hierarchical_summary | 83.3% | 4.165 | 0.172 | 209.6 |
+| static_semantic_route | 50.0% | 9.938 | 0.173 | 336.8 |
+| static_recent_local | 53.3% | 19.217 | 0.187 | 170.1 |
+| static_full_context | 50.0% | 11.035 | 0.272 | 1729.1 |
+
+解释：
+
+```text
+1. V1 planner 达到 100% accuracy，与 oracle_best_expert 一样。
+2. V1 PPL = 1.951，略好于 V0 rule router 的 2.014。
+3. V1 visible tokens = 242.1，略少于 V0 rule router 的 255.3。
+4. V1 明显优于任何单一弱 expert，例如 recent_local / semantic_route / hierarchical_summary。
+5. full_context prompt fallback 并不强，只有 50% accuracy；
+   这说明未来真正的 fallback 应该是 KV-level full/dense fallback，而不是把全上下文文本塞回 prompt。
+```
+
+### 分任务结果
+
+| Variant | Planner plan first stage | Planner acc | Planner PPL | Planner tokens | 对比 |
+| --- | --- | ---: | ---: | ---: | --- |
+| casual_recent | recent_local | 100.0% | 3.875 | 186.3 | 与 V0 相同 |
+| temporal_fact | hierarchical_summary | 100.0% | 1.753 | 109.2 | 优于 V0 typed_role PPL 2.055 / tokens 175.0 |
+| multihop_bridge | chain_typed | 100.0% | 1.890 | 316.7 | 与 V0 相同 |
+| summary_theme | hierarchical_summary | 100.0% | 1.206 | 249.2 | 与 oracle 相同 |
+| compare_score | chain_typed | 100.0% | 1.824 | 349.2 | 与 V0 相同，接近 oracle PPL 1.785 |
+
+### 重要观察
+
+第一版 naive progressive planner 先试 cheap path，再逐步 fallback，结果 accuracy 是 100%，但 token cost 明显偏高：
+
+```text
+planner tokens = 448.9
+V0 router tokens = 255.3
+```
+
+原因是 temporal/multihop 先试了不合适的 cheap path，虽然最后答对了，但多做了一步。修正后的 need-aware plan 把第一阶段改成“cheap-enough and type-matched expert”，结果：
+
+```text
+planner tokens = 242.1
+V0 router tokens = 255.3
+```
+
+这说明 planner 的关键不是永远 cheapest-first，而是：
+
+```text
+在当前 need vector 下，先选最便宜但类型匹配的 expert。
+```
+
+### 当前结论
+
+这个结果支持把项目升级成：
+
+```text
+Risk-Calibrated KV Memory Planner
+```
+
+而不是：
+
+```text
+Task-aware KV strategy router
+```
+
+更强的论文 claim 应该是：
+
+```text
+1. 固定 KV 策略在混合 workload 下没有 Pareto-optimal。
+2. 单选 router 是第一步，但不够完整。
+3. Memory planner 可以输出 need vector 和 ordered memory plan。
+4. Planner 通过 typed resolver / chain / hierarchical / fallback 组合专家，
+   在接近 oracle quality 的同时降低 token cost。
+5. 下一步把 prompt-level plan 改成 KV-level page/range plan，
+   用 range_sdpa / block-sparse kernel 跑真实 latency。
+```
+
+### 下一步
+
+```text
+1. 把 planner 的输出从 prompt expert 改成 KV expert：
+   strategy -> selected page ids / KV ranges。
+
+2. 增加 oracle regret label：
+   对每个样本记录所有 strategy 的 accuracy / PPL / latency / kept_tokens，
+   训练 planner 在给定 SLA 下选最小 regret plan。
+
+3. 做 causal KV influence label：
+   用 full KV teacher，逐 page mask KV，
+   看 logits / answer / PPL 变化，标注真正有因果影响的 memory block。
+
+4. 接 range_sdpa：
+   不再只报 visible tokens，而是报真实 TTFT / decode latency / throughput。
+
+5. 做 composite workload benchmark：
+   casual, long fact, multihop, current conflict, global summary, high-risk fallback。
+```
+
+## 77. Regret-Aware Memory Planner V2：SLA 条件化的 Oracle-Regret Planner
+
+这一节完成上一节“下一步”里的第 2 项：
+
+```text
+增加 oracle regret label：
+对每个样本记录所有 strategy 的 accuracy / PPL / latency / kept_tokens，
+训练 planner 在给定 SLA 下选最小 regret plan。
+```
+
+V2 的定位是把项目从规则 planner 往更有论文创新性的方向推进：
+
+```text
+不是手写 task -> strategy，
+而是先构造每个样本的 multi-strategy Pareto frontier，
+再按不同 SLA 学习 plan 排序。
+```
+
+### 新增脚本
+
+本地脚本：
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_regret_aware_memory_planner_v2.py
+```
+
+服务器脚本：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_regret_aware_memory_planner_v2.py
+```
+
+主输出：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/regret_aware_memory_planner_v2_5x10_20260702
+```
+
+输出文件：
+
+```text
+regret_planner_rows.csv
+regret_planner_summary.csv
+pareto_frontier_rows.csv
+learned_plans.json
+summary.json
+```
+
+### 方法
+
+V2 仍然复用 V1 的 expert 集合：
+
+```text
+recent_local
+semantic_route
+typed_role
+chain_typed
+hierarchical_summary
+recent_typed
+semantic_chain
+hier_chain
+full_context
+```
+
+但 V2 不直接写死策略，而是对每个样本运行所有 expert，得到：
+
+```text
+strategy -> acc / PPL / eval_sec / visible_tokens / margin / evidence_hit
+```
+
+然后为每个样本构造 Pareto frontier：
+
+```text
+如果没有另一个 strategy 在 correctness、PPL、tokens、seconds 上同时不差，
+且至少一项更好，
+则该 strategy 是 Pareto strategy。
+```
+
+再定义 3 个 SLA：
+
+| SLA | 目标 |
+| --- | --- |
+| quality | 主要追求 PPL / quality |
+| balanced | 同时考虑 PPL、tokens、seconds |
+| low_cost | 在保证正确的前提下更重视 token cost |
+
+每个 SLA 的 oracle label 是：
+
+```text
+oracle_sla = argmin strategy objective(strategy, SLA)
+```
+
+训练方式：
+
+```text
+每类任务 10 条样本；
+前 5 条作为 train；
+后 5 条作为 test。
+
+在 train split 上，为每个 variant 和 SLA 统计各 strategy 平均 objective，
+得到 learned plan 排序；
+在 test split 上执行 learned plan。
+```
+
+这不是最终 learned neural planner，但已经把实验口径从 rule router 推进到：
+
+```text
+SLA-conditioned oracle-regret policy learning。
+```
+
+### 测试集总体结果
+
+测试集是 5 类任务各 5 条，共 25 条。
+
+| Mode | SLA | Acc | PPL | Tokens | Objective regret |
+| --- | --- | ---: | ---: | ---: | ---: |
+| oracle_sla_quality | quality | 100.0% | 1.490 | 222.4 | 0.000 |
+| learned_planner_v2_quality | quality | 100.0% | 1.588 | 242.3 | 0.063 |
+| oracle_sla_balanced | balanced | 100.0% | 1.490 | 222.4 | 0.000 |
+| learned_planner_v2_balanced | balanced | 100.0% | 1.588 | 242.3 | 0.064 |
+| oracle_sla_low_cost | low_cost | 100.0% | 1.495 | 214.1 | 0.000 |
+| learned_planner_v2_low_cost | low_cost | 100.0% | 1.565 | 215.4 | 0.017 |
+| risk_calibrated_planner_v1 | - | 100.0% | 1.588 | 242.3 | - |
+| task_aware_rule_router_v0 | - | 100.0% | 1.646 | 255.4 | - |
+| static_chain_typed | - | 100.0% | 1.676 | 245.6 | - |
+| static_hierarchical_summary | - | 88.0% | 2.950 | 209.7 | - |
+| static_recent_local | - | 44.0% | 15.964 | 166.6 | - |
+| static_semantic_route | - | 56.0% | 8.394 | 334.7 | - |
+| static_full_context | - | 60.0% | 8.223 | 1729.2 | - |
+
+### 关键结论
+
+1. V2 low_cost planner 最接近目标创新点。
+
+```text
+oracle_sla_low_cost tokens = 214.1
+learned_planner_v2_low_cost tokens = 215.4
+
+objective regret = 0.017
+accuracy = 100%
+```
+
+这说明 V2 已经能从 train split 学到接近 oracle 的低成本 memory plan。
+
+2. V2 相比 V1 / V0 更省 token。
+
+```text
+V0 rule router tokens = 255.4
+V1 planner tokens = 242.3
+V2 low_cost tokens = 215.4
+```
+
+同时保持：
+
+```text
+accuracy = 100%
+```
+
+3. fixed full context 很差。
+
+```text
+static_full_context acc = 60.0%
+PPL = 8.223
+tokens = 1729.2
+```
+
+这再次说明对这些混合任务而言，“把所有上下文都塞进去”不是最优。planner 不是为了少算而牺牲质量，而是在很多任务上通过去噪提高质量。
+
+4. 单一 strategy 没有稳定 Pareto-optimal。
+
+测试集 Pareto static strategy 分布：
+
+```text
+chain_typed: 12
+recent_local: 20
+typed_role: 8
+hierarchical_summary: 20
+semantic_route: 6
+hier_chain: 1
+```
+
+注意 `recent_local` 虽然总体 accuracy 低，但因为 token 很少，在部分样本的 cost-quality 平面上仍然位于 Pareto frontier。这正是 planner 需要 SLA 的原因：不是所有 Pareto 点都适合高风险任务。
+
+### 学到的 Plan
+
+V2 learned plans 的例子：
+
+```text
+low_cost / temporal_fact:
+  hierarchical_summary -> chain_typed -> typed_role -> ...
+
+low_cost / multihop_bridge:
+  chain_typed -> typed_role -> recent_typed -> ...
+
+low_cost / summary_theme:
+  hierarchical_summary -> chain_typed -> typed_role -> ...
+
+low_cost / compare_score:
+  hierarchical_summary -> chain_typed -> typed_role -> ...
+
+quality / compare_score:
+  chain_typed -> typed_role -> hierarchical_summary -> ...
+```
+
+这说明 SLA 会改变 plan：
+
+```text
+compare_score:
+  quality 更偏 chain_typed；
+  low_cost 更愿意先试 hierarchical_summary。
+```
+
+这就是 “Memory Planning” 比 “Memory Routing” 更强的地方：同一个任务类型，在不同成本/质量目标下可以选择不同的 first-stage memory action。
+
+### 分任务 low_cost 测试结果
+
+| Variant | Acc | PPL | Tokens | Objective regret |
+| --- | ---: | ---: | ---: | ---: |
+| casual_recent | 100.0% | 1.754 | 183.0 | 0.043 |
+| temporal_fact | 100.0% | 1.415 | 109.6 | 0.000 |
+| multihop_bridge | 100.0% | 1.724 | 317.0 | 0.000 |
+| summary_theme | 100.0% | 1.432 | 248.6 | 0.037 |
+| compare_score | 100.0% | 1.533 | 219.0 | 0.003 |
+
+### 当前意义
+
+V2 比 V1 更接近可投稿的系统贡献：
+
+```text
+V1:
+  rule-based need-aware planner。
+
+V2:
+  oracle-regret labeled planner，
+  支持 SLA-conditioned policy learning，
+  输出 Pareto frontier 和 learned plan。
+```
+
+可以把论文主张写成：
+
+```text
+We formulate long-context KV memory selection as SLA-conditioned memory planning.
+For each query, a planner chooses a point on a multi-expert memory Pareto frontier,
+minimizing oracle regret under a quality/cost objective.
+```
+
+### 当前限制
+
+```text
+1. V2 仍是 prompt-level expert simulation，不是真正 KV range loading。
+2. 训练器还是 per-variant table，不是 learned neural planner。
+3. 测试集是 synthetic mixed workload，还需要 LongBench / RULER / real long QA。
+4. full fallback 目前是 prompt full_context，不能代表真正 dense KV fallback。
+```
+
+### 下一步 V3
+
+下一步应该直接朝 KV-level 创新推进：
+
+```text
+1. 把 learned plan 的 strategy 输出改成 page ids / KV ranges。
+2. 对 full KV 做 page mask，生成 causal KV influence labels。
+3. 训练一个小 planner / MLP：
+   input = query features + need vector + cheap probe stats
+   output = SLA-conditioned page/range plan。
+4. 接 range_sdpa，报告真实 latency / TTFT / decode throughput。
+5. 把 V2 的 oracle-regret label 作为 planner teacher。
+```
+
+## Section 78: Causal Memory Planner V3 结果
+
+本节记录 V3 的第一版实现和实验。V3 的目标不是继续做 strategy-level router，而是向更有创新性的方向推进：
+
+```text
+从 “选择哪个 memory strategy”
+升级为
+“预测哪些自然页 / KV range 对当前答案有因果影响”。
+```
+
+### V3 方法
+
+V3 做的是 causal page influence labeling：
+
+```text
+1. 把长上下文按自然段落切成 page。
+2. 用 full_context 做 teacher，得到 gold answer 的 label loss / PPL。
+3. 每次移除一个 page，重新前向。
+4. 计算：
+   loss_delta = ablated_gold_loss - full_gold_loss
+
+   loss_delta > 0：
+     移除这个 page 会伤害 gold answer 概率；
+     这个 page 对答案有正向因果影响。
+
+   loss_delta < 0：
+     移除这个 page 反而让 gold answer 更容易；
+     这个 page 可能是干扰页。
+5. 用 query/page 的 cheap features 训练一个小 logistic planner。
+6. 测试时 planner 只选择 top-k pages，再用这些 pages 回答。
+```
+
+这比 V2 更接近真正的 memory planning，因为 supervision 来自模型自己的行为变化，而不是人为指定 `chain_typed` / `hierarchical_summary` 这种 strategy label。
+
+### 实现文件
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_causal_memory_planner_v3.py
+```
+
+主要输出：
+
+```text
+page_influence.csv
+  每个 page 的 ablation delta、causal label、page features。
+
+task_results.csv
+  每个任务在 full / recent / lexical / learned / hybrid / oracle / progressive 下的结果。
+
+summary.csv / summary.json
+  按 split、variant、mode 聚合后的 acc / PPL / token / causal recall。
+
+learned_page_model.json
+  小 planner 的 feature weights。
+```
+
+### 第一个重要发现：固定阈值会产生大量假阳性
+
+最开始使用固定阈值：
+
+```text
+positive_delta_threshold = 0.03
+```
+
+结果：
+
+```text
+page_rows = 606
+positive_page_rate = 60.6%
+```
+
+这个比例明显过高。原因是 prompt-level full-context ablation 会引入位置变化和上下文长度变化：删除任何一页都可能轻微改变 logits。如果直接把很小的 positive delta 当作因果影响，就会把很多普通噪声页也标成 causal page。
+
+因此 V3 后面改成自适应阈值：
+
+```text
+task_threshold = max(
+  absolute_threshold,
+  median(loss_delta) + 1.0 * MAD(loss_delta)
+)
+```
+
+这样每个任务内部先估计“背景扰动”，只有明显高于背景扰动的 page 才算 causal。
+
+自适应后：
+
+```text
+page_rows = 606
+positive_page_rate = 20.1%
+weak_positive_pages = 1
+```
+
+这个标签分布更合理。
+
+### 实验设置
+
+服务器输出目录：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/causal_memory_planner_v3_hybrid_top5_5x6_20260702
+```
+
+配置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+variants = casual_recent, temporal_fact, multihop_bridge, summary_theme, compare_score
+tasks_per_variant = 6
+train/test = 3/3 per variant
+distractor_pages = 16
+topk_pages = 5
+adaptive_labeling = 1
+adaptive_mad_scale = 1.0
+```
+
+总量：
+
+```text
+tasks = 30
+page_rows = 606
+result_rows = 210
+elapsed_seconds = 151.3
+```
+
+### Test 总体结果
+
+测试集是 5 类任务各 3 条，共 15 条。
+
+| Mode | Acc | PPL | Tokens | Sec | Evidence hit | Causal recall |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full_context_teacher | 46.7% | 9.575 | 933.0 | 0.195 | 100.0% | 100.0% |
+| recent_topk_pages | 40.0% | 14.130 | 349.0 | 0.183 | 66.7% | 40.2% |
+| lexical_topk_pages | 53.3% | 12.191 | 305.1 | 0.182 | 100.0% | 51.1% |
+| learned_causal_topk_pages | 40.0% | 14.868 | 329.5 | 0.183 | 80.0% | 44.8% |
+| hybrid_causal_lexical_topk_pages | 60.0% | 10.171 | 304.1 | 0.182 | 100.0% | 52.8% |
+| oracle_causal_topk_pages | 40.0% | 11.227 | 331.9 | 0.183 | 86.7% | 90.2% |
+| progressive_causal_v3 | 46.7% | 12.313 | 1085.2 | 0.339 | 100.0% | 100.0% |
+
+当前最好的点是：
+
+```text
+hybrid_causal_lexical_topk_pages
+
+acc = 60.0%
+PPL = 10.171
+tokens = 304.1
+```
+
+和 full_context_teacher 对比：
+
+```text
+full_context_teacher:
+  acc = 46.7%
+  PPL = 9.575
+  tokens = 933.0
+
+hybrid_causal_lexical_topk_pages:
+  acc = 60.0%
+  PPL = 10.171
+  tokens = 304.1
+```
+
+所以 V3 hybrid 在这个小测试上：
+
+```text
+accuracy 高于 full_context teacher；
+PPL 接近 full_context teacher；
+visible tokens 只有 full 的 32.6%。
+```
+
+但这里的 `Sec` 还不是 range_sdpa 真实速度闭环。当前仍是 prompt-level simulation，小模型和短 prompt 下 Python/调用开销占比很高，所以不能直接把 0.182s vs 0.195s 当成真实 KV sparse speedup。
+
+### 分任务结果
+
+| Variant | Full Acc/PPL | Hybrid Acc/PPL | Hybrid Tokens | 解释 |
+| --- | ---: | ---: | ---: | --- |
+| casual_recent | 33.3% / 7.89 | 33.3% / 29.57 | 374.3 | recent reply 页能召回，但模型在选项映射上仍不稳 |
+| temporal_fact | 66.7% / 5.59 | 66.7% / 5.77 | 334.3 | 基本追平 full，token 大幅下降 |
+| multihop_bridge | 100.0% / 6.83 | 100.0% / 6.56 | 326.0 | hybrid 找到了 bridge/artifact 关键页，效果最好 |
+| summary_theme | 33.3% / 10.47 | 66.7% / 4.44 | 225.0 | typed coverage repair 很有效，优于 full |
+| compare_score | 0.0% / 25.52 | 33.3% / 21.89 | 260.7 | full 本身也很差，hybrid 有改善但仍不稳 |
+
+### 为什么 learned-only 不够好
+
+`learned_causal_topk_pages` 的总体结果是：
+
+```text
+acc = 40.0%
+PPL = 14.868
+tokens = 329.5
+```
+
+它不如 lexical / hybrid，主要原因有两个：
+
+1. 训练样本太少。
+
+```text
+train pages = 303
+train positive rate = 18.2%
+train accuracy = 75.6%
+```
+
+这个规模不足以稳定学习 summary / compare 这种聚合任务的 coverage 需求。
+
+2. causal label 是 page-level 影响，不等于 answer-level planning。
+
+比如 summary/compare 不是选一个最高 delta page 就够了，而是需要覆盖一组同类型 page：
+
+```text
+summary_theme:
+  需要多个 current theme=... pages 才能数频率。
+
+compare_score:
+  需要多个 current priority_score=... pages 才能比较最大值。
+```
+
+所以 V3 加了 `hybrid_causal_lexical_topk_pages`：
+
+```text
+score = learned_causal_prob + lexical_score + typed_role_prior
+```
+
+并对聚合任务做 coverage repair：
+
+```text
+summary_theme:
+  优先保留多个 current theme= pages。
+
+compare_score:
+  topk >= 4 时优先保留多个 current priority_score= pages。
+```
+
+这说明一个重要方向：
+
+```text
+因果影响标签负责学“哪些页可能有用”；
+typed structural prior 负责保证任务需要的 coverage。
+```
+
+这比单纯 learned router 更像真正的 memory planner。
+
+### 为什么 oracle_causal_topk 的 accuracy 不最高
+
+`oracle_causal_topk_pages` 的 causal recall 很高：
+
+```text
+causal recall = 90.2%
+```
+
+但 accuracy 只有：
+
+```text
+acc = 40.0%
+```
+
+这不是代码错误，而是指标含义不同：
+
+```text
+oracle_causal_topk 选择的是 loss_delta 最大的 pages；
+它优化的是 gold option logprob influence，
+不是直接优化最终 argmax accuracy。
+```
+
+如果某些 page 对 gold logprob 有帮助，但同时缺少聚合 coverage，或者 prompt 中仍有旧事实/干扰项，模型最终 argmax 仍可能错。
+
+这说明 V4 的 oracle 不应该只看单页 delta，而应该看组合 page set 的 utility：
+
+```text
+utility(page_set) =
+  answer correctness
+  + gold logprob
+  + causal mass coverage
+  - token cost
+```
+
+### Progressive fallback 目前不成功
+
+`progressive_causal_v3` 的结果：
+
+```text
+acc = 46.7%
+PPL = 12.313
+tokens = 1085.2
+fallback_rate = 80.0%
+```
+
+它经常 fallback 到 full_context，导致 token 反而超过 full。这说明当前 fallback criterion 太保守，而且 full_context teacher 本身不一定强。
+
+后续应该改成：
+
+```text
+fallback 不一定回 full；
+而是按 plan 逐步扩展：
+  top3 causal pages
+  -> typed coverage repair
+  -> add semantic neighbors
+  -> add current/conflict resolver
+  -> last resort full
+```
+
+### 当前结论
+
+V3 的最重要贡献不是这个小测试的绝对分数，而是验证了一条更有论文价值的路线：
+
+```text
+1. 直接 full-context ablation 会产生 label noise。
+2. 需要 robust per-task causal threshold 去除背景扰动。
+3. 单页 causal influence 不等于最终 memory plan。
+4. 最好的方向是：
+   causal learner + typed structural prior + coverage-aware planning。
+```
+
+当前 best result：
+
+```text
+hybrid_causal_lexical_topk_pages:
+  acc = 60.0%
+  PPL = 10.171
+  tokens = 304.1
+
+full_context_teacher:
+  acc = 46.7%
+  PPL = 9.575
+  tokens = 933.0
+```
+
+可以把这个写成下一版项目主张：
+
+```text
+Risk-calibrated memory planning should not merely route among fixed experts.
+It should learn causal memory influence from model behavior,
+then compose learned causal pages with typed structural coverage constraints.
+```
+
+### 下一步 V4
+
+V4 应该做三件事：
+
+```text
+1. 从 prompt-level ablation 升级到 KV-level page/range mask。
+   当前删除 page 会改变位置和上下文长度；
+   KV mask 能更干净地估计因果影响。
+
+2. 从 single-page label 升级到 page-set utility。
+   对 summary/compare/multihop，真正重要的是一组 page 的组合覆盖。
+
+3. 接 range_sdpa 做真实速度闭环。
+   报告 TTFT、prefill latency、decode throughput、KV bytes loaded，
+   而不是只报告 visible tokens。
+```
+
+更具体的 V4 planner：
+
+```text
+input:
+  query features
+  typed need vector
+  cheap lexical/entity/page-role scores
+  optional cheap probe logits
+
+output:
+  memory plan =
+    causal page candidates
+    typed coverage constraints
+    progressive expansion order
+    risk-calibrated fallback rule
+
+training signal:
+  KV page mask causal delta
+  page-set utility
+  oracle regret under quality/cost SLA
+```
+
+## Section 79: Fixed-Position KV Mask Planner V4 结果
+
+V4 继续沿着 V3 的方向推进，但解决了 V3 最大的问题：
+
+```text
+V3:
+  通过删除文本 page 做 ablation。
+  问题是 token 位置和上下文长度都会变化，因此 loss_delta 里混入了位置扰动。
+
+V4:
+  不删除任何 token。
+  保持 full prompt token 位置不变，
+  只用 4D attention mask 让 query / answer token 看不见某个 page 的 KV range。
+```
+
+这更接近真正的 KV page loading：
+
+```text
+prefill 阶段：
+  所有 page token 仍在原始位置。
+
+query / answer 阶段：
+  只允许 attend 到 selected page ranges。
+
+label 阶段：
+  mask 掉某个 page range，
+  如果 gold answer loss 上升，就说明这个 KV range 对答案有因果贡献。
+```
+
+### 实现文件
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_fixed_position_kv_mask_planner_v4.py
+```
+
+核心实现：
+
+```text
+1. 构造 fixed-position full prompt。
+2. 记录每个自然 page 的 token span：
+   page_id -> [token_start, token_end)
+3. 构造 4D additive attention mask：
+   shape = [batch, 1, seq_len, seq_len]
+4. 对 query_start 之后的 query / answer rows：
+   mask 掉指定 page span 的 key/value columns。
+5. 用 full prompt + masked KV visibility 计算 option loss。
+```
+
+所以 V4 输出的 `selected_token_ranges` 已经可以直接作为未来 range-SDPA / KV loader 的输入雏形。
+
+### 实验设置
+
+服务器 best 输出目录：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/fixed_position_kv_mask_planner_v4_top5_5x6_20260702
+```
+
+配置：
+
+```text
+model = /home/fdong/hrj/prove/Qwen3-0.6B
+variants = casual_recent, temporal_fact, multihop_bridge, summary_theme, compare_score
+tasks_per_variant = 6
+train/test = 3/3 per variant
+distractor_pages = 16
+topk_pages = 5
+adaptive_labeling = 1
+adaptive_mad_scale = 1.0
+```
+
+总量：
+
+```text
+tasks = 30
+page_rows = 606
+result_rows = 180
+elapsed_seconds = 245.2
+```
+
+### 标签质量变化
+
+V3 adaptive 的正标签比例：
+
+```text
+positive_page_rate = 20.1%
+```
+
+V4 fixed-position mask 后：
+
+```text
+positive_page_rate = 12.7%
+train positives = 37 / 303
+test positives = 40 / 303
+```
+
+这说明 fixed-position mask 确实去掉了一部分“删除文本导致的位置扰动假阳性”。标签更稀疏，也更像真正的 causal KV ranges。
+
+### Test 总体结果
+
+测试集是 5 类任务各 3 条，共 15 条。
+
+| Mode | Acc | PPL | Effective visible tokens | Raw prompt tokens | Evidence hit | Causal recall | Causal mass recall |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| full_fixed_position_mask_teacher | 53.3% | 14.912 | 1152.4 | 1152.4 | 100.0% | 100.0% | 100.0% |
+| recent_kv_mask_topk_pages | 40.0% | 28.594 | 359.1 | 1152.4 | 53.3% | 27.8% | 30.6% |
+| lexical_kv_mask_topk_pages | 53.3% | 18.874 | 305.6 | 1152.4 | 80.0% | 64.4% | 58.2% |
+| learned_causal_kv_mask_topk_pages | 60.0% | 11.121 | 310.5 | 1152.4 | 100.0% | 65.0% | 75.6% |
+| set_utility_kv_mask_v4 | 60.0% | 11.072 | 305.0 | 1152.4 | 100.0% | 69.4% | 75.5% |
+| oracle_causal_kv_mask_topk_pages | 66.7% | 8.092 | 323.7 | 1152.4 | 100.0% | 100.0% | 91.5% |
+
+当前 V4 best 是：
+
+```text
+set_utility_kv_mask_v4:
+  acc = 60.0%
+  PPL = 11.072
+  effective visible tokens = 305.0
+  raw prompt tokens = 1152.4
+```
+
+对比 full fixed-position teacher：
+
+```text
+full_fixed_position_mask_teacher:
+  acc = 53.3%
+  PPL = 14.912
+  visible tokens = 1152.4
+
+set_utility_kv_mask_v4:
+  acc = 60.0%
+  PPL = 11.072
+  visible tokens = 305.0
+```
+
+也就是说，在这个小测试上 V4 sparse memory 不只是省 token，还同时提升了 accuracy 和 PPL：
+
+```text
+accuracy: 53.3% -> 60.0%
+PPL:      14.912 -> 11.072
+tokens:   1152.4 -> 305.0
+```
+
+有效 token 约为 full 的：
+
+```text
+305.0 / 1152.4 = 26.5%
+```
+
+这个结果比 V3 更有意义，因为 V4 的 token range 是 fixed-position mask 下得到的，更接近真实 KV range selection。
+
+### 分任务结果
+
+| Variant | Full Acc/PPL | Learned Acc/PPL | Set-Utility Acc/PPL | Oracle Acc/PPL | 解释 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| casual_recent | 100.0% / 5.21 | 100.0% / 7.22 | 100.0% / 7.22 | 100.0% / 6.14 | recent reply page 很容易定位 |
+| temporal_fact | 100.0% / 4.92 | 100.0% / 2.22 | 100.0% / 2.22 | 100.0% / 1.94 | sparse 去掉旧事实/噪声后 PPL 明显优于 full |
+| multihop_bridge | 0.0% / 57.93 | 0.0% / 40.58 | 33.3% / 20.53 | 33.3% / 22.88 | set utility 的 typed coverage 能补 bridge + artifact memo |
+| summary_theme | 33.3% / 13.60 | 100.0% / 6.13 | 33.3% / 12.32 | 66.7% / 6.13 | learned causal 在 summary 上最好，set utility 仍需改进 |
+| compare_score | 33.3% / 36.56 | 0.0% / 42.71 | 33.3% / 41.08 | 33.3% / 20.80 | compare 需要更强 page-set comparison utility |
+
+### 为什么 V4 比 V3 更像真正方案
+
+V3 的 `visible_tokens` 来自重新拼接 selected pages prompt，因此它还是 prompt-level retrieval simulation。
+
+V4 不一样：
+
+```text
+full prompt 始终存在；
+每个 page 的 token range 始终保持原位置；
+query / answer 只能 attend 到 planner 选择的 page ranges。
+```
+
+这更接近未来的真实实现：
+
+```text
+1. prefill 全上下文或分层 memory；
+2. planner 输出 selected KV ranges；
+3. range-SDPA 只加载 selected ranges；
+4. query/recent/sink 仍保留。
+```
+
+当前 V4 已经输出：
+
+```text
+selected_page_ids
+selected_token_ranges
+visible_tokens
+raw_prompt_tokens
+```
+
+这些字段可以直接用于下一步 range-SDPA 速度闭环。
+
+### 速度解释
+
+V4 表里的 `eval_seconds` 不能当作真实 sparse speedup。
+
+原因：
+
+```text
+当前实现为了验证 fixed-position mask，
+仍然把 raw full prompt 输入模型，
+只是通过 4D attention mask 屏蔽不可见 KV columns。
+```
+
+所以当前计算量仍接近 full prompt：
+
+```text
+mean_raw_prompt_tokens = 1152.4
+```
+
+真正的速度收益要看：
+
+```text
+mean_visible_tokens = 305.0
+```
+
+也就是如果 range-SDPA 真的只加载这些 selected ranges，理论 KV load 约为 full 的 26.5%。真实 latency 还需要接 kernel 后测。
+
+### 一个负结果：query-conditioned utility 调权失败
+
+我额外跑了一版 query-conditioned utility weights：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/fixed_position_kv_mask_planner_v4_qweights_top5_5x6_20260702
+```
+
+结果：
+
+```text
+set_utility_kv_mask_v4:
+  acc = 53.3%
+  PPL = 11.243
+```
+
+比固定权重版：
+
+```text
+acc = 60.0%
+PPL = 11.072
+```
+
+更差。主要原因是 compare_score 被 learned 候选拉偏。代码已经回退到固定 utility 权重。
+
+### 当前结论
+
+V4 的核心结论：
+
+```text
+1. fixed-position KV visibility mask 比删除文本 page 更适合生成 causal memory labels。
+2. causal labels 更稀疏：
+   V3 adaptive 20.1% -> V4 12.7%。
+3. learned causal page planner 已经能在 26.5% effective visible tokens 下超过 full fixed-position teacher。
+4. oracle top5 仍有明显上界：
+   acc = 66.7%
+   PPL = 8.092
+```
+
+所以 V4 进一步支持这个项目主张：
+
+```text
+长上下文推理不应该固定保留所有 KV；
+更好的方式是 query-conditioned memory planning：
+先预测 causal KV ranges，
+再加 typed coverage constraints，
+最后按风险决定是否 progressive expansion / fallback。
+```
+
+### 下一步 V5
+
+V5 应该从“mask simulation”走向真实速度闭环：
+
+```text
+1. 接 range-SDPA / KV gather：
+   用 V4 输出的 selected_token_ranges 作为真实加载范围。
+
+2. 做 top-k budget curve：
+   top1 / top2 / top3 / top5 / top8 / full
+   比较 acc、PPL、visible tokens、真实 latency。
+
+3. 做 page-set oracle：
+   当前 oracle 是 single-page delta 排序；
+   下一步要评估 page set utility，
+   尤其是 summary_theme 和 compare_score。
+
+4. 加更通用任务：
+   普通 long-context continuation PPL，
+   LongBench / RULER 风格 QA，
+   MMLU with long distractor context。
+```
+
+## Section 80: KV Gather Planner V5 结果
+
+V5 从 V4 的 mask simulation 继续往真实 KV loading 推进。
+
+V4 做的是：
+
+```text
+full prompt 仍然完整进入模型；
+用 4D attention mask 屏蔽不可见 page ranges。
+```
+
+V5 做的是：
+
+```text
+1. 先对 full memory prefix 做一次 prefill，得到 full KV cache。
+2. planner 选择 page token ranges。
+3. 从 full KV cache 里真实 gather selected KV tokens。
+4. query / answer 阶段只带 gathered KV cache 前向。
+```
+
+所以 V5 已经开始测真实的 query-side KV token 成本和 latency，而不是只看 mask simulation。
+
+### 实现文件
+
+```text
+ymluo/projects/qwen3_top2_head_limit3_ppl/src/run_kv_gather_planner_v5.py
+```
+
+关键函数：
+
+```text
+gather_past_key_values(...)
+  对每层 KV cache 在 sequence 维度 index_select selected token indices。
+
+keep_indices_for_pages(...)
+  保留非 page 的结构 token + selected page token ranges。
+
+evaluate_with_cache(...)
+  用 gathered KV cache 运行 query 和 answer option scoring。
+```
+
+V5 输出里时间被拆成：
+
+```text
+prefill_seconds:
+  full memory prefix prefill 时间。
+
+kv_gather_seconds:
+  从 full KV cache gather selected ranges 的时间。
+
+query_eval_seconds:
+  query + option scoring 时间。
+
+online_seconds:
+  kv_gather_seconds + query_eval_seconds。
+
+total_seconds:
+  prefill_seconds + online_seconds。
+```
+
+这里最重要的是：
+
+```text
+online_seconds 更接近“已有 memory cache 后的一次查询成本”；
+total_seconds 则包含 full prefix prefill。
+```
+
+### Short Context Budget Curve
+
+为了和 V4 做同 seed 对比，V5 跑了：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/kv_gather_planner_v5_budget_seed0209_5x6_20260703
+```
+
+配置：
+
+```text
+seed = 2026070209
+variants = 5 类任务
+tasks_per_variant = 6
+test = 15 tasks
+distractor_pages = 16
+topk_budgets = 1,2,3,5,8
+```
+
+full baseline：
+
+```text
+full_kv_cache:
+  acc = 53.3%
+  PPL = 15.008
+  visible_tokens = 1152.4
+  online_seconds = 0.2219
+  prefill_seconds = 0.0365
+  total_seconds = 0.2584
+```
+
+V5 set-utility budget curve：
+
+| Budget | Acc | PPL | Visible tokens | Keep frac | Online sec | Evidence hit |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| top1 | 40.0% | 19.244 | 116.8 | 10.2% | 0.1824 | 60.0% |
+| top2 | 40.0% | 14.643 | 158.3 | 13.9% | 0.1826 | 86.7% |
+| top3 | 46.7% | 12.502 | 205.8 | 18.1% | 0.1829 | 100.0% |
+| top5 | 40.0% | 12.341 | 306.1 | 27.0% | 0.1833 | 100.0% |
+| top8 | 40.0% | 12.869 | 459.1 | 40.5% | 0.1837 | 100.0% |
+
+short context 下的当前 best tradeoff 是：
+
+```text
+set_utility_kv_gather_v5 top3:
+  acc = 46.7%
+  PPL = 12.502
+  visible_tokens = 205.8
+  keep_frac = 18.1%
+  online_seconds = 0.1829
+```
+
+它相比 full：
+
+```text
+accuracy 低一点：
+  53.3% -> 46.7%
+
+PPL 更好：
+  15.008 -> 12.502
+
+online latency 更低：
+  0.2219s -> 0.1829s
+
+effective tokens 大幅下降：
+  1152.4 -> 205.8
+```
+
+注意 short context 只有约 1.1k tokens，因此 online latency 的速度差距不大：
+
+```text
+0.2219 / 0.1829 = 1.21x
+```
+
+这是合理的，因为小上下文下 Python / option scoring / model overhead 占比较高，KV 长度不是主要瓶颈。
+
+### Long Context Speed Sanity
+
+为了看真实 KV gather 在更长上下文下是否有速度趋势，又跑了一个 speed sanity：
+
+```text
+/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl/outputs/kv_gather_planner_v5_long_speed_4x2_20260703
+```
+
+配置：
+
+```text
+variants = temporal_fact, multihop_bridge, summary_theme, compare_score
+tasks_per_variant = 2
+test = 4 tasks
+distractor_pages = 64
+topk_budgets = 3,5,8
+max_ablate_pages = 24
+```
+
+full baseline：
+
+```text
+full_kv_cache:
+  acc = 50.0%
+  PPL = 22.82
+  visible_tokens = 4054.5
+  online_seconds = 0.4353
+  prefill_seconds = 0.1845
+  total_seconds = 0.6198
+```
+
+V5 set-utility：
+
+| Budget | Acc | PPL | Visible tokens | Keep frac | Online sec | Online speedup | Evidence hit |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| top3 | 75.0% | 14.82 | 193.0 | 4.8% | 0.1817 | 2.40x | 100.0% |
+| top5 | 75.0% | 14.52 | 288.2 | 7.1% | 0.1824 | 2.39x | 100.0% |
+| top8 | 75.0% | 15.80 | 433.0 | 10.7% | 0.1824 | 2.39x | 100.0% |
+
+这个结果说明：
+
+```text
+当 raw context 增长到约 4k tokens 时，
+V5 的真实 KV gather 开始体现明显 online speedup。
+```
+
+最好的 speed-quality 点是：
+
+```text
+set_utility_kv_gather_v5 top5:
+  acc = 75.0%
+  PPL = 14.52
+  visible_tokens = 288.2
+  keep_frac = 7.1%
+  online_seconds = 0.1824
+```
+
+对比 full：
+
+```text
+full:
+  acc = 50.0%
+  PPL = 22.82
+  visible_tokens = 4054.5
+  online_seconds = 0.4353
+
+V5 top5:
+  acc = 75.0%
+  PPL = 14.52
+  visible_tokens = 288.2
+  online_seconds = 0.1824
+```
+
+也就是说这个小样本上：
+
+```text
+accuracy 更高；
+PPL 更低；
+effective KV tokens 只有 full 的 7.1%；
+online latency 约 2.39x 更快。
+```
+
+### V5 和 V4 的关系
+
+V4 验证的是：
+
+```text
+如果 query/answer 只能看 selected page ranges，
+质量是否还能保持？
+```
+
+V5 验证的是：
+
+```text
+如果真的只把 selected page ranges 的 KV cache gather 出来，
+query/answer 前向是否能跑？
+速度和质量如何？
+```
+
+因此 V5 是从 “mask simulation” 到 “real KV gather execution” 的关键一步。
+
+### 重要限制
+
+V5 仍不是最终 range-SDPA kernel。
+
+当前做法是：
+
+```text
+先 full prefill；
+再从 full KV cache index_select selected tokens；
+query 阶段用 gathered cache。
+```
+
+它验证了 query-side sparse KV 的可行性，但还没有做到：
+
+```text
+1. prefill 阶段直接避免无关 page 计算；
+2. CUDA kernel 内部按 range 高效加载；
+3. decode 多步时复用 gather 结果；
+4. 对 page-set utility 做真正 oracle search。
+```
+
+另外，V5 的 `prefill_seconds` 仍然包含 full memory prefix prefill。如果应用场景是长期 memory 已经缓存，那么 `online_seconds` 更重要；如果是一次性长上下文 prefill，则还需要优化 prefill 或做 hierarchical cache。
+
+### 当前结论
+
+V5 支持一个更强的系统 claim：
+
+```text
+query-conditioned causal memory planning 不只是减少 prompt tokens；
+它可以输出真实 KV ranges，
+并通过 KV gather 在 query-side 得到实际 online latency 收益。
+```
+
+当前最有说服力的数字是 long speed sanity：
+
+```text
+raw context tokens = 4054.5
+selected visible tokens = 288.2
+keep_frac = 7.1%
+online speedup = 2.39x
+acc = 75.0% vs full 50.0%
+PPL = 14.52 vs full 22.82
+```
+
+但需要强调：
+
+```text
+这个 long speed sanity 的 test 只有 4 条，
+只能说明趋势，不能作为最终论文结果。
+```
+
+### 下一步 V6
+
+V6 应该做两条线：
+
+```text
+1. 真实 kernel / range-SDPA：
+   不再 index_select 生成 compact KV，
+   而是在 attention kernel 里按 selected_token_ranges 直接 gather。
+
+2. 更强 page-set planner：
+   当前 single-page causal label 不足以处理 compare_score / summary_theme。
+   需要训练或搜索 page-set utility：
+     answer correctness
+     gold PPL
+     causal mass
+     typed coverage
+     token / latency cost
+```
+
+实验上要扩大：
+
+```text
+1. distractor_pages = 64 / 128 / 256 的 scaling curve；
+2. top-k budget curve；
+3. 多 seed；
+4. LongBench / RULER / 普通 continuation PPL；
+5. 报告 TTFT、decode throughput、KV bytes loaded。
 ```
