@@ -209,6 +209,7 @@ class Config:
     sink_tokens: int
     recent_tokens: int
     page_tokens: int
+    prefill_chunk_tokens: int
     obs_window_tokens: int
     snap_pool_kernel: int
     ours_scorer: str
@@ -295,6 +296,12 @@ def parse_args() -> Config:
     parser.add_argument("--sink_tokens", type=int, default=64)
     parser.add_argument("--recent_tokens", type=int, default=256)
     parser.add_argument("--page_tokens", type=int, default=256)
+    parser.add_argument(
+        "--prefill_chunk_tokens",
+        type=int,
+        default=2048,
+        help="Chunk prefix prefill to reduce activation memory. Use 0 to prefill the whole prefix at once.",
+    )
     parser.add_argument("--obs_window_tokens", type=int, default=64)
     parser.add_argument("--snap_pool_kernel", type=int, default=7)
     parser.add_argument(
@@ -1230,9 +1237,32 @@ METHODS = {
 
 
 @torch.inference_mode()
-def prefill_prefix(model: torch.nn.Module, bundle: PromptBundle, input_device: torch.device) -> tuple[Any, float]:
+def prefill_prefix(
+    model: torch.nn.Module,
+    bundle: PromptBundle,
+    input_device: torch.device,
+    chunk_tokens: int,
+) -> tuple[Any, float]:
     ids = bundle.input_ids[:, : bundle.query_start].to(input_device)
     started = time.perf_counter()
+    if chunk_tokens > 0 and ids.shape[-1] > chunk_tokens:
+        past_key_values = None
+        for start in range(0, ids.shape[-1], chunk_tokens):
+            end = min(start + chunk_tokens, ids.shape[-1])
+            outputs = model_forward(
+                model,
+                {
+                    "input_ids": ids[:, start:end],
+                    "past_key_values": past_key_values,
+                    "use_cache": True,
+                    "return_dict": True,
+                    "output_attentions": False,
+                    "output_hidden_states": False,
+                    "cache_position": torch.arange(start, end, device=input_device),
+                },
+            )
+            past_key_values = outputs.past_key_values
+        return past_key_values, time.perf_counter() - started
     outputs = model_forward(
         model,
         {
@@ -1465,6 +1495,10 @@ def main() -> None:
     unknown = [method for method in methods if method not in METHODS]
     if unknown:
         raise ValueError(f"Unknown methods: {unknown}; available={sorted(METHODS)}")
+    # Full KV generation can extend cache objects in place. Run it last so sparse selectors
+    # always see the original prefix cache without requiring a full long-context clone.
+    if "full_kv" in methods:
+        methods = [method for method in methods if method != "full_kv"] + ["full_kv"]
 
     rows: list[dict[str, Any]] = []
     started = time.perf_counter()
@@ -1477,7 +1511,12 @@ def main() -> None:
                 f"prefix_tokens={bundle.query_start} pages={len(pages)}",
                 flush=True,
             )
-        full_prefix_cache, prefill_seconds = prefill_prefix(model, bundle, input_device)
+        full_prefix_cache, prefill_seconds = prefill_prefix(
+            model,
+            bundle,
+            input_device,
+            config.prefill_chunk_tokens,
+        )
         attention_scores = None
         if needs_attention:
             attention_scores = attention_scores_from_suffix(model, bundle, full_prefix_cache, input_device)
@@ -1489,7 +1528,7 @@ def main() -> None:
                 example,
                 bundle,
                 pages,
-                clone_past_key_values(full_prefix_cache),
+                full_prefix_cache,
                 prefill_seconds,
                 method,
                 config,
@@ -1501,6 +1540,8 @@ def main() -> None:
                 f"online={row['online_seconds']:.3f}s pred={row['prediction'][:80]}",
                 flush=True,
             )
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         del full_prefix_cache
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

@@ -63,6 +63,7 @@ _ACTIVE_OBS_STATE: "ObservationWindowState | None" = None
 _ACTIVE_OBS_MASS_STATE: "AllTokenMassObservationState | None" = None
 _ACTIVE_OBS_HYBRID_STATE: "HybridObservationState | None" = None
 _ACTIVE_REUSE_STATE: "ReuseCandidateState | None" = None
+_ACTIVE_ADJACENT_TOP2_STATE: "AdjacentTop2ReuseState | None" = None
 _ACTIVE_KNORM_STATE: "KNormState | None" = None
 _ACTIVE_BLOCK_ROUTE_STATE: "BlockRouteState | None" = None
 _ACTIVE_KSIGN_STATE: "KSignIndexState | None" = None
@@ -76,6 +77,10 @@ _FULL_LAYER_SELECTION_CACHE: dict[tuple[str, int], set[int]] = {}
 _ACTIVE_FULL_HEAD_MAP_PATH: str = ""
 _ACTIVE_FULL_LAYER_MAP_PATH: str = ""
 _ACTIVE_LAYER_BUDGET_MAP_PATH: str = ""
+_ACTIVE_SHARED_TOP2_GROUP_PATH: str = ""
+_ACTIVE_ADJACENT_TOP2_WHITELIST_PATH: str = ""
+_SHARED_TOP2_GROUP_CACHE: dict[str, Any] | None = None
+_ADJACENT_TOP2_WHITELIST_CACHE: dict[str, Any] | None = None
 _ACTIVE_CANDIDATE_STATS: "CandidateStats | None" = None
 _ACTIVE_REUSE_OVERLAP_STATS: "ReuseOverlapStats | None" = None
 _ACTIVE_EVIDENCE_COVERAGE_STATS: "EvidenceSpanCoverageStats | None" = None
@@ -95,6 +100,11 @@ _QABS_CUDA_BREP_WARNED: bool = False
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 _LAYER_BUDGET_QABS_REUSE_STATE: dict[int, dict[str, Any]] = {}
 _BATCH_ROW_INDEX_TENSOR_CACHE: dict[tuple[str, tuple[int, ...]], torch.Tensor] = {}
+_SHARED_TOP2_INDEX_CACHE: dict[
+    tuple[str, int, int, float, str],
+    tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+] = {}
+_ADJACENT_TOP2_MASK_CACHE: dict[tuple[str, int, int, float, str], torch.Tensor] = {}
 
 
 def snapshot_layer_budget_qabs_reuse_state() -> dict[int, dict[str, Any]]:
@@ -247,7 +257,7 @@ def parse_args() -> argparse.Namespace:
         default="topk",
         help=(
             "How qabs fast path converts partial scores to the current raw candidate mask. "
-            "topk is exact; sample_quantile estimates the 3% threshold from sampled tokens; "
+            "topk is exact; sample_quantile estimates the 3%% threshold from sampled tokens; "
             "previous_threshold reuses the previous decode step's partial-score threshold per layer/head."
         ),
     )
@@ -291,6 +301,23 @@ def parse_args() -> argparse.Namespace:
             "Optional JSON map for layerbudgetattn. Format: "
             "{'default': {'type':'full'}, 'layers': {'0': {'type':'landmark','recent':1024,'stride':64}}}. "
             "Layer budget types: full, recent, landmark, head_recent, synthetic."
+        ),
+    )
+    parser.add_argument(
+        "--shared_top2_group_path",
+        default="",
+        help=(
+            "Optional shared_head_groups.csv from analyze_top2_head_position_sharing.py. "
+            "Required for sharedtop2t...attn and sharedtop2rt...attn modes unless SHARED_TOP2_GROUP_PATH is set."
+        ),
+    )
+    parser.add_argument(
+        "--adjacent_top2_whitelist_path",
+        default="",
+        help=(
+            "Optional layer_head_adjacent_step_stats.csv from analyze_top2_adjacent_step_position_sharing.py. "
+            "Required for adjtop2wlt...s...attn and adjtop2rwlt...s...attn modes unless "
+            "ADJACENT_TOP2_WHITELIST_PATH is set."
         ),
     )
     parser.add_argument("--make_plots", type=str2bool, default=True)
@@ -358,6 +385,12 @@ def parse_modes(spec: str) -> list[str]:
             "limit_score_fill",
             "limit_score_gap",
             "limit_score_protect",
+            "shared_top2",
+            "shared_top2_remote",
+            "adjacent_top2",
+            "adjacent_top2_remote",
+            "adjacent_top2_whitelist",
+            "adjacent_top2_remote_whitelist",
             "top2_union_all",
             "observation_window",
             "observation_all_mass",
@@ -403,7 +436,9 @@ def parse_modes(spec: str) -> list[str]:
         raise ValueError(
             "Invalid modes: "
             f"{invalid}. Valid examples: baseline, top2, top2limit3, top2limit3score, "
-            "top2union, obstop2fullnonmasst80kn2mn1, top2limit3gap1p0, "
+            "top2union, sharedtop2t0p7attn, sharedtop2rt0p7attn, "
+            "adjtop2s2attn, adjtop2rs2attn, "
+            "obstop2fullnonmasst80kn2mn1, top2limit3gap1p0, "
             "top2limit3protects16r1p0, synthkv16meanattn, synthkv16massattn."
         )
     if not modes:
@@ -422,6 +457,18 @@ def parse_mode_config(mode: str) -> tuple[str, int | None]:
         return "baseline", None
     if mode == "top2":
         return "top2", None
+    if re.fullmatch(r"sharedtop2t\d+(?:p\d+)?attn", mode):
+        return "shared_top2", None
+    if re.fullmatch(r"sharedtop2rt\d+(?:p\d+)?attn", mode):
+        return "shared_top2_remote", None
+    if re.fullmatch(r"adjtop2s\d+attn", mode):
+        return "adjacent_top2", None
+    if re.fullmatch(r"adjtop2rs\d+attn", mode):
+        return "adjacent_top2_remote", None
+    if re.fullmatch(r"adjtop2wlt\d+(?:p\d+)?s\d+attn", mode):
+        return "adjacent_top2_whitelist", None
+    if re.fullmatch(r"adjtop2rwlt\d+(?:p\d+)?s\d+attn", mode):
+        return "adjacent_top2_remote_whitelist", None
     if mode == "top2union":
         return "top2_union_all", None
     if mode == "top2obswin":
@@ -531,6 +578,27 @@ def parse_gap_margin(mode: str) -> float | None:
     if not match:
         return None
     return float(match.group(2).replace("p", "."))
+
+
+def parse_shared_top2_threshold(mode: str) -> float | None:
+    match = re.fullmatch(r"sharedtop2r?t(\d+(?:p\d+)?)attn", mode)
+    if not match:
+        return None
+    return float(match.group(1).replace("p", "."))
+
+
+def parse_adjacent_top2_stride(mode: str) -> int | None:
+    match = re.fullmatch(r"adjtop2r?(?:wlt\d+(?:p\d+)?)?s(\d+)attn", mode)
+    if not match:
+        return None
+    return max(1, int(match.group(1)))
+
+
+def parse_adjacent_top2_whitelist_threshold(mode: str) -> float | None:
+    match = re.fullmatch(r"adjtop2r?wlt(\d+(?:p\d+)?)s\d+attn", mode)
+    if not match:
+        return None
+    return float(match.group(1).replace("p", "."))
 
 
 def parse_sign_xnor_candidate_fraction(mode: str) -> float | None:
@@ -659,6 +727,96 @@ def full_layer_indices(full_layers: int) -> set[int]:
     selected = set(layers[:requested])
     _FULL_LAYER_SELECTION_CACHE[cache_key] = selected
     return selected
+
+
+def shared_top2_representatives_for_layer(
+    layer_idx: int,
+    head_count: int,
+    threshold: float,
+) -> list[int]:
+    global _SHARED_TOP2_GROUP_CACHE
+    map_path = _ACTIVE_SHARED_TOP2_GROUP_PATH or os.environ.get("SHARED_TOP2_GROUP_PATH", "")
+    if not map_path:
+        raise RuntimeError("sharedtop2 modes require --shared_top2_group_path or SHARED_TOP2_GROUP_PATH.")
+    cache_key = f"{map_path}|{threshold:.12g}|{head_count}"
+    if _SHARED_TOP2_GROUP_CACHE is None or _SHARED_TOP2_GROUP_CACHE.get("_key") != cache_key:
+        representatives_by_layer: dict[int, list[int]] = {}
+        selected_threshold = float(threshold)
+        with open(map_path, "r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                if "threshold" not in row or "layer" not in row:
+                    raise ValueError(f"Shared top2 group CSV is missing required columns: {map_path}")
+                if abs(float(row["threshold"]) - selected_threshold) > 1.0e-9:
+                    continue
+                layer = int(row["layer"])
+                representative = int(row["representative_head"])
+                if not (0 <= representative < head_count):
+                    continue
+                layer_reps = representatives_by_layer.setdefault(layer, list(range(head_count)))
+                members = [
+                    int(part.strip())
+                    for part in str(row.get("member_heads", "")).split(",")
+                    if part.strip()
+                ]
+                for member in members:
+                    if 0 <= member < head_count:
+                        layer_reps[member] = representative
+        _SHARED_TOP2_GROUP_CACHE = {
+            "_key": cache_key,
+            "_path": map_path,
+            "threshold": selected_threshold,
+            "representatives_by_layer": representatives_by_layer,
+        }
+    representatives_by_layer = _SHARED_TOP2_GROUP_CACHE["representatives_by_layer"]
+    return list(representatives_by_layer.get(layer_idx, list(range(head_count))))
+
+
+def adjacent_top2_whitelist_for_layer(
+    layer_idx: int,
+    head_count: int,
+    threshold: float,
+    device: torch.device,
+) -> torch.Tensor:
+    global _ADJACENT_TOP2_WHITELIST_CACHE
+    map_path = _ACTIVE_ADJACENT_TOP2_WHITELIST_PATH or os.environ.get("ADJACENT_TOP2_WHITELIST_PATH", "")
+    if not map_path:
+        raise RuntimeError(
+            "Adjacent whitelist modes require --adjacent_top2_whitelist_path or ADJACENT_TOP2_WHITELIST_PATH."
+        )
+    mask_cache_key = (map_path, int(layer_idx), int(head_count), round(float(threshold), 6), str(device))
+    cached_mask = _ADJACENT_TOP2_MASK_CACHE.get(mask_cache_key)
+    if cached_mask is not None:
+        return cached_mask
+    cache_key = f"{map_path}|{threshold:.12g}|{head_count}"
+    if _ADJACENT_TOP2_WHITELIST_CACHE is None or _ADJACENT_TOP2_WHITELIST_CACHE.get("_key") != cache_key:
+        heads_by_layer: dict[int, set[int]] = defaultdict(set)
+        selected_threshold = float(threshold)
+        with open(map_path, "r", encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                if "layer" not in row or "head" not in row or "prev_to_current_top2_recall_mean" not in row:
+                    raise ValueError(f"Adjacent top2 whitelist CSV is missing required columns: {map_path}")
+                recall = float(row["prev_to_current_top2_recall_mean"])
+                if recall < selected_threshold:
+                    continue
+                layer = int(row["layer"])
+                head = int(row["head"])
+                if 0 <= head < head_count:
+                    heads_by_layer[layer].add(head)
+        _ADJACENT_TOP2_WHITELIST_CACHE = {
+            "_key": cache_key,
+            "_path": map_path,
+            "threshold": selected_threshold,
+            "heads_by_layer": heads_by_layer,
+        }
+    heads_by_layer = _ADJACENT_TOP2_WHITELIST_CACHE["heads_by_layer"]
+    mask = torch.zeros((head_count,), dtype=torch.bool, device=device)
+    for head in heads_by_layer.get(layer_idx, set()):
+        if 0 <= int(head) < head_count:
+            mask[int(head)] = True
+    _ADJACENT_TOP2_MASK_CACHE[mask_cache_key] = mask
+    return mask
 
 
 def _layer_budget_from_parts(
@@ -1759,6 +1917,77 @@ class ReuseCandidateState:
         return self.refresh_head_count / self.refresh_case_count
 
 
+class AdjacentTop2ReuseState:
+    def __init__(self, stride: int) -> None:
+        self.stride = max(1, int(stride))
+        self.previous_layer: dict[int, dict[str, Any]] = {}
+        self.case_count = 0
+        self.refresh_count = 0
+        self.reuse_count = 0
+        self.head_case_count = 0
+        self.head_refresh_count = 0
+        self.head_reuse_count = 0
+
+    def can_reuse(self, layer: int, query_token: int) -> bool:
+        if self.stride <= 1:
+            return False
+        previous = self.previous_layer.get(layer)
+        if previous is None:
+            return False
+        if int(previous["last_query_token"]) != query_token - 1:
+            return False
+        return int(previous["steps_since_refresh"]) + 1 < self.stride
+
+    def reuse_mask(
+        self,
+        layer: int,
+        query_token: int,
+        finite: torch.Tensor,
+        reusable_head_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor | None:
+        if not self.can_reuse(layer, query_token):
+            return None
+        previous = self.previous_layer[layer]
+        valid_count = int(finite[0, 0].sum().item())
+        if valid_count <= 1:
+            return torch.zeros_like(finite, dtype=torch.bool)
+        history_count = valid_count - 1
+        previous_keep = previous["keep"].to(finite.device)
+        copy_len = min(history_count, int(previous_keep.shape[-1]))
+        keep = torch.zeros_like(finite, dtype=torch.bool)
+        if copy_len > 0:
+            keep[:, :, :copy_len] = previous_keep[:, :, :copy_len]
+        previous["last_query_token"] = query_token
+        previous["steps_since_refresh"] = int(previous["steps_since_refresh"]) + 1
+        self.case_count += 1
+        self.reuse_count += 1
+        head_count = int(finite.shape[1])
+        if reusable_head_mask is None:
+            reused_heads = head_count
+        else:
+            reused_heads = int(reusable_head_mask.detach().bool().sum().item())
+        self.head_case_count += head_count
+        self.head_reuse_count += reused_heads
+        self.head_refresh_count += max(0, head_count - reused_heads)
+        return keep
+
+    def refresh(self, layer: int, query_token: int, keep: torch.Tensor, finite: torch.Tensor) -> None:
+        valid_count = int(finite[0, 0].sum().item())
+        history_count = max(0, valid_count - 1)
+        self.previous_layer[layer] = {
+            "last_query_token": query_token,
+            "steps_since_refresh": 0,
+            "keep": keep[:, :, :history_count].detach().clone().bool(),
+        }
+        self.case_count += 1
+        self.refresh_count += 1
+        self.head_case_count += int(finite.shape[1])
+        self.head_refresh_count += int(finite.shape[1])
+
+    def reuse_fraction(self) -> float:
+        return self.head_reuse_count / self.head_case_count if self.head_case_count else 0.0
+
+
 class BlockRouteState:
     def __init__(self) -> None:
         self.previous_layer: dict[int, dict[str, Any]] = {}
@@ -2470,6 +2699,26 @@ def _top2_history_keep_for_query(row_scores: torch.Tensor, finite: torch.Tensor,
     return keep
 
 
+def _top2_history_keep_for_query_heads(
+    row_scores: torch.Tensor,
+    finite: torch.Tensor,
+    top_fraction: float,
+    head_mask: torch.Tensor,
+) -> torch.Tensor:
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    selected_heads = torch.nonzero(head_mask.to(device=row_scores.device).bool(), as_tuple=False).flatten()
+    if selected_heads.numel() == 0:
+        return keep
+    finite_selected = finite.index_select(dim=1, index=selected_heads)
+    selected_keep = _top2_history_keep_for_query(
+        row_scores.index_select(dim=1, index=selected_heads),
+        finite_selected,
+        top_fraction,
+    )
+    keep[:, selected_heads, :] = selected_keep
+    return keep
+
+
 def _sign_xnor_history_keep_for_query(
     query_states: torch.Tensor,
     key_states: torch.Tensor,
@@ -2725,6 +2974,147 @@ def _sparq_fast_attention_output_for_query(
 def _expand_selected_tokens_to_all_heads(original_keep: torch.Tensor) -> torch.Tensor:
     token_keep = original_keep.any(dim=1, keepdim=True)
     return token_keep.expand_as(original_keep).clone()
+
+
+def _shared_top2_index_tensors(
+    layer_idx: int,
+    head_count: int,
+    threshold: float,
+    device: torch.device,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    cache_key = (
+        str(_ACTIVE_SHARED_TOP2_GROUP_PATH or ""),
+        int(layer_idx),
+        int(head_count),
+        round(float(threshold), 6),
+        str(device),
+    )
+    cached = _SHARED_TOP2_INDEX_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    representatives = shared_top2_representatives_for_layer(layer_idx, head_count, threshold)
+    if len(representatives) != head_count:
+        raise RuntimeError(
+            f"Shared top2 group map returned {len(representatives)} heads for layer {layer_idx}, expected {head_count}."
+        )
+    invalid = [head for head in representatives if head < 0 or head >= head_count]
+    if invalid:
+        raise RuntimeError(
+            f"Invalid representative heads for layer {layer_idx}: {sorted(set(invalid))}."
+        )
+
+    unique_representatives = sorted(set(representatives))
+    rep_to_local = {head: local for local, head in enumerate(unique_representatives)}
+    source_local = [rep_to_local[representative_head] for representative_head in representatives]
+    rep_index = torch.tensor(unique_representatives, dtype=torch.long, device=device)
+    source_local_index = torch.tensor(source_local, dtype=torch.long, device=device)
+    source_head_index = torch.tensor(representatives, dtype=torch.long, device=device)
+    cached = (rep_index, source_local_index, source_head_index)
+    _SHARED_TOP2_INDEX_CACHE[cache_key] = cached
+    return cached
+
+
+def _share_top2_positions_for_query(
+    original_keep: torch.Tensor,
+    finite: torch.Tensor,
+    layer_idx: int,
+    threshold: float,
+    remote_only: bool,
+    sink_tokens: int,
+    recent_tokens: int,
+) -> torch.Tensor:
+    batch_count, head_count, key_count = original_keep.shape
+    _, _, source_head_index = _shared_top2_index_tensors(
+        layer_idx,
+        head_count,
+        threshold,
+        original_keep.device,
+    )
+    final_keep = original_keep.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return final_keep
+    history_count = valid_count - 1
+    if remote_only:
+        remote_start = min(max(0, sink_tokens), history_count)
+        remote_end = max(remote_start, history_count - max(0, recent_tokens))
+    else:
+        remote_start = 0
+        remote_end = history_count
+    if remote_start >= remote_end:
+        return final_keep
+    shared_keep = original_keep.index_select(dim=1, index=source_head_index)
+    final_keep[:, :, remote_start:remote_end] = shared_keep[:, :, remote_start:remote_end]
+    return final_keep
+
+
+def _remote_only_top2_keep_for_query(
+    original_keep: torch.Tensor,
+    finite: torch.Tensor,
+    sink_tokens: int,
+    recent_tokens: int,
+) -> torch.Tensor:
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return torch.zeros_like(original_keep, dtype=torch.bool)
+    history_count = valid_count - 1
+    remote_start = min(max(0, sink_tokens), history_count)
+    remote_end = max(remote_start, history_count - max(0, recent_tokens))
+    keep = torch.zeros_like(original_keep, dtype=torch.bool)
+    if remote_start < remote_end:
+        keep[:, :, remote_start:remote_end] = original_keep[:, :, remote_start:remote_end]
+    return keep
+
+
+def _shared_top2_keep_for_query_from_scores(
+    row_scores: torch.Tensor,
+    finite: torch.Tensor,
+    top_fraction: float,
+    layer_idx: int,
+    threshold: float,
+    remote_only: bool,
+    sink_tokens: int,
+    recent_tokens: int,
+) -> torch.Tensor:
+    batch_count, head_count, key_count = row_scores.shape
+    rep_index, source_local_index, _ = _shared_top2_index_tensors(
+        layer_idx,
+        head_count,
+        threshold,
+        row_scores.device,
+    )
+    history_valid = finite.clone()
+    valid_count = int(finite[0, 0].sum().item())
+    if valid_count <= 1:
+        return torch.zeros_like(finite, dtype=torch.bool)
+    self_index = valid_count - 1
+    history_valid[:, :, self_index] = False
+    history_count = valid_count - 1
+    keep_count = min(history_count, max(1, math.ceil(top_fraction * history_count)))
+    if remote_only:
+        remote_start = min(max(0, sink_tokens), history_count)
+        remote_end = max(remote_start, history_count - max(0, recent_tokens))
+    else:
+        remote_start = 0
+        remote_end = history_count
+
+    keep = torch.zeros_like(finite, dtype=torch.bool)
+    if rep_index.numel() == 0:
+        return keep
+    rep_scores = row_scores.index_select(dim=1, index=rep_index)
+    rep_valid = history_valid.index_select(dim=1, index=rep_index)
+    masked_scores = rep_scores.masked_fill(~rep_valid, torch.finfo(row_scores.dtype).min)
+    _, rep_top_indices = torch.topk(masked_scores, k=keep_count, dim=-1, largest=True)
+    rep_keep = torch.zeros_like(rep_valid, dtype=torch.bool)
+    rep_keep.scatter_(-1, rep_top_indices, True)
+    rep_keep &= rep_valid
+    expanded_keep = rep_keep.index_select(dim=1, index=source_local_index)
+    if remote_only:
+        keep[:, :, remote_start:remote_end] = expanded_keep[:, :, remote_start:remote_end]
+    else:
+        keep[:, :, :history_count] = expanded_keep[:, :, :history_count]
+    return keep
 
 
 def _apply_full_head_protection(
@@ -6250,6 +6640,47 @@ def _limited_eager_attention_forward(
         key_states = key_states.repeat_interleave(repeat_groups, dim=1)
         value_states = value_states.repeat_interleave(repeat_groups, dim=1)
     mode_kind, mode_max_heads = parse_mode_config(_ACTIVE_MODE)
+    if (
+        mode_kind == "adjacent_top2_remote"
+        and query_states.shape[-2] == 1
+        and _ACTIVE_LOAD_STATS is None
+        and _ACTIVE_ADJACENT_TOP2_STATE is not None
+        and not bool(kwargs.get("output_attentions", False))
+    ):
+        layer_idx = int(getattr(module, "layer_idx", 0))
+        key_count = int(key_states.shape[-2])
+        query_token = key_count - 1
+        batch_count = int(query_states.shape[0])
+        head_count = int(query_states.shape[1])
+        finite = torch.ones((batch_count, head_count, key_count), dtype=torch.bool, device=query_states.device)
+        reused_keep = _ACTIVE_ADJACENT_TOP2_STATE.reuse_mask(
+            layer_idx,
+            query_token,
+            finite,
+            None,
+        )
+        if reused_keep is not None:
+            history_count = max(0, key_count - 1)
+            selected_history_indices, selected_valid = _indices_from_keep_mask(reused_keep[:, :, :history_count])
+            final_indices, final_valid = _qabs_final_indices_from_selected(
+                selected_history_indices,
+                selected_valid,
+                history_count,
+                key_count,
+                _ACTIVE_ALWAYS_KEEP_SELF,
+            )
+            return (
+                _qabs_attention_from_final_indices(
+                    query_states,
+                    key_states,
+                    value_states,
+                    attention_mask,
+                    final_indices,
+                    final_valid,
+                    scaling,
+                ),
+                None,
+            )
     if mode_kind == "ksign_index_rerank":
         return _ksign_index_attention_forward(
             module,
@@ -6605,6 +7036,12 @@ def _limited_eager_attention_forward(
 
     if mode_kind in {
         "top2",
+        "shared_top2",
+        "shared_top2_remote",
+        "adjacent_top2",
+        "adjacent_top2_remote",
+        "adjacent_top2_whitelist",
+        "adjacent_top2_remote_whitelist",
         "limit_random",
         "limit_score",
         "limit_score_fill",
@@ -6630,7 +7067,87 @@ def _limited_eager_attention_forward(
         for query_index in range(query_count):
             row = scores[:, :, query_index, :]
             finite = torch.isfinite(row)
-            history_original = _top2_history_keep_for_query(row, finite, _ACTIVE_TOP_FRACTION)
+            shared_precomputed = False
+            adjacent_final_pre: torch.Tensor | None = None
+            if mode_kind in {
+                "adjacent_top2",
+                "adjacent_top2_remote",
+                "adjacent_top2_whitelist",
+                "adjacent_top2_remote_whitelist",
+            }:
+                if _ACTIVE_ADJACENT_TOP2_STATE is None:
+                    raise RuntimeError("Adjacent top2 modes require an active AdjacentTop2ReuseState.")
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                query_token = chunk_query_start + query_index
+                head_count = row.shape[1]
+                whitelist_mask: torch.Tensor | None = None
+                if mode_kind in {"adjacent_top2_whitelist", "adjacent_top2_remote_whitelist"}:
+                    whitelist_threshold = parse_adjacent_top2_whitelist_threshold(_ACTIVE_MODE)
+                    if whitelist_threshold is None:
+                        raise RuntimeError(f"Invalid adjacent whitelist mode: {_ACTIVE_MODE}")
+                    whitelist_mask = adjacent_top2_whitelist_for_layer(
+                        layer_idx,
+                        head_count,
+                        whitelist_threshold,
+                        row.device,
+                    )
+                reused_keep = _ACTIVE_ADJACENT_TOP2_STATE.reuse_mask(
+                    layer_idx,
+                    query_token,
+                    finite,
+                    whitelist_mask,
+                )
+                if reused_keep is not None and _ACTIVE_LOAD_STATS is None and whitelist_mask is None:
+                    history_original = reused_keep
+                else:
+                    if reused_keep is not None and whitelist_mask is not None and _ACTIVE_LOAD_STATS is None:
+                        refresh_head_mask = ~whitelist_mask
+                        current_original = _top2_history_keep_for_query_heads(
+                            row,
+                            finite,
+                            _ACTIVE_TOP_FRACTION,
+                            refresh_head_mask,
+                        )
+                    else:
+                        current_original = _top2_history_keep_for_query(row, finite, _ACTIVE_TOP_FRACTION)
+                    current_selector = (
+                        _remote_only_top2_keep_for_query(
+                            current_original,
+                            finite,
+                            _ACTIVE_PROTECT_SINK_TOKENS,
+                            _ACTIVE_PROTECT_RECENT_TOKENS,
+                        )
+                        if mode_kind in {"adjacent_top2_remote", "adjacent_top2_remote_whitelist"}
+                        else current_original
+                    )
+                    if reused_keep is None:
+                        _ACTIVE_ADJACENT_TOP2_STATE.refresh(layer_idx, query_token, current_selector, finite)
+                        adjacent_final_pre = current_selector
+                    else:
+                        if whitelist_mask is None:
+                            adjacent_final_pre = reused_keep
+                        else:
+                            adjacent_final_pre = current_selector.clone()
+                            adjacent_final_pre[:, whitelist_mask, :] = reused_keep[:, whitelist_mask, :]
+                    history_original = current_original if _ACTIVE_LOAD_STATS is not None else current_selector
+            elif mode_kind in {"shared_top2", "shared_top2_remote"} and _ACTIVE_LOAD_STATS is None:
+                layer_idx = int(getattr(module, "layer_idx", 0))
+                threshold = parse_shared_top2_threshold(_ACTIVE_MODE)
+                if threshold is None:
+                    raise RuntimeError(f"Invalid shared-top2 mode: {_ACTIVE_MODE}")
+                history_original = _shared_top2_keep_for_query_from_scores(
+                    row,
+                    finite,
+                    _ACTIVE_TOP_FRACTION,
+                    layer_idx,
+                    threshold,
+                    remote_only=mode_kind == "shared_top2_remote",
+                    sink_tokens=_ACTIVE_PROTECT_SINK_TOKENS,
+                    recent_tokens=_ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                shared_precomputed = True
+            else:
+                history_original = _top2_history_keep_for_query(row, finite, _ACTIVE_TOP_FRACTION)
             if mode_kind in {"sign_xnor", "sign_xnor_knorm", "sign_xnor_rerank"}:
                 candidate_fraction = parse_sign_xnor_candidate_fraction(_ACTIVE_MODE)
                 if candidate_fraction is None:
@@ -6774,6 +7291,55 @@ def _limited_eager_attention_forward(
             elif mode_kind == "top2":
                 history_final = _apply_full_head_protection(
                     history_original,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind in {"shared_top2", "shared_top2_remote"}:
+                if shared_precomputed:
+                    history_final = history_original
+                else:
+                    layer_idx = int(getattr(module, "layer_idx", 0))
+                    threshold = parse_shared_top2_threshold(_ACTIVE_MODE)
+                    if threshold is None:
+                        raise RuntimeError(f"Invalid shared-top2 mode: {_ACTIVE_MODE}")
+                    history_final = _share_top2_positions_for_query(
+                        history_original,
+                        finite,
+                        layer_idx,
+                        threshold,
+                        remote_only=mode_kind == "shared_top2_remote",
+                        sink_tokens=_ACTIVE_PROTECT_SINK_TOKENS,
+                        recent_tokens=_ACTIVE_PROTECT_RECENT_TOKENS,
+                    )
+                history_final = _apply_full_head_protection(
+                    history_final,
+                    finite,
+                    _ACTIVE_PROTECT_SINK_TOKENS,
+                    _ACTIVE_PROTECT_RECENT_TOKENS,
+                )
+                if _ACTIVE_LOAD_STATS is not None:
+                    history_valid = finite.clone()
+                    valid_count = int(finite[0, 0].sum().item())
+                    if valid_count > 0:
+                        history_valid[:, :, valid_count - 1] = False
+                    _ACTIVE_LOAD_STATS.update(layer_idx, history_original, history_final, history_valid)
+            elif mode_kind in {
+                "adjacent_top2",
+                "adjacent_top2_remote",
+                "adjacent_top2_whitelist",
+                "adjacent_top2_remote_whitelist",
+            }:
+                history_final = adjacent_final_pre if adjacent_final_pre is not None else history_original
+                history_final = _apply_full_head_protection(
+                    history_final,
                     finite,
                     _ACTIVE_PROTECT_SINK_TOKENS,
                     _ACTIVE_PROTECT_RECENT_TOKENS,
@@ -6957,6 +7523,7 @@ def attention_mode(
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
+    adjacent_top2_state: AdjacentTop2ReuseState | None = None,
     knorm_state: KNormState | None = None,
     block_route_state: BlockRouteState | None = None,
     ksign_state: KSignIndexState | None = None,
@@ -6975,8 +7542,10 @@ def attention_mode(
     full_head_map_path: str = "",
     full_layer_map_path: str = "",
     layer_budget_map_path: str = "",
+    shared_top2_group_path: str = "",
+    adjacent_top2_whitelist_path: str = "",
 ):
-    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_KNORM_STATE, _ACTIVE_BLOCK_ROUTE_STATE, _ACTIVE_KSIGN_STATE, _ACTIVE_KDOM_STATE, _ACTIVE_BREP_STATE, _ACTIVE_SPARQ_MEAN_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL, _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL, _ACTIVE_QABS_CUDA_REUSE_SELECT_KERNEL, _ACTIVE_QABS_PROFILE_STATS, _ACTIVE_QABS_CANDIDATE_SELECTION, _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE, _ACTIVE_FULL_HEAD_MAP_PATH, _ACTIVE_FULL_LAYER_MAP_PATH, _ACTIVE_LAYER_BUDGET_MAP_PATH, _LAYER_BUDGET_QABS_REUSE_STATE
+    global _ACTIVE_MODE, _ACTIVE_TOP_FRACTION, _ACTIVE_MAX_HEADS_PER_TOKEN, _ACTIVE_ALWAYS_KEEP_SELF, _ACTIVE_PROTECT_SINK_TOKENS, _ACTIVE_PROTECT_RECENT_TOKENS, _ACTIVE_LOAD_STATS, _ACTIVE_OBS_STATE, _ACTIVE_OBS_MASS_STATE, _ACTIVE_OBS_HYBRID_STATE, _ACTIVE_REUSE_STATE, _ACTIVE_ADJACENT_TOP2_STATE, _ACTIVE_KNORM_STATE, _ACTIVE_BLOCK_ROUTE_STATE, _ACTIVE_KSIGN_STATE, _ACTIVE_KDOM_STATE, _ACTIVE_BREP_STATE, _ACTIVE_SPARQ_MEAN_STATE, _ACTIVE_CANDIDATE_STATS, _ACTIVE_REUSE_OVERLAP_STATS, _ACTIVE_QABS_FAST_PATH, _ACTIVE_QABS_CUDA_FINAL_KERNEL, _ACTIVE_QABS_CUDA_CANDIDATE_KERNEL, _ACTIVE_QABS_CUDA_REUSE_SELECT_KERNEL, _ACTIVE_QABS_PROFILE_STATS, _ACTIVE_QABS_CANDIDATE_SELECTION, _ACTIVE_QABS_THRESHOLD_SAMPLE_SIZE, _ACTIVE_FULL_HEAD_MAP_PATH, _ACTIVE_FULL_LAYER_MAP_PATH, _ACTIVE_LAYER_BUDGET_MAP_PATH, _ACTIVE_SHARED_TOP2_GROUP_PATH, _ACTIVE_ADJACENT_TOP2_WHITELIST_PATH, _LAYER_BUDGET_QABS_REUSE_STATE
     previous = (
         _ACTIVE_MODE,
         _ACTIVE_TOP_FRACTION,
@@ -6989,6 +7558,7 @@ def attention_mode(
         _ACTIVE_OBS_MASS_STATE,
         _ACTIVE_OBS_HYBRID_STATE,
         _ACTIVE_REUSE_STATE,
+        _ACTIVE_ADJACENT_TOP2_STATE,
         _ACTIVE_KNORM_STATE,
         _ACTIVE_BLOCK_ROUTE_STATE,
         _ACTIVE_KSIGN_STATE,
@@ -7007,6 +7577,8 @@ def attention_mode(
         _ACTIVE_FULL_HEAD_MAP_PATH,
         _ACTIVE_FULL_LAYER_MAP_PATH,
         _ACTIVE_LAYER_BUDGET_MAP_PATH,
+        _ACTIVE_SHARED_TOP2_GROUP_PATH,
+        _ACTIVE_ADJACENT_TOP2_WHITELIST_PATH,
     )
     _ACTIVE_MODE = mode
     _ACTIVE_TOP_FRACTION = top_fraction
@@ -7019,6 +7591,7 @@ def attention_mode(
     _ACTIVE_OBS_MASS_STATE = obs_mass_state
     _ACTIVE_OBS_HYBRID_STATE = obs_hybrid_state
     _ACTIVE_REUSE_STATE = reuse_state
+    _ACTIVE_ADJACENT_TOP2_STATE = adjacent_top2_state
     _ACTIVE_KNORM_STATE = knorm_state
     _ACTIVE_BLOCK_ROUTE_STATE = block_route_state
     _ACTIVE_KSIGN_STATE = ksign_state
@@ -7037,6 +7610,8 @@ def attention_mode(
     _ACTIVE_FULL_HEAD_MAP_PATH = full_head_map_path
     _ACTIVE_FULL_LAYER_MAP_PATH = full_layer_map_path
     _ACTIVE_LAYER_BUDGET_MAP_PATH = layer_budget_map_path
+    _ACTIVE_SHARED_TOP2_GROUP_PATH = shared_top2_group_path
+    _ACTIVE_ADJACENT_TOP2_WHITELIST_PATH = adjacent_top2_whitelist_path
     if mode == "layerbudgetattn":
         _LAYER_BUDGET_QABS_REUSE_STATE = {}
     try:
@@ -7054,6 +7629,7 @@ def attention_mode(
             _ACTIVE_OBS_MASS_STATE,
             _ACTIVE_OBS_HYBRID_STATE,
             _ACTIVE_REUSE_STATE,
+            _ACTIVE_ADJACENT_TOP2_STATE,
             _ACTIVE_KNORM_STATE,
             _ACTIVE_BLOCK_ROUTE_STATE,
             _ACTIVE_KSIGN_STATE,
@@ -7072,6 +7648,8 @@ def attention_mode(
             _ACTIVE_FULL_HEAD_MAP_PATH,
             _ACTIVE_FULL_LAYER_MAP_PATH,
             _ACTIVE_LAYER_BUDGET_MAP_PATH,
+            _ACTIVE_SHARED_TOP2_GROUP_PATH,
+            _ACTIVE_ADJACENT_TOP2_WHITELIST_PATH,
         ) = previous
 
 
@@ -7150,6 +7728,7 @@ def compute_eval_loss(
     obs_mass_state: AllTokenMassObservationState | None = None,
     obs_hybrid_state: HybridObservationState | None = None,
     reuse_state: ReuseCandidateState | None = None,
+    adjacent_top2_state: AdjacentTop2ReuseState | None = None,
     knorm_state: KNormState | None = None,
     block_route_state: BlockRouteState | None = None,
     ksign_state: KSignIndexState | None = None,
@@ -7168,6 +7747,8 @@ def compute_eval_loss(
     full_head_map_path: str = "",
     full_layer_map_path: str = "",
     layer_budget_map_path: str = "",
+    shared_top2_group_path: str = "",
+    adjacent_top2_whitelist_path: str = "",
     adaptive_budget_stats: dict[str, Any] | None = None,
     initial_past_key_values: Any | None = None,
     initial_prev_logits: torch.Tensor | None = None,
@@ -7245,6 +7826,7 @@ def compute_eval_loss(
             obs_mass_state,
             obs_hybrid_state,
             reuse_state,
+            adjacent_top2_state,
             knorm_state,
             block_route_state,
             ksign_state,
@@ -7263,6 +7845,8 @@ def compute_eval_loss(
             full_head_map_path,
             full_layer_map_path,
             layer_budget_map_path,
+            shared_top2_group_path,
+            adjacent_top2_whitelist_path,
         ):
             outputs = model_forward(model, kwargs)
         logits = outputs.logits
@@ -7556,12 +8140,29 @@ def main() -> None:
         qabs_dim_count = qabs_params[0] if qabs_params else None
         qabs_candidate_fraction = qabs_params[1] if qabs_params else None
         kdom_key_dim_count = kdom_params[1] if kdom_params else None
+        adjacent_top2_stride = (
+            parse_adjacent_top2_stride(mode)
+            if mode_kind
+            in {
+                "adjacent_top2",
+                "adjacent_top2_remote",
+                "adjacent_top2_whitelist",
+                "adjacent_top2_remote_whitelist",
+            }
+            else None
+        )
         stats = (
             LoadStats(layer_count, head_count)
             if not args.disable_sparse_stats
             and mode_kind
             in {
                 "top2",
+                "shared_top2",
+                "shared_top2_remote",
+                "adjacent_top2",
+                "adjacent_top2_remote",
+                "adjacent_top2_whitelist",
+                "adjacent_top2_remote_whitelist",
                 "top2_union_all",
                 "limit_random",
                 "limit_score",
@@ -7612,6 +8213,17 @@ def main() -> None:
         reuse_state = (
             ReuseCandidateState()
             if mode_kind in {"qabs_reuse_rerank", "lagged_reuse_rerank", "qabs_shared_reuse_attention", "qabs_periodic_candidate_attention"}
+            else None
+        )
+        adjacent_top2_state = (
+            AdjacentTop2ReuseState(adjacent_top2_stride or 1)
+            if mode_kind
+            in {
+                "adjacent_top2",
+                "adjacent_top2_remote",
+                "adjacent_top2_whitelist",
+                "adjacent_top2_remote_whitelist",
+            }
             else None
         )
         knorm_state = KNormState() if mode_kind == "knorm_reservoir" else None
@@ -7712,6 +8324,7 @@ def main() -> None:
             obs_mass_state,
             obs_hybrid_state,
             reuse_state,
+            adjacent_top2_state,
             knorm_state,
             block_route_state,
             ksign_state,
@@ -7730,6 +8343,8 @@ def main() -> None:
             args.full_head_map_path,
             args.full_layer_map_path,
             args.layer_budget_map_path,
+            args.shared_top2_group_path,
+            args.adjacent_top2_whitelist_path,
             adaptive_budget_stats,
             shared_past_key_values,
             shared_prev_logits,
@@ -7806,6 +8421,18 @@ def main() -> None:
                     if mode_kind == "limit_score_protect"
                     else "top2_union_all"
                     if mode_kind == "top2_union_all"
+                    else "shared_top2"
+                    if mode_kind == "shared_top2"
+                    else "shared_top2_remote"
+                    if mode_kind == "shared_top2_remote"
+                    else "adjacent_top2"
+                    if mode_kind == "adjacent_top2"
+                    else "adjacent_top2_remote"
+                    if mode_kind == "adjacent_top2_remote"
+                    else "adjacent_top2_whitelist"
+                    if mode_kind == "adjacent_top2_whitelist"
+                    else "adjacent_top2_remote_whitelist"
+                    if mode_kind == "adjacent_top2_remote_whitelist"
                     else "observation_window"
                     if mode_kind == "observation_window"
                     else "observation_all_mass"
@@ -7963,6 +8590,32 @@ def main() -> None:
                 ),
                 "layer_budget_map_path": (
                     args.layer_budget_map_path if mode_kind == "layer_budget_attention" else ""
+                ),
+                "shared_top2_group_path": (
+                    args.shared_top2_group_path if mode_kind in {"shared_top2", "shared_top2_remote"} else ""
+                ),
+                "shared_top2_threshold": (
+                    parse_shared_top2_threshold(mode) if mode_kind in {"shared_top2", "shared_top2_remote"} else ""
+                ),
+                "adjacent_top2_stride": adjacent_top2_stride if adjacent_top2_stride else "",
+                "adjacent_top2_whitelist_path": (
+                    args.adjacent_top2_whitelist_path
+                    if mode_kind in {"adjacent_top2_whitelist", "adjacent_top2_remote_whitelist"}
+                    else ""
+                ),
+                "adjacent_top2_whitelist_threshold": (
+                    parse_adjacent_top2_whitelist_threshold(mode)
+                    if mode_kind in {"adjacent_top2_whitelist", "adjacent_top2_remote_whitelist"}
+                    else ""
+                ),
+                "adjacent_top2_reuse_fraction": (
+                    adjacent_top2_state.reuse_fraction() if adjacent_top2_state is not None else ""
+                ),
+                "adjacent_top2_refresh_count": (
+                    adjacent_top2_state.refresh_count if adjacent_top2_state is not None else ""
+                ),
+                "adjacent_top2_reuse_count": (
+                    adjacent_top2_state.reuse_count if adjacent_top2_state is not None else ""
                 ),
                 "adaptive_low_tokens": adaptive_low_tokens,
                 "adaptive_high_tokens": adaptive_high_tokens,
@@ -8315,6 +8968,14 @@ def main() -> None:
             "full_head_map_path",
             "full_layer_map_path",
             "layer_budget_map_path",
+            "shared_top2_group_path",
+            "shared_top2_threshold",
+            "adjacent_top2_stride",
+            "adjacent_top2_whitelist_path",
+            "adjacent_top2_whitelist_threshold",
+            "adjacent_top2_reuse_fraction",
+            "adjacent_top2_refresh_count",
+            "adjacent_top2_reuse_count",
             "adaptive_low_tokens",
             "adaptive_high_tokens",
             "adaptive_low_fraction",

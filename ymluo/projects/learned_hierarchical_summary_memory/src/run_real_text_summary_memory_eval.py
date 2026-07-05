@@ -58,6 +58,7 @@ STOPWORDS = {
     "upon",
     "now",
 }
+MEMORY_LEVELS = ("summary10", "summary100", "summary1000", "raw")
 
 
 @dataclass(frozen=True)
@@ -384,6 +385,24 @@ def summarize(rows: list[TrialResult]) -> tuple[list[dict[str, Any]], list[dict[
     return summary, by_kind
 
 
+def route_mix(rows: list[TrialResult]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[TrialResult]] = defaultdict(list)
+    for row in rows:
+        grouped[row.method].append(row)
+
+    mixes: list[dict[str, Any]] = []
+    for method, items in sorted(grouped.items()):
+        total = len(items)
+        counts = Counter(row.memory_level for row in items)
+        mix: dict[str, Any] = {"method": method, "tasks": total}
+        for level in MEMORY_LEVELS:
+            name = "full_attention" if level == "raw" else level
+            mix[f"{name}_count"] = counts[level]
+            mix[f"{name}_ratio"] = counts[level] / max(1, total)
+        mixes.append(mix)
+    return mixes
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -414,8 +433,10 @@ def main() -> None:
     rows.extend(evaluate("adaptive_with_raw", tasks, blocks, memories, config, allow_raw=True))
 
     summary, by_kind = summarize(rows)
+    mixes = route_mix(rows)
     write_csv(output_dir / "summary.csv", summary)
     write_csv(output_dir / "by_kind.csv", by_kind)
+    write_csv(output_dir / "route_mix.csv", mixes)
     write_csv(output_dir / "trials.csv", [asdict(row) for row in rows])
     payload = {
         "config": asdict(config),
@@ -423,6 +444,7 @@ def main() -> None:
         "tasks": len(tasks),
         "summary": summary,
         "by_kind": by_kind,
+        "route_mix": mixes,
         "block_memories": {str(k): asdict(v) for k, v in memories.items()},
     }
     (output_dir / "summary.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

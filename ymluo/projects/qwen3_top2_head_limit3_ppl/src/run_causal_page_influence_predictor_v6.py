@@ -276,6 +276,178 @@ def keep_with_page_scores(
     return lb.fit_context_budget(keep, bundle, config.budget_tokens)
 
 
+def sparse_bundle_from_keep_indices(
+    bundle: lb.PromptBundle,
+    keep_indices: list[int],
+) -> lb.PromptBundle:
+    original_ids = bundle.input_ids[0].detach().cpu().tolist()
+    prefix_ids = original_ids[: bundle.prefix_token_count]
+    context_ids = [
+        original_ids[idx]
+        for idx in sorted(keep_indices)
+        if bundle.context_token_start <= idx < bundle.query_start
+    ]
+    suffix_ids = original_ids[bundle.query_start :]
+    sparse_ids = prefix_ids + context_ids + suffix_ids
+    query_start = len(prefix_ids) + len(context_ids)
+    return lb.PromptBundle(
+        input_ids=torch.tensor([sparse_ids], dtype=torch.long),
+        prefix_token_count=len(prefix_ids),
+        context_token_start=len(prefix_ids),
+        query_start=query_start,
+        suffix_token_count=len(suffix_ids),
+        page_spans={},
+    )
+
+
+def sparse_bundle_and_original_positions(
+    bundle: lb.PromptBundle,
+    keep_indices: list[int],
+) -> tuple[lb.PromptBundle, list[int]]:
+    original_ids = bundle.input_ids[0].detach().cpu().tolist()
+    prefix_positions = list(range(bundle.prefix_token_count))
+    context_positions = [
+        idx
+        for idx in sorted(keep_indices)
+        if bundle.context_token_start <= idx < bundle.query_start
+    ]
+    prefix_ids = [original_ids[idx] for idx in prefix_positions]
+    context_ids = [original_ids[idx] for idx in context_positions]
+    suffix_ids = original_ids[bundle.query_start :]
+    sparse_ids = prefix_ids + context_ids + suffix_ids
+    query_start = len(prefix_ids) + len(context_ids)
+    sparse_bundle = lb.PromptBundle(
+        input_ids=torch.tensor([sparse_ids], dtype=torch.long),
+        prefix_token_count=len(prefix_ids),
+        context_token_start=len(prefix_ids),
+        query_start=query_start,
+        suffix_token_count=len(suffix_ids),
+        page_spans={},
+    )
+    return sparse_bundle, prefix_positions + context_positions
+
+
+@torch.inference_mode()
+def prefill_prefix_with_original_positions(
+    model: torch.nn.Module,
+    sparse_bundle: lb.PromptBundle,
+    original_positions: list[int],
+    input_device: torch.device,
+) -> tuple[Any, float]:
+    ids = sparse_bundle.input_ids[:, : sparse_bundle.query_start].to(input_device)
+    if ids.shape[-1] != len(original_positions):
+        raise ValueError(f"Position length mismatch: ids={ids.shape[-1]} positions={len(original_positions)}")
+    started = time.perf_counter()
+    outputs = model_forward(
+        model,
+        {
+            "input_ids": ids,
+            "position_ids": torch.tensor([original_positions], dtype=torch.long, device=input_device),
+            "use_cache": True,
+            "return_dict": True,
+            "output_attentions": False,
+            "output_hidden_states": False,
+            # Keep cache_position compact for DynamicCache indexing; RoPE uses position_ids above.
+            "cache_position": torch.arange(ids.shape[-1], device=input_device),
+        },
+    )
+    return outputs.past_key_values, time.perf_counter() - started
+
+
+@torch.inference_mode()
+def run_tokens_with_original_positions(
+    model: torch.nn.Module,
+    input_ids: torch.Tensor,
+    past_key_values: Any,
+    compact_position_start: int,
+    original_position_start: int,
+    input_device: torch.device,
+) -> tuple[Any, torch.Tensor, float]:
+    ids = input_ids.to(input_device)
+    if ids.shape[-1] == 0:
+        raise ValueError("empty token segment")
+    started = time.perf_counter()
+    outputs = model_forward(
+        model,
+        {
+            "input_ids": ids,
+            "past_key_values": past_key_values,
+            "position_ids": torch.arange(
+                original_position_start,
+                original_position_start + ids.shape[-1],
+                device=input_device,
+            ).view(1, -1),
+            "use_cache": True,
+            "return_dict": True,
+            "output_attentions": False,
+            "output_hidden_states": False,
+            "cache_position": torch.arange(
+                compact_position_start,
+                compact_position_start + ids.shape[-1],
+                device=input_device,
+            ),
+        },
+    )
+    return outputs.past_key_values, outputs.logits[:, -1, :].detach(), time.perf_counter() - started
+
+
+@torch.inference_mode()
+def generate_with_original_positions(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    sparse_bundle: lb.PromptBundle,
+    prefix_cache: Any,
+    original_query_start: int,
+    max_new_tokens: int,
+    input_device: torch.device,
+) -> tuple[str, list[int], float, float]:
+    suffix_ids = sparse_bundle.input_ids[:, sparse_bundle.query_start :].to(input_device)
+    query_cache, prev_logits, query_seconds = run_tokens_with_original_positions(
+        model,
+        suffix_ids,
+        prefix_cache,
+        sparse_bundle.query_start,
+        original_query_start,
+        input_device,
+    )
+    generated: list[int] = []
+    decode_started = time.perf_counter()
+    eos_ids = set()
+    if tokenizer.eos_token_id is not None:
+        eos_ids.add(int(tokenizer.eos_token_id))
+    for step in range(max_new_tokens):
+        next_id = int(torch.argmax(prev_logits.float(), dim=-1).item())
+        if next_id in eos_ids:
+            break
+        generated.append(next_id)
+        token = torch.tensor([[next_id]], dtype=torch.long, device=input_device)
+        outputs = model_forward(
+            model,
+            {
+                "input_ids": token,
+                "past_key_values": query_cache,
+                "position_ids": torch.tensor(
+                    [[original_query_start + sparse_bundle.suffix_token_count + step]],
+                    dtype=torch.long,
+                    device=input_device,
+                ),
+                "use_cache": True,
+                "return_dict": True,
+                "output_attentions": False,
+                "output_hidden_states": False,
+                "cache_position": torch.tensor(
+                    [sparse_bundle.query_start + sparse_bundle.suffix_token_count + step],
+                    device=input_device,
+                ),
+            },
+        )
+        query_cache = outputs.past_key_values
+        prev_logits = outputs.logits[:, -1, :].detach()
+    decode_seconds = time.perf_counter() - decode_started
+    text = tokenizer.decode(generated, skip_special_tokens=True)
+    return text, generated, query_seconds, decode_seconds
+
+
 @torch.inference_mode()
 def target_nll(
     model: torch.nn.Module,
@@ -480,6 +652,85 @@ def evaluate_sparse_method(
         "keep_fraction": len(keep_indices) / max(1, bundle.query_start),
         "selected_pages": ",".join(str(page_id) for page_id in lb.selected_page_ids(bundle, keep_indices)),
         "page_count": len(pages),
+        "prefill_path": "full_prefill_then_kv_gather" if method != "full_kv" else "full_prefill",
+        "selector_seconds": 0.0,
+    }
+
+
+def evaluate_sparse_prefill_method(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    input_device: torch.device,
+    example: lb.Example,
+    bundle: lb.PromptBundle,
+    pages: list[lb.Page],
+    config: lb.Config,
+    method: str,
+    page_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    selector_started = time.perf_counter()
+    if method in {"heuristic_sparse_prefill", "heuristic_rangepos_sparse_prefill"}:
+        keep_indices = lb.keep_ours_page(bundle, example, pages, config, {"model": model, "tokenizer": tokenizer})
+    elif method in {"causal_ridge_sparse_prefill", "causal_ridge_rangepos_sparse_prefill"}:
+        scores = {int(row["page_id"]): float(row["predicted_delta_nll"] or 0.0) for row in page_rows}
+        keep_indices = keep_with_page_scores(bundle, pages, config, scores)
+    else:
+        raise ValueError(method)
+    selector_seconds = time.perf_counter() - selector_started
+
+    if method in {"heuristic_rangepos_sparse_prefill", "causal_ridge_rangepos_sparse_prefill"}:
+        sparse_bundle, original_positions = sparse_bundle_and_original_positions(bundle, keep_indices)
+        sparse_prefix_cache, prefill_seconds = prefill_prefix_with_original_positions(
+            model, sparse_bundle, original_positions, input_device
+        )
+        prediction, generated_ids, query_seconds, decode_seconds = generate_with_original_positions(
+            model,
+            tokenizer,
+            sparse_bundle,
+            sparse_prefix_cache,
+            bundle.query_start,
+            example.max_new_tokens,
+            input_device,
+        )
+        prefill_path = "range_position_sparse_prefill"
+    else:
+        sparse_bundle = sparse_bundle_from_keep_indices(bundle, keep_indices)
+        sparse_prefix_cache, prefill_seconds = lb.prefill_prefix(model, sparse_bundle, input_device)
+        prediction, generated_ids, query_seconds, decode_seconds = lb.generate_with_cache(
+            model,
+            tokenizer,
+            sparse_bundle,
+            sparse_prefix_cache,
+            example.max_new_tokens,
+            input_device,
+        )
+        prefill_path = "sparse_text_prefill"
+    score = lb.score_prediction(example.metric, prediction, example.answers)
+    context_kept = sum(1 for idx in keep_indices if bundle.context_token_start <= idx < bundle.query_start)
+    return {
+        "benchmark": example.benchmark,
+        "task": example.task,
+        "sample_id": example.sample_id,
+        "method": method,
+        "metric": example.metric,
+        "score": score,
+        "prediction": prediction.replace("\n", "\\n")[:500],
+        "answers": json.dumps(example.answers, ensure_ascii=False),
+        "generated_tokens": len(generated_ids),
+        "prefill_seconds": prefill_seconds,
+        "kv_gather_seconds": 0.0,
+        "query_seconds": query_seconds,
+        "decode_seconds": decode_seconds,
+        "selector_seconds": selector_seconds,
+        "online_seconds": selector_seconds + query_seconds + decode_seconds,
+        "total_seconds": selector_seconds + prefill_seconds + query_seconds + decode_seconds,
+        "raw_prefix_tokens": bundle.query_start,
+        "kept_prefix_tokens": sparse_bundle.query_start,
+        "kept_context_tokens": context_kept,
+        "keep_fraction": sparse_bundle.query_start / max(1, bundle.query_start),
+        "selected_pages": ",".join(str(page_id) for page_id in lb.selected_page_ids(bundle, keep_indices)),
+        "page_count": len(pages),
+        "prefill_path": prefill_path,
     }
 
 
@@ -507,6 +758,7 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "mean_online_seconds": sum(float(row["online_seconds"]) for row in subset) / n,
                 "mean_prefill_seconds": sum(float(row["prefill_seconds"]) for row in subset) / n,
                 "mean_kv_gather_seconds": sum(float(row["kv_gather_seconds"]) for row in subset) / n,
+                "mean_selector_seconds": sum(float(row.get("selector_seconds", 0.0)) for row in subset) / n,
                 "mean_query_seconds": sum(float(row["query_seconds"]) for row in subset) / n,
                 "mean_decode_seconds": sum(float(row["decode_seconds"]) for row in subset) / n,
                 "mean_kept_prefix_tokens": sum(int(row["kept_prefix_tokens"]) for row in subset) / n,
@@ -593,7 +845,16 @@ def main() -> None:
         page_rows_by_sample.setdefault(key, []).append(row)
 
     result_rows: list[dict[str, Any]] = []
-    methods = ["full_kv", "heuristic_page_gather", "causal_ridge_page_gather", "causal_label_oracle"]
+    methods = [
+        "full_kv",
+        "heuristic_page_gather",
+        "causal_ridge_page_gather",
+        "causal_label_oracle",
+        "heuristic_sparse_prefill",
+        "causal_ridge_sparse_prefill",
+        "heuristic_rangepos_sparse_prefill",
+        "causal_ridge_rangepos_sparse_prefill",
+    ]
     for idx, example in enumerate(examples):
         bundle, pages, _, _, _ = lb.build_bundle(tokenizer, example, config)
         print(
@@ -604,19 +865,37 @@ def main() -> None:
         full_prefix_cache, prefill_seconds = lb.prefill_prefix(model, bundle, input_device)
         page_rows = page_rows_by_sample[(example.benchmark, example.task, str(example.sample_id))]
         for method in methods:
-            row = evaluate_sparse_method(
-                model,
-                tokenizer,
-                input_device,
-                example,
-                bundle,
-                pages,
-                clone_past_key_values(full_prefix_cache),
-                prefill_seconds,
-                config,
-                method,
-                page_rows,
-            )
+            if method in {
+                "heuristic_sparse_prefill",
+                "causal_ridge_sparse_prefill",
+                "heuristic_rangepos_sparse_prefill",
+                "causal_ridge_rangepos_sparse_prefill",
+            }:
+                row = evaluate_sparse_prefill_method(
+                    model,
+                    tokenizer,
+                    input_device,
+                    example,
+                    bundle,
+                    pages,
+                    config,
+                    method,
+                    page_rows,
+                )
+            else:
+                row = evaluate_sparse_method(
+                    model,
+                    tokenizer,
+                    input_device,
+                    example,
+                    bundle,
+                    pages,
+                    clone_past_key_values(full_prefix_cache),
+                    prefill_seconds,
+                    config,
+                    method,
+                    page_rows,
+                )
             result_rows.append(row)
             print(
                 f"  {method}: score={row['score']:.3f} kept={row['kept_prefix_tokens']}/{row['raw_prefix_tokens']} "

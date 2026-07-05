@@ -13,6 +13,7 @@ from typing import Any
 LABELS = ["A", "B", "C", "D"]
 COLORS = ["blue", "green", "silver", "amber", "violet", "white"]
 ACTIONS = ["approve", "reject", "delay", "archive", "expand", "freeze"]
+MEMORY_LEVELS = ("summary10", "summary100", "summary1000", "raw")
 
 
 @dataclass(frozen=True)
@@ -305,6 +306,24 @@ def summarize(rows: list[TrialResult]) -> tuple[list[dict[str, Any]], list[dict[
     return summary, by_variant
 
 
+def route_mix(rows: list[TrialResult]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[TrialResult]] = defaultdict(list)
+    for row in rows:
+        grouped[row.method].append(row)
+
+    mixes: list[dict[str, Any]] = []
+    for method, items in sorted(grouped.items()):
+        total = len(items)
+        counts = Counter(row.memory_level for row in items)
+        mix: dict[str, Any] = {"method": method, "tasks": total}
+        for level in MEMORY_LEVELS:
+            name = "full_attention" if level == "raw" else level
+            mix[f"{name}_count"] = counts[level]
+            mix[f"{name}_ratio"] = counts[level] / max(1, total)
+        mixes.append(mix)
+    return mixes
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -329,14 +348,17 @@ def main() -> None:
     rows.extend(evaluate("adaptive_no_raw", cases, config, allow_raw=False))
     rows.extend(evaluate("adaptive_with_raw", cases, config, allow_raw=True))
     summary, by_variant = summarize(rows)
+    mixes = route_mix(rows)
     write_csv(output_dir / "summary.csv", summary)
     write_csv(output_dir / "by_variant.csv", by_variant)
+    write_csv(output_dir / "route_mix.csv", mixes)
     write_csv(output_dir / "trials.csv", [asdict(row) for row in rows])
     payload = {
         "config": asdict(config),
         "cases": len(cases),
         "summary": summary,
         "by_variant": by_variant,
+        "route_mix": mixes,
     }
     (output_dir / "summary.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     print("method,tasks,accuracy,avg_token_cost,cost_ratio_vs_raw")

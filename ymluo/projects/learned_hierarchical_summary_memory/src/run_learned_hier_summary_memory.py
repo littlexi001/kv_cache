@@ -44,6 +44,7 @@ RESULTS = ["victory", "delay", "capture", "escape", "alliance", "exile", "revers
 
 NONE_ROLE = 0
 TOKEN_RE = re.compile(r"[A-Za-z0-9_-]+")
+MEMORY_LEVELS = ("summary10", "summary100", "summary1000", "raw")
 
 
 @dataclass(frozen=True)
@@ -728,6 +729,24 @@ def summarize(rows: list[TrialResult]) -> tuple[list[dict[str, Any]], list[dict[
     return summary, by_kind
 
 
+def route_mix(rows: list[TrialResult]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[TrialResult]] = defaultdict(list)
+    for row in rows:
+        grouped[row.method].append(row)
+
+    mixes: list[dict[str, Any]] = []
+    for method, items in sorted(grouped.items()):
+        total = len(items)
+        counts = Counter(row.memory_level for row in items)
+        mix: dict[str, Any] = {"method": method, "tasks": total}
+        for level in MEMORY_LEVELS:
+            name = "full_attention" if level == "raw" else level
+            mix[f"{name}_count"] = counts[level]
+            mix[f"{name}_ratio"] = counts[level] / max(1, total)
+        mixes.append(mix)
+    return mixes
+
+
 def write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not rows:
@@ -778,8 +797,10 @@ def main() -> None:
     all_rows.extend(evaluate_method("learned_adaptive_with_raw", tasks, books, learned_memories, config, allow_raw=True))
 
     summary, by_kind = summarize(all_rows)
+    mixes = route_mix(all_rows)
     write_csv(output_dir / "summary.csv", summary)
     write_csv(output_dir / "by_kind.csv", by_kind)
+    write_csv(output_dir / "route_mix.csv", mixes)
     write_csv(output_dir / "trials.csv", [asdict(row) for row in all_rows])
 
     metrics = {
@@ -790,6 +811,7 @@ def main() -> None:
         "summarizer_component_metrics": component_metrics(test_blocks, learned_memories),
         "summary": summary,
         "by_kind": by_kind,
+        "route_mix": mixes,
         "train_history_tail": train_history[-10:],
     }
     (output_dir / "summary.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")

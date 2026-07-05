@@ -11,6 +11,7 @@ MODEL="${MODEL:-/home/fdong/qwen/LlaMa-3.1-8B}"
 SAMPLES="${SAMPLES:-1}"
 MAX_CONTEXT="${MAX_CONTEXT:-8192}"
 MAX_NEW="${MAX_NEW:-64}"
+PREFILL_CHUNK="${PREFILL_CHUNK:-2048}"
 BUDGETS="${BUDGETS:-256 512 1024 2048}"
 OURS_SCORER="${OURS_SCORER:-hybrid_late_mmr}"
 METHODS="${METHODS:-full_kv,ours_page_gather}"
@@ -30,6 +31,7 @@ for BUDGET in $BUDGETS; do
     --max_samples_per_task "$SAMPLES" \
     --max_context_tokens "$MAX_CONTEXT" \
     --max_new_tokens_override "$MAX_NEW" \
+    --prefill_chunk_tokens "$PREFILL_CHUNK" \
     --methods "$METHODS" \
     --budget_tokens "$BUDGET" \
     --sink_tokens 64 \

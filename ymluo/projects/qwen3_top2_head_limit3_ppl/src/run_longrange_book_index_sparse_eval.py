@@ -28,7 +28,15 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from analyze_hierarchical_book_index_recall import joined  # noqa: E402
+from analyze_hierarchical_book_index_recall import (  # noqa: E402
+    SparseTfidfIndex,
+    assign_parents,
+    build_paragraphs,
+    build_sections,
+    build_sentences,
+    build_token_to_page,
+    joined,
+)
 from analyze_longrange_book_index_semantic_retrieval import (  # noqa: E402
     LABELS,
     GeneratedTask,
@@ -36,7 +44,6 @@ from analyze_longrange_book_index_semantic_retrieval import (  # noqa: E402
     Span,
     TOPICS,
     append_segment,
-    build_indexes,
     build_task,
     encode,
     fill_to,
@@ -59,6 +66,42 @@ from book_page_router import pages_to_ranges, pages_to_tokens, selected_pages_fo
 CHAIN_VARIANTS = {"chain", "chain_para", "chain_para_conflict", "chain_story_conflict"}
 _ORIGINAL_EAGER_ATTENTION_FORWARD: Any | None = None
 _ACTIVE_SPARSE_CONTEXT: "SparseContext | None" = None
+
+TIMING_FIELDS = [
+    "l1_page_build_seconds",
+    "l1_page_index_seconds",
+    "l2_section_build_seconds",
+    "l2_section_index_seconds",
+    "l3_chapter_build_seconds",
+    "l3_chapter_index_seconds",
+    "global_index_seconds",
+    "ingest_index_seconds",
+    "prefill_seconds",
+    "calibration_seconds",
+    "route_seconds",
+    "range_build_seconds",
+    "text_verifier_seconds",
+    "typed_route_seconds",
+    "typed_record_build_seconds",
+    "typed_record_tokenize_seconds",
+    "eval_seconds",
+    "query_pipeline_seconds",
+    "end_to_end_seconds",
+]
+HIERARCHY_COUNT_FIELDS = [
+    "l0_current_tokens",
+    "l1_page_count",
+    "l2_section_count",
+    "l3_chapter_count",
+    "global_index_doc_count",
+]
+HIERARCHY_POLICY_FIELDS = [
+    "l1_page_min_tokens",
+    "l1_page_max_tokens",
+    "l2_section_max_pages",
+    "l3_chapter_max_pages",
+    "global_index_update_pages",
+]
 
 
 class SparseContext:
@@ -133,6 +176,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--paragraph_min_tokens", type=int, default=64)
     parser.add_argument("--paragraph_max_tokens", type=int, default=192)
     parser.add_argument("--section_max_paragraphs", type=int, default=8)
+    parser.add_argument("--chapter_max_pages", type=int, default=64)
+    parser.add_argument("--global_index_update_pages", type=int, default=128)
     parser.add_argument("--query_window_tokens", type=int, default=256)
     parser.add_argument(
         "--suite_layouts",
@@ -247,6 +292,101 @@ def parse_layout(layout: str) -> tuple[int, int] | None:
     if not (0 <= evidence_percent <= 99 and 0 <= decoy_percent <= 99):
         raise ValueError(f"Layout percents must be in [0, 99]: {layout}")
     return evidence_percent, decoy_percent
+
+
+def build_memory_hierarchy_timed(task: GeneratedTask, args: argparse.Namespace) -> tuple[
+    list[Any],
+    list[int],
+    SparseTfidfIndex,
+    list[Any],
+    SparseTfidfIndex,
+    dict[int, list[int]],
+    dict[str, Any],
+]:
+    token_texts = task.token_texts[: task.prefill_tokens]
+
+    started = time.perf_counter()
+    sentences = build_sentences(token_texts, min_sentence_tokens=8)
+    pages = build_paragraphs(
+        token_texts,
+        sentences,
+        args.paragraph_min_tokens,
+        args.paragraph_max_tokens,
+    )
+    page_token_ids = build_token_to_page(pages, len(task.token_ids))
+    page_docs = [joined(task.token_texts, unit.start, unit.end) for unit in pages]
+    l1_page_build_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    page_index = SparseTfidfIndex(page_docs)
+    l1_page_index_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    sections = build_sections(pages, args.section_max_paragraphs)
+    pages = assign_parents(pages, sections)
+    section_to_pages: dict[int, list[int]] = defaultdict(list)
+    for page in pages:
+        if page.parent_id is not None:
+            section_to_pages[page.parent_id].append(page.unit_id)
+    section_docs = [joined(task.token_texts, unit.start, unit.end) for unit in sections]
+    l2_section_build_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    section_index = SparseTfidfIndex(section_docs)
+    l2_section_index_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    chapter_size = max(1, int(args.chapter_max_pages))
+    chapter_docs = []
+    for start in range(0, len(pages), chapter_size):
+        group = pages[start : start + chapter_size]
+        if group:
+            chapter_docs.append(joined(task.token_texts, group[0].start, group[-1].end))
+    l3_chapter_build_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    _chapter_index = SparseTfidfIndex(chapter_docs)
+    l3_chapter_index_seconds = time.perf_counter() - started
+
+    started = time.perf_counter()
+    global_docs = []
+    global_update_pages = max(1, int(args.global_index_update_pages))
+    for start in range(0, len(pages), global_update_pages):
+        group = pages[start : start + global_update_pages]
+        if group:
+            global_docs.append(joined(task.token_texts, group[0].start, group[-1].end))
+    _global_index = SparseTfidfIndex(global_docs)
+    global_index_seconds = time.perf_counter() - started
+
+    timing = {
+        "l0_current_tokens": 0,
+        "l1_page_count": len(pages),
+        "l2_section_count": len(sections),
+        "l3_chapter_count": len(chapter_docs),
+        "global_index_doc_count": len(global_docs),
+        "l1_page_min_tokens": int(args.paragraph_min_tokens),
+        "l1_page_max_tokens": int(args.paragraph_max_tokens),
+        "l2_section_max_pages": int(args.section_max_paragraphs),
+        "l3_chapter_max_pages": int(args.chapter_max_pages),
+        "global_index_update_pages": int(args.global_index_update_pages),
+        "l1_page_build_seconds": l1_page_build_seconds,
+        "l1_page_index_seconds": l1_page_index_seconds,
+        "l2_section_build_seconds": l2_section_build_seconds,
+        "l2_section_index_seconds": l2_section_index_seconds,
+        "l3_chapter_build_seconds": l3_chapter_build_seconds,
+        "l3_chapter_index_seconds": l3_chapter_index_seconds,
+        "global_index_seconds": global_index_seconds,
+    }
+    timing["ingest_index_seconds"] = sum(float(timing[name]) for name in [
+        "l1_page_build_seconds",
+        "l1_page_index_seconds",
+        "l2_section_build_seconds",
+        "l2_section_index_seconds",
+        "l3_chapter_build_seconds",
+        "l3_chapter_index_seconds",
+        "global_index_seconds",
+    ])
+    return pages, page_token_ids, page_index, sections, section_index, section_to_pages, timing
 
 
 def mode_recent_tokens(
@@ -1780,13 +1920,12 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "evidence_hit",
             "evidence_page_coverage",
             "decoy_hit",
-            "eval_seconds",
             "mean_kept_fraction",
             "mean_kept_tokens",
             "margin_true_minus_decoy",
             "calibrated_margin_true_minus_decoy",
-        ]:
-            group[field] += float(row[field])
+        ] + TIMING_FIELDS + HIERARCHY_COUNT_FIELDS:
+            group[field] += float(row.get(field, 0.0))
     out = []
     for (
         context_tokens,
@@ -1802,49 +1941,53 @@ def summarize(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ), group in sorted(grouped.items()):
         tasks = group["tasks"]
         query_tokens = group["query_tokens"]
-        out.append(
-            {
-                "context_tokens": context_tokens,
-                "task_variant": task_variant,
-                "typed_record_mode": typed_record_mode,
-                "typed_record_format": typed_record_format,
-                "typed_summary_source_mode": typed_summary_source_mode,
-                "typed_record_answer_override": typed_record_answer_override,
-                "typed_record_insert": typed_record_insert,
-                "skip_lm_answer_when_override": skip_lm_answer_when_override,
-                "mode": mode,
-                "sparse_attention_impl": sparse_attention_impl,
-                "tasks": int(tasks),
-                "accuracy": group["correct"] / tasks if tasks else 0.0,
-                "calibrated_accuracy": group["calibrated_correct"] / tasks if tasks else 0.0,
-                "text_verifier_coverage": group["text_verifier_present"] / tasks if tasks else 0.0,
-                "text_verifier_accuracy": group["text_verifier_correct"] / tasks if tasks else 0.0,
-                "typed_record_coverage": group["typed_record_present"] / tasks if tasks else 0.0,
-                "typed_record_accuracy": group["typed_record_correct"] / tasks if tasks else 0.0,
-                "typed_record_decoy_pred_rate": group["typed_record_decoy_pred"] / tasks if tasks else 0.0,
-                "mean_typed_record_tokens": group["typed_record_tokens"] / tasks if tasks else 0.0,
-                "answer_override_rate": group["answer_override_applied"] / tasks if tasks else 0.0,
-                "lm_answer_scored_rate": group["lm_answer_scored"] / tasks if tasks else 0.0,
-                "sentence_gate_rate": group["sentence_gate_triggered"] / tasks if tasks else 0.0,
-                "mean_base_calibrated_margin": group["base_calibrated_margin"] / tasks if tasks else 0.0,
-                "decoy_pred_rate": group["decoy_pred"] / tasks if tasks else 0.0,
-                "calibrated_decoy_pred_rate": group["calibrated_decoy_pred"] / tasks if tasks else 0.0,
-                "text_verifier_decoy_pred_rate": group["text_verifier_decoy_pred"] / tasks if tasks else 0.0,
-                "query_ppl": math.exp(group["query_nll"] / query_tokens) if query_tokens else 0.0,
-                "mean_selected_pages": group["selected_pages"] / tasks if tasks else 0.0,
-                "mean_selected_remote_tokens": group["selected_remote_tokens"] / tasks if tasks else 0.0,
-                "evidence_hit_rate": group["evidence_hit"] / tasks if tasks else 0.0,
-                "evidence_page_coverage": group["evidence_page_coverage"] / tasks if tasks else 0.0,
-                "decoy_hit_rate": group["decoy_hit"] / tasks if tasks else 0.0,
-                "mean_eval_seconds": group["eval_seconds"] / tasks if tasks else 0.0,
-                "mean_kept_fraction": group["mean_kept_fraction"] / tasks if tasks else 0.0,
-                "mean_kept_tokens": group["mean_kept_tokens"] / tasks if tasks else 0.0,
-                "mean_margin_true_minus_decoy": group["margin_true_minus_decoy"] / tasks if tasks else 0.0,
-                "mean_calibrated_margin_true_minus_decoy": (
-                    group["calibrated_margin_true_minus_decoy"] / tasks if tasks else 0.0
-                ),
-            }
-        )
+        summary_row = {
+            "context_tokens": context_tokens,
+            "task_variant": task_variant,
+            "typed_record_mode": typed_record_mode,
+            "typed_record_format": typed_record_format,
+            "typed_summary_source_mode": typed_summary_source_mode,
+            "typed_record_answer_override": typed_record_answer_override,
+            "typed_record_insert": typed_record_insert,
+            "skip_lm_answer_when_override": skip_lm_answer_when_override,
+            "mode": mode,
+            "sparse_attention_impl": sparse_attention_impl,
+            "tasks": int(tasks),
+            "accuracy": group["correct"] / tasks if tasks else 0.0,
+            "calibrated_accuracy": group["calibrated_correct"] / tasks if tasks else 0.0,
+            "text_verifier_coverage": group["text_verifier_present"] / tasks if tasks else 0.0,
+            "text_verifier_accuracy": group["text_verifier_correct"] / tasks if tasks else 0.0,
+            "typed_record_coverage": group["typed_record_present"] / tasks if tasks else 0.0,
+            "typed_record_accuracy": group["typed_record_correct"] / tasks if tasks else 0.0,
+            "typed_record_decoy_pred_rate": group["typed_record_decoy_pred"] / tasks if tasks else 0.0,
+            "mean_typed_record_tokens": group["typed_record_tokens"] / tasks if tasks else 0.0,
+            "answer_override_rate": group["answer_override_applied"] / tasks if tasks else 0.0,
+            "lm_answer_scored_rate": group["lm_answer_scored"] / tasks if tasks else 0.0,
+            "sentence_gate_rate": group["sentence_gate_triggered"] / tasks if tasks else 0.0,
+            "mean_base_calibrated_margin": group["base_calibrated_margin"] / tasks if tasks else 0.0,
+            "decoy_pred_rate": group["decoy_pred"] / tasks if tasks else 0.0,
+            "calibrated_decoy_pred_rate": group["calibrated_decoy_pred"] / tasks if tasks else 0.0,
+            "text_verifier_decoy_pred_rate": group["text_verifier_decoy_pred"] / tasks if tasks else 0.0,
+            "query_ppl": math.exp(group["query_nll"] / query_tokens) if query_tokens else 0.0,
+            "mean_selected_pages": group["selected_pages"] / tasks if tasks else 0.0,
+            "mean_selected_remote_tokens": group["selected_remote_tokens"] / tasks if tasks else 0.0,
+            "evidence_hit_rate": group["evidence_hit"] / tasks if tasks else 0.0,
+            "evidence_page_coverage": group["evidence_page_coverage"] / tasks if tasks else 0.0,
+            "decoy_hit_rate": group["decoy_hit"] / tasks if tasks else 0.0,
+            "mean_eval_seconds": group["eval_seconds"] / tasks if tasks else 0.0,
+            "mean_kept_fraction": group["mean_kept_fraction"] / tasks if tasks else 0.0,
+            "mean_kept_tokens": group["mean_kept_tokens"] / tasks if tasks else 0.0,
+            "mean_margin_true_minus_decoy": group["margin_true_minus_decoy"] / tasks if tasks else 0.0,
+            "mean_calibrated_margin_true_minus_decoy": (
+                group["calibrated_margin_true_minus_decoy"] / tasks if tasks else 0.0
+            ),
+        }
+        for field in TIMING_FIELDS:
+            summary_row[f"mean_{field}"] = group[field] / tasks if tasks else 0.0
+            summary_row[f"total_{field}"] = group[field]
+        for field in HIERARCHY_COUNT_FIELDS:
+            summary_row[f"mean_{field}"] = group[field] / tasks if tasks else 0.0
+        out.append(summary_row)
     return out
 
 
@@ -1927,7 +2070,9 @@ def main() -> None:
                         target_label_override=target_label_override,
                         decoy_label_override=decoy_label_override,
                     )
-                pages, _, page_index, sections, section_index, section_to_pages = build_indexes(task, args)
+                pages, _, page_index, sections, section_index, section_to_pages, hierarchy_timing = (
+                    build_memory_hierarchy_timed(task, args)
+                )
                 evidence_pages = span_pages(pages, task.evidence_spans, task.evidence_span)
                 decoy_pages = span_pages(pages, task.decoy_spans, task.decoy_span)
                 evidence_page = overlap_page(pages, task.evidence_span)
@@ -1939,6 +2084,7 @@ def main() -> None:
                     flush=True,
                 )
                 context_ids = torch.tensor(task.token_ids[: task.prefill_tokens], dtype=torch.long).view(1, -1)
+                prefill_started = time.perf_counter()
                 with sparse_context(None):
                     context_cache, context_prev, _, _ = run_tokens(
                         model,
@@ -1949,13 +2095,16 @@ def main() -> None:
                         score_tokens=False,
                         prev_logits=None,
                     )
+                prefill_seconds = time.perf_counter() - prefill_started
                 query_ids = tokenizer(task.query_text, return_tensors="pt", add_special_tokens=False)["input_ids"]
                 base_answer_score_format = (
                     "answer_label" if args.answer_score_format == "gated_sentence" else args.answer_score_format
                 )
                 prior_scores: dict[str, float] = {label: 0.0 for label in LABELS}
                 sentence_prior_scores: dict[str, float] = {label: 0.0 for label in LABELS}
+                calibration_seconds = 0.0
                 if args.score_calibrated:
+                    calibration_started = time.perf_counter()
                     with sparse_context(None):
                         prior_cache, prior_prev, _, _ = run_tokens(
                             model,
@@ -1992,6 +2141,7 @@ def main() -> None:
                     del prior_cache, prior_prev
                     if input_device.type == "cuda":
                         torch.cuda.empty_cache()
+                    calibration_seconds = time.perf_counter() - calibration_started
                 for mode in modes:
                     ctx_recent_tokens = mode_recent_tokens(
                         mode,
@@ -1999,6 +2149,7 @@ def main() -> None:
                         task.prefill_tokens,
                         args.sink_tokens,
                     )
+                    route_started = time.perf_counter()
                     selected_pages = selected_pages_for_mode(
                         mode,
                         task,
@@ -2011,8 +2162,11 @@ def main() -> None:
                         ctx_recent_tokens,
                         args.query_window_tokens,
                     )
+                    route_seconds = time.perf_counter() - route_started
+                    range_started = time.perf_counter()
                     keep_remote_tokens = pages_to_tokens(pages, selected_pages)
                     keep_remote_ranges = pages_to_ranges(pages, selected_pages)
+                    range_build_seconds = time.perf_counter() - range_started
                     evidence_page_coverage = selected_page_coverage(evidence_pages, selected_pages, mode)
                     evidence_hit = evidence_page_coverage >= 1.0
                     decoy_hit = (
@@ -2020,7 +2174,9 @@ def main() -> None:
                         if mode not in {"full", "sink_recent"}
                         else mode == "full"
                     )
+                    verifier_started = time.perf_counter()
                     verifier_pred = text_verifier_label(task, pages, selected_pages, mode)
+                    text_verifier_seconds = time.perf_counter() - verifier_started
                     typed_record_source_mode = (
                         args.typed_summary_source_mode
                         if args.typed_record_format
@@ -2036,7 +2192,9 @@ def main() -> None:
                         else mode
                     )
                     typed_record_pages = selected_pages
+                    typed_route_seconds = 0.0
                     if typed_record_source_mode != mode:
+                        typed_route_started = time.perf_counter()
                         typed_record_pages = selected_pages_for_mode(
                             typed_record_source_mode,
                             task,
@@ -2049,6 +2207,8 @@ def main() -> None:
                             ctx_recent_tokens,
                             args.query_window_tokens,
                         )
+                        typed_route_seconds = time.perf_counter() - typed_route_started
+                    typed_record_started = time.perf_counter()
                     typed_record_text, typed_record_meta = build_typed_record(
                         task,
                         pages,
@@ -2057,15 +2217,18 @@ def main() -> None:
                         args.typed_record_mode,
                         args.typed_record_format,
                     )
+                    typed_record_build_seconds = time.perf_counter() - typed_record_started
                     answer_override_available = (
                         args.typed_record_answer_override
                         and bool(typed_record_meta.get("typed_record_answer_label", ""))
                     )
+                    typed_record_tokenize_started = time.perf_counter()
                     typed_record_ids = (
                         tokenizer(typed_record_text, return_tensors="pt", add_special_tokens=False)["input_ids"]
                         if typed_record_text and args.typed_record_insert
                         else torch.empty((1, 0), dtype=torch.long)
                     )
+                    typed_record_tokenize_seconds = time.perf_counter() - typed_record_tokenize_started
                     stats = SparseStats()
                     ctx = SparseContext(
                         mode=mode,
@@ -2143,6 +2306,21 @@ def main() -> None:
                             base_calibrated_margin = 0.0
                             sentence_gate_triggered = False
                     eval_seconds = time.perf_counter() - eval_started
+                    query_pipeline_seconds = (
+                        route_seconds
+                        + range_build_seconds
+                        + text_verifier_seconds
+                        + typed_route_seconds
+                        + typed_record_build_seconds
+                        + typed_record_tokenize_seconds
+                        + eval_seconds
+                    )
+                    end_to_end_seconds = (
+                        float(hierarchy_timing["ingest_index_seconds"])
+                        + prefill_seconds
+                        + calibration_seconds
+                        + query_pipeline_seconds
+                    )
                     model_pred = max(scores, key=scores.get)
                     effective_prior_scores = sentence_prior_scores if sentence_gate_triggered else prior_scores
                     calibrated_scores = (
@@ -2224,6 +2402,17 @@ def main() -> None:
                             "calibrated_margin_true_minus_decoy": (
                                 calibrated_scores[task.target_label] - calibrated_scores[task.decoy_label]
                             ),
+                            **hierarchy_timing,
+                            "prefill_seconds": prefill_seconds,
+                            "calibration_seconds": calibration_seconds,
+                            "route_seconds": route_seconds,
+                            "range_build_seconds": range_build_seconds,
+                            "text_verifier_seconds": text_verifier_seconds,
+                            "typed_route_seconds": typed_route_seconds,
+                            "typed_record_build_seconds": typed_record_build_seconds,
+                            "typed_record_tokenize_seconds": typed_record_tokenize_seconds,
+                            "query_pipeline_seconds": query_pipeline_seconds,
+                            "end_to_end_seconds": end_to_end_seconds,
                             **stat_row,
                             **{f"score_{label}": scores[label] for label in LABELS},
                             **{f"prior_score_{label}": effective_prior_scores[label] for label in LABELS},
@@ -2297,6 +2486,9 @@ def main() -> None:
         "evidence_page_coverage",
         "decoy_hit",
         "eval_seconds",
+        *HIERARCHY_POLICY_FIELDS,
+        *HIERARCHY_COUNT_FIELDS,
+        *[field for field in TIMING_FIELDS if field != "eval_seconds"],
         "margin_true_minus_decoy",
         "calibrated_margin_true_minus_decoy",
         "sparse_cases",
@@ -2319,48 +2511,55 @@ def main() -> None:
     ]
     write_csv(output_dir / "sparse_rows.csv", rows, row_fields)
     summary_rows = summarize(rows)
+    summary_fields = [
+        "context_tokens",
+        "task_variant",
+        "typed_record_mode",
+        "typed_record_format",
+        "typed_summary_source_mode",
+        "typed_record_answer_override",
+        "typed_record_insert",
+        "skip_lm_answer_when_override",
+        "mode",
+        "sparse_attention_impl",
+        "tasks",
+        "accuracy",
+        "calibrated_accuracy",
+        "text_verifier_coverage",
+        "text_verifier_accuracy",
+        "typed_record_coverage",
+        "typed_record_accuracy",
+        "typed_record_decoy_pred_rate",
+        "mean_typed_record_tokens",
+        "answer_override_rate",
+        "lm_answer_scored_rate",
+        "sentence_gate_rate",
+        "mean_base_calibrated_margin",
+        "decoy_pred_rate",
+        "calibrated_decoy_pred_rate",
+        "text_verifier_decoy_pred_rate",
+        "query_ppl",
+        "mean_selected_pages",
+        "mean_selected_remote_tokens",
+        "evidence_hit_rate",
+        "evidence_page_coverage",
+        "decoy_hit_rate",
+        "mean_eval_seconds",
+        "mean_kept_fraction",
+        "mean_kept_tokens",
+        "mean_margin_true_minus_decoy",
+        "mean_calibrated_margin_true_minus_decoy",
+    ]
+    for field in TIMING_FIELDS:
+        mean_field = f"mean_{field}"
+        if mean_field not in summary_fields:
+            summary_fields.append(mean_field)
+        summary_fields.append(f"total_{field}")
+    summary_fields.extend(f"mean_{field}" for field in HIERARCHY_COUNT_FIELDS)
     write_csv(
         output_dir / "sparse_summary.csv",
         summary_rows,
-        [
-            "context_tokens",
-            "task_variant",
-            "typed_record_mode",
-            "typed_record_format",
-            "typed_summary_source_mode",
-            "typed_record_answer_override",
-            "typed_record_insert",
-            "skip_lm_answer_when_override",
-            "mode",
-            "sparse_attention_impl",
-            "tasks",
-            "accuracy",
-            "calibrated_accuracy",
-            "text_verifier_coverage",
-            "text_verifier_accuracy",
-            "typed_record_coverage",
-            "typed_record_accuracy",
-            "typed_record_decoy_pred_rate",
-            "mean_typed_record_tokens",
-            "answer_override_rate",
-            "lm_answer_scored_rate",
-            "sentence_gate_rate",
-            "mean_base_calibrated_margin",
-            "decoy_pred_rate",
-            "calibrated_decoy_pred_rate",
-            "text_verifier_decoy_pred_rate",
-            "query_ppl",
-            "mean_selected_pages",
-            "mean_selected_remote_tokens",
-            "evidence_hit_rate",
-            "evidence_page_coverage",
-            "decoy_hit_rate",
-            "mean_eval_seconds",
-            "mean_kept_fraction",
-            "mean_kept_tokens",
-            "mean_margin_true_minus_decoy",
-            "mean_calibrated_margin_true_minus_decoy",
-        ],
+        summary_fields,
     )
     summary = {
         "args": vars(args),

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -31,6 +32,24 @@ def normalize_records(data: Any) -> list[dict[str, Any]]:
     return []
 
 
+def load_prediction_records(path: Path) -> list[dict[str, Any]]:
+    text = path.read_text(encoding="utf-8")
+    try:
+        return normalize_records(json.loads(text))
+    except json.JSONDecodeError:
+        records: list[dict[str, Any]] = []
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            if not line.strip():
+                continue
+            try:
+                item = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise json.JSONDecodeError(f"JSONL line {line_no}: {exc.msg}", exc.doc, exc.pos) from exc
+            if isinstance(item, dict):
+                records.append(item)
+        return records
+
+
 def pick_prediction(row: dict[str, Any]) -> str:
     for key in ("prediction", "pred", "output", "outputs", "response", "text"):
         value = row.get(key)
@@ -53,14 +72,19 @@ def main() -> None:
     args = parse_args()
     input_dir = Path(args.input_dir)
     rows: list[dict[str, Any]] = []
-    for path in sorted(input_dir.glob("*/*.json")):
+    for path in sorted(input_dir.glob("*/*/*.json")):
+        model_budget = path.parent.parent.name
         task = path.parent.name
         method = path.stem
         if task not in LONG_BENCH_PROMPTS:
             continue
+        match = re.search(r"_(\d+)$", model_budget)
+        budget = int(match.group(1)) if match else ""
         if path.stat().st_size == 0:
             rows.append(
                 {
+                    "model_budget": model_budget,
+                    "budget": budget,
                     "task": task,
                     "method": method,
                     "samples": 0,
@@ -71,10 +95,12 @@ def main() -> None:
             )
             continue
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            records = load_prediction_records(path)
         except Exception as exc:
             rows.append(
                 {
+                    "model_budget": model_budget,
+                    "budget": budget,
                     "task": task,
                     "method": method,
                     "samples": 0,
@@ -84,7 +110,6 @@ def main() -> None:
                 }
             )
             continue
-        records = normalize_records(data)
         scores: list[float] = []
         for record in records:
             prediction = pick_prediction(record)
@@ -94,6 +119,8 @@ def main() -> None:
             scores.append(score_prediction(str(LONG_BENCH_PROMPTS[task]["metric"]), prediction, answers))
         rows.append(
             {
+                "model_budget": model_budget,
+                "budget": budget,
                 "task": task,
                 "method": method,
                 "samples": len(scores),
@@ -111,6 +138,8 @@ def main() -> None:
         values = [float(row["score"]) for row in subset]
         rows.append(
             {
+                "model_budget": "ALL",
+                "budget": "",
                 "task": "ALL",
                 "method": method,
                 "samples": sum(int(row["samples"]) for row in subset),
@@ -122,7 +151,7 @@ def main() -> None:
 
     output_csv = Path(args.output_csv)
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["task", "method", "samples", "score", "status", "path"]
+    fields = ["model_budget", "budget", "task", "method", "samples", "score", "status", "path"]
     with output_csv.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
         writer.writeheader()
