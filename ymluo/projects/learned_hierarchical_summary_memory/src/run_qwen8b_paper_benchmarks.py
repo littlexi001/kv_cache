@@ -492,12 +492,21 @@ def router_features(tokenizer: Any, case: BenchCase, config: Config) -> tuple[li
     query = case.query
     query_terms = set(content_words(query))
     blocks = token_blocks(tokenizer, case.context, config.block_tokens)
-    scores = []
-    for block in blocks:
-        scores.append(float(len(query_terms & set(content_words(block)))))
-    scores.sort(reverse=True)
+    scored_blocks = []
+    for idx, block in enumerate(blocks):
+        scored_blocks.append((float(len(query_terms & set(content_words(block)))), idx))
+    scored_blocks.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    scores = [score for score, _ in scored_blocks]
     top1 = scores[0] if scores else 0.0
     top2 = scores[1] if len(scores) > 1 else 0.0
+    top3 = scores[2] if len(scores) > 2 else 0.0
+    top1_idx = scored_blocks[0][1] if scored_blocks else 0
+    top2_idx = scored_blocks[1][1] if len(scored_blocks) > 1 else top1_idx
+    block_denom = max(1.0, float(len(blocks) - 1))
+    top1_pos = float(top1_idx) / block_denom
+    top2_pos = float(top2_idx) / block_denom
+    recent_block_threshold = max(0, len(blocks) - math.ceil(max(1, recent_len) / max(1, config.block_tokens)) - 1)
+    top1_is_recent = 1.0 if top1_idx >= recent_block_threshold else 0.0
     gap = top1 - top2
     positive = float(sum(1 for score in scores if score > 0))
     query_words = word_tokens(query)
@@ -537,10 +546,15 @@ def router_features(tokenizer: Any, case: BenchCase, config: Config) -> tuple[li
             float(config.summary1000_words),
             top1,
             top2,
+            top3,
             gap,
             positive,
             top1 / denom,
+            top2 / denom,
             gap / denom,
+            top1_pos,
+            top2_pos,
+            top1_is_recent,
             unique_ratio,
             nums_log,
             caps_log,
@@ -551,14 +565,54 @@ def router_features(tokenizer: Any, case: BenchCase, config: Config) -> tuple[li
 
 def rule_router_action(case: BenchCase) -> str:
     if case.benchmark.startswith("ruler"):
-        if case.task in {"niah_multiquery", "niah_multivalue", "vt", "cwe", "fwe"}:
-            return "retrieval_raw_k2"
-        return "retrieval_raw_k1"
+        return "retrieval_raw_k2"
     if case.task in SUMMARY_TASKS:
         return "summary100"
     if case.task in {"passage_count", "passage_retrieval_en", "hotpotqa", "2wikimqa", "musique"}:
         return "retrieval_raw_k2"
     return "retrieval_raw_k1"
+
+
+def safety_override_action(case: BenchCase, action: str) -> str:
+    exact = case.benchmark.startswith("ruler") or case.task in EXACT_LONG_BENCH_TASKS
+    if not exact:
+        return action
+    old_action = action.removeprefix("recent_plus_") if action.startswith("recent_plus_") else action
+    retrieval_prefix = "recent_plus_retrieval_raw_k" if action.startswith("recent_plus_") else "retrieval_raw_k"
+    lower = case.query.lower()
+    high_risk_multi = any(
+        phrase in lower
+        for phrase in (
+            "all the",
+            "all ",
+            "variables",
+            "assigned the value",
+            "most common",
+            "frequently appeared",
+            "top 10",
+            "three most",
+            "list all",
+        )
+    )
+    unsafe_compressed = {
+        "recent_only",
+        "summary10",
+        "summary100",
+        "summary1000",
+        "summary1_8",
+        "summary1_4",
+        "summary1_2",
+        "static_hier",
+    }
+    if case.benchmark.startswith("ruler"):
+        if any(phrase in lower for phrase in ("most common", "frequently appeared", "top 10", "three most")):
+            return f"{retrieval_prefix}1"
+        if high_risk_multi or old_action in unsafe_compressed or old_action == "retrieval_raw_k1":
+            return f"{retrieval_prefix}2"
+        return action
+    if old_action in unsafe_compressed:
+        return f"{retrieval_prefix}1"
+    return action
 
 
 def resolve_action(method: str, tokenizer: Any, case: BenchCase, config: Config, router: Any | None) -> str:
@@ -575,7 +629,7 @@ def resolve_action(method: str, tokenizer: Any, case: BenchCase, config: Config,
             action = router.predict(features, task_family=task_family).action
         if action == "summary10" and not case.benchmark.startswith("ruler") and case.task not in EXACT_LONG_BENCH_TASKS:
             action = "summary100"
-        return action
+        return safety_override_action(case, action)
     return method
 
 
@@ -583,6 +637,43 @@ def build_memory_for_action(action: str, tokenizer: Any, case: BenchCase, config
     context = case.context
     if action == "full_raw":
         return context
+    if action.startswith("recent_plus_"):
+        old_ids = tokenizer(context, add_special_tokens=False)["input_ids"]
+        old_cut = max(0, len(old_ids) - config.recent_tokens)
+        old_context = tokenizer.decode(old_ids[:old_cut], skip_special_tokens=True)
+        recent = tokenizer.decode(old_ids[old_cut:], skip_special_tokens=True) if old_ids else ""
+        old_case = BenchCase(
+            benchmark=case.benchmark,
+            task=case.task,
+            case_id=case.case_id,
+            context=old_context,
+            query=case.query,
+            answers=case.answers,
+            length=case.length,
+        )
+        old_action = action.removeprefix("recent_plus_")
+        if old_action == "full_old_raw":
+            old_memory = old_context
+        elif old_action == "static_hier":
+            old_memory = static_hier_memory(tokenizer, old_context, config)
+        elif summary_ratio(old_action) is not None:
+            old_memory = build_ratio_summary_memory(tokenizer, old_context, config, old_action)
+        elif old_action.startswith("retrieval_raw_k"):
+            top_k = int(old_action.removeprefix("retrieval_raw_k"))
+            old_memory = (
+                "Old summary memory:\n"
+                f"{static_hier_memory(tokenizer, old_context, config)}\n\n"
+                "Retrieved old raw evidence:\n"
+                f"{retrieve_blocks(tokenizer, old_context, case.query, config, top_k)}"
+            )
+        else:
+            raise ValueError(action)
+        return (
+            "Old memory:\n"
+            f"{old_memory}\n\n"
+            "Recent raw context:\n"
+            f"{recent}"
+        )
     if action == "recent_only":
         return recent_text(tokenizer, context, config.recent_tokens)
     if action == "summary10":
