@@ -125,7 +125,20 @@ def parse_args() -> Config:
     parser.add_argument("--summary10_words", type=int, default=10)
     parser.add_argument("--summary100_words", type=int, default=100)
     parser.add_argument("--summary1000_words", type=int, default=900)
-    parser.add_argument("--policy", choices=["budget", "balanced", "conservative"], default="balanced")
+    parser.add_argument(
+        "--policy",
+        choices=[
+            "budget",
+            "balanced",
+            "conservative",
+            "kv_safe_topk",
+            "kv_safe_topk_v2",
+            "kv_safe_topk_v3",
+            "kv_safe_topk_v4",
+            "kv_safe_topk_v5",
+        ],
+        default="balanced",
+    )
     parser.add_argument("--hidden_dim", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=1200)
     parser.add_argument("--lr", type=float, default=2e-3)
@@ -225,6 +238,58 @@ def bench_config(config: Config) -> BenchConfig:
 
 
 def exact_label(kind: str, old_blocks: int, prefix_tokens: int, policy: str) -> str:
+    if policy == "kv_safe_topk_v5":
+        if kind.startswith("natural_"):
+            return "recent_plus_retrieval_raw_k2"
+        if kind in {"cwe_k1", "fwe_k1", "vt_k2"}:
+            return "recent_plus_span_top3_b0_a0"
+        if kind in {"magic_multiquery", "magic_multivalue"}:
+            return "recent_plus_span_top3_b0_a0"
+        if old_blocks <= 1:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 2:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 3:
+            return "recent_plus_span_top3_b0_a0"
+        return "recent_plus_prefix_to_farthest_top3" if prefix_tokens >= 16_000 else "recent_plus_span_top3_b0_a0"
+    if policy == "kv_safe_topk_v4":
+        if kind == "four_old":
+            return "recent_plus_full_old_raw" if prefix_tokens >= 12_000 else "recent_plus_prefix_to_farthest_top3"
+        if kind in {"magic_multiquery", "magic_multivalue"} and prefix_tokens >= 16_000:
+            return "recent_plus_prefix_to_farthest_top3"
+        if kind.startswith("natural_"):
+            return "recent_plus_prefix_to_farthest_top3" if prefix_tokens >= 16_000 else "recent_plus_retrieval_raw_k2"
+        if kind in {"cwe_k1", "fwe_k1", "vt_k2"}:
+            return "recent_plus_span_top3_b0_a0"
+        if old_blocks <= 1:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 2:
+            return "recent_plus_span_top3_b0_a0" if prefix_tokens >= 12_000 else "recent_plus_span_top2_b0_a0"
+        if old_blocks == 3:
+            return "recent_plus_prefix_to_farthest_top3" if prefix_tokens >= 16_000 else "recent_plus_span_top3_b0_a0"
+        return "recent_plus_full_old_raw" if prefix_tokens >= 12_000 else "recent_plus_prefix_to_farthest_top3"
+    if policy == "kv_safe_topk_v3":
+        if kind.startswith("natural_"):
+            return "recent_plus_retrieval_raw_k2"
+        if kind in {"cwe_k1", "fwe_k1", "vt_k2"}:
+            return "recent_plus_span_top3_b0_a0"
+        if old_blocks <= 1:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 2:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 3:
+            return "recent_plus_span_top3_b0_a0"
+        return "recent_plus_prefix_to_farthest_top3"
+    if policy in {"kv_safe_topk", "kv_safe_topk_v2"}:
+        if kind in {"cwe_k1", "fwe_k1", "vt_k2"}:
+            return "recent_plus_span_top3_b0_a0"
+        if old_blocks <= 1:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 2:
+            return "recent_plus_span_top2_b0_a0"
+        if old_blocks == 3:
+            return "recent_plus_span_top3_b0_a0"
+        return "recent_plus_prefix_to_farthest_top3"
     if policy == "conservative":
         if kind in {"magic_multivalue", "magic_multiquery", "four_old"} or old_blocks >= 4:
             return "recent_plus_retrieval_raw_k4"
@@ -252,6 +317,34 @@ def choose_label(kind: str, old_blocks: int, prefix_tokens: int, task_family: st
     if kind == "full_context":
         return "full_raw"
     if task_family == "generation":
+        if policy == "kv_safe_topk":
+            if kind == "recent_generation":
+                return "recent_plus_summary1_8"
+            return "recent_plus_summary1_8"
+        if policy == "kv_safe_topk_v2":
+            if kind == "recent_generation":
+                return "recent_plus_summary1_8"
+            if kind == "full_context":
+                return "recent_plus_prefix_to_farthest_top3"
+            return "recent_plus_summary1_4"
+        if policy == "kv_safe_topk_v3":
+            if kind == "recent_generation":
+                return "recent_plus_summary1_8"
+            if kind == "summary_detailed":
+                return "recent_plus_span_top3_b0_a0"
+            return "recent_plus_summary1_4"
+        if policy == "kv_safe_topk_v4":
+            if kind == "recent_generation":
+                return "recent_plus_summary1_8"
+            if kind == "summary_detailed":
+                return "recent_plus_prefix_to_farthest_top3" if prefix_tokens >= 12_000 else "recent_plus_summary1_4"
+            return "recent_plus_summary1_4"
+        if policy == "kv_safe_topk_v5":
+            if kind == "recent_generation":
+                return "recent_plus_summary1_8"
+            if kind == "summary_detailed":
+                return "recent_plus_span_top3_b0_a0" if prefix_tokens >= 16_000 else "recent_plus_summary1_4"
+            return "recent_plus_summary1_4"
         if kind == "summary_detailed":
             return "recent_plus_summary1_2" if policy == "conservative" else "recent_plus_summary1_4"
         if kind == "recent_generation":

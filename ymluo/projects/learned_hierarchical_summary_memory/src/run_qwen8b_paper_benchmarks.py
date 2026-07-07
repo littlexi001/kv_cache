@@ -462,6 +462,102 @@ def retrieve_blocks(tokenizer: Any, context: str, query: str, config: Config, to
     return "\n\n".join(f"[raw block {idx}]\n{block}" for idx, block in chosen)
 
 
+def score_blocks(tokenizer: Any, context: str, query: str, config: Config) -> list[tuple[int, int, str]]:
+    blocks = token_blocks(tokenizer, context, config.block_tokens)
+    query_terms = set(content_words(query))
+    query_numbers = set(re.findall(r"[A-Za-z]*\d+[A-Za-z0-9-]*", query))
+    scored = []
+    for idx, block in enumerate(blocks):
+        block_terms = set(content_words(block))
+        overlap = len(query_terms & block_terms)
+        overlap += 3 * len(query_numbers & set(re.findall(r"[A-Za-z]*\d+[A-Za-z0-9-]*", block)))
+        scored.append((overlap, idx, block))
+    scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    return scored
+
+
+def retrieve_span_blocks(
+    tokenizer: Any,
+    context: str,
+    query: str,
+    config: Config,
+    before: int,
+    after: int,
+    max_spans: int = 1,
+) -> str:
+    blocks = token_blocks(tokenizer, context, config.block_tokens)
+    if not blocks:
+        return ""
+    scored = score_blocks(tokenizer, context, query, config)
+    centers = [idx for score, idx, _ in scored[:max_spans] if score > 0]
+    if not centers:
+        centers = [scored[0][1]]
+    selected: set[int] = set()
+    for center in centers:
+        for idx in range(max(0, center - before), min(len(blocks) - 1, center + after) + 1):
+            selected.add(idx)
+    return "\n\n".join(f"[raw span block {idx}]\n{blocks[idx]}" for idx in sorted(selected))
+
+
+def retrieve_prefix_to_evidence(tokenizer: Any, context: str, query: str, config: Config, top_k: int = 1) -> str:
+    blocks = token_blocks(tokenizer, context, config.block_tokens)
+    if not blocks:
+        return ""
+    scored = score_blocks(tokenizer, context, query, config)
+    centers = [idx for score, idx, _ in scored[:top_k] if score > 0]
+    if not centers:
+        centers = [scored[0][1]]
+    center = max(centers)
+    return "\n\n".join(f"[raw prefix block {idx}]\n{blocks[idx]}" for idx in range(center + 1))
+
+
+def kv_safe_rule_action(case: BenchCase, tokenizer: Any, config: Config) -> str:
+    context_tokens = len(tokenizer(case.context, add_special_tokens=False)["input_ids"])
+    lower_query = case.query.lower()
+    exact = case.benchmark.startswith("ruler") or case.task in EXACT_LONG_BENCH_TASKS
+    global_needles = (
+        "all ",
+        "all the",
+        "every",
+        "list",
+        "count",
+        "how many",
+        "number of",
+        "most common",
+        "frequently appeared",
+        "top 10",
+        "three most",
+        "summary",
+        "summarize",
+    )
+    multi_evidence = (
+        "all ",
+        "every",
+        "variables",
+        "multi",
+        "compare",
+        "and ",
+        " or ",
+        "count",
+        "how many",
+    )
+    if case.task in SUMMARY_TASKS:
+        return "recent_plus_summary1_8" if context_tokens >= 12000 else "recent_plus_summary1_4"
+    if any(phrase in lower_query for phrase in global_needles):
+        if context_tokens >= 12000 or case.task in {"passage_count", "cwe", "fwe", "vt"}:
+            return "recent_plus_full_old_raw"
+        return "recent_plus_prefix_to_farthest_top3"
+    if case.benchmark.startswith("ruler"):
+        if any(phrase in lower_query for phrase in multi_evidence):
+            return "recent_plus_prefix_to_farthest_top2"
+        return "recent_plus_span_top2_b0_a0"
+    if exact and context_tokens >= 12000:
+        return "recent_plus_prefix_to_farthest_top2"
+    if exact:
+        return "recent_plus_span_top2_b1_a0"
+    return "recent_plus_summary1_8"
+
+
 def recent_text(tokenizer: Any, context: str, recent_tokens: int) -> str:
     ids = tokenizer(context, add_special_tokens=False)["input_ids"]
     return tokenizer.decode(ids[-recent_tokens:], skip_special_tokens=True) if ids else ""
@@ -615,12 +711,117 @@ def safety_override_action(case: BenchCase, action: str) -> str:
     return action
 
 
+def kv_safe_router_override(case: BenchCase, action: str) -> str:
+    exact = case.benchmark.startswith("ruler") or case.task in EXACT_LONG_BENCH_TASKS
+    old_action = action.removeprefix("recent_plus_") if action.startswith("recent_plus_") else action
+    lower = case.query.lower()
+    length_match = re.search(r"ruler_(\d+)", case.benchmark)
+    ruler_length = int(length_match.group(1)) if length_match else 0
+    compressed = {
+        "recent_only",
+        "summary10",
+        "summary100",
+        "summary1000",
+        "summary1_8",
+        "summary1_4",
+        "summary1_2",
+        "static_hier",
+    }
+    if case.task in SUMMARY_TASKS:
+        return action
+    if not exact:
+        return action
+    if old_action in compressed:
+        if case.benchmark.startswith("ruler"):
+            return "recent_plus_span_top3_b0_a0"
+        return "recent_plus_retrieval_raw_k2"
+    if case.benchmark.startswith("ruler") and case.task in {"vt", "cwe", "fwe"}:
+        if old_action in {"span_top2_b0_a0", "span_b0_a0", "prefix_to_evidence"}:
+            return "recent_plus_span_top3_b0_a0"
+    if case.benchmark.startswith("ruler") and ruler_length >= 16384:
+        if case.task == "niah_multikey_1" and old_action.startswith("span_"):
+            return "recent_plus_full_old_raw"
+        if case.task in {"niah_multiquery", "niah_multivalue"} and old_action.startswith("span_"):
+            return "recent_plus_prefix_to_farthest_top3"
+    if any(phrase in lower for phrase in ("all ", "all the", "every", "list all", "most common", "frequently appeared")):
+        if old_action in {"span_top2_b0_a0", "span_b0_a0"}:
+            return "recent_plus_span_top3_b0_a0"
+    return action
+
+
+def router_prediction_margin(prediction: Any) -> float:
+    probabilities = getattr(prediction, "probabilities", None)
+    if not probabilities:
+        return 1.0
+    values = sorted((float(value) for value in probabilities.values()), reverse=True)
+    if len(values) < 2:
+        return values[0] if values else 0.0
+    return values[0] - values[1]
+
+
+def kv_safe_router_override_v5(case: BenchCase, prediction: Any) -> str:
+    action = getattr(prediction, "raw_action", prediction)
+    confidence = float(getattr(prediction, "confidence", 1.0))
+    margin = router_prediction_margin(prediction)
+    exact = case.benchmark.startswith("ruler") or case.task in EXACT_LONG_BENCH_TASKS
+    old_action = action.removeprefix("recent_plus_") if action.startswith("recent_plus_") else action
+    lower = case.query.lower()
+    length_match = re.search(r"ruler_(\d+)", case.benchmark)
+    ruler_length = int(length_match.group(1)) if length_match else 0
+    compressed = {
+        "recent_only",
+        "summary10",
+        "summary100",
+        "summary1000",
+        "summary1_8",
+        "summary1_4",
+        "summary1_2",
+        "static_hier",
+    }
+    if case.task in SUMMARY_TASKS:
+        return action
+    if not exact:
+        return action
+    if old_action in compressed:
+        if case.benchmark.startswith("ruler"):
+            return "recent_plus_span_top3_b0_a0"
+        return "recent_plus_retrieval_raw_k2"
+    if case.benchmark.startswith("ruler") and case.task in {"vt", "cwe", "fwe"}:
+        if old_action in {"span_top2_b0_a0", "span_b0_a0", "prefix_to_evidence"}:
+            return "recent_plus_span_top3_b0_a0"
+    if case.benchmark.startswith("ruler") and ruler_length >= 16384:
+        if case.task == "niah_multikey_1" and old_action.startswith("span_"):
+            return "recent_plus_full_old_raw"
+        uncertain = confidence < 0.55 or margin < 0.20
+        if case.task in {"niah_multiquery", "niah_multivalue"} and old_action.startswith("span_") and uncertain:
+            return "recent_plus_prefix_to_farthest_top3"
+    if any(phrase in lower for phrase in ("all ", "all the", "every", "list all", "most common", "frequently appeared")):
+        if old_action in {"span_top2_b0_a0", "span_b0_a0"}:
+            return "recent_plus_span_top3_b0_a0"
+    return action
+
+
 def resolve_action(method: str, tokenizer: Any, case: BenchCase, config: Config, router: Any | None) -> str:
+    if method == "recent_plus_kv_safe_rule_v0":
+        return kv_safe_rule_action(case, tokenizer, config)
     if method == "router":
         if router is None:
             return rule_router_action(case)
         features, task_family = router_features(tokenizer, case, config)
         return router.predict(features, task_family=task_family).raw_action
+    if method == "router_safe":
+        if router is None:
+            action = rule_router_action(case)
+        else:
+            features, task_family = router_features(tokenizer, case, config)
+            action = router.predict(features, task_family=task_family).raw_action
+        return kv_safe_router_override(case, action)
+    if method == "router_safe_v5":
+        if router is None:
+            return kv_safe_router_override_v5(case, rule_router_action(case))
+        features, task_family = router_features(tokenizer, case, config)
+        prediction = router.predict(features, task_family=task_family)
+        return kv_safe_router_override_v5(case, prediction)
     if method == "router_conservative":
         if router is None:
             action = rule_router_action(case)
@@ -665,6 +866,31 @@ def build_memory_for_action(action: str, tokenizer: Any, case: BenchCase, config
                 f"{static_hier_memory(tokenizer, old_context, config)}\n\n"
                 "Retrieved old raw evidence:\n"
                 f"{retrieve_blocks(tokenizer, old_context, case.query, config, top_k)}"
+            )
+        elif old_action == "prefix_to_evidence":
+            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, config)
+        elif old_action.startswith("prefix_to_farthest_top"):
+            top_k = int(old_action.removeprefix("prefix_to_farthest_top"))
+            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, config, top_k=top_k)
+        elif old_action.startswith("span_b"):
+            match = re.fullmatch(r"span_b(\d+)_a(\d+)", old_action)
+            if not match:
+                raise ValueError(action)
+            before, after = int(match.group(1)), int(match.group(2))
+            old_memory = retrieve_span_blocks(tokenizer, old_context, case.query, config, before=before, after=after)
+        elif old_action.startswith("span_top"):
+            match = re.fullmatch(r"span_top(\d+)_b(\d+)_a(\d+)", old_action)
+            if not match:
+                raise ValueError(action)
+            max_spans, before, after = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            old_memory = retrieve_span_blocks(
+                tokenizer,
+                old_context,
+                case.query,
+                config,
+                before=before,
+                after=after,
+                max_spans=max_spans,
             )
         else:
             raise ValueError(action)
