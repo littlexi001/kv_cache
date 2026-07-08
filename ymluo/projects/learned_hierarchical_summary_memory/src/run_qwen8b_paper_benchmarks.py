@@ -9,7 +9,7 @@ import statistics
 import sys
 import time
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -85,6 +85,13 @@ RULER_TASKS = {
     "fwe",
 }
 
+CALIBRATED_FLOOR_ACTIONS = {
+    "longbench": "recent_plus_b128_span_top12_b0_a0",
+    "ruler_4096": "recent_plus_b256_span_top3_b0_a0",
+    "ruler_8192": "recent_plus_b256_span_top3_b0_a0",
+    "ruler_16384": "recent_plus_b512_span_top3_b0_a0",
+}
+
 
 @dataclass(frozen=True)
 class Config:
@@ -98,6 +105,7 @@ class Config:
     ruler_context_lengths: tuple[int, ...]
     methods: tuple[str, ...]
     max_examples_per_task: int
+    case_ids: tuple[str, ...]
     block_tokens: int
     recent_tokens: int
     max_input_tokens: int
@@ -172,6 +180,7 @@ def parse_args() -> Config:
         default="full_raw,summary10,summary100,summary1000,summary1_8,summary1_4,summary1_2,static_hier,retrieval_raw_k1,retrieval_raw_k2,router,router_conservative",
     )
     parser.add_argument("--max_examples_per_task", type=int, default=6)
+    parser.add_argument("--case_ids", default="", help="Optional comma-separated case ids to run instead of the first N cases.")
     parser.add_argument("--block_tokens", type=int, default=1024)
     parser.add_argument("--recent_tokens", type=int, default=512)
     parser.add_argument("--max_input_tokens", type=int, default=24000)
@@ -197,6 +206,7 @@ def parse_args() -> Config:
             "ruler_tasks": parse_csv_tuple(args.ruler_tasks),
             "ruler_context_lengths": parse_int_tuple(args.ruler_context_lengths),
             "methods": parse_csv_tuple(args.methods),
+            "case_ids": parse_csv_tuple(args.case_ids),
         }
     )
 
@@ -252,14 +262,18 @@ def load_longbench_cases(config: Config) -> list[BenchCase]:
             continue
         with path.open("r", encoding="utf-8") as handle:
             for idx, line in enumerate(handle):
-                if idx >= config.max_examples_per_task:
+                case_id = str(idx)
+                if not config.case_ids and idx >= config.max_examples_per_task:
                     break
                 row = json.loads(line)
+                case_id = str(row.get("_id") or idx)
+                if config.case_ids and case_id not in config.case_ids:
+                    continue
                 cases.append(
                     BenchCase(
                         benchmark="longbench",
                         task=task,
-                        case_id=str(row.get("_id") or idx),
+                        case_id=case_id,
                         context=str(row.get("context", "")),
                         query=str(row.get("input", "")),
                         answers=tuple(str(item) for item in row.get("answers", [])),
@@ -303,15 +317,19 @@ def load_ruler_cases(config: Config) -> list[BenchCase]:
                 continue
             with path.open("r", encoding="utf-8") as handle:
                 for idx, line in enumerate(handle):
-                    if idx >= config.max_examples_per_task:
+                    case_id = str(idx)
+                    if not config.case_ids and idx >= config.max_examples_per_task:
                         break
                     row = json.loads(line)
+                    case_id = str(row.get("index", idx))
+                    if config.case_ids and case_id not in config.case_ids:
+                        continue
                     memory, query = split_ruler_input(str(row["input"]))
                     cases.append(
                         BenchCase(
                             benchmark=f"ruler_{context_length}",
                             task=task,
-                            case_id=str(row.get("index", idx)),
+                            case_id=case_id,
                             context=memory,
                             query=query,
                             answers=tuple(str(item) for item in row.get("outputs", [])),
@@ -801,6 +819,76 @@ def kv_safe_router_override_v5(case: BenchCase, prediction: Any) -> str:
     return action
 
 
+def parse_recent_plus_block_action(action: str) -> tuple[int, int] | None:
+    match = re.fullmatch(r"recent_plus_b(\d+)_span_top(\d+)_b0_a0", action)
+    if not match:
+        return None
+    return int(match.group(1)), int(match.group(2))
+
+
+def enforce_block_floor(action: str, floor_action: str) -> str:
+    parsed = parse_recent_plus_block_action(action)
+    floor = parse_recent_plus_block_action(floor_action)
+    if parsed is None or floor is None:
+        return floor_action
+    block, top_k = parsed
+    floor_block, floor_top_k = floor
+    if block < floor_block or top_k < floor_top_k:
+        return floor_action
+    return action
+
+
+def blocksize_floor_v1_action(case: BenchCase, action: str) -> str:
+    """Risk floor for the aggressive small-block router.
+
+    The m3 oracle often selects 32/64-token blocks, but m10 partial runs show
+    that unconstrained small-block routing is unsafe on multi-evidence RULER.
+    This floor keeps the router useful for easy cases while enforcing the
+    smallest empirically safe action for hard benchmark families.
+    """
+    if case.benchmark.startswith("ruler_"):
+        length_match = re.search(r"ruler_(\d+)", case.benchmark)
+        ruler_length = int(length_match.group(1)) if length_match else 0
+        if ruler_length >= 16384:
+            return enforce_block_floor(action, "recent_plus_b512_span_top3_b0_a0")
+        return enforce_block_floor(action, "recent_plus_b256_span_top3_b0_a0")
+    if case.task in SUMMARY_TASKS:
+        return enforce_block_floor(action, "recent_plus_b128_span_top12_b0_a0")
+    if case.task in EXACT_LONG_BENCH_TASKS:
+        return enforce_block_floor(action, "recent_plus_b128_span_top6_b0_a0")
+    return action
+
+
+def calibrated_floor_for_case(case: BenchCase) -> str:
+    if case.benchmark.startswith("ruler_"):
+        return CALIBRATED_FLOOR_ACTIONS.get(case.benchmark, "")
+    if case.benchmark == "longbench":
+        return CALIBRATED_FLOOR_ACTIONS["longbench"]
+    return ""
+
+
+def blocksize_lattice_floor_action(case: BenchCase, action: str) -> str:
+    """Legacy floor that treats larger block/topK as a monotone upgrade."""
+    floor_action = calibrated_floor_for_case(case)
+    if floor_action:
+        return enforce_block_floor(action, floor_action)
+    return action
+
+
+def blocksize_calibrated_floor_action(case: BenchCase, action: str) -> str:
+    """Exact calibrated risk floor selected from block-size/topK sweeps.
+
+    Calibration is over complete actions, not just lower bounds: changing block
+    size can change evidence ranking, so a larger block is not always safer.
+    """
+    floor_action = calibrated_floor_for_case(case)
+    return floor_action or action
+
+
+def blocksize_floor_v2_action(case: BenchCase, action: str) -> str:
+    return blocksize_lattice_floor_action(case, action)
+
+
 def resolve_action(method: str, tokenizer: Any, case: BenchCase, config: Config, router: Any | None) -> str:
     if method == "recent_plus_kv_safe_rule_v0":
         return kv_safe_rule_action(case, tokenizer, config)
@@ -822,6 +910,34 @@ def resolve_action(method: str, tokenizer: Any, case: BenchCase, config: Config,
         features, task_family = router_features(tokenizer, case, config)
         prediction = router.predict(features, task_family=task_family)
         return kv_safe_router_override_v5(case, prediction)
+    if method == "router_blocksize":
+        if router is None:
+            return "recent_plus_span_top3_b0_a0"
+        features, task_family = router_features(tokenizer, case, config)
+        return router.predict(features, task_family=task_family).raw_action
+    if method == "router_blocksize_floor_v1":
+        if router is None:
+            action = "recent_plus_span_top3_b0_a0"
+        else:
+            features, task_family = router_features(tokenizer, case, config)
+            action = router.predict(features, task_family=task_family).raw_action
+        return blocksize_floor_v1_action(case, action)
+    if method == "router_blocksize_floor_v2":
+        if router is None:
+            action = "recent_plus_span_top3_b0_a0"
+        else:
+            features, task_family = router_features(tokenizer, case, config)
+            action = router.predict(features, task_family=task_family).raw_action
+        return blocksize_floor_v2_action(case, action)
+    if method in {"router_blocksize_calibrated", "riskkv_block_calibrated"}:
+        if router is None:
+            action = "recent_plus_span_top3_b0_a0"
+        else:
+            features, task_family = router_features(tokenizer, case, config)
+            action = router.predict(features, task_family=task_family).raw_action
+        return blocksize_calibrated_floor_action(case, action)
+    if method in {"blocksize_calibrated_floor_only", "riskkv_block_floor_only"}:
+        return blocksize_calibrated_floor_action(case, "full_raw")
     if method == "router_conservative":
         if router is None:
             action = rule_router_action(case)
@@ -853,31 +969,36 @@ def build_memory_for_action(action: str, tokenizer: Any, case: BenchCase, config
             length=case.length,
         )
         old_action = action.removeprefix("recent_plus_")
+        action_config = config
+        block_match = re.fullmatch(r"b(\d+)_(.+)", old_action)
+        if block_match:
+            action_config = replace(config, block_tokens=int(block_match.group(1)))
+            old_action = block_match.group(2)
         if old_action == "full_old_raw":
             old_memory = old_context
         elif old_action == "static_hier":
-            old_memory = static_hier_memory(tokenizer, old_context, config)
+            old_memory = static_hier_memory(tokenizer, old_context, action_config)
         elif summary_ratio(old_action) is not None:
-            old_memory = build_ratio_summary_memory(tokenizer, old_context, config, old_action)
+            old_memory = build_ratio_summary_memory(tokenizer, old_context, action_config, old_action)
         elif old_action.startswith("retrieval_raw_k"):
             top_k = int(old_action.removeprefix("retrieval_raw_k"))
             old_memory = (
                 "Old summary memory:\n"
-                f"{static_hier_memory(tokenizer, old_context, config)}\n\n"
+                f"{static_hier_memory(tokenizer, old_context, action_config)}\n\n"
                 "Retrieved old raw evidence:\n"
-                f"{retrieve_blocks(tokenizer, old_context, case.query, config, top_k)}"
+                f"{retrieve_blocks(tokenizer, old_context, case.query, action_config, top_k)}"
             )
         elif old_action == "prefix_to_evidence":
-            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, config)
+            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, action_config)
         elif old_action.startswith("prefix_to_farthest_top"):
             top_k = int(old_action.removeprefix("prefix_to_farthest_top"))
-            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, config, top_k=top_k)
+            old_memory = retrieve_prefix_to_evidence(tokenizer, old_context, case.query, action_config, top_k=top_k)
         elif old_action.startswith("span_b"):
             match = re.fullmatch(r"span_b(\d+)_a(\d+)", old_action)
             if not match:
                 raise ValueError(action)
             before, after = int(match.group(1)), int(match.group(2))
-            old_memory = retrieve_span_blocks(tokenizer, old_context, case.query, config, before=before, after=after)
+            old_memory = retrieve_span_blocks(tokenizer, old_context, case.query, action_config, before=before, after=after)
         elif old_action.startswith("span_top"):
             match = re.fullmatch(r"span_top(\d+)_b(\d+)_a(\d+)", old_action)
             if not match:
@@ -887,7 +1008,7 @@ def build_memory_for_action(action: str, tokenizer: Any, case: BenchCase, config
                 tokenizer,
                 old_context,
                 case.query,
-                config,
+                action_config,
                 before=before,
                 after=after,
                 max_spans=max_spans,

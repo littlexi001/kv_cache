@@ -12,6 +12,7 @@ import time
 import zipfile
 from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,20 @@ LONG_BENCH_PROMPTS = {
         "max_new_tokens": 32,
         "metric": "qa_f1",
     },
+    "qmsum": {
+        "prefix": "You are given a meeting transcript and a query containing a question or instruction. Answer the query in one or more sentences.\n\nTranscript:\n",
+        "suffix": "\n\nNow, answer the query based on the above meeting transcript in one or more sentences.\n\nQuery: {input}\nAnswer:",
+        "max_new_tokens": 512,
+        "metric": "rouge_l",
+        "global_task": True,
+    },
+    "trec": {
+        "prefix": "Please determine the type of the question below. Here are some examples of questions.\n\n",
+        "suffix": "\n{input}",
+        "max_new_tokens": 64,
+        "metric": "classification",
+        "no_chat": True,
+    },
     "triviaqa": {
         "prefix": (
             "Answer the question based on the given passage. Only give me the answer and do not output any other words. "
@@ -106,6 +121,15 @@ LONG_BENCH_PROMPTS = {
         "suffix": "\n\n{input}",
         "max_new_tokens": 32,
         "metric": "qa_f1",
+        "no_chat": True,
+    },
+    "samsum": {
+        "prefix": "Summarize the dialogue into a few short sentences. The following are some examples.\n\n",
+        "suffix": "\n\n{input}",
+        "max_new_tokens": 128,
+        "metric": "rouge_l",
+        "global_task": True,
+        "no_chat": True,
     },
     "passage_retrieval_en": {
         "prefix": "Here are 30 paragraphs from Wikipedia, along with an abstract. Please determine which paragraph the abstract is from.\n\n",
@@ -142,6 +166,20 @@ LONG_BENCH_PROMPTS = {
         "max_new_tokens": 512,
         "metric": "rouge_l",
         "global_task": True,
+    },
+    "lcc": {
+        "prefix": "Please complete the code given below. \n",
+        "suffix": "Next line of code:\n",
+        "max_new_tokens": 64,
+        "metric": "code_sim",
+        "no_chat": True,
+    },
+    "repobench-p": {
+        "prefix": "Please complete the code given below. \n",
+        "suffix": "{input}Next line of code:\n",
+        "max_new_tokens": 64,
+        "metric": "code_sim",
+        "no_chat": True,
     },
 }
 
@@ -246,6 +284,8 @@ class Example:
     metric: str
     max_new_tokens: int
     length: int
+    all_classes: list[str]
+    no_chat: bool = False
 
 
 @dataclass
@@ -476,11 +516,26 @@ def ruler_string_match_part(prediction: str, answers: list[str]) -> float:
     return 1.0 if any(answer.lower() in lowered for answer in answers) else 0.0
 
 
-def score_prediction(metric: str, prediction: str, answers: list[str]) -> float:
+def code_sim_score(prediction: str, ground_truth: str) -> float:
+    for line in prediction.lstrip("\n").split("\n"):
+        if "`" not in line and "#" not in line and "//" not in line:
+            return SequenceMatcher(None, line, ground_truth).ratio()
+    return 0.0
+
+
+def classification_score(prediction: str, ground_truth: str, all_classes: list[str]) -> float:
+    matches = [class_name for class_name in all_classes if class_name in prediction]
+    matches = [match for match in matches if not (match in ground_truth and match != ground_truth)]
+    return 1.0 / len(matches) if ground_truth in matches and matches else 0.0
+
+
+def score_prediction(metric: str, prediction: str, answers: list[str], all_classes: list[str] | None = None) -> float:
     if metric == "ruler_string_match":
         return ruler_string_match(prediction, answers)
     if metric == "ruler_string_match_part":
         return ruler_string_match_part(prediction, answers)
+    if metric in {"classification", "qa_f1", "rouge_l"}:
+        prediction = prediction.lstrip("\n").split("\n")[0] if metric == "classification" else prediction
     scores = []
     for answer in answers:
         if metric == "qa_f1":
@@ -491,6 +546,10 @@ def score_prediction(metric: str, prediction: str, answers: list[str]) -> float:
             scores.append(count_score(prediction, answer))
         elif metric == "rouge_l":
             scores.append(rouge_l_score(prediction, answer))
+        elif metric == "classification":
+            scores.append(classification_score(prediction, answer, all_classes or []))
+        elif metric == "code_sim":
+            scores.append(code_sim_score(prediction, answer))
         else:
             raise ValueError(f"Unsupported metric: {metric}")
     return max(scores) if scores else 0.0
@@ -548,6 +607,8 @@ def load_longbench_examples(config: Config) -> list[Example]:
                         metric=str(info["metric"]),
                         max_new_tokens=max_new,
                         length=int(row.get("length", 0) or 0),
+                        all_classes=[str(item) for item in row.get("all_classes", [])],
+                        no_chat=bool(info.get("no_chat", False)),
                     )
                 )
     return examples
@@ -617,6 +678,7 @@ def load_ruler_examples(config: Config, tokenizer_name: str) -> list[Example]:
                     metric=metric,
                     max_new_tokens=max_new,
                     length=length,
+                    all_classes=[],
                 )
             )
 
@@ -816,7 +878,7 @@ def build_bundle(tokenizer: Any, example: Example, config: Config) -> tuple[Prom
     context = trim_context_to_tokens(tokenizer, example.context, config.max_context_tokens)
     prefix_text = example.prefix_template
     suffix_text = example.suffix_template.format(input=example.query)
-    if config.prompt_wrapper == "llama3":
+    if config.prompt_wrapper == "llama3" and not example.no_chat:
         prefix_text = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n" + prefix_text
         suffix_text = suffix_text + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
     prefix_ids = token_ids(tokenizer, prefix_text)
@@ -1391,7 +1453,7 @@ def evaluate_method(
         example.max_new_tokens,
         input_device,
     )
-    score = score_prediction(example.metric, prediction, example.answers)
+    score = score_prediction(example.metric, prediction, example.answers, example.all_classes)
     context_kept = sum(1 for idx in keep_indices if bundle.context_token_start <= idx < bundle.query_start)
     return {
         "benchmark": example.benchmark,
