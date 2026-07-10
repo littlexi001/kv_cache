@@ -1,0 +1,72 @@
+\begin{thebibliography}{8}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Bai et~al.(2023)Bai, Lv, Zhang, Lyu, Tang, Huang, Du, Liu, Zeng, Hou,
+  Dong, Tang, and Li]{bai2023longbench}
+Yushi Bai, Xin Lv, Jiajie Zhang, Hongchang Lyu, Jiankai Tang, Zhidian Huang,
+  Zhengxiao Du, Xiao Liu, Aohan Zeng, Lei Hou, Yuxiao Dong, Jie Tang, and
+  Juanzi Li.
+\newblock Longbench: A bilingual, multitask benchmark for long context
+  understanding.
+\newblock \emph{arXiv preprint arXiv:2308.14508}, 2023.
+
+\bibitem[Cai et~al.(2024)Cai, Zhang, Gao, Liu, Liu, Lu, Xiong, Dong, Chang, Hu,
+  Xiao, Yuan, and Zhang]{cai2024pyramidkv}
+Zefan Cai, Yichi Zhang, Bofei Gao, Yuliang Liu, Tianyu Liu, Keming Lu, Wayne
+  Xiong, Yue Dong, Baobao Chang, Junjie Hu, Wen Xiao, Qi~Yuan, and Wenxuan
+  Zhang.
+\newblock Pyramidkv: Dynamic kv cache compression based on pyramidal
+  information funneling.
+\newblock \emph{arXiv preprint arXiv:2406.02069}, 2024.
+
+\bibitem[Hsieh et~al.(2024)Hsieh, Sun, Kriman, Acharya, Rekesh, Jia, and
+  Ginsburg]{hsieh2024ruler}
+Cheng-Ping Hsieh, Simeng Sun, Samuel Kriman, Shantanu Acharya, Dima Rekesh, Fei
+  Jia, and Boris Ginsburg.
+\newblock Ruler: What's the real context size of your long-context language
+  models?
+\newblock \emph{arXiv preprint arXiv:2404.06654}, 2024.
+
+\bibitem[Li et~al.(2024)Li, Huang, Yang, Venkitesh, Locatelli, Ye, Cai, Lewis,
+  and Chen]{li2024snapkv}
+Yuhong Li, Yingbing Huang, Bowen Yang, Bharath Venkitesh, Andrea Locatelli,
+  Hanchen Ye, Tianle Cai, Patrick Lewis, and Deming Chen.
+\newblock Snapkv: Llm knows what you are looking for before generation.
+\newblock \emph{arXiv preprint arXiv:2404.14469}, 2024.
+
+\bibitem[Xiao et~al.(2023)Xiao, Tian, Chen, Han, and
+  Lewis]{xiao2023streamingllm}
+Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis.
+\newblock Efficient streaming language models with attention sinks.
+\newblock \emph{arXiv preprint arXiv:2309.17453}, 2023.
+
+\bibitem[Yang et~al.(2024)Yang, Han, Gao, Hu, Zhang, and
+  Zhao]{yang2024pyramidinfer}
+Dongjie Yang, Xiao Han, Yan Gao, Yao Hu, Shiyang Zhang, and Hai Zhao.
+\newblock Pyramidinfer: Pyramid kv cache compression for high-throughput llm
+  inference.
+\newblock \emph{arXiv preprint arXiv:2405.12532}, 2024.
+
+\bibitem[Zhang et~al.(2023)Zhang, Sheng, Zhou, Chen, Zheng, Cai, Song, Tian,
+  R{\'e}, Barrett, Wang, and Chen]{zhang2023h2o}
+Zhenyu Zhang, Ying Sheng, Tianyi Zhou, Tianlong Chen, Lianmin Zheng, Ruisi Cai,
+  Zhao Song, Yuandong Tian, Christopher R{\'e}, Clark Barrett, Zhangyang Wang,
+  and Beidi Chen.
+\newblock H2o: Heavy-hitter oracle for efficient generative inference of large
+  language models.
+\newblock \emph{arXiv preprint arXiv:2306.14048}, 2023.
+
+\bibitem[Zhou et~al.(2024)Zhou, Ning, Hong, Fu, Xu, Li, Lou, Wang, Yuan, Li,
+  Yan, Dai, Wang, Yang, and Wang]{zhou2024dynamickv}
+Zhenyu Zhou, Xuefei Ning, Ke~Hong, Tianchen Fu, Jiaming Xu, Shiyao Li, Yiping
+  Lou, Liyue Wang, Zhihang Yuan, Xiuhong Li, Guohao Yan, Guohao Dai, Huazhong
+  Wang, Yu~Yang, and Yu~Wang.
+\newblock Dynamickv: Task-aware adaptive kv cache compression for long context
+  llms.
+\newblock \emph{arXiv preprint arXiv:2412.14838}, 2024.
+
+\end{thebibliography}

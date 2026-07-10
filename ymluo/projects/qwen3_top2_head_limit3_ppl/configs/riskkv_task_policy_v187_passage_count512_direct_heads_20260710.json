@@ -1,0 +1,133 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.2
+  },
+  "narrativeqa": {
+    "budget_tokens": 512,
+    "score_risk": true,
+    "score_risk_budget_tokens": 999999,
+    "score_risk_entropy_at_most": 0.9699,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false
+  },
+  "multifieldqa_en": {
+    "budget_tokens": 512,
+    "score_risk": true,
+    "score_risk_budget_tokens": 999999,
+    "score_risk_max_entropy": 0.9892,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false
+  },
+  "hotpotqa": {
+    "budget_tokens": 2048,
+    "score_risk": false,
+    "full_fallback": false
+  },
+  "2wikimqa": {
+    "budget_tokens": 512,
+    "score_risk": true,
+    "score_risk_linear_threshold": 0.946880252247314,
+    "score_risk_gap2_weight": 1.0,
+    "score_risk_gap3_weight": 0.0,
+    "score_risk_top_score_weight": 0.0,
+    "output_verifier": true,
+    "grounding_verifier": true,
+    "retry_budget_tokens": 2048,
+    "consistency_verifier": true,
+    "consistency_budget_tokens": 2048,
+    "consistency_requires_score_risk": 1
+  },
+  "musique": {
+    "budget_tokens": 1280,
+    "score_risk": true,
+    "score_risk_budget_tokens": 999999,
+    "score_risk_min_gap2": 0.0827,
+    "full_fallback": false
+  },
+  "qasper": {
+    "budget_tokens": 768,
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.16,
+    "score_risk": true,
+    "score_risk_budget_tokens": 2048,
+    "score_risk_raw_prefix_at_most": 6574,
+    "score_risk_max_gap3": 0.04
+  },
+  "gov_report": {
+    "budget_tokens": 1024
+  },
+  "qmsum": {
+    "budget_tokens": 1024,
+    "short_decode": true,
+    "short_decode_max_tokens": 128
+  },
+  "multi_news": {
+    "budget_tokens": 768,
+    "short_decode": true,
+    "short_decode_max_tokens": 128
+  },
+  "trec": {
+    "budget_tokens": 128,
+    "short_decode": true,
+    "short_decode_max_tokens": 0,
+    "output_verifier": false,
+    "direct_structured_answer": true,
+    "score_risk": false
+  },
+  "passage_count": {
+    "budget_tokens": 512,
+    "page_tokens": 128,
+    "structured_fingerprint": true,
+    "structured_fingerprint_budget_fraction": 0.9,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "score_risk": false
+  },
+  "passage_retrieval_en": {
+    "budget_tokens": 768,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.8,
+    "ours_multiscale_weight": 0.28,
+    "ours_flow_neighbor_radius": 2,
+    "ours_flow_neighbor_budget_fraction": 0.2,
+    "ours_flow_neighbor_min_score": 0.08,
+    "label_support": true,
+    "ours_label_backtrack_pages": 6,
+    "ours_label_budget_fraction": 0.18,
+    "short_decode": true,
+    "short_decode_max_tokens": 8,
+    "output_verifier": false,
+    "direct_structured_answer": true,
+    "grounding_verifier": false,
+    "score_risk": false
+  },
+  "samsum": {
+    "budget_tokens": 384,
+    "short_decode": true,
+    "short_decode_max_tokens": 32
+  },
+  "repobench-p": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 448,
+    "score_risk": true,
+    "score_risk_budget_tokens": 999999,
+    "score_risk_min_gap3": 0.0479,
+    "output_verifier": true,
+    "retry_budget_tokens": 2048
+  }
+}

@@ -480,16 +480,80 @@ def retrieve_blocks(tokenizer: Any, context: str, query: str, config: Config, to
     return "\n\n".join(f"[raw block {idx}]\n{block}" for idx, block in chosen)
 
 
+IDENTIFIER_RE = re.compile(r"[A-Za-z]*\d+[A-Za-z0-9-]*|\b[A-Z][A-Za-z0-9-]{2,}\b")
+
+
+def exact_identifiers(text: str) -> set[str]:
+    return {match.group(0).lower() for match in IDENTIFIER_RE.finditer(text)}
+
+
+def build_tail_block_terms(blocks: list[str], tail_fraction: float = 0.5) -> list[set[str]]:
+    """Build one-layer long-tail term sets for each block.
+
+    Terms are ranked by document-level rarity across blocks. Each block keeps
+    the rarest fraction of its unique content words, and always keeps exact
+    identifiers/numbers because they dominate retrieval-style tasks.
+    """
+    block_word_sets = [set(content_words(block)) for block in blocks]
+    document_frequency: Counter[str] = Counter()
+    for words in block_word_sets:
+        document_frequency.update(words)
+    num_blocks = max(1, len(blocks))
+    tail_sets: list[set[str]] = []
+    for block, words in zip(blocks, block_word_sets):
+        if not words:
+            tail_sets.append(exact_identifiers(block))
+            continue
+        keep_n = max(1, int(math.ceil(len(words) * tail_fraction)))
+        ranked = sorted(
+            words,
+            key=lambda word: (
+                math.log((num_blocks + 1.0) / (document_frequency[word] + 1.0)),
+                len(word),
+                word,
+            ),
+            reverse=True,
+        )
+        tail = set(ranked[:keep_n])
+        tail.update(exact_identifiers(block))
+        tail_sets.append(tail)
+    return tail_sets
+
+
+def build_tail_block_index(blocks: list[str], tail_fraction: float = 0.5) -> tuple[list[set[str]], dict[str, list[int]]]:
+    tail_terms = build_tail_block_terms(blocks, tail_fraction=tail_fraction)
+    postings: dict[str, list[int]] = {}
+    for idx, terms in enumerate(tail_terms):
+        for term in terms:
+            postings.setdefault(term, []).append(idx)
+    return tail_terms, postings
+
+
 def score_blocks(tokenizer: Any, context: str, query: str, config: Config) -> list[tuple[int, int, str]]:
     blocks = token_blocks(tokenizer, context, config.block_tokens)
     query_terms = set(content_words(query))
-    query_numbers = set(re.findall(r"[A-Za-z]*\d+[A-Za-z0-9-]*", query))
+    query_numbers = exact_identifiers(query)
     scored = []
     for idx, block in enumerate(blocks):
         block_terms = set(content_words(block))
         overlap = len(query_terms & block_terms)
-        overlap += 3 * len(query_numbers & set(re.findall(r"[A-Za-z]*\d+[A-Za-z0-9-]*", block)))
+        overlap += 3 * len(query_numbers & exact_identifiers(block))
         scored.append((overlap, idx, block))
+    scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    return scored
+
+
+def score_blocks_tail(tokenizer: Any, context: str, query: str, config: Config) -> list[tuple[int, int, str]]:
+    blocks = token_blocks(tokenizer, context, config.block_tokens)
+    query_terms = set(content_words(query)) | exact_identifiers(query)
+    query_identifiers = exact_identifiers(query)
+    _, postings = build_tail_block_index(blocks)
+    score_by_idx: Counter[int] = Counter()
+    for term in query_terms:
+        weight = 4 if term in query_identifiers else 1
+        for idx in postings.get(term, []):
+            score_by_idx[idx] += weight
+    scored = [(int(score_by_idx.get(idx, 0)), idx, block) for idx, block in enumerate(blocks)]
     scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
     return scored
 
@@ -502,11 +566,12 @@ def retrieve_span_blocks(
     before: int,
     after: int,
     max_spans: int = 1,
+    scorer: str = "full",
 ) -> str:
     blocks = token_blocks(tokenizer, context, config.block_tokens)
     if not blocks:
         return ""
-    scored = score_blocks(tokenizer, context, query, config)
+    scored = score_blocks_tail(tokenizer, context, query, config) if scorer == "tail" else score_blocks(tokenizer, context, query, config)
     centers = [idx for score, idx, _ in scored[:max_spans] if score > 0]
     if not centers:
         centers = [scored[0][1]]
@@ -1012,6 +1077,21 @@ def build_memory_for_action(action: str, tokenizer: Any, case: BenchCase, config
                 before=before,
                 after=after,
                 max_spans=max_spans,
+            )
+        elif old_action.startswith("tail_span_top"):
+            match = re.fullmatch(r"tail_span_top(\d+)_b(\d+)_a(\d+)", old_action)
+            if not match:
+                raise ValueError(action)
+            max_spans, before, after = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            old_memory = retrieve_span_blocks(
+                tokenizer,
+                old_context,
+                case.query,
+                action_config,
+                before=before,
+                after=after,
+                max_spans=max_spans,
+                scorer="tail",
             )
         else:
             raise ValueError(action)

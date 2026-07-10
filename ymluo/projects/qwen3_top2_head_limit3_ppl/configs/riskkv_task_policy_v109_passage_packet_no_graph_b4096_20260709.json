@@ -1,0 +1,60 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.20
+  },
+  "hotpotqa": {
+    "budget_tokens": 4096,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "title_anchor": true,
+    "anchor_pages_per_key": 5,
+    "label_support": true,
+    "passage_closure": true,
+    "passage_closure_budget_fraction": 0.42,
+    "passage_closure_radius_pages": 6,
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.12,
+    "ours_bridge_max_terms": 32,
+    "coverage_mmr_weight": 0.45,
+    "coverage_mmr_max_terms": 48,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.20,
+    "coverage_certificate_min_terms": 2
+  },
+  "musique": {
+    "budget_tokens": 4096,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "title_anchor": true,
+    "anchor_pages_per_key": 6,
+    "label_support": true,
+    "passage_closure": true,
+    "passage_closure_budget_fraction": 0.45,
+    "passage_closure_radius_pages": 7,
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.14,
+    "ours_bridge_max_terms": 36,
+    "coverage_mmr_weight": 0.50,
+    "coverage_mmr_max_terms": 56,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.22,
+    "coverage_certificate_min_terms": 2
+  },
+  "qasper": {
+    "budget_tokens": 2048,
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.22
+  }
+}

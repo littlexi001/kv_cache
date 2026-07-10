@@ -1,0 +1,24 @@
+{
+  "passage_retrieval_en": {
+    "budget_tokens": 768,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.8,
+    "ours_multiscale_weight": 0.28,
+    "ours_flow_neighbor_radius": 2,
+    "ours_flow_neighbor_budget_fraction": 0.2,
+    "ours_flow_neighbor_min_score": 0.08,
+    "label_support": true,
+    "ours_label_backtrack_pages": 6,
+    "ours_label_budget_fraction": 0.18,
+    "short_decode": true,
+    "short_decode_max_tokens": 8,
+    "output_verifier": true,
+    "ours_output_probe_max_tokens": 8,
+    "retry_budget_tokens": 6144,
+    "grounding_verifier": false,
+    "score_risk": true,
+    "score_risk_budget_tokens": 4096,
+    "score_risk_entropy_at_most": 0.97
+  }
+}

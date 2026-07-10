@@ -36,6 +36,7 @@ from run_position_mode_planner_from_repack_results import (  # noqa: E402
     MLP,
     content_words,
 )
+from run_output_level_risk_verifier_from_repack_results import output_features  # noqa: E402
 
 
 @dataclass(frozen=True)
@@ -48,6 +49,9 @@ class Config:
     ruler_tasks: tuple[str, ...]
     ruler_context_lengths: tuple[int, ...]
     max_examples_per_task: int
+    case_start: int
+    case_limit: int
+    runtime_methods: tuple[str, ...]
     max_context_tokens: int
     page_tokens: int
     top_k: int
@@ -62,12 +66,21 @@ class Config:
     variable_budget_policy: str
     variable_budget_tail_threshold: float
     variable_budget_temperature: float
+    variable_budget_min_budget: int
     variable_budget_source: str
     consistency_probe_budgets: tuple[int, ...]
     consistency_probe_kl_threshold: float
     consistency_probe_require_top1_agree: bool
     teacher_verifier_budgets: tuple[int, ...]
     teacher_verifier_fallback_nll: float
+    output_verifier_path: str
+    output_verifier_threshold: float
+    output_verifier_source: str
+    output_verifier_budgets: tuple[int, ...]
+    output_verifier_mode: str
+    output_verifier_min_budget: int
+    output_verifier_long_ruler_min_budget: int
+    output_verifier_long_ruler_context_threshold: int
     seed: int
 
 
@@ -113,6 +126,13 @@ def parse_args() -> Config:
     parser.add_argument("--ruler_tasks", default="niah_single_1,niah_single_2,niah_multikey_1,niah_multiquery,niah_multivalue,vt,cwe,fwe")
     parser.add_argument("--ruler_context_lengths", default="4096")
     parser.add_argument("--max_examples_per_task", type=int, default=1)
+    parser.add_argument("--case_start", type=int, default=0)
+    parser.add_argument("--case_limit", type=int, default=0)
+    parser.add_argument(
+        "--runtime_methods",
+        default="all",
+        help="Comma-separated method rows to run; 'all' preserves the full benchmark suite.",
+    )
     parser.add_argument("--max_context_tokens", type=int, default=4096)
     parser.add_argument("--page_tokens", type=int, default=512)
     parser.add_argument("--top_k", type=int, default=2)
@@ -127,6 +147,7 @@ def parse_args() -> Config:
     parser.add_argument("--variable_budget_policy", choices=["argmax", "tail_risk"], default="tail_risk")
     parser.add_argument("--variable_budget_tail_threshold", type=float, default=0.35)
     parser.add_argument("--variable_budget_temperature", type=float, default=1.0)
+    parser.add_argument("--variable_budget_min_budget", type=int, default=0)
     parser.add_argument(
         "--variable_budget_source",
         default="auto",
@@ -150,6 +171,27 @@ def parse_args() -> Config:
         default=float("inf"),
         help="Fallback to full decode if the best compact candidate has teacher NLL above this value.",
     )
+    parser.add_argument("--output_verifier_path", default="")
+    parser.add_argument("--output_verifier_threshold", type=float, default=0.7)
+    parser.add_argument(
+        "--output_verifier_source",
+        default="auto",
+        help="Source one-hot to use for output-level verifier checkpoints; 'auto' follows the training groups.",
+    )
+    parser.add_argument(
+        "--output_verifier_budgets",
+        default="",
+        help="Optional compact budgets to evaluate for output-level verifier; empty uses checkpoint actions.",
+    )
+    parser.add_argument(
+        "--output_verifier_mode",
+        choices=["all", "prefix"],
+        default="all",
+        help="all decodes every candidate before verifying; prefix stops at the first safe candidate.",
+    )
+    parser.add_argument("--output_verifier_min_budget", type=int, default=1)
+    parser.add_argument("--output_verifier_long_ruler_min_budget", type=int, default=0)
+    parser.add_argument("--output_verifier_long_ruler_context_threshold", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=2026070701)
     args = parser.parse_args()
     return Config(
@@ -161,6 +203,9 @@ def parse_args() -> Config:
         ruler_tasks=parse_csv_tuple(args.ruler_tasks),
         ruler_context_lengths=parse_int_tuple(args.ruler_context_lengths),
         max_examples_per_task=args.max_examples_per_task,
+        case_start=args.case_start,
+        case_limit=args.case_limit,
+        runtime_methods=parse_csv_tuple(args.runtime_methods),
         max_context_tokens=args.max_context_tokens,
         page_tokens=args.page_tokens,
         top_k=args.top_k,
@@ -175,12 +220,21 @@ def parse_args() -> Config:
         variable_budget_policy=args.variable_budget_policy,
         variable_budget_tail_threshold=args.variable_budget_tail_threshold,
         variable_budget_temperature=args.variable_budget_temperature,
+        variable_budget_min_budget=args.variable_budget_min_budget,
         variable_budget_source=args.variable_budget_source,
         consistency_probe_budgets=parse_int_tuple(args.consistency_probe_budgets),
         consistency_probe_kl_threshold=args.consistency_probe_kl_threshold,
         consistency_probe_require_top1_agree=args.consistency_probe_require_top1_agree,
         teacher_verifier_budgets=parse_int_tuple(args.teacher_verifier_budgets),
         teacher_verifier_fallback_nll=args.teacher_verifier_fallback_nll,
+        output_verifier_path=args.output_verifier_path,
+        output_verifier_threshold=args.output_verifier_threshold,
+        output_verifier_source=args.output_verifier_source,
+        output_verifier_budgets=parse_int_tuple(args.output_verifier_budgets),
+        output_verifier_mode=args.output_verifier_mode,
+        output_verifier_min_budget=args.output_verifier_min_budget,
+        output_verifier_long_ruler_min_budget=args.output_verifier_long_ruler_min_budget,
+        output_verifier_long_ruler_context_threshold=args.output_verifier_long_ruler_context_threshold,
         seed=args.seed,
     )
 
@@ -212,6 +266,15 @@ def bench_config(config: Config) -> BenchConfig:
         router_path="",
         seed=config.seed,
     )
+
+
+def method_enabled(config: Config, method: str) -> bool:
+    methods = set(config.runtime_methods)
+    return not methods or "all" in methods or method in methods
+
+
+def any_method_enabled(config: Config, methods: tuple[str, ...]) -> bool:
+    return any(method_enabled(config, method) for method in methods)
 
 
 def resolve_dtype(name: str) -> torch.dtype:
@@ -371,6 +434,19 @@ def compact_action_budget(action: str) -> int:
     raise ValueError(action)
 
 
+def apply_variable_budget_floor(action: str, available_budgets: list[int], min_budget: int) -> str:
+    floor = max(0, int(min_budget))
+    if floor <= 0 or action == "full":
+        return action
+    selected_budget = compact_action_budget(action)
+    if selected_budget >= floor:
+        return action
+    eligible_budgets = [budget for budget in sorted(available_budgets) if budget >= floor]
+    if not eligible_budgets:
+        return action
+    return f"k{eligible_budgets[0]}_compact"
+
+
 class RuntimeTwoStagePlanner:
     def __init__(self, checkpoint_path: str, threshold_full: float, threshold_k3: float) -> None:
         payload = torch.load(checkpoint_path, map_location="cpu")
@@ -490,12 +566,18 @@ class RuntimeVariableBudgetPlanner:
         self.label_to_id = {str(key): int(value) for key, value in payload["label_to_id"].items()}
         self.id_to_label = {idx: label for label, idx in self.label_to_id.items()}
         self.policy = policy
-        self.tail_threshold = float(tail_threshold)
+        checkpoint_tau = payload.get("selected_tau")
+        if tail_threshold < 0.0 and checkpoint_tau is not None:
+            self.tail_threshold = float(checkpoint_tau)
+        else:
+            self.tail_threshold = float(tail_threshold)
         self.temperature = max(1e-6, float(temperature))
         self.source_name = source_name
         self.max_examples_per_task = int(max_examples_per_task)
         self.source_features = [name.removeprefix("source=") for name in self.feature_names if name.startswith("source=")]
         self.budgets = sorted({compact_action_budget(label) for label in self.label_to_id if label != "full"})
+        cfg = payload.get("config", {})
+        self.use_text_features = bool(cfg.get("use_text_features", False))
         self.model = MLP(int(payload["input_dim"]), int(payload["hidden_dim"]), len(self.label_to_id))
         self.model.load_state_dict(payload["state_dict"])
         self.model.eval()
@@ -560,7 +642,12 @@ class RuntimeVariableBudgetPlanner:
             values[f"k{top_k}_available"] = 1.0 if top_k in pages_by_budget else 0.0
             for name, value in zip(layout_names, page_layout_features(context_tokens, page_tokens, pages)):
                 values[f"k{top_k}_{name}"] = float(value)
-            for name, value in zip(TEXT_FEATURE_NAMES, runtime_text_features(query, scores, denom, pages)):
+            text_values = (
+                runtime_text_features(query, scores, denom, pages)
+                if self.use_text_features
+                else [0.0] * len(TEXT_FEATURE_NAMES)
+            )
+            for name, value in zip(TEXT_FEATURE_NAMES, text_values):
                 values[f"k{top_k}_{name}"] = float(value)
         for left, right in zip(self.budgets, self.budgets[1:]):
             left_set = page_sets.get(left, set())
@@ -617,6 +704,181 @@ class RuntimeVariableBudgetPlanner:
         if self.policy == "argmax":
             return max(probs, key=lambda label: (probs[label], -compact_action_budget(label))), probs
         return self.choose_tail_risk(probs), probs
+
+
+class RuntimeOutputLevelRiskVerifier:
+    OUTPUT_FEATURE_NAMES = [
+        "prediction_chars_log",
+        "prediction_words_log",
+        "prediction_unique_word_ratio",
+        "prediction_repeated_bigram_ratio",
+        "prediction_contains_passage",
+        "prediction_contains_question",
+        "prediction_contains_answer",
+        "prediction_contains_only_give",
+        "prediction_ends_question_mark",
+        "prediction_same_as_smaller_budget",
+        "prediction_same_as_larger_budget",
+        "prediction_same_as_any_budget",
+    ]
+
+    def __init__(
+        self,
+        checkpoint_path: str,
+        *,
+        threshold: float,
+        source_name: str,
+        max_examples_per_task: int,
+        budget_override: tuple[int, ...],
+    ) -> None:
+        payload = torch.load(checkpoint_path, map_location="cpu")
+        self.feature_names = list(payload["feature_names"])
+        self.mean = [float(item) for item in payload["mean"]]
+        self.std = [float(item) for item in payload["std"]]
+        self.compact_actions = [str(item) for item in payload["compact_actions"]]
+        if budget_override:
+            allowed = {f"k{budget}_compact" for budget in budget_override}
+            self.compact_actions = [action for action in self.compact_actions if action in allowed]
+        self.budgets = sorted({compact_action_budget(action) for action in self.compact_actions})
+        self.threshold = float(threshold)
+        self.source_name = source_name
+        self.max_examples_per_task = int(max_examples_per_task)
+        self.source_features = [name.removeprefix("source=") for name in self.feature_names if name.startswith("source=")]
+        cfg = payload.get("config", {})
+        self.use_text_features = bool(cfg.get("use_text_features", False))
+        self.model = MLP(int(payload["input_dim"]), int(payload["hidden_dim"]), 2)
+        self.model.load_state_dict(payload["state_dict"])
+        self.model.eval()
+
+    def resolve_source(self, benchmark: str) -> str:
+        if self.source_name != "auto":
+            return self.source_name
+        if not self.source_features:
+            return ""
+        if len(self.source_features) == 1:
+            return self.source_features[0]
+        if benchmark.startswith("ruler"):
+            return self.source_features[0]
+        if benchmark == "longbench" and self.max_examples_per_task > 4:
+            return self.source_features[-1]
+        return self.source_features[0]
+
+    def build_base_values(
+        self,
+        *,
+        benchmark: str,
+        task: str,
+        context_tokens: int,
+        query_tokens: int,
+        page_tokens: int,
+        query: str,
+        scores: list[float],
+        denom: float,
+        pages_by_budget: dict[int, list[int]],
+    ) -> dict[str, float]:
+        available_budgets = sorted(pages_by_budget)
+        values: dict[str, float] = {
+            "is_longbench": 1.0 if benchmark == "longbench" else 0.0,
+            "is_ruler": 1.0 if benchmark.startswith("ruler") else 0.0,
+            "context_tokens_log": math.log1p(context_tokens),
+            "query_tokens_log": math.log1p(query_tokens),
+            "page_tokens_log": math.log1p(page_tokens),
+            "num_budgets": float(len(available_budgets)),
+            "min_budget": float(min(available_budgets)) if available_budgets else 0.0,
+            "max_budget": float(max(available_budgets)) if available_budgets else 0.0,
+            f"task={task}": 1.0,
+            f"benchmark={benchmark}": 1.0,
+        }
+        source = self.resolve_source(benchmark)
+        if source:
+            values[f"source={source}"] = 1.0
+        layout_names = [
+            "pages",
+            "first_page_norm",
+            "last_page_norm",
+            "mean_page_norm",
+            "span_width_norm",
+            "max_gap_norm",
+            "has_page0",
+            "all_pages_adjacent",
+            "selected_kv_ratio",
+        ]
+        page_sets: dict[int, set[int]] = {}
+        for top_k in self.budgets:
+            pages = pages_by_budget.get(top_k, [])
+            page_sets[top_k] = set(pages)
+            values[f"k{top_k}_available"] = 1.0 if top_k in pages_by_budget else 0.0
+            for name, value in zip(layout_names, page_layout_features(context_tokens, page_tokens, pages)):
+                values[f"k{top_k}_{name}"] = float(value)
+            text_values = (
+                runtime_text_features(query, scores, denom, pages)
+                if self.use_text_features
+                else [0.0] * len(TEXT_FEATURE_NAMES)
+            )
+            for name, value in zip(TEXT_FEATURE_NAMES, text_values):
+                values[f"k{top_k}_{name}"] = float(value)
+        for left, right in zip(self.budgets, self.budgets[1:]):
+            left_set = page_sets.get(left, set())
+            right_set = page_sets.get(right, set())
+            union = left_set | right_set
+            values[f"delta_k{left}_to_k{right}_page_jaccard"] = (
+                float(len(left_set & right_set)) / max(1.0, float(len(union)))
+            )
+            values[f"delta_k{left}_to_k{right}_added_pages"] = float(len(right_set - left_set))
+        return values
+
+    def action_values(
+        self,
+        *,
+        base_values: dict[str, float],
+        action: str,
+        rank: int,
+        active_kv_ratio: float,
+        predictions: dict[str, str],
+    ) -> dict[str, float]:
+        values = dict(base_values)
+        budget = compact_action_budget(action)
+        values.update(
+            {
+                "candidate_budget_log": math.log1p(budget),
+                "candidate_budget_rank": float(rank) / max(1.0, float(len(self.compact_actions) - 1)),
+                "candidate_kv_ratio": active_kv_ratio,
+                "candidate_is_k1": 1.0 if budget == 1 else 0.0,
+                "candidate_is_k2": 1.0 if budget == 2 else 0.0,
+                "candidate_is_k3": 1.0 if budget == 3 else 0.0,
+                "candidate_is_k4": 1.0 if budget == 4 else 0.0,
+                "candidate_is_k6": 1.0 if budget == 6 else 0.0,
+                "candidate_is_k8": 1.0 if budget == 8 else 0.0,
+            }
+        )
+        for candidate in self.compact_actions:
+            values[f"candidate={candidate}"] = 1.0 if candidate == action else 0.0
+        for name, value in zip(self.OUTPUT_FEATURE_NAMES, output_features(predictions.get(action, ""), predictions, action)):
+            values[name] = float(value)
+        return values
+
+    def safe_probability(
+        self,
+        *,
+        base_values: dict[str, float],
+        action: str,
+        rank: int,
+        active_kv_ratio: float,
+        predictions: dict[str, str],
+    ) -> float:
+        values = self.action_values(
+            base_values=base_values,
+            action=action,
+            rank=rank,
+            active_kv_ratio=active_kv_ratio,
+            predictions=predictions,
+        )
+        features = [values.get(name, 0.0) for name in self.feature_names]
+        normed = [(value - self.mean[idx]) / max(self.std[idx], 1e-6) for idx, value in enumerate(features)]
+        x = torch.tensor([normed], dtype=torch.float32)
+        with torch.inference_mode():
+            probs = torch.softmax(self.model(x), dim=-1)[0]
+        return float(probs[1])
 
 
 def page_indices(pages: list[int], context_len: int, page_tokens: int, device: torch.device) -> torch.Tensor:
@@ -1259,6 +1521,247 @@ def run_teacher_verifier_method(
     )
 
 
+def run_output_level_verifier_method(
+    *,
+    rows: list[ResultRow],
+    case: BenchCase,
+    model: Any,
+    tokenizer: Any,
+    query_ids: torch.Tensor,
+    full_cache: Any,
+    full_query_seconds: float,
+    full_decode: float,
+    full_prediction: str,
+    full_nll: float,
+    full_prefill: float,
+    full_online: float,
+    context_tokens: int,
+    page_tokens: int,
+    page_scores: list[float],
+    score_denom: float,
+    q_text: str,
+    lexical_planner_seconds: float,
+    decode_steps: int,
+    verifier: RuntimeOutputLevelRiskVerifier | None,
+    mode: str,
+    min_budget: int,
+) -> None:
+    if verifier is None:
+        return
+    device = query_ids.device
+    total_pages = max(1, math.ceil(context_tokens / max(1, page_tokens)))
+    pages_by_budget = {
+        budget: top_pages_from_scores(page_scores, budget)
+        for budget in verifier.budgets
+        if budget <= total_pages
+    }
+    candidates: list[dict[str, Any]] = []
+    predictions: dict[str, str] = {}
+    probs: dict[str, float] = {}
+    method_seconds = lexical_planner_seconds
+    base_values = verifier.build_base_values(
+        benchmark=case.benchmark,
+        task=case.task,
+        context_tokens=context_tokens,
+        query_tokens=int(query_ids.shape[1]),
+        page_tokens=page_tokens,
+        query=q_text,
+        scores=page_scores,
+        denom=score_denom,
+        pages_by_budget=pages_by_budget,
+    )
+
+    eligible_actions = [
+        action
+        for action in sorted(verifier.compact_actions, key=lambda item: (compact_action_budget(item), item))
+        if compact_action_budget(action) >= min_budget
+    ]
+    if not eligible_actions:
+        eligible_actions = sorted(verifier.compact_actions, key=lambda item: (compact_action_budget(item), item))
+
+    for action in eligible_actions:
+        budget = compact_action_budget(action)
+        if budget not in pages_by_budget:
+            continue
+        selected_pages = pages_by_budget[budget]
+        if budget >= total_pages:
+            prediction = full_prediction
+            nll = full_nll
+            active_tokens = context_tokens
+            repack_seconds = 0.0
+            query_seconds = full_query_seconds
+            decode_seconds = full_decode
+            method_seconds += query_seconds + decode_seconds
+        else:
+            selected_indices = page_indices(selected_pages, context_tokens, page_tokens, device)
+            synchronize()
+            start = time.perf_counter()
+            selected_positions = torch.arange(int(selected_indices.numel()), dtype=torch.long, device=device)
+            compact_cache = cache_from_legacy(gather_and_rope_repack_cache(model, full_cache, selected_indices, selected_positions))
+            synchronize()
+            repack_seconds = time.perf_counter() - start
+            active_tokens = cache_len(compact_cache)
+            q_cache, compact_logits, query_seconds = run_query_on_cache(
+                model,
+                query_ids,
+                compact_cache,
+                position_start=active_tokens,
+                past_len=active_tokens,
+            )
+            prediction, decode_seconds = greedy_decode(model, tokenizer, compact_logits, q_cache, decode_steps)
+            nll = answer_nll(model, tokenizer, case.answers, compact_logits, q_cache)
+            method_seconds += repack_seconds + query_seconds + decode_seconds
+            del compact_cache, q_cache, compact_logits
+        predictions[action] = prediction
+        candidates.append(
+            {
+                "action": action,
+                "budget": budget,
+                "pages": selected_pages,
+                "active_kv_tokens": active_tokens,
+                "active_kv_ratio_vs_full": active_tokens / max(1, context_tokens),
+                "prediction": prediction.replace("\n", " ")[:200],
+                "answer_nll": nll,
+                "repack_seconds": repack_seconds,
+                "query_seconds": query_seconds,
+                "decode_seconds": decode_seconds,
+            }
+        )
+
+        if mode == "prefix":
+            rank = verifier.compact_actions.index(action)
+            probs[action] = verifier.safe_probability(
+                base_values=base_values,
+                action=action,
+                rank=rank,
+                active_kv_ratio=active_tokens / max(1, context_tokens),
+                predictions=predictions,
+            )
+            if probs[action] >= verifier.threshold:
+                selected = candidates[-1]
+                selected_cost = (
+                    float(selected["repack_seconds"])
+                    + float(selected["query_seconds"])
+                    + float(selected["decode_seconds"])
+                )
+                payload = {
+                    "mode": mode,
+                    "min_budget": min_budget,
+                    "selected": selected,
+                    "threshold": verifier.threshold,
+                    "safe_probs": probs,
+                    "candidates": candidates,
+                }
+                rows.append(
+                    make_row(
+                        case=case,
+                        method="output_level_risk_kv_planner",
+                        context_tokens=context_tokens,
+                        active_kv_tokens=int(selected["active_kv_tokens"]),
+                        query_tokens=int(query_ids.shape[1]),
+                        selected_pages_value=json.dumps(payload, ensure_ascii=False),
+                        planner_action=str(selected["action"]),
+                        planner_seconds=max(0.0, method_seconds - selected_cost),
+                        prefill_seconds=0.0,
+                        full_prefill_seconds=full_prefill,
+                        repack_seconds=float(selected["repack_seconds"]),
+                        query_seconds=float(selected["query_seconds"]),
+                        decode_seconds=float(selected["decode_seconds"]),
+                        full_online_seconds=full_online,
+                        prediction=str(selected["prediction"]),
+                        nll=float(selected["answer_nll"]),
+                    )
+                )
+                return
+
+    for rank, action in enumerate(verifier.compact_actions):
+        if action not in eligible_actions:
+            continue
+        candidate = next((item for item in candidates if item["action"] == action), None)
+        if candidate is None:
+            continue
+        probs[action] = verifier.safe_probability(
+            base_values=base_values,
+            action=action,
+            rank=rank,
+            active_kv_ratio=float(candidate["active_kv_ratio_vs_full"]),
+            predictions=predictions,
+        )
+
+    selected = None
+    for candidate in sorted(candidates, key=lambda item: (item["budget"], item["action"])):
+        if probs.get(str(candidate["action"]), 0.0) >= verifier.threshold:
+            selected = candidate
+            break
+
+    if selected is None:
+        payload = {
+            "mode": mode,
+            "min_budget": min_budget,
+            "selected": {
+                "action": "full",
+                "fallback_reason": "no_candidate_above_threshold",
+                "threshold": verifier.threshold,
+            },
+            "safe_probs": probs,
+            "candidates": candidates,
+        }
+        rows.append(
+            make_row(
+                case=case,
+                method="output_level_risk_kv_planner",
+                context_tokens=context_tokens,
+                active_kv_tokens=context_tokens,
+                query_tokens=int(query_ids.shape[1]),
+                selected_pages_value=json.dumps(payload, ensure_ascii=False),
+                planner_action="full",
+                planner_seconds=method_seconds,
+                prefill_seconds=0.0,
+                full_prefill_seconds=full_prefill,
+                query_seconds=full_query_seconds,
+                decode_seconds=full_decode,
+                full_online_seconds=full_online,
+                prediction=full_prediction,
+                nll=full_nll,
+            )
+        )
+        return
+
+    selected_cost = (
+        float(selected["repack_seconds"])
+        + float(selected["query_seconds"])
+        + float(selected["decode_seconds"])
+    )
+    payload = {
+        "mode": mode,
+        "min_budget": min_budget,
+        "selected": selected,
+        "threshold": verifier.threshold,
+        "safe_probs": probs,
+        "candidates": candidates,
+    }
+    rows.append(
+        make_row(
+            case=case,
+            method="output_level_risk_kv_planner",
+            context_tokens=context_tokens,
+            active_kv_tokens=int(selected["active_kv_tokens"]),
+            query_tokens=int(query_ids.shape[1]),
+            selected_pages_value=json.dumps(payload, ensure_ascii=False),
+            planner_action=str(selected["action"]),
+            planner_seconds=max(0.0, method_seconds - selected_cost),
+            prefill_seconds=0.0,
+            full_prefill_seconds=full_prefill,
+            repack_seconds=float(selected["repack_seconds"]),
+            query_seconds=float(selected["query_seconds"]),
+            decode_seconds=float(selected["decode_seconds"]),
+            full_online_seconds=full_online,
+            prediction=str(selected["prediction"]),
+            nll=float(selected["answer_nll"]),
+        )
+    )
+
+
 def add_oracle_rows(rows: list[ResultRow], case: BenchCase) -> None:
     case_rows = [row for row in rows if row.benchmark == case.benchmark and row.task == case.task and row.case_id == case.case_id]
     sparse = [
@@ -1371,9 +1874,26 @@ def main() -> None:
             source_name=config.variable_budget_source,
             max_examples_per_task=config.max_examples_per_task,
         )
+    output_verifier = None
+    if config.output_verifier_path:
+        verifier_path = Path(config.output_verifier_path)
+        if not verifier_path.exists():
+            raise FileNotFoundError(f"output-level verifier checkpoint not found: {verifier_path}")
+        output_verifier = RuntimeOutputLevelRiskVerifier(
+            str(verifier_path),
+            threshold=config.output_verifier_threshold,
+            source_name=config.output_verifier_source,
+            max_examples_per_task=config.max_examples_per_task,
+            budget_override=config.output_verifier_budgets,
+        )
 
     bcfg = bench_config(config)
     cases = load_longbench_cases(bcfg) + load_ruler_cases(bcfg)
+    case_start = max(0, int(config.case_start))
+    if case_start:
+        cases = cases[case_start:]
+    if int(config.case_limit) > 0:
+        cases = cases[: int(config.case_limit)]
     rows: list[ResultRow] = []
 
     for case_idx, case in enumerate(cases):
@@ -1428,6 +1948,12 @@ def main() -> None:
                 denom=score_denom,
                 pages_by_budget=variable_budget_pages_by_budget,
             )
+            raw_variable_budget_action = variable_budget_action
+            variable_budget_action = apply_variable_budget_floor(
+                variable_budget_action,
+                variable_budget_planner.budgets,
+                config.variable_budget_min_budget,
+            )
             variable_budget_planner_seconds = lexical_planner_seconds + (time.perf_counter() - variable_budget_start)
         indices = page_indices(pages, len(context_ids), config.page_tokens, device)
         pages_json = json.dumps(pages)
@@ -1460,133 +1986,144 @@ def main() -> None:
                 nll=full_nll,
             )
         )
+        naive_legacy = compact_cache = shifted_cache = prompt_cache = None
+        two_stage_cache = None
+        variable_budget_cache = None
 
-        synchronize()
-        start = time.perf_counter()
-        naive_legacy = gather_cache(full_cache, indices)
-        synchronize()
-        gather_seconds = time.perf_counter() - start
+        if any_method_enabled(
+            config,
+            ("naive_kv_gather_absolute_query_pos", "naive_kv_gather_compact_query_pos"),
+        ):
+            synchronize()
+            start = time.perf_counter()
+            naive_legacy = gather_cache(full_cache, indices)
+            synchronize()
+            gather_seconds = time.perf_counter() - start
 
-        run_cache_method(
-            rows=rows,
-            case=case,
-            method="naive_kv_gather_absolute_query_pos",
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            cache=cache_from_legacy(naive_legacy),
-            context_tokens=len(context_ids),
-            active_kv_tokens=int(indices.numel()),
-            selected_pages_value=pages_json,
-            position_start=len(context_ids),
-            prefill_seconds=0.0,
-            full_prefill_seconds=full_prefill,
-            gather_seconds=gather_seconds,
-            repack_seconds=0.0,
-            decode_steps=decode_steps,
-            full_online_seconds=full_online,
-        )
-        run_cache_method(
-            rows=rows,
-            case=case,
-            method="naive_kv_gather_compact_query_pos",
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            cache=cache_from_legacy(naive_legacy),
-            context_tokens=len(context_ids),
-            active_kv_tokens=int(indices.numel()),
-            selected_pages_value=pages_json,
-            position_start=int(indices.numel()),
-            prefill_seconds=0.0,
-            full_prefill_seconds=full_prefill,
-            gather_seconds=0.0,
-            repack_seconds=0.0,
-            decode_steps=decode_steps,
-            full_online_seconds=full_online,
-        )
+            if method_enabled(config, "naive_kv_gather_absolute_query_pos"):
+                run_cache_method(
+                    rows=rows,
+                    case=case,
+                    method="naive_kv_gather_absolute_query_pos",
+                    model=model,
+                    tokenizer=tokenizer,
+                    query_ids=query_ids,
+                    cache=cache_from_legacy(naive_legacy),
+                    context_tokens=len(context_ids),
+                    active_kv_tokens=int(indices.numel()),
+                    selected_pages_value=pages_json,
+                    position_start=len(context_ids),
+                    prefill_seconds=0.0,
+                    full_prefill_seconds=full_prefill,
+                    gather_seconds=gather_seconds,
+                    repack_seconds=0.0,
+                    decode_steps=decode_steps,
+                    full_online_seconds=full_online,
+                )
+            if method_enabled(config, "naive_kv_gather_compact_query_pos"):
+                run_cache_method(
+                    rows=rows,
+                    case=case,
+                    method="naive_kv_gather_compact_query_pos",
+                    model=model,
+                    tokenizer=tokenizer,
+                    query_ids=query_ids,
+                    cache=cache_from_legacy(naive_legacy),
+                    context_tokens=len(context_ids),
+                    active_kv_tokens=int(indices.numel()),
+                    selected_pages_value=pages_json,
+                    position_start=int(indices.numel()),
+                    prefill_seconds=0.0,
+                    full_prefill_seconds=full_prefill,
+                    gather_seconds=0.0,
+                    repack_seconds=0.0,
+                    decode_steps=decode_steps,
+                    full_online_seconds=full_online,
+                )
 
-        synchronize()
-        start = time.perf_counter()
-        compact_positions = torch.arange(int(indices.numel()), dtype=torch.long, device=device)
-        compact_cache = cache_from_legacy(gather_and_rope_repack_cache(model, full_cache, indices, compact_positions))
-        synchronize()
-        compact_repack = time.perf_counter() - start
-        run_cache_method(
-            rows=rows,
-            case=case,
-            method="rope_delta_repack_compact_query_pos",
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            cache=compact_cache,
-            context_tokens=len(context_ids),
-            active_kv_tokens=cache_len(compact_cache),
-            selected_pages_value=pages_json,
-            position_start=cache_len(compact_cache),
-            prefill_seconds=0.0,
-            full_prefill_seconds=full_prefill,
-            gather_seconds=0.0,
-            repack_seconds=compact_repack,
-            decode_steps=decode_steps,
-            full_online_seconds=full_online,
-        )
-
-        synchronize()
-        start = time.perf_counter()
-        shifted_positions = indices - int(indices.min().item())
-        shifted_cache = cache_from_legacy(gather_and_rope_repack_cache(model, full_cache, indices, shifted_positions))
-        synchronize()
-        shifted_repack = time.perf_counter() - start
-        run_cache_method(
-            rows=rows,
-            case=case,
-            method="rope_delta_repack_shifted_query_pos",
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            cache=shifted_cache,
-            context_tokens=len(context_ids),
-            active_kv_tokens=cache_len(shifted_cache),
-            selected_pages_value=pages_json,
-            position_start=len(context_ids) - int(indices.min().item()),
-            prefill_seconds=0.0,
-            full_prefill_seconds=full_prefill,
-            gather_seconds=0.0,
-            repack_seconds=shifted_repack,
-            decode_steps=decode_steps,
-            full_online_seconds=full_online,
-        )
-
-        selected_text = selected_context_text(tokenizer, context_ids, pages, config.page_tokens)
-        prompt_text = selected_text + "\n\n" + q_text
-        prompt_ids = tokenizer(prompt_text, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
-        prompt_cache, prompt_logits, prompt_prefill = prefill(model, prompt_ids)
-        prompt_prediction, prompt_decode = greedy_decode(model, tokenizer, prompt_logits, prompt_cache, decode_steps)
-        prompt_nll = answer_nll(model, tokenizer, case.answers, prompt_logits, prompt_cache)
-        rows.append(
-            make_row(
+        if method_enabled(config, "rope_delta_repack_compact_query_pos"):
+            synchronize()
+            start = time.perf_counter()
+            compact_positions = torch.arange(int(indices.numel()), dtype=torch.long, device=device)
+            compact_cache = cache_from_legacy(gather_and_rope_repack_cache(model, full_cache, indices, compact_positions))
+            synchronize()
+            compact_repack = time.perf_counter() - start
+            run_cache_method(
+                rows=rows,
                 case=case,
-                method="prompt_rebuild_selected_pages",
+                method="rope_delta_repack_compact_query_pos",
+                model=model,
+                tokenizer=tokenizer,
+                query_ids=query_ids,
+                cache=compact_cache,
                 context_tokens=len(context_ids),
-                active_kv_tokens=int(prompt_ids.shape[1]),
-                query_tokens=int(query_ids.shape[1]),
+                active_kv_tokens=cache_len(compact_cache),
                 selected_pages_value=pages_json,
-                planner_action="prompt_rebuild",
-                prefill_seconds=prompt_prefill,
+                position_start=cache_len(compact_cache),
+                prefill_seconds=0.0,
                 full_prefill_seconds=full_prefill,
                 gather_seconds=0.0,
-                repack_seconds=0.0,
-                query_seconds=0.0,
-                decode_seconds=prompt_decode,
+                repack_seconds=compact_repack,
+                decode_steps=decode_steps,
                 full_online_seconds=full_online,
-                prediction=prompt_prediction,
-                nll=prompt_nll,
             )
-        )
 
-        two_stage_cache = None
-        if two_stage_planner is not None:
+        if method_enabled(config, "rope_delta_repack_shifted_query_pos"):
+            synchronize()
+            start = time.perf_counter()
+            shifted_positions = indices - int(indices.min().item())
+            shifted_cache = cache_from_legacy(gather_and_rope_repack_cache(model, full_cache, indices, shifted_positions))
+            synchronize()
+            shifted_repack = time.perf_counter() - start
+            run_cache_method(
+                rows=rows,
+                case=case,
+                method="rope_delta_repack_shifted_query_pos",
+                model=model,
+                tokenizer=tokenizer,
+                query_ids=query_ids,
+                cache=shifted_cache,
+                context_tokens=len(context_ids),
+                active_kv_tokens=cache_len(shifted_cache),
+                selected_pages_value=pages_json,
+                position_start=len(context_ids) - int(indices.min().item()),
+                prefill_seconds=0.0,
+                full_prefill_seconds=full_prefill,
+                gather_seconds=0.0,
+                repack_seconds=shifted_repack,
+                decode_steps=decode_steps,
+                full_online_seconds=full_online,
+            )
+
+        if method_enabled(config, "prompt_rebuild_selected_pages"):
+            selected_text = selected_context_text(tokenizer, context_ids, pages, config.page_tokens)
+            prompt_text = selected_text + "\n\n" + q_text
+            prompt_ids = tokenizer(prompt_text, add_special_tokens=False, return_tensors="pt").input_ids.to(device)
+            prompt_cache, prompt_logits, prompt_prefill = prefill(model, prompt_ids)
+            prompt_prediction, prompt_decode = greedy_decode(model, tokenizer, prompt_logits, prompt_cache, decode_steps)
+            prompt_nll = answer_nll(model, tokenizer, case.answers, prompt_logits, prompt_cache)
+            rows.append(
+                make_row(
+                    case=case,
+                    method="prompt_rebuild_selected_pages",
+                    context_tokens=len(context_ids),
+                    active_kv_tokens=int(prompt_ids.shape[1]),
+                    query_tokens=int(query_ids.shape[1]),
+                    selected_pages_value=pages_json,
+                    planner_action="prompt_rebuild",
+                    prefill_seconds=prompt_prefill,
+                    full_prefill_seconds=full_prefill,
+                    gather_seconds=0.0,
+                    repack_seconds=0.0,
+                    query_seconds=0.0,
+                    decode_seconds=prompt_decode,
+                    full_online_seconds=full_online,
+                    prediction=prompt_prediction,
+                    nll=prompt_nll,
+                )
+            )
+
+        if two_stage_planner is not None and method_enabled(config, "two_stage_calibrated_kv_planner"):
             two_stage_selected = {
                 "action": planner_action,
                 "k2_pages": k2_pages,
@@ -1648,10 +2185,11 @@ def main() -> None:
                     full_online_seconds=full_online,
                 )
 
-        variable_budget_cache = None
-        if variable_budget_planner is not None:
+        if variable_budget_planner is not None and method_enabled(config, "variable_budget_kv_planner"):
             variable_budget_selected = {
                 "action": variable_budget_action,
+                "raw_action": raw_variable_budget_action,
+                "min_budget": int(config.variable_budget_min_budget),
                 "policy": config.variable_budget_policy,
                 "tail_threshold": config.variable_budget_tail_threshold,
                 "temperature": config.variable_budget_temperature,
@@ -1718,47 +2256,92 @@ def main() -> None:
                     full_online_seconds=full_online,
                 )
 
-        run_consistency_probe_method(
-            rows=rows,
-            case=case,
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            full_cache=full_cache,
-            full_logits=full_logits,
-            full_query_seconds=full_query_seconds,
-            full_decode=full_decode,
-            full_prediction=full_prediction,
-            full_nll=full_nll,
-            full_prefill=full_prefill,
-            full_online=full_online,
-            context_tokens=len(context_ids),
-            page_tokens=config.page_tokens,
-            page_scores=page_scores,
-            lexical_planner_seconds=lexical_planner_seconds,
-            decode_steps=decode_steps,
-            config=config,
-        )
+        if method_enabled(config, "consistency_probe_kv_planner"):
+            run_consistency_probe_method(
+                rows=rows,
+                case=case,
+                model=model,
+                tokenizer=tokenizer,
+                query_ids=query_ids,
+                full_cache=full_cache,
+                full_logits=full_logits,
+                full_query_seconds=full_query_seconds,
+                full_decode=full_decode,
+                full_prediction=full_prediction,
+                full_nll=full_nll,
+                full_prefill=full_prefill,
+                full_online=full_online,
+                context_tokens=len(context_ids),
+                page_tokens=config.page_tokens,
+                page_scores=page_scores,
+                lexical_planner_seconds=lexical_planner_seconds,
+                decode_steps=decode_steps,
+                config=config,
+            )
 
-        run_teacher_verifier_method(
-            rows=rows,
-            case=case,
-            model=model,
-            tokenizer=tokenizer,
-            query_ids=query_ids,
-            full_cache=full_cache,
-            full_decode=full_decode,
-            full_prediction=full_prediction,
-            full_nll=full_nll,
-            full_prefill=full_prefill,
-            full_online=full_online,
-            context_tokens=len(context_ids),
-            page_tokens=config.page_tokens,
-            page_scores=page_scores,
-            lexical_planner_seconds=lexical_planner_seconds,
-            decode_steps=decode_steps,
-            config=config,
-        )
+        if method_enabled(config, "teacher_likelihood_kv_planner"):
+            run_teacher_verifier_method(
+                rows=rows,
+                case=case,
+                model=model,
+                tokenizer=tokenizer,
+                query_ids=query_ids,
+                full_cache=full_cache,
+                full_decode=full_decode,
+                full_prediction=full_prediction,
+                full_nll=full_nll,
+                full_prefill=full_prefill,
+                full_online=full_online,
+                context_tokens=len(context_ids),
+                page_tokens=config.page_tokens,
+                page_scores=page_scores,
+                lexical_planner_seconds=lexical_planner_seconds,
+                decode_steps=decode_steps,
+                config=config,
+            )
+
+        if output_verifier is not None and method_enabled(config, "output_level_risk_kv_planner"):
+            del full_q_cache, naive_legacy, compact_cache, shifted_cache, prompt_cache
+            full_q_cache = naive_legacy = compact_cache = shifted_cache = prompt_cache = None
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        output_verifier_min_budget = max(1, int(config.output_verifier_min_budget))
+        benchmark_context_tokens = len(context_ids)
+        ruler_match = re.match(r"ruler_(\d+)", case.benchmark)
+        if ruler_match is not None:
+            benchmark_context_tokens = max(benchmark_context_tokens, int(ruler_match.group(1)))
+        if (
+            case.benchmark.startswith("ruler")
+            and benchmark_context_tokens >= int(config.output_verifier_long_ruler_context_threshold)
+            and int(config.output_verifier_long_ruler_min_budget) > 0
+        ):
+            output_verifier_min_budget = max(output_verifier_min_budget, int(config.output_verifier_long_ruler_min_budget))
+        if method_enabled(config, "output_level_risk_kv_planner"):
+            run_output_level_verifier_method(
+                rows=rows,
+                case=case,
+                model=model,
+                tokenizer=tokenizer,
+                query_ids=query_ids,
+                full_cache=full_cache,
+                full_query_seconds=full_query_seconds,
+                full_decode=full_decode,
+                full_prediction=full_prediction,
+                full_nll=full_nll,
+                full_prefill=full_prefill,
+                full_online=full_online,
+                context_tokens=len(context_ids),
+                page_tokens=config.page_tokens,
+                page_scores=page_scores,
+                score_denom=score_denom,
+                q_text=q_text,
+                lexical_planner_seconds=lexical_planner_seconds,
+                decode_steps=decode_steps,
+                verifier=output_verifier,
+                mode=config.output_verifier_mode,
+                min_budget=output_verifier_min_budget,
+            )
 
         add_oracle_rows(rows, case)
         write_csv(output_dir / "results.partial.csv", [asdict(row) for row in rows])

@@ -1,0 +1,106 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.20
+  },
+  "narrativeqa": {
+    "coverage_risk": true,
+    "coverage_risk_min_recall": 0.25,
+    "coverage_risk_min_terms": 4,
+    "coverage_risk_budget_tokens": 2048,
+    "score_risk": true,
+    "score_risk_linear_threshold": 0.8441593191391078,
+    "score_risk_gap2_weight": 1.0,
+    "score_risk_gap3_weight": 0.0,
+    "score_risk_top_score_weight": 0.0,
+    "consistency_verifier": true,
+    "consistency_budget_tokens": 2048,
+    "consistency_requires_score_risk": 1
+  },
+  "multifieldqa_en": {
+    "coverage_risk": true,
+    "coverage_risk_min_recall": 0.25,
+    "coverage_risk_min_terms": 4,
+    "coverage_risk_budget_tokens": 2048,
+    "score_risk": true,
+    "score_risk_linear_threshold": 0.8763454987254873,
+    "score_risk_gap2_weight": 1.0,
+    "score_risk_gap3_weight": 0.0,
+    "score_risk_top_score_weight": 0.0,
+    "output_verifier": true,
+    "grounding_verifier": true,
+    "consistency_verifier": true,
+    "consistency_budget_tokens": 2048,
+    "consistency_requires_score_risk": 1
+  },
+  "hotpotqa": {
+    "full_fallback": true
+  },
+  "2wikimqa": {
+    "coverage_risk": true,
+    "coverage_risk_min_recall": 0.25,
+    "coverage_risk_min_terms": 4,
+    "coverage_risk_budget_tokens": 2048,
+    "score_risk": true,
+    "score_risk_linear_threshold": 0.946880252247314,
+    "score_risk_gap2_weight": 1.0,
+    "score_risk_gap3_weight": 0.0,
+    "score_risk_top_score_weight": 0.0,
+    "consistency_verifier": true,
+    "consistency_budget_tokens": 2048,
+    "consistency_requires_score_risk": 1
+  },
+  "musique": {
+    "full_fallback": true
+  },
+  "qasper": {
+    "full_fallback": true
+  },
+  "gov_report": {
+    "budget_tokens": 1024
+  },
+  "qmsum": {
+    "budget_tokens": 1024
+  },
+  "multi_news": {
+    "budget_tokens": 1024
+  },
+  "trec": {
+    "full_fallback": true
+  },
+  "passage_count": {
+    "full_fallback": true
+  },
+  "passage_retrieval_en": {
+    "budget_tokens": 1024,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "coverage_risk": true,
+    "coverage_risk_min_recall": 0.20,
+    "coverage_risk_min_terms": 3,
+    "coverage_risk_budget_tokens": 2048,
+    "ours_idf_mix": 0.80,
+    "ours_multiscale_weight": 0.28,
+    "ours_flow_neighbor_radius": 2,
+    "ours_flow_neighbor_budget_fraction": 0.20,
+    "ours_flow_neighbor_min_score": 0.08,
+    "label_support": true,
+    "ours_label_backtrack_pages": 6,
+    "ours_label_budget_fraction": 0.18,
+    "output_verifier": true,
+    "ours_output_probe_max_tokens": 8
+  },
+  "repobench-p": {
+    "full_fallback": true
+  }
+}

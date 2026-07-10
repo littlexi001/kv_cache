@@ -1,0 +1,27 @@
+{
+  "*": {
+    "budget_tokens": 1024,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 64,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.90,
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.24,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.10,
+    "ours_flow_neighbor_min_score": 0.05,
+    "ours_flow_score_smooth_weight": 0.10,
+    "ours_flow_anchor_boost": 0.30,
+    "coverage_mmr_weight": 0.45,
+    "coverage_mmr_max_terms": 48,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.40,
+    "coverage_certificate_min_terms": 1,
+    "coverage_risk": true,
+    "coverage_risk_min_recall": 0.80,
+    "coverage_risk_min_terms": 1,
+    "coverage_risk_budget_tokens": 2048,
+    "title_anchor": true
+  }
+}

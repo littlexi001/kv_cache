@@ -1,0 +1,30 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.20
+  },
+  "narrativeqa": {
+    "budget_tokens": 512,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false,
+    "score_risk": false
+  },
+  "multifieldqa_en": {
+    "budget_tokens": 512,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false,
+    "score_risk": false
+  }
+}

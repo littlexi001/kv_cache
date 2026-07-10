@@ -1,0 +1,31 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.20
+  },
+  "gov_report": {
+    "budget_tokens": 512,
+    "short_decode": true,
+    "short_decode_max_tokens": 128
+  },
+  "multi_news": {
+    "budget_tokens": 1024,
+    "short_decode": true,
+    "short_decode_max_tokens": 128
+  },
+  "samsum": {
+    "budget_tokens": 512,
+    "short_decode": true,
+    "short_decode_max_tokens": 48
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow",
+    "ours_multiscale_group_pages": 4,
+    "ours_multiscale_weight": 0.22,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.12,
+    "ours_flow_score_smooth_weight": 0.16,
+    "ours_flow_anchor_boost": 0.20
+  },
+  "qasper": {
+    "budget_tokens": 1024,
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.18
+  },
+  "musique": {
+    "scorer": "hybrid_late_mmr_multiscale_task_bridge_flow",
+    "bridge": true,
+    "ours_bridge_budget_fraction": 0.18
+  },
+  "gov_report": {
+    "budget_tokens": 1024
+  },
+  "qmsum": {
+    "budget_tokens": 1024
+  },
+  "multi_news": {
+    "budget_tokens": 1024
+  },
+  "passage_count": {
+    "budget_tokens": 1024
+  },
+  "passage_retrieval_en": {
+    "full_fallback": true
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "objective": "Make the risk-constrained KV budget planner evidence strong enough for an ICML submission direction.",
+  "remote": {
+    "host": "10.176.37.31",
+    "user": "fdong",
+    "root": "/home/fdong/ymluo/projects/learned_hierarchical_summary_memory",
+    "python": "/home/fdong/miniconda3/envs/moe/bin/python"
+  },
+  "local_files_to_sync": [
+    "src/run_rope_aware_kv_repack_benchmark.py",
+    "scripts/summarize_runtime_scaling_20260707.py",
+    "scripts/run_variable_budget_runtime_sweep_20260707.sh",
+    "scripts/run_variable_budget_longbench_mixed_expansion_20260707.sh",
+    "scripts/run_variable_budget_ruler_scaling_20260707.sh",
+    "scripts/run_variable_budget_ruler_expansion_m5_m3_20260707.sh",
+    "scripts/run_variable_budget_ruler_m5_minsafe_20260707.sh",
+    "scripts/run_variable_budget_ruler_m5_conformal_floor2_20260707.sh",
+    "scripts/run_variable_budget_16k_missing_recovery_20260707.sh",
+    "scripts/run_output_verifier_floor_sweep_20260707.sh",
+    "scripts/run_ruler_scaling_expansion_20260707.sh",
+    "scripts/run_ruler16k_case1_shards_20260707.sh",
+    "scripts/run_ruler16k_floor2_recovery_20260707.sh"
+  ],
+  "local_recovery_scripts": [
+    "scripts/sync_and_launch_variable_budget_runtime_20260707.ps1",
+    "scripts/collect_icml_runtime_status_20260707.ps1",
+    "scripts/audit_icml_runtime_manifest_20260707.py",
+    "scripts/make_icml_runtime_tables_20260707.py",
+    "scripts/make_icml_paper_tables_20260707.py",
+    "scripts/plot_icml_runtime_figures_20260707.py",
+    "scripts/make_icml_readiness_report_20260707.py",
+    "scripts/make_icml_overhead_report_20260707.py",
+    "scripts/test_runtime_controls_20260707.py"
+  ],
+  "runtime_features": {
+    "runtime_methods_filter": "Use --runtime_methods to run only full_kv_cache plus the target planner, reducing irrelevant baselines and long-context OOM risk.",
+    "variable_budget_conformal_auto": "Use --variable_budget_tail_threshold -1 to read selected_tau from conformal_tailrisk_planner.pt.",
+    "case_sharding": "Use --case_start and --case_limit for 16k case-level shards."
+  },
+  "primary_experiments": [
+    {
+      "name": "longbench_m4_bestcal_tail035",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_longbench_m4_bestcal_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Match full score and improve online speed over output verifier floor2/floor3."
+    },
+    {
+      "name": "longbench_m4_minsafe_tail035",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_longbench_m4_minsafe_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Conservative input-side budget baseline; should match full score."
+    },
+    {
+      "name": "longbench_m4_conformal_auto",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_longbench_m4_conformal_auto_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Risk-calibrated input-side planner; strongest candidate for paper method if speed is competitive."
+    },
+    {
+      "name": "mixed13_m1_bestcal_tail035",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_mixed13_m1_bestcal_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Match full score and retain at least about 1.0x online speed."
+    },
+    {
+      "name": "mixed13_m1_minsafe_tail035",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_mixed13_m1_minsafe_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Conservative mixed-task safety baseline."
+    },
+    {
+      "name": "mixed13_m1_conformal_auto",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_mixed13_m1_conformal_auto_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Risk-calibrated mixed-task planner."
+    },
+    {
+      "name": "ruler8k_m1_bestcal_tail035",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_ruler8k_m1_bestcal_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Retain full-level RULER 8k accuracy with online speed greater than 1.0x."
+    },
+    {
+      "name": "ruler8k_m1_conformal_auto",
+      "output_dir": "outputs/variable_budget_runtime_qwen8b_ruler8k_m1_conformal_auto_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Risk-calibrated long-context planner."
+    }
+  ],
+  "pending_scaling_experiments": [
+    {
+      "name": "ruler4k_m3_floor2",
+      "output_dir": "outputs/output_verifier_runtime_qwen8b_ruler_4096_m3_tau07_prefix_floor2_20260707",
+      "method": "output_level_risk_kv_planner",
+      "target": "Increase sample count beyond m1 while matching full score."
+    },
+    {
+      "name": "ruler8k_m3_floor2",
+      "output_dir": "outputs/output_verifier_runtime_qwen8b_ruler_8192_m3_tau07_prefix_floor2_20260707",
+      "method": "output_level_risk_kv_planner",
+      "target": "Increase sample count beyond m1 while retaining speedup."
+    },
+    {
+      "name": "ruler16k_m2_case_shards",
+      "output_dir_glob": "outputs/output_verifier_runtime_qwen8b_ruler_16k_*_case1_tau07_prefix_floor2_20260707",
+      "method": "output_level_risk_kv_planner",
+      "target": "Use case-level sharding to avoid 24GB OOM and expand 16k from m1 to m2."
+    },
+    {
+      "name": "ruler4k_8k_m3_variable_scaling",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler*_m3_*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Replace output-verifier scaling gate with input-side planner evidence."
+    },
+    {
+      "name": "ruler16k_m2_variable_case_shards",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler_16k_*_case*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Measure input-side planner scaling at 16k without full m2 OOM."
+    },
+    {
+      "name": "longbench_m8_variable_expansion",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_longbench_m8_*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Increase LongBench sample count from 20 to 40 and verify the near-1x speed result."
+    },
+    {
+      "name": "mixed13_m2_variable_expansion",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_mixed13_m2_*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Increase mixed-task sample count from 13 to 26 and verify quality retention."
+    },
+    {
+      "name": "ruler4k_8k_m5_variable_expansion",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler*_m5_*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Increase RULER 4k/8k input-side planner sample count from m3 to m5."
+    },
+    {
+      "name": "ruler16k_m3_variable_case2_expansion",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler_16k_*_case2_*_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Expand 16k sharded input-side planner results from m2 to m3."
+    },
+    {
+      "name": "ruler4k_8k_m5_minsafe_recovery",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler*_m5_minsafe_tail035_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Recover RULER 4k m5 quality with a conservative min-safe input planner."
+    },
+    {
+      "name": "ruler4k_8k_m5_conformal_floor2_recovery",
+      "output_dir_glob": "outputs/variable_budget_runtime_qwen8b_ruler*_m5_conformal_floor2_20260707",
+      "method": "variable_budget_kv_planner",
+      "target": "Recover multi-evidence RULER 4k m5 quality by enforcing a k2 safety floor."
+    }
+  ],
+  "acceptance_criteria": [
+    "LongBench m4 variable/conformal planner should match full score. If it remains below full, it is not suitable as the default paper method.",
+    "At least one input-side planner should substantially improve LongBench online speed over output verifier floor2/floor3.",
+    "Mixed13 should keep full-level score around 69.23 percent and online speed near or above 1.0x.",
+    "RULER 8k should keep full-level score and online speed above 1.0x.",
+    "RULER 4k/8k m3 and 16k m2 shards should reduce sample-count criticism for the scaling claim.",
+    "Input-side planner scaling should replace output-verifier scaling when verifier overhead dominates 8k m3 runtime."
+  ],
+  "commands": {
+    "launch": "powershell -ExecutionPolicy Bypass -File ymluo/projects/learned_hierarchical_summary_memory/scripts/sync_and_launch_variable_budget_runtime_20260707.ps1",
+    "launch_variable_ruler_scaling": "ssh fdong@10.176.37.31 'cd /home/fdong/ymluo/projects/learned_hierarchical_summary_memory && setsid scripts/run_variable_budget_ruler_scaling_20260707.sh > outputs/variable_budget_ruler_scaling_20260707.nohup.log 2>&1 < /dev/null &'",
+    "launch_variable_ruler_expansion_m5_m3": "ssh fdong@10.176.37.31 'cd /home/fdong/ymluo/projects/learned_hierarchical_summary_memory && setsid scripts/run_variable_budget_ruler_expansion_m5_m3_20260707.sh > outputs/variable_budget_ruler_expansion_m5_m3_20260707.nohup.log 2>&1 < /dev/null &'",
+    "launch_variable_ruler_m5_minsafe": "ssh fdong@10.176.37.31 'cd /home/fdong/ymluo/projects/learned_hierarchical_summary_memory && setsid scripts/run_variable_budget_ruler_m5_minsafe_20260707.sh > outputs/variable_budget_ruler_m5_minsafe_20260707.nohup.log 2>&1 < /dev/null &'",
+    "launch_variable_ruler_m5_conformal_floor2": "ssh fdong@10.176.37.31 'cd /home/fdong/ymluo/projects/learned_hierarchical_summary_memory && setsid scripts/run_variable_budget_ruler_m5_conformal_floor2_20260707.sh > outputs/variable_budget_ruler_m5_conformal_floor2_20260707.nohup.log 2>&1 < /dev/null &'",
+    "collect": "powershell -ExecutionPolicy Bypass -File ymluo/projects/learned_hierarchical_summary_memory/scripts/collect_icml_runtime_status_20260707.ps1",
+    "audit": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/audit_icml_runtime_manifest_20260707.py",
+    "test_runtime_controls": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/test_runtime_controls_20260707.py",
+    "make_tables": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_runtime_tables_20260707.py --summary_csv ymluo/projects/learned_hierarchical_summary_memory/outputs/remote_runtime_status_20260707/runtime_scaling_summary_20260707/runtime_scaling_summary.csv",
+    "make_figures": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/plot_icml_runtime_figures_20260707.py --summary_csv ymluo/projects/learned_hierarchical_summary_memory/outputs/remote_runtime_status_20260707/runtime_scaling_summary_20260707/runtime_scaling_summary.csv",
+    "make_readiness_report": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_readiness_report_20260707.py --summary_csv ymluo/projects/learned_hierarchical_summary_memory/outputs/remote_runtime_status_20260707/runtime_scaling_summary_20260707/runtime_scaling_summary.csv",
+    "make_overhead_report": "python ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_overhead_report_20260707.py --summary_csv ymluo/projects/learned_hierarchical_summary_memory/outputs/remote_runtime_status_20260707/runtime_scaling_summary_20260707/runtime_scaling_summary.csv",
+    "local_check": "python -m py_compile ymluo/projects/learned_hierarchical_summary_memory/src/run_rope_aware_kv_repack_benchmark.py ymluo/projects/learned_hierarchical_summary_memory/scripts/summarize_runtime_scaling_20260707.py ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_runtime_tables_20260707.py ymluo/projects/learned_hierarchical_summary_memory/scripts/plot_icml_runtime_figures_20260707.py ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_readiness_report_20260707.py ymluo/projects/learned_hierarchical_summary_memory/scripts/make_icml_overhead_report_20260707.py"
+  }
+}

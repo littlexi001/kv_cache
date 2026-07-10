@@ -1,0 +1,99 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand\HyperFirstAtBeginDocument{\AtBeginDocument}
+\HyperFirstAtBeginDocument{\ifx\hyper@anchor\@undefined
+\global\let\oldcontentsline\contentsline
+\gdef\contentsline#1#2#3#4{\oldcontentsline{#1}{#2}{#3}}
+\global\let\oldnewlabel\newlabel
+\gdef\newlabel#1#2{\newlabelxx{#1}#2}
+\gdef\newlabelxx#1#2#3#4#5#6{\oldnewlabel{#1}{{#2}{#3}}}
+\AtEndDocument{\ifx\hyper@anchor\@undefined
+\let\contentsline\oldcontentsline
+\let\newlabel\oldnewlabel
+\fi}
+\fi}
+\global\let\hyper@last\relax 
+\gdef\HyperFirstAtBeginDocument#1{#1}
+\providecommand*\HyPL@Entry[1]{}
+\citation{zhang2023h2o,li2024snapkv}
+\citation{xiao2023streamingllm}
+\citation{cai2024pyramidkv,yang2024pyramidinfer,zhou2024dynamickv}
+\HyPL@Entry{0<</S/D>>}
+\@writefile{toc}{\contentsline {section}{\numberline {1}Introduction}{1}{section.1}\protected@file@percent }
+\citation{zhang2023h2o}
+\citation{li2024snapkv}
+\citation{cai2024pyramidkv,yang2024pyramidinfer}
+\citation{zhou2024dynamickv}
+\citation{xiao2023streamingllm}
+\citation{bai2023longbench}
+\citation{hsieh2024ruler}
+\@writefile{toc}{\contentsline {section}{\numberline {2}Related Work}{2}{section.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{KV cache compression.}{2}{section*.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Streaming and long-context inference.}{2}{section*.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Long-context evaluation.}{2}{section*.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces RiskKV-Block\ routes each query to a memory action that jointly specifies block size, top-$k$ evidence budget, and fallback. The same routed action can be executed as prompt-level selected spans for rapid evaluation or as cache-native KV block selection followed by RoPE-aware repacking for serving.}}{3}{figure.1}\protected@file@percent }
+\newlabel{fig:architecture}{{1}{3}{\method \ routes each query to a memory action that jointly specifies block size, top-$k$ evidence budget, and fallback. The same routed action can be executed as prompt-level selected spans for rapid evaluation or as cache-native KV block selection followed by RoPE-aware repacking for serving}{figure.1}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Problem Formulation}{3}{section.3}\protected@file@percent }
+\newlabel{eq:risk-objective}{{4}{3}{Problem Formulation}{equation.3.4}{}}
+\newlabel{eq:oracle-label}{{5}{3}{Problem Formulation}{equation.3.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {4}Method}{3}{section.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Overview}{3}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Evidence Block Scoring}{3}{subsection.4.2}\protected@file@percent }
+\newlabel{eq:block-score}{{7}{3}{Evidence Block Scoring}{equation.4.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}Risk-Constrained Router}{4}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}Fallback Modes}{4}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}Cache-Native Execution and RoPE-Aware Repacking}{4}{subsection.4.5}\protected@file@percent }
+\newlabel{eq:rope-repack}{{11}{4}{Cache-Native Execution and RoPE-Aware Repacking}{equation.4.11}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5}Experimental Setup}{4}{section.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Models.}{4}{section*.4}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces Current block-size router result on a 96-example mixed suite. The router dynamically selects block size and top-$k$ action.}}{5}{table.1}\protected@file@percent }
+\newlabel{tab:router-e2e}{{1}{5}{Current block-size router result on a 96-example mixed suite. The router dynamically selects block size and top-$k$ action}{table.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Block-size/top-$k$ frontier. Attention upper is approximated as inverse active token ratio.}}{5}{table.2}\protected@file@percent }
+\newlabel{tab:granularity-frontier}{{2}{5}{Block-size/top-$k$ frontier. Attention upper is approximated as inverse active token ratio}{table.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{Benchmarks.}{5}{section*.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Metrics.}{5}{section*.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}Results}{5}{section.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}Block-Size Router End-to-End Results}{5}{subsection.6.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}Granularity Frontier}{5}{subsection.6.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.3}Cache-Native RiskKV Results}{5}{subsection.6.3}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Cache-native RiskKV results. Online speedup excludes full prompt rebuilding and reflects compact KV decode behavior.}}{6}{table.3}\protected@file@percent }
+\newlabel{tab:cache-main}{{3}{6}{Cache-native RiskKV results. Online speedup excludes full prompt rebuilding and reflects compact KV decode behavior}{table.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Cache-native overhead decomposition. Times are per-run aggregate component differences from the full-cache baseline.}}{6}{table.4}\protected@file@percent }
+\newlabel{tab:overhead}{{4}{6}{Cache-native overhead decomposition. Times are per-run aggregate component differences from the full-cache baseline}{table.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.4}Attention Subsystem and Overhead}{6}{subsection.6.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {7}Ablations}{6}{section.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.1}RoPE-Aware Repacking}{6}{subsection.7.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Safety Floor}{6}{subsection.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {8}Required Experiments to Complete the Submission}{6}{section.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion and Limitations}{6}{section.9}\protected@file@percent }
+\bibdata{references}
+\bibcite{bai2023longbench}{{1}{2023}{{Bai et~al.}}{{Bai, Lv, Zhang, Lyu, Tang, Huang, Du, Liu, Zeng, Hou, Dong, Tang, and Li}}}
+\bibcite{cai2024pyramidkv}{{2}{2024}{{Cai et~al.}}{{Cai, Zhang, Gao, Liu, Liu, Lu, Xiong, Dong, Chang, Hu, Xiao, Yuan, and Zhang}}}
+\bibcite{hsieh2024ruler}{{3}{2024}{{Hsieh et~al.}}{{Hsieh, Sun, Kriman, Acharya, Rekesh, Jia, and Ginsburg}}}
+\bibcite{li2024snapkv}{{4}{2024}{{Li et~al.}}{{Li, Huang, Yang, Venkitesh, Locatelli, Ye, Cai, Lewis, and Chen}}}
+\bibcite{xiao2023streamingllm}{{5}{2023}{{Xiao et~al.}}{{Xiao, Tian, Chen, Han, and Lewis}}}
+\bibcite{yang2024pyramidinfer}{{6}{2024}{{Yang et~al.}}{{Yang, Han, Gao, Hu, Zhang, and Zhao}}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces RoPE-aware repacking ablation. Naive gathering fails at the same KV ratio; RoPE repacking recovers full-cache behavior.}}{7}{table.5}\protected@file@percent }
+\newlabel{tab:rope-ablation}{{5}{7}{RoPE-aware repacking ablation. Naive gathering fails at the same KV ratio; RoPE repacking recovers full-cache behavior}{table.5}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Safety-floor ablation on RULER m5.}}{7}{table.6}\protected@file@percent }
+\newlabel{tab:floor-ablation}{{6}{7}{Safety-floor ablation on RULER m5}{table.6}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion}{7}{section.10}\protected@file@percent }
+\bibcite{zhang2023h2o}{{7}{2023}{{Zhang et~al.}}{{Zhang, Sheng, Zhou, Chen, Zheng, Cai, Song, Tian, R{\'e}, Barrett, Wang, and Chen}}}
+\bibcite{zhou2024dynamickv}{{8}{2024}{{Zhou et~al.}}{{Zhou, Ning, Hong, Fu, Xu, Li, Lou, Wang, Yuan, Li, Yan, Dai, Wang, Yang, and Wang}}}
+\bibstyle{iclr2026_conference}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces \leavevmode {\color  {red}\textbf  {[TODO: Main multi-model benchmark table. Fill after running router v2 on full or large-sample LongBench/RULER splits.]}}}}{8}{table.7}\protected@file@percent }
+\newlabel{tab:todo-main}{{7}{8}{\todoexp {Main multi-model benchmark table. Fill after running router v2 on full or large-sample LongBench/RULER splits.}}{table.7}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces \leavevmode {\color  {red}\textbf  {[TODO: Baseline comparison table. Include official or reproduced SnapKV, H2O, PyramidKV, StreamingLLM/sliding-window, and fixed-block baselines.]}}}}{8}{table.8}\protected@file@percent }
+\newlabel{tab:todo-baselines}{{8}{8}{\todoexp {Baseline comparison table. Include official or reproduced SnapKV, H2O, PyramidKV, StreamingLLM/sliding-window, and fixed-block baselines.}}{table.8}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Implementation Details}{8}{appendix.A}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Content words.}{8}{section*.8}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Identifier matching.}{8}{section*.9}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Block order.}{8}{section*.10}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {B}Additional Placeholder Tables}{8}{appendix.B}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Placeholder for scaling figure.}}{9}{figure.2}\protected@file@percent }
+\newlabel{fig:todo-scaling}{{2}{9}{Placeholder for scaling figure}{figure.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Placeholder for Pareto frontier figure.}}{9}{figure.3}\protected@file@percent }
+\newlabel{fig:todo-pareto}{{3}{9}{Placeholder for Pareto frontier figure}{figure.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces \leavevmode {\color  {red}\textbf  {[TODO: Router v2 table after training on 32/64/128/256/512 sweeps.]}}}}{9}{table.9}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces \leavevmode {\color  {red}\textbf  {[TODO: Ablation table for router components.]}}}}{9}{table.10}\protected@file@percent }
+\gdef \@abspage@last{9}
