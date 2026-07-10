@@ -1069,6 +1069,29 @@ def gather_past_key_values(past_key_values: Any, keep_indices: list[int]) -> Any
     return legacy_to_cache_like(tuple(gathered_layers), past_key_values)
 
 
+def gather_past_key_values_layerwise(past_key_values: Any, layer_keep_indices: list[list[int]]) -> Any:
+    legacy = cache_to_legacy(past_key_values)
+    if len(layer_keep_indices) != len(legacy):
+        raise ValueError(f"layer_keep_indices has {len(layer_keep_indices)} layers, cache has {len(legacy)} layers")
+    gathered_layers = []
+    for layer_cache, keep_indices in zip(legacy, layer_keep_indices):
+        key_states, value_states = layer_cache[:2]
+        idx = torch.tensor(keep_indices, dtype=torch.long, device=key_states.device)
+        gathered_key = key_states.index_select(2, idx).contiguous()
+        gathered_value = value_states.index_select(2, idx).contiguous()
+        if len(layer_cache) > 2:
+            gathered_layers.append((gathered_key, gathered_value, *layer_cache[2:]))
+        else:
+            gathered_layers.append((gathered_key, gathered_value))
+    return legacy_to_cache_like(tuple(gathered_layers), past_key_values)
+
+
+def average_layer_keep_count(layer_keep_indices: list[list[int]]) -> float:
+    if not layer_keep_indices:
+        return 0.0
+    return sum(len(indices) for indices in layer_keep_indices) / len(layer_keep_indices)
+
+
 def normalize_answer(text: str) -> str:
     def remove_articles(s: str) -> str:
         return re.sub(r"\b(a|an|the)\b", " ", s)
@@ -1920,6 +1943,12 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_graph_bridge_max_terms"
         elif key == "graph_bridge_min_score":
             normalized_key = "ours_graph_bridge_min_score"
+        elif key == "layer_router_mode":
+            normalized_key = "ours_layer_router_mode"
+        elif key == "layer_router_low_fraction":
+            normalized_key = "ours_layer_router_low_fraction"
+        elif key == "layer_router_low_budget_tokens":
+            normalized_key = "ours_layer_router_low_budget_tokens"
         elif key == "passage_closure_budget_fraction":
             normalized_key = "ours_passage_closure_budget_fraction"
         elif key == "passage_closure_radius_pages":
@@ -1954,6 +1983,9 @@ def config_for_example(config: Config, example: Example) -> Config:
 
     if "graph_bridge" in merged:
         overrides["ours_graph_bridge_tasks"] = example.task if bool(merged["graph_bridge"]) else ""
+
+    if "layer_router" in merged:
+        overrides["ours_layer_router_tasks"] = example.task if bool(merged["layer_router"]) else ""
 
     if "full_fallback" in merged:
         overrides["ours_full_fallback_tasks"] = example.task if bool(merged["full_fallback"]) else ""
