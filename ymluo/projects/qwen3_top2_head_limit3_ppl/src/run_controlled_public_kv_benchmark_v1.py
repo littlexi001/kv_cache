@@ -4142,6 +4142,11 @@ def evaluate_method(
         if method == "ours_page_gather" and not full_fallback_active
         else False
     )
+    layer_router_active = (
+        layer_router_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
     label_support_active = (
         label_support_active_for_example(config, example) if method == "ours_page_gather" and not full_fallback_active else False
     )
@@ -4211,7 +4216,14 @@ def evaluate_method(
         consistency_verifier_active = False
     uses_full_prefix_cache = method == "full_kv" or len(keep_indices) >= bundle.query_start
     gather_started = time.perf_counter()
-    sparse_cache = full_prefix_cache if uses_full_prefix_cache else gather_past_key_values(full_prefix_cache, keep_indices)
+    layer_keep_indices: list[list[int]] | None = None
+    if uses_full_prefix_cache:
+        sparse_cache = full_prefix_cache
+    elif layer_router_active:
+        layer_keep_indices = build_layer_keep_indices(full_prefix_cache, bundle, keep_indices, config)
+        sparse_cache = gather_past_key_values_layerwise(full_prefix_cache, layer_keep_indices)
+    else:
+        sparse_cache = gather_past_key_values(full_prefix_cache, keep_indices)
     gather_seconds = 0.0 if uses_full_prefix_cache else time.perf_counter() - gather_started
     first_max_new_tokens = example.max_new_tokens
     if short_decode_active and not uses_full_prefix_cache and config.ours_short_decode_max_tokens > 0:
@@ -4476,6 +4488,12 @@ def evaluate_method(
             decode_seconds += direct_structured_decode_seconds
     score = score_prediction(example.metric, prediction, example.answers, example.all_classes)
     context_kept = sum(1 for idx in keep_indices if bundle.context_token_start <= idx < bundle.query_start)
+    reported_kept_prefix_tokens = (
+        average_layer_keep_count(layer_keep_indices)
+        if layer_keep_indices is not None
+        else float(len(keep_indices))
+    )
+    reported_kept_context_tokens = max(0.0, reported_kept_prefix_tokens - float(bundle.prefix_token_count))
     selected_ids = selected_page_ids(bundle, keep_indices)
     query_coverage = (
         selected_query_coverage_stats(example, pages, selected_ids, config)
@@ -4500,9 +4518,9 @@ def evaluate_method(
         "total_seconds": full_prefill_seconds + gather_seconds + query_seconds + decode_seconds,
         "raw_prefix_tokens": bundle.query_start,
         "raw_prompt_tokens": int(bundle.input_ids.shape[-1]),
-        "kept_prefix_tokens": len(keep_indices),
-        "kept_context_tokens": context_kept,
-        "keep_fraction": len(keep_indices) / max(1, bundle.query_start),
+        "kept_prefix_tokens": reported_kept_prefix_tokens,
+        "kept_context_tokens": reported_kept_context_tokens,
+        "keep_fraction": reported_kept_prefix_tokens / max(1, bundle.query_start),
         "budget_tokens": config.budget_tokens,
         "sink_tokens": config.sink_tokens,
         "recent_tokens": config.recent_tokens,
@@ -4521,6 +4539,13 @@ def evaluate_method(
         if method == "ours_page_gather"
         else "",
         "ours_graph_bridge_tokens": selector_extra.get("graph_bridge_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_layer_router_active": int(layer_router_active) if method == "ours_page_gather" else "",
+        "ours_layer_router_tasks": config.ours_layer_router_tasks if method == "ours_page_gather" else "",
+        "ours_layer_router_mode": config.ours_layer_router_mode if method == "ours_page_gather" else "",
+        "ours_layer_router_low_fraction": config.ours_layer_router_low_fraction if method == "ours_page_gather" else "",
+        "ours_layer_router_low_budget_tokens": config.ours_layer_router_low_budget_tokens
         if method == "ours_page_gather"
         else "",
         "ours_task_policy_active": int(bool(config.ours_task_policy_json)) if method == "ours_page_gather" else "",
