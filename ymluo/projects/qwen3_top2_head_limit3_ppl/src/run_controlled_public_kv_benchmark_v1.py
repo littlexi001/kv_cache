@@ -291,6 +291,10 @@ class Config:
     ours_graph_bridge_seed_pages: int
     ours_graph_bridge_max_terms: int
     ours_graph_bridge_min_score: float
+    ours_layer_router_tasks: str
+    ours_layer_router_mode: str
+    ours_layer_router_low_fraction: float
+    ours_layer_router_low_budget_tokens: int
     ours_task_policy_json: str
     ours_full_fallback_tasks: str
     ours_label_support_tasks: str
@@ -645,6 +649,29 @@ def parse_args() -> Config:
         type=float,
         default=0.0,
         help="Minimum base page score for graph bridge candidate pages.",
+    )
+    parser.add_argument(
+        "--ours_layer_router_tasks",
+        default="",
+        help="Comma-separated task names that enable layer-wise KV token routing.",
+    )
+    parser.add_argument(
+        "--ours_layer_router_mode",
+        default="early_stream_late_retrieval",
+        choices=["early_stream_late_retrieval"],
+        help="Layer-wise routing strategy. The first fraction of layers use a small sink+recent cache; later layers use retrieval blocks.",
+    )
+    parser.add_argument(
+        "--ours_layer_router_low_fraction",
+        type=float,
+        default=0.5,
+        help="Fraction of lower layers assigned the low-budget sink+recent cache.",
+    )
+    parser.add_argument(
+        "--ours_layer_router_low_budget_tokens",
+        type=int,
+        default=512,
+        help="Context-token budget for lower layers under layer-wise routing.",
     )
     parser.add_argument(
         "--ours_task_policy_json",
@@ -1725,6 +1752,10 @@ TASK_POLICY_KEYS = {
     "ours_graph_bridge_seed_pages",
     "ours_graph_bridge_max_terms",
     "ours_graph_bridge_min_score",
+    "ours_layer_router_tasks",
+    "ours_layer_router_mode",
+    "ours_layer_router_low_fraction",
+    "ours_layer_router_low_budget_tokens",
     "ours_full_fallback_tasks",
     "ours_label_support_tasks",
     "ours_label_backtrack_pages",
