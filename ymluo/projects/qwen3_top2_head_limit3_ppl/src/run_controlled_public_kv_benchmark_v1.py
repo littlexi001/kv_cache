@@ -2061,6 +2061,11 @@ def graph_bridge_active_for_example(config: Config, example: Example) -> bool:
     return example.task in tasks
 
 
+def layer_router_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_layer_router_tasks.split(",") if item.strip()}
+    return example.task in tasks
+
+
 def full_fallback_active_for_example(config: Config, example: Example) -> bool:
     tasks = {item.strip() for item in config.ours_full_fallback_tasks.split(",") if item.strip()}
     return example.task in tasks
@@ -3272,6 +3277,29 @@ def fit_context_budget(indices: set[int], bundle: PromptBundle, budget_tokens: i
             right -= 1
         context = sorted(chosen)
     return sorted(prefix | set(context))
+
+
+def streaming_keep_for_budget(bundle: PromptBundle, config: Config, budget_tokens: int) -> list[int]:
+    return fit_context_budget(base_context_keep_indices(bundle, config), bundle, max(0, budget_tokens))
+
+
+def build_layer_keep_indices(
+    full_prefix_cache: Any,
+    bundle: PromptBundle,
+    retrieval_keep_indices: list[int],
+    config: Config,
+) -> list[list[int]]:
+    legacy = cache_to_legacy(full_prefix_cache)
+    num_layers = len(legacy)
+    if num_layers == 0:
+        return []
+    if config.ours_layer_router_mode != "early_stream_late_retrieval":
+        return [retrieval_keep_indices for _ in range(num_layers)]
+    low_fraction = min(1.0, max(0.0, float(config.ours_layer_router_low_fraction)))
+    low_layers = int(round(num_layers * low_fraction))
+    low_layers = min(max(0, low_layers), num_layers)
+    low_keep = streaming_keep_for_budget(bundle, config, config.ours_layer_router_low_budget_tokens)
+    return [low_keep if layer_id < low_layers else retrieval_keep_indices for layer_id in range(num_layers)]
 
 
 def keep_full(bundle: PromptBundle, _: Example, __: list[Page], config: Config, ___: Any = None) -> list[int]:
