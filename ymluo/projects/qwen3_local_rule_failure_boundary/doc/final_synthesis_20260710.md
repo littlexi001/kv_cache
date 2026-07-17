@@ -86,7 +86,9 @@
 
 ![clean gap](../figures/clean_ablation_20260710/clean_gap_acc_margin.png)
 
-无干扰、无竞争链时，相关 rule 之间 gap 从 0 到 8192 tokens 没有造成失败。
+无干扰、无竞争链时，相关 rule 之间 gap 从 0 到 8192 tokens 没有造成 candidate scoring 失败。
+
+补充的 generation@256 实验显示：candidate acc 仍为 100%，但自由生成的 `contains_gold@256` 只有 8k=64%、32k=56%，最终确定答案准确率只有 8k=12%、32k=4%。所以这里的“没有失败”只适用于候选排序，不等同于真实自由生成任务稳定成功。
 
 ### 2.3 Interference boundary
 
@@ -266,12 +268,37 @@ rope_scaling = None
 
 ### 子问题 3：推理时为什么会失败？
 
-推理时失败更像是证据选择和绑定失败，具体表现为：
+这个子问题要回答的不是“模型会不会做 if A then B”，而是：
+
+```text
+在 inference 阶段，把简单短程依赖，例如 if A then B，放进越来越长、越来越复杂的 context 后，
+模型会在什么条件下从能答对变成答错？
+```
+
+因此实验设计要系统控制下面这些变量：
+
+1. context length；
+2. 干扰信息数量；
+3. 干扰信息相似度；
+4. 相关信息之间的距离；
+5. 相关信息在 context 中的位置；
+6. 推理链长度；
+7. 竞争推理链数量。
+
+目标是画出不同模型的 inference failure boundary：
+
+```text
+小模型在什么 context 长度、什么干扰强度、什么竞争链密度下开始 fail？
+大模型的边界是否更靠后？
+fail 的时候，模型内部和输出上有什么可观测表现？
+```
+
+当前结果显示，失败更像是证据选择、抗干扰和变量绑定失败，而不是简单规则本身不会推。具体表现为：
 
 1. gold candidate margin 下降到接近 0 或负数；
 2. gold-rule attention selectivity 下降；
-3. 模型把概率分配给 conflict/competitor/distractor 产生的错误 code；
-4. 自由生成时会出现格式错误、miss、或先答错再补正确答案。
+3. 模型把概率分配给 conflict / competitor / distractor 产生的错误 code；
+4. 自由生成时出现 miss、格式错误、或先答错再补正确答案。
 
 最直接证据：
 
@@ -286,6 +313,19 @@ competitor=4: mean margin 0.0015
 ```
 
 这说明加入竞争链以后，模型并不是“推理步骤算错”，而是正确链的证据优势被压掉了。
+
+所以子问题 3 的核心结论应写成：
+
+```text
+推理失败不是由单一 context length 决定的，而是由 context length、干扰强度、干扰相似度、相关证据位置、
+相关证据距离、推理链长度和竞争链数量共同决定。
+
+当 context 变长但没有强干扰时，小模型仍然可以在 candidate scoring 中做对简单短程规则；
+当高相似干扰、冲突规则或竞争推理链出现时，gold evidence 的 attention selectivity 和 candidate margin 会下降，
+模型更容易把问题绑定到错误证据链，从而 fail。
+
+但如果评价方式换成自由生成，失败会更早暴露：即使没有干扰，模型也可能把中间 code、局部数字或格式错误当成最终答案。
+```
 
 ## 4. 与年龄 needle 实验的统一解释
 

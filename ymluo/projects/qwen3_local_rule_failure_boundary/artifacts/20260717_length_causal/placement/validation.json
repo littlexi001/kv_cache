@@ -1,0 +1,19 @@
+{
+  "completed_shard_count": 12,
+  "result_count": 432,
+  "expected_result_count": 432,
+  "case_count": 144,
+  "expected_case_count": 144,
+  "candidate_score_count": 5616,
+  "seed_values": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "complete": true
+}

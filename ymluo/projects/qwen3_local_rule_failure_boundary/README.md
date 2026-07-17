@@ -25,6 +25,7 @@ competing chains. It records:
 
 - `doc/experiment_design_20260709.md`: experiment design.
 - `doc/results_summary_0p6b_20260709.md`: Qwen3-0.6B result summary and interpretation.
+- `doc/four_condition_answer_results_20260717.md`: paired conflict × filler accuracy and gold-answer PPL experiment.
 
 ## Smoke
 
@@ -43,6 +44,27 @@ bash scripts/run_question3_boundary_phase1_qwen06_server.sh
 ```bash
 bash scripts/run_question3_boundary_qwen8b_compare_server.sh
 ```
+
+## Per-head gold-evidence attention study
+
+This paired study asks which layer/head combinations attend to the two gold
+`VERIFIED RULE` spans at the answer query.  Each conflict prompt is paired with
+an equal-token-length nonconflict prompt.  The paired prompt keeps every rule
+position, wrong consequent, candidate answer, and filler token fixed; only each
+`DECOY RULE` antecedent is changed so that it no longer matches the gold chain.
+
+The runner records gold/decoy/competitor attention mass, span-length-corrected
+enrichment, gold-rule selectivity, per-step attention, and gold-token coverage
+inside each head's top 2% logits.  It also scores the answer candidates.
+
+```bash
+CUDA_VISIBLE_DEVICES=0 \
+  bash scripts/run_head_evidence_attention_server.sh
+```
+
+Raw and summarized outputs include `head_attention.csv`,
+`head_event_attention.csv`, `paired_conflict_effect_by_head.csv`, `top_heads.csv`,
+and layer-by-head heatmaps.
 
 ## Local dry run
 

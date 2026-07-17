@@ -582,6 +582,111 @@ def normalize_generated(text: str) -> str:
     return re.sub(r"[^A-Za-z0-9-]", "", text).upper()
 
 
+def compact_code(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]", "", value).upper()
+
+
+def known_code_kinds(gold: str, events: list[RuleEvent], candidates: list[str]) -> dict[str, str]:
+    kinds: dict[str, str] = {compact_code(gold): "gold"}
+    for event in events:
+        key = compact_code(event.consequent)
+        if key == compact_code(gold):
+            kinds[key] = "gold"
+        else:
+            kinds.setdefault(key, event.kind)
+    for candidate in candidates:
+        key = compact_code(candidate)
+        if key == compact_code(gold):
+            kinds[key] = "gold"
+        else:
+            kinds.setdefault(key, "random")
+    return kinds
+
+
+def extract_known_code_mentions(
+    generated_text: str,
+    gold: str,
+    events: list[RuleEvent],
+    candidates: list[str],
+) -> list[dict[str, Any]]:
+    kinds = known_code_kinds(gold, events, candidates)
+    canonical_by_compact: dict[str, str] = {}
+    canonical_by_compact[compact_code(gold)] = gold.upper()
+    for event in events:
+        canonical_by_compact.setdefault(compact_code(event.consequent), event.consequent.upper())
+    for candidate in candidates:
+        canonical_by_compact.setdefault(compact_code(candidate), candidate.upper())
+
+    mentions: list[dict[str, Any]] = []
+    pattern = re.compile(r"\b[A-Za-z]{2}\d{2}\s*-?\s*\d{3}\b")
+    for match in pattern.finditer(generated_text):
+        key = compact_code(match.group(0))
+        if key not in kinds:
+            continue
+        mentions.append(
+            {
+                "answer": canonical_by_compact.get(key, match.group(0).upper().replace(" ", "")),
+                "answer_compact": key,
+                "answer_class": kinds[key],
+                "start_char": match.start(),
+                "end_char": match.end(),
+            }
+        )
+    return mentions
+
+
+def classify_answer_text(
+    raw_answer: str,
+    gold: str,
+    events: list[RuleEvent],
+    candidates: list[str],
+) -> dict[str, Any]:
+    kinds = known_code_kinds(gold, events, candidates)
+    canonical_by_compact: dict[str, str] = {compact_code(gold): gold.upper()}
+    for event in events:
+        canonical_by_compact.setdefault(compact_code(event.consequent), event.consequent.upper())
+    for candidate in candidates:
+        canonical_by_compact.setdefault(compact_code(candidate), candidate.upper())
+
+    key = compact_code(raw_answer)
+    cleaned = re.sub(r"[^A-Za-z0-9-]", "", raw_answer).upper()
+    if key in kinds:
+        return {
+            "answer": canonical_by_compact.get(key, cleaned),
+            "answer_compact": key,
+            "answer_class": kinds[key],
+        }
+    return {
+        "answer": cleaned,
+        "answer_compact": key,
+        "answer_class": "wrong" if key else "miss",
+    }
+
+
+def extract_explicit_answers(
+    generated_text: str,
+    gold: str,
+    events: list[RuleEvent],
+    candidates: list[str],
+) -> list[dict[str, Any]]:
+    answers: list[dict[str, Any]] = []
+    pattern = re.compile(
+        r"(?i)\b(?:final\s+(?:active\s+)?(?:code|answer)|answer)\s*(?:is|:)?\s*"
+        r"([A-Za-z]{0,2}\d{2}\s*-?\s*\d{3}|\d{3,6})"
+    )
+    for match in pattern.finditer(generated_text):
+        item = classify_answer_text(match.group(1), gold, events, candidates)
+        item.update(
+            {
+                "raw_answer": match.group(1),
+                "start_char": match.start(1),
+                "end_char": match.end(1),
+            }
+        )
+        answers.append(item)
+    return answers
+
+
 def classify_generation(generated_text: str, gold: str, events: list[RuleEvent]) -> str:
     normalized = normalize_generated(generated_text)
     if not normalized:
@@ -606,6 +711,7 @@ def generate_answer(
     max_new_tokens: int,
     gold_answer: str,
     events: list[RuleEvent],
+    candidates: list[str],
 ) -> dict[str, Any]:
     device = input_device(model)
     generated: list[int] = []
@@ -630,11 +736,36 @@ def generate_answer(
     synchronize()
     generated_text = tokenizer.decode(generated, skip_special_tokens=True)
     generation_class = classify_generation(generated_text, gold_answer, events)
+    mentions = extract_known_code_mentions(generated_text, gold_answer, events, candidates)
+    explicit_answers = extract_explicit_answers(generated_text, gold_answer, events, candidates)
+    first_mention = mentions[0] if mentions else None
+    last_known_mention = mentions[-1] if mentions else None
+    final_answer = explicit_answers[-1] if explicit_answers else last_known_mention
+    final_source = "explicit" if explicit_answers else "last_known_mention" if last_known_mention else "none"
+    mentioned_classes = [str(item["answer_class"]) for item in mentions]
+    contains_gold = any(item["answer_class"] == "gold" for item in mentions)
+    contains_wrong = any(item["answer_class"] in {"conflict", "competitor", "distractor", "random"} for item in mentions)
+    contains_wrong = contains_wrong or any(item["answer_class"] == "wrong" for item in explicit_answers)
+    final_class = str(final_answer["answer_class"]) if final_answer else "miss"
+    first_class = str(first_mention["answer_class"]) if first_mention else "miss"
     return {
         "generated_text": generated_text.replace("\n", "\\n"),
         "generated_normalized": normalize_generated(generated_text),
         "generation_class": generation_class,
         "generation_correct": int(generation_class == "correct"),
+        "generation_contains_gold": int(contains_gold),
+        "generation_contains_wrong": int(contains_wrong),
+        "generation_mentioned_codes": " ".join(str(item["answer"]) for item in mentions),
+        "generation_mentioned_classes": " ".join(mentioned_classes),
+        "generation_explicit_answers": " ".join(str(item["answer"]) for item in explicit_answers),
+        "generation_explicit_classes": " ".join(str(item["answer_class"]) for item in explicit_answers),
+        "generation_first_answer": "" if first_mention is None else first_mention["answer"],
+        "generation_first_class": first_class,
+        "generation_first_correct": int(first_class == "gold"),
+        "generation_final_answer": "" if final_answer is None else final_answer["answer"],
+        "generation_final_class": final_class,
+        "generation_final_correct": int(final_class == "gold"),
+        "generation_final_source": final_source,
         "generation_seconds": time.perf_counter() - started,
     }
 
@@ -851,6 +982,10 @@ def summarize(rows: list[dict[str, Any]], boundary_threshold: float) -> tuple[li
         n = len(bucket)
         cand_acc = sum(int(row["candidate_correct"]) for row in bucket) / max(1, n)
         gen_acc = sum(int(row["generation_correct"]) for row in bucket) / max(1, n)
+        contains_gold_acc = sum(int(row.get("generation_contains_gold", 0)) for row in bucket) / max(1, n)
+        first_answer_acc = sum(int(row.get("generation_first_correct", 0)) for row in bucket) / max(1, n)
+        final_answer_acc = sum(int(row.get("generation_final_correct", 0)) for row in bucket) / max(1, n)
+        wrong_contam_rate = sum(int(row.get("generation_contains_wrong", 0)) for row in bucket) / max(1, n)
         margins = [safe_float(row.get("candidate_margin")) for row in bucket]
         margins = [item for item in margins if item is not None]
         selectivity = [safe_float(row.get("rule_attention_selectivity")) for row in bucket]
@@ -863,6 +998,10 @@ def summarize(rows: list[dict[str, Any]], boundary_threshold: float) -> tuple[li
                 "cases": n,
                 "candidate_accuracy": f"{cand_acc:.6f}",
                 "generation_accuracy": f"{gen_acc:.6f}",
+                "contains_gold_accuracy": f"{contains_gold_acc:.6f}",
+                "first_answer_accuracy": f"{first_answer_acc:.6f}",
+                "final_answer_accuracy": f"{final_answer_acc:.6f}",
+                "wrong_answer_contamination": f"{wrong_contam_rate:.6f}",
                 "mean_candidate_margin": "" if not margins else f"{sum(margins) / len(margins):.6f}",
                 "mean_rule_attention_selectivity": "" if not selectivity else f"{sum(selectivity) / len(selectivity):.6f}",
                 "mean_gold_rule_mass": "" if not gold_mass else f"{sum(gold_mass) / len(gold_mass):.8f}",
@@ -909,8 +1048,8 @@ def write_markdown_summary(path: Path, summary_rows: list[dict[str, Any]], bound
         "",
         "## Lowest Candidate Accuracy Conditions",
         "",
-        "| model | length | depth | dist | sim | gap | chain | comp | cases | cand acc | gen acc | selectivity |",
-        "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|",
+        "| model | length | depth | dist | sim | gap | chain | comp | cases | cand acc | gen acc | contains gold | final acc | wrong contam | selectivity |",
+        "|---|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     worst = sorted(summary_rows, key=lambda row: float(row["candidate_accuracy"]))[:30]
     for row in worst:
@@ -918,7 +1057,9 @@ def write_markdown_summary(path: Path, summary_rows: list[dict[str, Any]], bound
             f"| {row['model_label']} | {row['target_context_tokens']} | {row['depth_percent']} | "
             f"{row['distractor_count']} | {row['distractor_similarity']} | {row['rule_gap_tokens']} | "
             f"{row['chain_length']} | {row['competitor_count']} | {row['cases']} | "
-            f"{row['candidate_accuracy']} | {row['generation_accuracy']} | {row['mean_rule_attention_selectivity']} |"
+            f"{row['candidate_accuracy']} | {row['generation_accuracy']} | {row['contains_gold_accuracy']} | "
+            f"{row['final_answer_accuracy']} | {row['wrong_answer_contamination']} | "
+            f"{row['mean_rule_attention_selectivity']} |"
         )
     lines.extend(
         [
@@ -1144,6 +1285,7 @@ def main() -> None:
             args.max_new_tokens,
             case.gold_answer,
             events,
+            candidates,
         )
         row: dict[str, Any] = {
             **asdict(case),
