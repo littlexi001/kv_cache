@@ -22,6 +22,19 @@ LaTeX 宏包，之后通常明显更快。输出文件为：
 
 - `output/pdf/SAGE_RoPE_ICLR2027_draft_anonymous.pdf`
 - `output/pdf/SAGE_RoPE_ICLR2027_draft_author.pdf`
+- `output/pdf/SAGE_RoPE_ICLR2027_draft_zh.pdf`（中文阅读版）
+
+如果只修改和编译中文版，可以运行：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_zh.ps1
+```
+
+中文版入口为 `main_zh.tex`，各章节位于 `sections_zh/`。它与英文稿共享
+公式、图表、实验数据、引用和 TODO 边界，仅用于阅读与讨论，不作为正式
+投稿文件。三张核心图也提供了中文标签。英文内容发生实质修改时，应同步
+更新对应的中文章节；构建脚本会先运行 `scripts/check_bilingual_sync.py`，
+检查公式、标签、引用、实验数字、环境结构和 TODO 数量是否发生漂移。
 
 ## 当前完成度
 
@@ -45,4 +58,3 @@ benchmark、跨模型验证、本地语序/短文本 PPL、实际近似索引和
 3. 不把 143K 的位置扩展诊断写成模型原生窗口结果。
 4. 不写“距离越远 QK 单调下降”；相位模型和实验都是振荡/非单调的。
 5. 不在完整 pre-RoPE 扫描仍存在时宣称系统加速。
-

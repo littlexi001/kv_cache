@@ -1,0 +1,72 @@
+\section{SAGE-RoPE：局部位置，全局语义}
+\label{sec:method}
+
+上述机制揭示了三项设计约束。第一，近期词元必须保留原始的位置计算，因为
+局部顺序与句法信息是有用的。第二，即使当前 RoPE 相位不利，远程语义匹配
+仍应存在进入候选集的路径。第三，修复机制不应在不加说明的情况下替换预训练
+模型的评分规则。\method 通过分离\emph{候选提议}与\emph{候选使用}来满足
+这些约束。
+
+\subsection{无位置的远程候选提议}
+
+除\cref{eq:standard-attn}中的标准 post-RoPE logit $s^R$ 外，我们定义
+仅依赖内容的候选提议分数
+\begin{equation}
+  s^C(t,j)=\frac{\preq_t^\top\prek_j}{\sqrt d}.
+  \label{eq:content-score}
+\end{equation}
+在主要方法中，该分数不被用作注意力 logit，而仅用于在 RoPE 可能压低远程
+键的分数之前对其进行排序。设序列长度为 $N$，总候选预算为
+$B=\lceil\beta N\rceil$，局部窗口为 $\mathcal L_W$，sink 集合为
+$\mathcal S$，则每个头的候选集为
+\begin{equation}
+  \mathcal C_{l,h}
+  =\mathcal S\cup\mathcal L_W\cup
+  \TopK_{B-|\mathcal S|-|\mathcal L_W|}
+  \left\{s^C_{l,h}(t,j):j<t-W,\ j\notin\mathcal S\right\}.
+  \label{eq:candidate-set}
+\end{equation}
+我们已登记的先导实验采用 $\beta=0.02$、$W=128$ 和 16 个 sink 词元，
+并始终将当前查询位置纳入候选集。
+
+\subsection{精确的 post-RoPE 候选使用}
+
+候选提议完成后，\methodpost 收集所有 $j\in\mathcal C$ 对应的原始 K/V，
+计算其精确的标准 logit，并仅在候选集内归一化：
+\begin{equation}
+  o^{\textsc{Sage}}_{l,h}(t)
+  =\sum_{j\in\mathcal C_{l,h}}
+  \frac{\exp s^R_{l,h}(t,j)}
+  {\sum_{r\in\mathcal C_{l,h}}\exp s^R_{l,h}(t,r)}v_{l,h,j}.
+  \label{eq:sage-attention}
+\end{equation}
+每个入选词元的权重仍完全由原始 post-RoPE 几何关系决定。相较于精确的
+post-RoPE Top-2\%，唯一的变化是远程候选提议规则。因此，\methodpost
+既保守，又便于进行干净的机制归因：任何质量差异均可归因于哪些候选在相位
+敏感的排序中得以保留，以及该候选集所形成的 softmax 分母。
+
+全注意力并不构成任务质量的上界。如果候选选择器保留证据 $E$，同时移除
+$D\setminus\mathcal C$ 中的干扰项，那么重新归一化可以提高
+\begin{equation}
+  m_E^{\mathcal C}
+  =\frac{\sum_{i\in E\cap\mathcal C}\exp s_i}
+  {\sum_{i\in E\cap\mathcal C}\exp s_i+
+   \sum_{j\in D\cap\mathcal C}\exp s_j}.
+  \label{eq:sparse-mass}
+\end{equation}
+因此，该方法可以通过两个相互关联的作用获得收益：一是从不利的相位排序中
+救回相关的远程键，二是从 softmax 分母中排除弱干扰项。
+
+\subsection{变体与实现边界}
+
+本文将 \methodpost 作为主要方法。我们还在附录中评估了两类诊断性扩展：
+校准后的 pre/post-RoPE 分数混合，以及保持注意力占比的远程重排序。这些扩展
+能够改善部分先导实验指标，但也会改变预训练模型的评分数值，因此在成为默认
+方案之前仍需更广泛的验证。
+
+当前实现会计算完整的 pre-RoPE 分数向量，以单独考察候选提议质量。因此，
+它所验证的是一种注意力规则，而非加速效果。可部署的实现应将 pre-RoPE 键
+存入近似索引，针对每个头查询该索引，并仅收集入选候选的精确 post-RoPE
+K/V。\todoexp{实现近似索引，并在匹配设置下报告端到端延迟、吞吐量、更新
+成本和内存开销。} 候选提议完成后的目标注意力成本为 $O(Bd)$，而非
+$O(Nd)$；候选提议成本则取决于所采用的索引。

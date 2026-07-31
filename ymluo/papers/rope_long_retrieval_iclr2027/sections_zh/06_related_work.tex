@@ -1,0 +1,37 @@
+\section{相关工作}
+\label{sec:related}
+
+\paragraph{长上下文利用与评测。}
+Lost in the Middle 表明，即使相关信息位于输入范围内，模型仍表现出显著的位置敏感性
+~\citep{liu2024lost}；LongBench 与 RULER 将评测范围拓展到不同长度下的检索、推理、
+聚合与鲁棒性~\citep{bai2024longbench,hsieh2024ruler}。这些工作表明，标称窗口长度会
+高估实际可用的上下文。作为任务级测量的补充，我们建立了一条内部因果链：从受控的
+位置变化出发，依次追踪其对 QK、softmax 后的注意力总量、残差状态和输出 margin 的影响。
+
+\paragraph{RoPE 扩展。}
+Position Interpolation 将位置压缩到训练范围内
+~\citep{chen2023positioninterpolation}；YaRN 对不同频带进行插值并调整注意力温度
+~\citep{peng2024yarn}；LongRoPE 与 LongRoPE2 搜索依赖于维度的重缩放方案
+~\citep{ding2024longrope,shang2025longrope2}。Resonance RoPE 将波长与观测到的位置对齐
+~\citep{wang2024resonance}，而针对 RoPE 扩展的分析则将频率映射与注意力不确定性及
+检索联系起来~\citep{zhong2025understanding}。这些方法主要旨在改善外推能力或扩大
+有效窗口长度。我们关注的问题与此正交：即使已经选定了有效的频率映射，细粒度的
+远程相位是否仍应控制语义候选的准入？
+
+\paragraph{分离局部位置与全局访问。}
+LM-Infinite 对有效相对距离设置上限~\citep{han2024lminfinite}，SelfExtend 则将精确的
+局部注意力与分组的远程位置结合起来~\citep{jin2024selfextend}。RNoPE 交替使用 RoPE
+层与 NoPE 层~\citep{yang2025rnope}，而 HoPE 保留选定的旋转分量并加入与位置无关的
+维度~\citep{chen2025hope}。实证研究还发现，较宽的旋转角范围可能使注意力头中的部分
+维度无法被有效用于长距离检索~\citep{chiang2025dimension}。近期理论表明，足够长的
+旋转上下文中可能出现位置混叠和 token 混叠，从而促使我们在结构上分离局部性与语义
+一致性~\citep{du2026rope}。\method 在原理上最接近这种局部/全局分离，但其面向冻结的
+预训练模型，并在每个注意力头内部将\emph{候选提议}与精确的 post-RoPE\emph{候选使用}
+分离。这一保守拆分既支持匹配预算的因果检验，又为每个入选 token 保留了模型学得的
+位置评分。
+
+\paragraph{稀疏注意力与检索。}
+稀疏注意力方法通过固定模式、token 重要性或近似搜索，减少每个查询所处理的 key 集合
+~\citep{beltagy2020longformer,zaheer2020bigbird,zhang2023h2o}。我们当前的原型并非系统
+层面的竞争方案，因为其精确的 pre-RoPE 候选提议仍需扫描所有 key。其贡献在于从 RoPE 的
+失效机制中导出一种检索信号。未来工作将把这一信号与实用的低比特或近似索引相结合。

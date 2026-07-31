@@ -1,0 +1,27 @@
+\section{问题设定}
+\label{sec:setup}
+
+考虑一个注意力头：位置 $t$ 处的 pre-RoPE 查询为 $\preq_t\in\mathbb R^d$，位置 $j$ 处的 pre-RoPE 键为 $\prek_j\in\mathbb R^d$。令 $\Rope_x$ 表示位置 $x$ 对应的分块对角 RoPE 旋转矩阵。标准注意力 logit 与权重为
+\begin{align}
+  s^R(t,j)
+  &= \frac{(\Rope_t\preq_t)^\top(\Rope_j\prek_j)}{\sqrt d},
+  &
+  a(t,j)
+  &= \frac{\exp s^R(t,j)}{\sum_{r\le t}\exp s^R(t,r)}.
+  \label{eq:standard-attn}
+\end{align}
+对于金标准证据 token 集合 $E$，其注意力总量为
+\begin{equation}
+  m_E(t)=\sum_{j\in E}a(t,j).
+  \label{eq:evidence-mass}
+\end{equation}
+我们使用首个答案 token $y^\star$ 的负对数似然 $\ell=-\log p(y^\star\mid x)$、\GoldPPL $=\exp(\ell)$，以及它相对于最强非金标准 token 的决策 margin 来评测该 token：
+\begin{equation}
+  \gamma=z_{y^\star}-\max_{v\ne y^\star}z_v.
+  \label{eq:margin}
+\end{equation}
+当 $\gamma<0$ 时，即发生首 token 失败。只有在首 token 机制得到确认之后，我们才进一步报告自由生成结果，因为格式因素和后续解码过程可能掩盖这一边界。
+
+我们的核心干预保持证据文本、查询文本和模型参数不变，仅通过插入 filler 或受控改变位置来调整二者的相对距离 $\Delta=t-j$。“相位敏感”并不意味着分数或准确率必须随 $\Delta$ 单调下降；它指改变 $\Delta$ 会改变 RoPE 相位，并可能逆转一个原本固定的语义匹配的相对优先级。我们将其与两个相邻效应区分开来：额外的 filler 还会向 softmax 分母中引入更多键，而后续层也可能改变内容向量本身。\Cref{sec:mechanism} 将这些阶段逐一分离。
+
+主要方法实验采用一条两跳规则链。每个实体均为普通英文单词，并且在所有模板中都严格对应分词器的一个 token。靠近上下文开头的两条已验证规则建立映射 $c_0\rightarrow c_1\rightarrow c_2$；上下文其余部分由随机英文 filler 填充，末尾的简洁查询要求回答 $c_2$。这一构造在保留自然分词的同时，使金标准 token、证据片段和推理链终点都具有无歧义的定义。

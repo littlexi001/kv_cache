@@ -1,0 +1,216 @@
+\section{RoPE 的详细推导}
+\label{app:rope-proof}
+
+\subsection{旋转约定与相对位置}
+
+对于第 $i$ 个二元分量对，定义
+\begin{equation}
+  R(\alpha)=
+  \begin{bmatrix}
+    \cos\alpha&-\sin\alpha\\
+    \sin\alpha&\cos\alpha
+  \end{bmatrix}.
+\end{equation}
+RoPE 将 $R(t\omega_i)$ 应用于 query 分量对，将 $R(j\omega_i)$ 应用于 key 分量对。
+由正交性与封闭性可得
+\begin{align}
+  [R(t\omega_i)q_i]^\top[R(j\omega_i)k_i]
+  &=q_i^\top R(-t\omega_i)R(j\omega_i)k_i\\
+  &=q_i^\top R((j-t)\omega_i)k_i.
+\end{align}
+令 $\Delta=t-j$。此时 $j-t=-\Delta$，因此
+\begin{equation}
+  R(-\Delta\omega_i)=
+  \begin{bmatrix}
+    \cos(\Delta\omega_i)&\sin(\Delta\omega_i)\\
+    -\sin(\Delta\omega_i)&\cos(\Delta\omega_i)
+  \end{bmatrix}.
+\end{equation}
+将其与 $q_i=[q_{i,x},q_{i,y}]^\top$ 和
+$k_i=[k_{i,x},k_{i,y}]^\top$ 相乘，得到
+\begin{align}
+  q_i^\top R(-\Delta\omega_i)k_i
+  &=(q_{i,x}k_{i,x}+q_{i,y}k_{i,y})\cos(\Delta\omega_i)\\
+  &\quad +(q_{i,x}k_{i,y}-q_{i,y}k_{i,x})\sin(\Delta\omega_i),
+\end{align}
+即 \cref{eq:pair-score}。
+
+\subsection{振幅--相位形式}
+
+令 $A_i=\rho_i\cos\psi_i$ 且 $B_i=\rho_i\sin\psi_i$。则
+\begin{align}
+  A_i\cos x+B_i\sin x
+  &=\rho_i(\cos\psi_i\cos x+\sin\psi_i\sin x)\\
+  &=\rho_i\cos(x-\psi_i).
+\end{align}
+这一恒等式澄清了本文论断的适用范围。每个非零分量对在一个完整相位周期内都会产生
+正贡献和负贡献。但这并不意味着聚合得分在任一特定距离上必然变为负值，因为不同的
+频率与偏移可能相互抵消。
+
+\subsection{填充文本引起的得分变化}
+
+插入 $m$ 个 token 后，$\Delta' = \Delta+m$。应用
+$\cos x-\cos y=-2\sin((x+y)/2)\sin((x-y)/2)$ 和
+$\sin x-\sin y=2\cos((x+y)/2)\sin((x-y)/2)$，可得
+\begin{align}
+  s_i(\Delta+m)-s_i(\Delta)
+  &=2\sin\left(\frac{m\omega_i}{2}\right)
+  \bigg[
+  -A_i\sin\left(\frac{(2\Delta+m)\omega_i}{2}\right)\\
+  &\hspace{38mm}+B_i\cos\left(\frac{(2\Delta+m)\omega_i}{2}\right)
+  \bigg].
+\end{align}
+Cauchy--Schwarz 不等式将方括号内的量界定为不超过
+$\sqrt{A_i^2+B_i^2}=\rho_i$，由此得到 \cref{eq:pair-bound}。其局部导数为
+\begin{equation}
+  \frac{\partial s_i}{\partial\Delta}
+  =\omega_i[-A_i\sin(\Delta\omega_i)+B_i\cos(\Delta\omega_i)].
+\end{equation}
+
+\section{精确的跨层有限差分}
+\label{app:layerwise}
+
+固定的模型参数定义了从完整提示到输出的精确函数，但仅凭最终 query 行的输入差分并
+不足以确定该函数。令 $X_0=(H_0,P,M)$ 包含所有 token 状态、位置与掩码。记层映射为
+$\Phi_l$、query 行提取器为 $\pi_q$，则
+\begin{equation}
+  z(X_0)=W_U\mathcal N_f\left(\pi_q[Phi_{L-1}\circ\cdots\circ\Phi_0(X_0)]\right).
+\end{equation}
+对该表达式求值即为前向传播；不存在从 $\|\delta h_0\|$ 到输出的标量捷径。
+
+对于 BF16 残差加法，令 $Q_b$ 表示舍入。硬件层面的递推为
+\begin{align}
+  u_{l,c}&=Q_b(h_{l,c}+\mathcal A_{l,c}),\\
+  h_{l+1,c}&=Q_b(u_{l,c}+\mathcal M_{l,c}),\qquad c\in\{S,T\}.
+\end{align}
+对两条分别舍入的轨迹作差，可以在每一层精确重建记录的输出。若忽略舍入，实向量恒等式
+\cref{eq:layer-difference} 在此次 BF16 运行中的相对误差最高为 5.95\%。
+
+\begin{table}[h]
+  \caption{从 143,424 到 143,488 的精确逐层重放中选取的若干行。
+  中间一项是向量和的范数，而非范数之和。}
+  \label{tab:layer-replay}
+  \centering
+  \small
+  \begin{tabular}{r rrr rr}
+    \toprule
+    层 & $\|\delta h_l\|$ & $\|\delta\mathcal A_l\|$ &
+    $\|\delta\mathcal M_l\|$ & $\|\sum\text{ 个向量}\|$ &
+    $\|\delta h_{l+1}\|$\\
+    \midrule
+    0  & 0.000   & 0.542  & 1.293   & 1.464   & 1.466\\
+    8  & 4.615   & 1.548  & 3.205   & 5.102   & 5.106\\
+    16 & 7.605   & 3.736  & 5.199   & 8.233   & 8.276\\
+    20 & 11.574  & 8.642  & 10.103  & 15.964  & 15.976\\
+    22 & 23.128  & 20.612 & 22.013  & 35.112  & 35.106\\
+    24 & 47.462  & 25.275 & 26.395  & 59.156  & 59.158\\
+    28 & 87.939  & 27.650 & 42.217  & 102.442 & 102.604\\
+    35 & 269.676 & 59.114 & 130.886 & 313.938 & 312.676\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+由于省略了两次舍入操作，实向量之和与记录的 BF16 输出略有差异。重新引入这些操作后，
+所列每一层的最大误差均为零。三个分量的范数不能直接相加：对于向量 $x,y,z$，
+\begin{equation}
+  \|x+y+z\|_2^2=\|x\|_2^2+\|y\|_2^2+\|z\|_2^2
+  +2\langle x,y\rangle+2\langle x,z\rangle+2\langle y,z\rangle.
+\end{equation}
+
+最后一层之后，精确的 margin 变化为
+\begin{equation}
+  \delta\gamma=
+  (W_{y^\star}-W_c)^\top
+  [\mathcal N_f(h_{L,T})-\mathcal N_f(h_{L,S})].
+\end{equation}
+FP32 读出以 $3.81\times10^{-6}$ 的绝对误差重建了失败运行的 margin，并以
+$3.73\times10^{-8}$ 的误差重建了正确答案概率。仅对最终 RMSNorm 计算的一阶 JVP
+具有 9.86\% 的相对向量误差，这说明我们为何将 Jacobian 乘积标记为局部近似，而非
+精确等式。
+
+\section{完整的方法结果}
+\label{app:full-results}
+
+\begin{table}[h]
+  \caption{\methodpost 相对于 Full RoPE 和精确 post-RoPE Top-2\% 的配对 NLL 比较。
+  负区间有利于 \methodpost。}
+  \centering
+  \small
+  \begin{tabular}{r rr rr}
+    \toprule
+    & \multicolumn{2}{c}{相对于 Full RoPE}
+    & \multicolumn{2}{c}{相对于 post-RoPE Top-2\%}\\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}
+    长度 & 质量比 & 95\% CI $\Delta$NLL
+           & 质量比 & 95\% CI $\Delta$NLL\\
+    \midrule
+    8K  & 1.228 & $[-0.348,-0.060]$ & 1.147 & $[-0.355,0.076]$\\
+    16K & 4.184 & $[-1.912,-0.957]$ & 1.902 & $[-0.973,-0.342]$\\
+    32K & 3.605 & $[-1.625,-0.954]$ & 1.996 & $[-1.035,-0.308]$\\
+    64K & 1.342 & $[-0.615,0.004]$  & 1.227 & $[-0.427,0.005]$\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+质量比定义为 $\exp(\mathrm{NLL}_{\rm baseline}-
+\mathrm{NLL}_{\rm method})$。不应将其描述为通用的语言模型质量；它仅指该受控检索任务中
+金标准答案首个 token 的质量。
+
+\section{数据与干预协议}
+\label{app:protocol}
+
+\paragraph{单 token 实体。}
+候选英文单词需经筛选并满足三个约束：裸词恰好对应一个 token；该词在规则模板与查询
+模板中的出现均映射为一个稳定的上下文 token；且该词不出现在任何填充段落中。使用
+固定随机种子的洗牌过程为每个样例选择三个单词。
+
+\paragraph{提示构造。}
+两条证据行采用 ``VERIFIED RULE: IF $c_i$ IS ACTIVE THEN
+$c_{i+1}$'' 的形式，并作为一个整体插入正文约第 256 个 token 附近。末尾查询给出起始
+代码，要求执行两次已验证的转移，指示模型忽略注释与诱饵规则，并要求仅输出一个最终
+代码。当前主测试套件不包含相互冲突的链；冲突鲁棒性是计划中的扩展。
+
+\paragraph{选择指标。}
+证据 token 召回率统计两条规则行跨度内的每个 tokenizer token。这一刻意严格的指标
+不仅包含实体 token，也包含结构词和标点。链完成率往往与任务目标更为一致：它检验
+一个层--头数据行是否同时包含来自两条证据行的至少一个 token。任何一个指标
+都无法单独证明因果使用；\GoldPPL 与激活修补提供了互补证据。
+
+\paragraph{激活修补。}
+短诊断提示与长诊断提示分别独立运行，并存储所有 query 行的残差输入。对于修补层
+$l$，再次运行失败样例，并将其在第 $l$ 层的 query 残差输入替换为成功运行的状态；
+其余所有计算以及长提示的 K/V 历史均保持不变。我们报告由此得到的正确答案概率和
+logit 间隔。当前修补扫描是对单次转移的详细案例研究；要提出总体层面的因果论断，
+仍需进行已注册的多样例复现实验。
+
+\section{伪代码}
+\label{app:pseudocode}
+
+\begin{verbatim}
+Inputs: pre-RoPE query q, pre-RoPE keys Kpre,
+        original post-RoPE keys Kpost, values V,
+        budget B, local window W, sink count S
+
+C_sink   <- positions [0, S)
+C_local  <- most recent W history positions
+C_remote <- TopK(q @ Kpre.T, B - |C_sink| - |C_local|,
+                 excluding sinks and local positions)
+C        <- unique(C_sink union C_local union C_remote union current)
+
+scores   <- exact_post_rope_qk(q, Kpost[C]) / sqrt(d)
+weights  <- softmax(scores)
+output   <- weights @ V[C]
+\end{verbatim}
+
+\section{投稿前必须完成的开放实验}
+\label{app:todos}
+
+\begin{enumerate}
+  \item 在公开的长上下文检索与多跳基准上进行评测，并采用匹配的 Full 和 post-RoPE
+  稀疏基线。
+  \item 至少增加一种架构，并明确区分原生窗口测试与位置扩展测试。
+  \item 增加短上下文语言建模、局部顺序及广泛生成能力的控制实验。
+  \item 评测近似 pre-RoPE 索引的召回率、延迟、吞吐量、内存占用和更新成本。
+  \item 增加一个规模更大的预注册 64K 样本，因为当前主要置信区间略微跨过零点。
+  \item 开展多样例相位干预、仅分母控制和激活修补，以量化超越案例研究的因果效应量。
+\end{enumerate}

@@ -1,8 +1,8 @@
-# SAGE-RoPE — ICLR 2027 draft
+# SAGE-RoPE -- ICLR 2027 draft
 
 This directory is a self-contained LaTeX project for the paper currently
-titled **“Local Position, Global Semantics: Diagnosing and Repairing
-Phase-Sensitive Retrieval in Rotary Transformers.”**
+titled **“Local Position, Global Semantics: Phase-Sensitive Retrieval under
+RoPE.”**
 
 The draft uses the official ICLR 2027 style files downloaded from the
 [ICLR 2027 author guide](https://iclr.cc/Conferences/2027/AuthorGuidelines).
@@ -21,6 +21,7 @@ the checked-in CSV files, and writes PDFs to:
 
 - `output/pdf/SAGE_RoPE_ICLR2027_draft_anonymous.pdf`
 - `output/pdf/SAGE_RoPE_ICLR2027_draft_author.pdf`
+- `output/pdf/SAGE_RoPE_ICLR2027_draft_zh.pdf` (Chinese reading edition)
 
 This avoids installing a full TeX Live distribution. The first Tectonic build
 may download missing LaTeX packages; later builds are cached and fast.
@@ -28,6 +29,9 @@ may download missing LaTeX packages; later builds are cached and fast.
 ## Editing map
 
 - `main.tex`: title, abstract, shared macros, mandatory statements.
+- `main_zh.tex` and `sections_zh/`: synchronized Chinese reading edition.
+- `scripts/check_bilingual_sync.py`: rejects drift in equations, labels,
+  citations, measured numbers, environments, and TODO counts.
 - `sections/01_introduction.tex`: problem → analysis → method → results story.
 - `sections/03_mechanism.tex`: first-layer RoPE derivation and cross-layer chain.
 - `sections/04_method.tex`: SAGE-RoPE and the conservative SAGE-Post variant.
@@ -40,4 +44,3 @@ may download missing LaTeX packages; later builds are cached and fast.
 All red `TODO` boxes intentionally identify claims that are not yet supported
 by completed experiments. They should be resolved, not hidden, before
 submission.
-

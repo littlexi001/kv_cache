@@ -1,0 +1,104 @@
+\documentclass{article}
+
+% 中文阅读版：沿用官方 ICLR 2027 版式，但不作为投稿文件。
+\usepackage{iclr2027_conference,times}
+\usepackage[UTF8,fontset=fandol,scheme=plain]{ctex}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\definecolor{sagegreen}{RGB}{14,116,109}
+\definecolor{phaseorange}{RGB}{221,107,32}
+\definecolor{todored}{RGB}{160,32,32}
+\definecolor{todofill}{RGB}{255,238,238}
+\hypersetup{
+  colorlinks=true,
+  citecolor=sagegreen,
+  linkcolor=sagegreen,
+  urlcolor=sagegreen
+}
+
+\newcommand{\method}{\textsc{Sage-RoPE}\xspace}
+\newcommand{\methodpost}{\textsc{Sage-Post}\xspace}
+\newcommand{\todoexp}[1]{%
+  \textcolor{todored}{\textbf{[待补实验：} #1\textbf{]}}}
+\newcommand{\preq}{\widetilde{\bm q}}
+\newcommand{\prek}{\widetilde{\bm k}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\TopK}{\operatorname{TopK}}
+\newcommand{\Rope}{\operatorname{R}}
+\newcommand{\GoldPPL}{\textsc{Gold-PPL}\xspace}
+
+\crefname{figure}{图}{图}
+\crefname{table}{表}{表}
+\crefname{equation}{式}{式}
+\crefname{section}{节}{节}
+\renewenvironment{abstract}{\vskip.075in\centerline{\large\bf 摘要}%
+\vspace{0.5ex}\begin{quote}}{\par\end{quote}\vskip 1ex}
+\renewcommand{\refname}{参考文献}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+
+\title{局部位置，全局语义：\\
+RoPE 下的相位敏感检索}
+\author{中文阅读版（非投稿稿）}
+\iclrfinalcopy
+
+\begin{document}
+\maketitle
+\lhead{SAGE-RoPE 中文阅读版（非投稿稿）}
+
+\begin{abstract}
+长上下文窗口能够向语言模型提供更多信息，却不能保证语义相关的证据获得更高的检索优先级。
+本文研究一种受控失效现象：证据与查询的内容保持不变，只改变二者之间的距离。
+在经过位置扩展的 Qwen3-8B 上，仅增加 64 个填充 token，就能使正确首答案 token 的概率从
+42.62\% 降至 1.75\%。我们从第一层注意力一直追踪这一失效过程至最终输出。对于固定的
+pre-RoPE 查询--键对，post-RoPE 分数是相对距离上多个正弦项之和；我们的精确分解能够重构
+实测的第一层分数，最大绝对误差仅为 $1.98\times10^{-3}$。由此产生的注意力扰动进入残差流，
+在层间逐步放大并改变答案 margin；只需在第 16 层进行激活修补，便足以逆转原先的错误决策。
+这一分析启发了 \method：局部结构和最终注意力计算仍保留标准 RoPE，但在稀疏 softmax 之前，
+使用不含位置的 pre-RoPE 分数提出远程候选。在一个 held-out 受控两跳检索测试集上，每个长度
+包含 24 个 seed、上下文长度为 8K--64K、候选预算约为 2\%。其中，保守的 \methodpost 变体
+将全注意力下的汇总几何平均 \GoldPPL 从 10.851 降至 4.859，并将首 token 准确率从 33.3\%
+提高到 47.9\%。在 16K 和 32K 上，它相较精确 post-RoPE Top-2\% 选择也显著改善了配对 NLL；
+64K 的置信区间则跨过零点。这些结果在受控检索场景中建立了一条机制解释和针对性修复路径，
+但尚不能被视为通用的长上下文解决方案：自然任务、更多模型架构和近似检索索引仍有待验证。
+\end{abstract}
+
+\input{sections_zh/01_introduction}
+\input{sections_zh/02_problem_setup}
+\input{sections_zh/03_mechanism}
+\input{sections_zh/04_method}
+\input{sections_zh/05_experiments}
+\input{sections_zh/06_related_work}
+\input{sections_zh/07_conclusion}
+
+\subsubsection*{AI 使用声明}
+生成式 AI 工具被用于协助假设细化、实验规划、代码实现、结果整理、文献检索和论文起草。
+本文的全部数值结论均对应已保存的实验产物，引用也已与原始论文或正式会议页面核对。
+作者将在投稿前复核所有经 AI 辅助生成的代码、文字、主张与引用，并对最终内容承担责任。
+\todoexp{投稿前用作者最终确认的披露文本替换本段过程性描述。}
+
+\subsubsection*{可复现性声明}
+受控数据构造、模型设置、评价指标、配对统计检验和干预协议见\cref{sec:experiments}与
+\cref{app:protocol}。补充材料给出了第一层精确分解、逐层重构、激活修补协议和候选选择伪代码。
+代码、冻结的数据清单、逐 seed 结果及绘图脚本将在匿名代码仓库中公开。
+
+\clearpage
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+
+\clearpage
+\appendix
+\input{sections_zh/appendix}
+
+\end{document}

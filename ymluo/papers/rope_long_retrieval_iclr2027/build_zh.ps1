@@ -24,12 +24,6 @@ try {
     & python scripts\make_figures_zh.py
     if ($LASTEXITCODE -ne 0) { throw "Chinese figure generation failed." }
 
-    & $Tectonic -X compile main.tex --outdir $BuildDir --keep-logs --keep-intermediates
-    if ($LASTEXITCODE -ne 0) { throw "Anonymous PDF compilation failed." }
-
-    & $Tectonic -X compile main_author.tex --outdir $BuildDir --keep-logs --keep-intermediates
-    if ($LASTEXITCODE -ne 0) { throw "Author PDF compilation failed." }
-
     & $Tectonic -X compile main_zh.tex --outdir $BuildDir --keep-logs --keep-intermediates
     if ($LASTEXITCODE -ne 0) { throw "Chinese companion PDF compilation failed." }
 }
@@ -37,14 +31,8 @@ finally {
     Pop-Location
 }
 
-$AnonymousPdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_anonymous.pdf"
-$AuthorPdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_author.pdf"
 $ChinesePdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_zh.pdf"
-Copy-Item -Force (Join-Path $BuildDir "main.pdf") $AnonymousPdf
-Copy-Item -Force (Join-Path $BuildDir "main_author.pdf") $AuthorPdf
 Copy-Item -Force (Join-Path $BuildDir "main_zh.pdf") $ChinesePdf
 
 Write-Host "Built:"
-Write-Host $AnonymousPdf
-Write-Host $AuthorPdf
 Write-Host $ChinesePdf
