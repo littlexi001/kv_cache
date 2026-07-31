@@ -1,0 +1,48 @@
+\section{Related work}
+\label{sec:related}
+
+\paragraph{Long-context utilization and evaluation.}
+Lost in the Middle demonstrates strong positional sensitivity even when
+relevant information lies inside the input~\citep{liu2024lost}; LongBench and
+RULER broaden evaluation to retrieval, reasoning, aggregation, and robustness
+across lengths~\citep{bai2024longbench,hsieh2024ruler}.  These works establish
+that nominal window size overstates usable context.  We complement task-level
+measurement with an internal chain from a controlled position change to QK,
+softmax mass, residual state, and output margin.
+
+\paragraph{Extending RoPE.}
+Position Interpolation compresses positions into a trained range
+~\citep{chen2023positioninterpolation}; YaRN interpolates frequency bands and adjusts
+attention temperature~\citep{peng2024yarn}; LongRoPE and LongRoPE2 search
+dimension-dependent rescalings~\citep{ding2024longrope,shang2025longrope2}.
+Resonance RoPE aligns wavelengths with observed positions
+~\citep{wang2024resonance}, while analyses of RoPE extension relate frequency
+mapping to attention uncertainty and retrieval~\citep{zhong2025understanding}.
+These methods primarily improve extrapolation or effective window length.  Our
+question is orthogonal: even after choosing an effective frequency map, should
+fine-grained remote phase control semantic candidate admission?
+
+\paragraph{Separating local position from global access.}
+LM-Infinite caps effective relative distances~\citep{han2024lminfinite}, and
+SelfExtend combines exact local attention with grouped remote positions
+~\citep{jin2024selfextend}.  RNoPE alternates RoPE and NoPE layers
+~\citep{yang2025rnope}, while HoPE preserves selected rotary components and
+adds position-independent dimensions~\citep{chen2025hope}.  Empirical work
+also finds that wide rotary angle ranges can leave attention-head dimensions
+inefficient for long-distance retrieval~\citep{chiang2025dimension}.  Recent theory
+shows that sufficiently long rotary contexts can exhibit position and token
+aliasing, motivating a structural separation of locality and semantic
+consistency~\citep{du2026rope}.  \method is closest in principle to this
+local/global separation, but targets frozen pretrained models and separates
+the \emph{candidate proposal} from exact post-RoPE \emph{consumption} inside
+each head.  This conservative split enables a matched-budget causal test and
+retains the model's learned positional scoring for every selected token.
+
+\paragraph{Sparse attention and retrieval.}
+Sparse attention methods reduce the set of keys processed at each query, using
+fixed patterns, token importance, or approximate search
+~\citep{beltagy2020longformer,zaheer2020bigbird,zhang2023h2o}.  Our current
+prototype is not a systems competitor because its exact pre-RoPE proposal
+still scans all keys.  Its contribution is a retrieval signal derived from the
+RoPE failure mechanism.  Combining that signal with a practical low-bit or
+approximate index is future work.

@@ -1,0 +1,48 @@
+\section{Problem setup}
+\label{sec:setup}
+
+Consider one attention head with pre-RoPE query $\preq_t\in\mathbb R^d$ at
+position $t$ and pre-RoPE key $\prek_j\in\mathbb R^d$ at position $j$.  Let
+$\Rope_x$ be the block-diagonal RoPE rotation for position $x$.  The standard
+attention logit and weight are
+\begin{align}
+  s^R(t,j)
+  &= \frac{(\Rope_t\preq_t)^\top(\Rope_j\prek_j)}{\sqrt d},
+  &
+  a(t,j)
+  &= \frac{\exp s^R(t,j)}{\sum_{r\le t}\exp s^R(t,r)}.
+  \label{eq:standard-attn}
+\end{align}
+For a gold evidence-token set $E$, its attention mass is
+\begin{equation}
+  m_E(t)=\sum_{j\in E}a(t,j).
+  \label{eq:evidence-mass}
+\end{equation}
+We evaluate the first answer token $y^\star$ using its negative log likelihood
+$\ell=-\log p(y^\star\mid x)$, \GoldPPL $=\exp(\ell)$, and its decision margin
+against the strongest non-gold token,
+\begin{equation}
+  \gamma=z_{y^\star}-\max_{v\ne y^\star}z_v.
+  \label{eq:margin}
+\end{equation}
+A first-token failure occurs when $\gamma<0$.  We additionally report free
+generation only after the first-token mechanism is established, because
+formatting and later decoding can otherwise obscure the boundary.
+
+Our central intervention keeps the evidence text, query text, and model
+parameters fixed while varying their relative distance $\Delta=t-j$ through
+filler insertion or controlled position changes.  ``Phase-sensitive'' does
+not mean that score or accuracy must decrease monotonically with $\Delta$.
+It means that changing $\Delta$ changes the RoPE phase and can reverse the
+relative priority of an otherwise fixed semantic match.  We distinguish this
+from two adjacent effects: extra filler also introduces more keys into the
+softmax denominator, and later layers can change the content vectors
+themselves.  \Cref{sec:mechanism} separates these stages.
+
+The main method experiment uses a two-hop rule chain.  Each entity is an
+ordinary English word that is exactly one tokenizer token in every template.
+Two verified rules near the beginning map $c_0\rightarrow c_1\rightarrow c_2$;
+random English filler occupies the rest of the context, and a concise query at
+the end asks for $c_2$.  This construction makes the gold token, evidence
+spans, and chain completion unambiguous while retaining natural tokenization.
+

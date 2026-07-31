@@ -1,0 +1,17 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+RoPE does not impose a simple monotone penalty on remote evidence.  It makes a
+fixed content match a mixture of distance-dependent phases; unfavorable
+interference can reduce its QK priority before softmax.  The changed attention
+write then alters later pre-RoPE representations and can cross the output
+decision boundary.  Exact first-layer reconstruction, layerwise finite-
+difference replay, and activation patching jointly support this mechanism in
+Qwen3-8B.  The same diagnosis yields a conservative repair: preserve local
+RoPE and exact post-RoPE consumption, but add a position-free semantic proposal
+for remote candidates.  \methodpost improves held-out controlled two-hop
+retrieval most clearly at 16K--32K.  Establishing generality now requires
+natural benchmarks, additional architectures, local-order controls, and an
+efficient retrieval index; these are explicit boundaries of the current
+claim.
+

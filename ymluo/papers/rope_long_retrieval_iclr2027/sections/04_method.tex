@@ -1,0 +1,81 @@
+\section{SAGE-RoPE: local position, global semantics}
+\label{sec:method}
+
+The mechanism suggests three design constraints.  First, recent tokens must
+retain the original positional computation because local order and syntax are
+useful.  Second, a remote semantic match should have a path into the candidate
+set even when its current RoPE phase is unfavorable.  Third, the repair should
+not silently replace the pretrained model's scoring rule.  \method satisfies
+these constraints by separating \emph{proposal} from \emph{consumption}.
+
+\subsection{A position-free remote proposal}
+
+Alongside the standard post-RoPE logit $s^R$ in \cref{eq:standard-attn}, define
+the content-only proposal score
+\begin{equation}
+  s^C(t,j)=\frac{\preq_t^\top\prek_j}{\sqrt d}.
+  \label{eq:content-score}
+\end{equation}
+This score is not used as an attention logit in the main method.  It only
+ranks remote keys before RoPE can suppress them.  For a total candidate budget
+$B=\lceil\beta N\rceil$ at sequence length $N$, local window $\mathcal L_W$,
+and sink set $\mathcal S$, the per-head candidate set is
+\begin{equation}
+  \mathcal C_{l,h}
+  =\mathcal S\cup\mathcal L_W\cup
+  \TopK_{B-|\mathcal S|-|\mathcal L_W|}
+  \left\{s^C_{l,h}(t,j):j<t-W,\ j\notin\mathcal S\right\}.
+  \label{eq:candidate-set}
+\end{equation}
+Our registered pilot uses $\beta=0.02$, $W=128$, and 16 sink tokens.  The
+current query is always included.
+
+\subsection{Exact post-RoPE consumption}
+
+After proposal, \methodpost gathers the original K/V for $j\in\mathcal C$,
+computes their exact standard logits, and normalizes only over the candidate
+set:
+\begin{equation}
+  o^{\textsc{Sage}}_{l,h}(t)
+  =\sum_{j\in\mathcal C_{l,h}}
+  \frac{\exp s^R_{l,h}(t,j)}
+  {\sum_{r\in\mathcal C_{l,h}}\exp s^R_{l,h}(t,r)}v_{l,h,j}.
+  \label{eq:sage-attention}
+\end{equation}
+The original post-RoPE geometry determines every selected token's weight.
+Relative to exact post-RoPE Top-2\%, the sole change is the remote proposal
+rule.  This makes \methodpost both conservative and diagnostically clean: any
+quality difference can be attributed to which candidates survive the
+phase-sensitive ranking, followed by the denominator induced by that set.
+
+Full attention is not a task-quality upper bound.  If the candidate selector
+retains evidence $E$ while removing distractors $D\setminus\mathcal C$, then
+renormalization can increase
+\begin{equation}
+  m_E^{\mathcal C}
+  =\frac{\sum_{i\in E\cap\mathcal C}\exp s_i}
+  {\sum_{i\in E\cap\mathcal C}\exp s_i+
+   \sum_{j\in D\cap\mathcal C}\exp s_j}.
+  \label{eq:sparse-mass}
+\end{equation}
+The method can therefore help through two linked effects: rescue a relevant
+remote key from an unfavorable phase ranking, and exclude weak distractors
+from the softmax denominator.
+
+\subsection{Variants and implementation boundary}
+
+The main paper treats \methodpost as the primary method.  We also evaluate two
+diagnostic extensions in the appendix: calibrated mixtures of pre/post-RoPE
+scores, and a mass-preserving remote reranking.  These extensions can improve
+some pilot metrics but change the pretrained score values, so they require
+broader validation before becoming defaults.
+
+The current implementation computes the entire pre-RoPE score vector to
+isolate proposal quality.  It therefore demonstrates an attention rule, not a
+speedup.  A deployable implementation would store pre-RoPE keys in an
+approximate index, query that index per head, and gather only selected exact
+post-RoPE K/V.  \todoexp{Implement the approximate index and report matched
+end-to-end latency, throughput, update cost, and memory.}  The target attention
+cost after proposal is $O(Bd)$ rather than $O(Nd)$, while proposal cost depends
+on the chosen index.
+

@@ -1,0 +1,117 @@
+\documentclass{article}
+
+% Official ICLR 2027 style, downloaded from the conference author guide.
+\usepackage{iclr2027_conference,times}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{bm}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\definecolor{sagegreen}{RGB}{14,116,109}
+\definecolor{phaseorange}{RGB}{221,107,32}
+\definecolor{todored}{RGB}{160,32,32}
+\definecolor{todofill}{RGB}{255,238,238}
+\hypersetup{
+  colorlinks=true,
+  citecolor=sagegreen,
+  linkcolor=sagegreen,
+  urlcolor=sagegreen
+}
+
+\newcommand{\method}{\textsc{Sage-RoPE}\xspace}
+\newcommand{\methodpost}{\textsc{Sage-Post}\xspace}
+\newcommand{\todoexp}[1]{%
+  \textcolor{todored}{\textbf{[TODO:} #1\textbf{]}}}
+\newcommand{\preq}{\widetilde{\bm q}}
+\newcommand{\prek}{\widetilde{\bm k}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\TopK}{\operatorname{TopK}}
+\newcommand{\Rope}{\operatorname{R}}
+\newcommand{\GoldPPL}{\textsc{Gold-PPL}\xspace}
+
+\title{Local Position, Global Semantics:\\
+Phase-Sensitive Retrieval under RoPE}
+
+\ifdefined\ROPEAUTHORVERSION
+  \author{Yiming Luo\\
+  Fudan University\\
+  Shanghai, China\\
+  \texttt{author-email-to-add}}
+  \iclrfinalcopy
+\else
+  \author{Anonymous Authors}
+\fi
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Long context windows expose a language model to more information, but do not
+ensure that semantically relevant evidence receives retrieval priority.  We
+study a controlled failure in which the evidence and query contents are fixed
+while their separation changes.  In a position-extended Qwen3-8B, adding only
+64 filler tokens can change the probability of the correct first answer token
+from 42.62\% to 1.75\%.  We trace this failure from the first attention layer to
+the output.  For a fixed pre-RoPE query--key pair, the post-RoPE score is a sum
+of sinusoidal terms over relative distance; our exact decomposition
+reconstructs measured first-layer scores with at most $1.98\times10^{-3}$
+absolute error.  The resulting attention perturbation enters the residual
+stream, grows across layers, and changes the answer margin; activation patching
+at layer 16 is already sufficient to reverse the failed decision.  This
+analysis motivates \method, which preserves standard RoPE for local structure
+and final attention computation, but uses a position-free pre-RoPE score to
+propose remote candidates before a sparse softmax.  On a held-out controlled
+two-hop retrieval suite with 24 seeds per length, 8K--64K contexts, and a 2\%
+candidate budget, the conservative \methodpost variant reduces aggregate
+geometric \GoldPPL from 10.851 under full attention to 4.859 and raises
+first-token accuracy from 33.3\% to 47.9\%.  At 16K and 32K it also improves
+paired NLL over exact post-RoPE Top-2\% selection; the 64K interval crosses zero.
+These results establish a mechanism and a targeted repair in a controlled
+retrieval regime, not yet a universal long-context solution: evaluation on
+natural benchmarks, additional architectures, and an approximate retrieval
+index remain open.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_problem_setup}
+\input{sections/03_mechanism}
+\input{sections/04_method}
+\input{sections/05_experiments}
+\input{sections/06_related_work}
+\input{sections/07_conclusion}
+
+\subsubsection*{AI use statement}
+Generative AI tools were used to assist with hypothesis refinement,
+experimental planning, implementation, result organization, literature
+search, and drafting.  All numerical claims in this manuscript are tied to
+saved experimental artifacts, and citations were checked against primary
+paper or proceedings pages.  The authors will review all AI-assisted code,
+text, claims, and citations before submission and take responsibility for the
+final content.  \todoexp{Replace this process description with the final,
+author-approved disclosure before submission.}
+
+\subsubsection*{Reproducibility statement}
+The controlled data construction, model settings, metrics, paired statistical
+tests, and intervention protocols are described in \cref{sec:experiments} and
+\cref{app:protocol}.  The supplement contains the exact first-layer
+decomposition, layerwise reconstruction, activation-patching protocol, and
+candidate-selection pseudocode.  Code, frozen manifests, per-seed rows, and
+plotting scripts will be released in an anonymous repository.
+
+\clearpage
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+
+\clearpage
+\appendix
+\input{sections/appendix}
+
+\end{document}

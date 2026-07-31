@@ -1,0 +1,238 @@
+\section{Detailed RoPE derivation}
+\label{app:rope-proof}
+
+\subsection{Rotation convention and relative position}
+
+For pair $i$, define
+\begin{equation}
+  R(\alpha)=
+  \begin{bmatrix}
+    \cos\alpha&-\sin\alpha\\
+    \sin\alpha&\cos\alpha
+  \end{bmatrix}.
+\end{equation}
+RoPE applies $R(t\omega_i)$ to the query pair and $R(j\omega_i)$ to the key
+pair.  Orthogonality and closure imply
+\begin{align}
+  [R(t\omega_i)q_i]^\top[R(j\omega_i)k_i]
+  &=q_i^\top R(-t\omega_i)R(j\omega_i)k_i\\
+  &=q_i^\top R((j-t)\omega_i)k_i.
+\end{align}
+Let $\Delta=t-j$.  Then $j-t=-\Delta$, so
+\begin{equation}
+  R(-\Delta\omega_i)=
+  \begin{bmatrix}
+    \cos(\Delta\omega_i)&\sin(\Delta\omega_i)\\
+    -\sin(\Delta\omega_i)&\cos(\Delta\omega_i)
+  \end{bmatrix}.
+\end{equation}
+Multiplying by $q_i=[q_{i,x},q_{i,y}]^\top$ and
+$k_i=[k_{i,x},k_{i,y}]^\top$ yields
+\begin{align}
+  q_i^\top R(-\Delta\omega_i)k_i
+  &=(q_{i,x}k_{i,x}+q_{i,y}k_{i,y})\cos(\Delta\omega_i)\\
+  &\quad +(q_{i,x}k_{i,y}-q_{i,y}k_{i,x})\sin(\Delta\omega_i),
+\end{align}
+which is \cref{eq:pair-score}.
+
+\subsection{Amplitude--phase form}
+
+Let $A_i=\rho_i\cos\psi_i$ and $B_i=\rho_i\sin\psi_i$.  Then
+\begin{align}
+  A_i\cos x+B_i\sin x
+  &=\rho_i(\cos\psi_i\cos x+\sin\psi_i\sin x)\\
+  &=\rho_i\cos(x-\psi_i).
+\end{align}
+This identity clarifies the scope of our claim.  Each nonzero pair spans
+positive and negative contributions over a complete phase cycle.  It does not
+follow that the aggregate score must become negative at any particular
+distance, because different frequencies and offsets can cancel.
+
+\subsection{Filler-induced score change}
+
+After inserting $m$ tokens, $\Delta' = \Delta+m$.  Applying
+$\cos x-\cos y=-2\sin((x+y)/2)\sin((x-y)/2)$ and
+$\sin x-\sin y=2\cos((x+y)/2)\sin((x-y)/2)$ gives
+\begin{align}
+  s_i(\Delta+m)-s_i(\Delta)
+  &=2\sin\left(\frac{m\omega_i}{2}\right)
+  \bigg[
+  -A_i\sin\left(\frac{(2\Delta+m)\omega_i}{2}\right)\\
+  &\hspace{38mm}+B_i\cos\left(\frac{(2\Delta+m)\omega_i}{2}\right)
+  \bigg].
+\end{align}
+Cauchy--Schwarz bounds the bracket by $\sqrt{A_i^2+B_i^2}=\rho_i$, producing
+\cref{eq:pair-bound}.  The local derivative is
+\begin{equation}
+  \frac{\partial s_i}{\partial\Delta}
+  =\omega_i[-A_i\sin(\Delta\omega_i)+B_i\cos(\Delta\omega_i)].
+\end{equation}
+
+\section{Exact cross-layer finite differences}
+\label{app:layerwise}
+
+Fixed model parameters define an exact function from the complete prompt to
+the output, but the final query-row input difference alone is insufficient.
+Let $X_0=(H_0,P,M)$ include all token states, positions, and the mask.  With
+layer maps $\Phi_l$ and query-row extractor $\pi_q$,
+\begin{equation}
+  z(X_0)=W_U\mathcal N_f\left(\pi_q[Phi_{L-1}\circ\cdots\circ\Phi_0(X_0)]\right).
+\end{equation}
+Evaluating this expression is the forward pass; there is no scalar shortcut
+from $\|\delta h_0\|$ to the output.
+
+For BF16 residual addition, let $Q_b$ denote rounding.  The hardware-level
+recurrence is
+\begin{align}
+  u_{l,c}&=Q_b(h_{l,c}+\mathcal A_{l,c}),\\
+  h_{l+1,c}&=Q_b(u_{l,c}+\mathcal M_{l,c}),\qquad c\in\{S,T\}.
+\end{align}
+Subtracting the two separately rounded trajectories exactly reconstructs the
+recorded output in every layer.  Ignoring rounding, the real-vector identity
+\cref{eq:layer-difference} has up to 5.95\% relative error in this BF16 run.
+
+\begin{table}[h]
+  \caption{Selected rows from the exact 143,424-to-143,488 layerwise replay.
+  The middle entry is the norm of the vector sum, not the sum of norms.}
+  \label{tab:layer-replay}
+  \centering
+  \small
+  \begin{tabular}{r rrr rr}
+    \toprule
+    Layer & $\|\delta h_l\|$ & $\|\delta\mathcal A_l\|$ &
+    $\|\delta\mathcal M_l\|$ & $\|\sum\text{ vectors}\|$ &
+    $\|\delta h_{l+1}\|$\\
+    \midrule
+    0  & 0.000   & 0.542  & 1.293   & 1.464   & 1.466\\
+    8  & 4.615   & 1.548  & 3.205   & 5.102   & 5.106\\
+    16 & 7.605   & 3.736  & 5.199   & 8.233   & 8.276\\
+    20 & 11.574  & 8.642  & 10.103  & 15.964  & 15.976\\
+    22 & 23.128  & 20.612 & 22.013  & 35.112  & 35.106\\
+    24 & 47.462  & 25.275 & 26.395  & 59.156  & 59.158\\
+    28 & 87.939  & 27.650 & 42.217  & 102.442 & 102.604\\
+    35 & 269.676 & 59.114 & 130.886 & 313.938 & 312.676\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The real-vector sum differs slightly from the recorded BF16 output because it
+omits two rounding operations.  Reintroducing those operations gives zero
+maximum error for every listed layer.  The three component norms cannot be
+added: for vectors $x,y,z$,
+\begin{equation}
+  \|x+y+z\|_2^2=\|x\|_2^2+\|y\|_2^2+\|z\|_2^2
+  +2\langle x,y\rangle+2\langle x,z\rangle+2\langle y,z\rangle.
+\end{equation}
+
+After the last layer, the exact margin change is
+\begin{equation}
+  \delta\gamma=
+  (W_{y^\star}-W_c)^\top
+  [\mathcal N_f(h_{L,T})-\mathcal N_f(h_{L,S})].
+\end{equation}
+The FP32 readout reconstructs the failed-run margin with
+$3.81\times10^{-6}$ absolute error and the gold probability with
+$3.73\times10^{-8}$ error.  A first-order JVP of only the final RMSNorm has
+9.86\% relative vector error, illustrating why we label Jacobian products as
+local approximations rather than exact equalities.
+
+\section{Full method results}
+\label{app:full-results}
+
+\begin{table}[h]
+  \caption{Paired NLL comparison of \methodpost against Full RoPE and exact
+  post-RoPE Top-2\%.  A negative interval favors \methodpost.}
+  \centering
+  \small
+  \begin{tabular}{r rr rr}
+    \toprule
+    & \multicolumn{2}{c}{versus Full RoPE}
+    & \multicolumn{2}{c}{versus post-RoPE Top-2\%}\\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}
+    Length & Quality ratio & 95\% CI $\Delta$NLL
+           & Quality ratio & 95\% CI $\Delta$NLL\\
+    \midrule
+    8K  & 1.228 & $[-0.348,-0.060]$ & 1.147 & $[-0.355,0.076]$\\
+    16K & 4.184 & $[-1.912,-0.957]$ & 1.902 & $[-0.973,-0.342]$\\
+    32K & 3.605 & $[-1.625,-0.954]$ & 1.996 & $[-1.035,-0.308]$\\
+    64K & 1.342 & $[-0.615,0.004]$  & 1.227 & $[-0.427,0.005]$\\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The quality ratio is $\exp(\mathrm{NLL}_{\rm baseline}-
+\mathrm{NLL}_{\rm method})$.  It should not be described as generic language
+model quality; it refers only to the gold first answer token in this controlled
+retrieval task.
+
+\section{Data and intervention protocol}
+\label{app:protocol}
+
+\paragraph{Single-token entities.}
+Candidate English words are filtered to satisfy three constraints: the bare
+word is exactly one token; occurrences in the rule and query templates map to
+one stable contextual token; and the word does not occur in any filler
+paragraph.  A seeded shuffle selects three words for each example.
+
+\paragraph{Prompt construction.}
+The two evidence lines have the form ``VERIFIED RULE: IF $c_i$ IS ACTIVE THEN
+$c_{i+1}$'' and are inserted as one block near body token 256.  The end query
+states the start code, asks for two verified transitions, instructs the model
+to ignore notes and decoy rules, and requires one final code.  The present main
+suite contains no conflicting chain; conflict robustness is a planned
+extension.
+
+\paragraph{Selection metrics.}
+Evidence-token recall counts every tokenizer token in both rule-line spans.
+This deliberately strict metric includes structural words and punctuation,
+not only entity tokens.  Chain completion is often more task-aligned: it asks
+whether a layer--head candidate row contains at least one token from each
+evidence line.  Neither metric alone proves causal use; \GoldPPL and patching
+provide complementary evidence.
+
+\paragraph{Activation patching.}
+The short and long diagnostic prompts are run independently and all query-row
+residual inputs are stored.  For patch layer $l$, the failed run is repeated
+with its query residual input at $l$ replaced by the successful run's state;
+all remaining computation and the long prompt's K/V history are unchanged.
+We report the resulting gold probability and logit margin.  The current patch
+sweep is a detailed single-transition case study; a registered multi-example
+replication is required for a population-level causal claim.
+
+\section{Pseudocode}
+\label{app:pseudocode}
+
+\begin{verbatim}
+Inputs: pre-RoPE query q, pre-RoPE keys Kpre,
+        original post-RoPE keys Kpost, values V,
+        budget B, local window W, sink count S
+
+C_sink   <- positions [0, S)
+C_local  <- most recent W history positions
+C_remote <- TopK(q @ Kpre.T, B - |C_sink| - |C_local|,
+                 excluding sinks and local positions)
+C        <- unique(C_sink union C_local union C_remote union current)
+
+scores   <- exact_post_rope_qk(q, Kpost[C]) / sqrt(d)
+weights  <- softmax(scores)
+output   <- weights @ V[C]
+\end{verbatim}
+
+\section{Submission-critical open experiments}
+\label{app:todos}
+
+\begin{enumerate}
+  \item Public long-context retrieval and multi-hop benchmarks with matched
+  Full and post-RoPE sparse baselines.
+  \item At least one additional architecture and a clean separation between
+  native-window and position-extended tests.
+  \item Short-context language modeling, local order, and broad-generation
+  controls.
+  \item Approximate pre-RoPE indexing with recall, latency, throughput, memory,
+  and update-cost measurements.
+  \item A larger preregistered 64K sample, because current primary intervals
+  narrowly cross zero.
+  \item Multi-example phase intervention, denominator-only controls, and
+  activation patching to quantify causal effect sizes beyond case studies.
+\end{enumerate}
+
