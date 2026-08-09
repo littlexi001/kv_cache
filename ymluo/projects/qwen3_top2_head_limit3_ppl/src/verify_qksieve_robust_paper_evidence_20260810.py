@@ -14,6 +14,8 @@ import qksieve_robust_contract_20260810 as contract
 RULER_LENGTHS = {"4096", "8192", "16384", "32768", "65536", "131072"}
 SYSTEM_LENGTHS = {65536, 131072}
 MODELS = {"llama31_8b", "qwen3_4b", "mistral_7b"}
+NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
+AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
 
 
 def parse_args() -> argparse.Namespace:
@@ -39,6 +41,13 @@ def validate_frozen_config(project_root: Path) -> dict[str, Any]:
     payload = read_json(path)
     numerical = payload["numerical_contract"]
     value_tail = numerical["value_tail"]
+    if payload.get("numerical_freeze_commit_sha") != NUMERICAL_FREEZE_SHA:
+        raise AssertionError("numerical freeze commit is missing or drifted")
+    if (
+        payload.get("audited_implementation_commit_sha")
+        != AUDITED_IMPLEMENTATION_SHA
+    ):
+        raise AssertionError("audited implementation commit is missing or drifted")
     if payload["score_mode"] != contract.SCORE_MODE:
         raise AssertionError("frozen score mode drifted")
     if numerical["quantile_samples_max"] != contract.MAX_QUANTILE_SAMPLE_COUNT:
