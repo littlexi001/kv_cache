@@ -5,12 +5,15 @@
 corrected native-128K audit shows that selected-only attention is not a
 universal consumer.  The 7.47\% Robust profile closes this omitted-Value
 failure on 12 topic/seed cases without reranking, learning, dense fallback,
-or additional exact-attention tokens.  A deterministic General profile uses
-Fast through 64K and Robust beyond it; an 80-example same-path LongBench
-screen removes the short-context Robust regression.  Under the frozen native
-MHA contract, the selector-plus-exact-sparse-attention path reaches
-1.22--6.23$\times$ from 8K to 128K with a 5.53\% realized index.  This path
-excludes the GQA-specific Value-tail sketch and is not a whole-model decode
-claim.  Short requests still may not amortize initialization.
-Full RULER, cross-model, H100, and complete same-path General LongBench
+or additional exact-attention tokens.  An earlier 64K-gated ablation improves
+an 80-example short-context screen, but the boundary is not theoretically
+derived and is not part of the frozen method.  Under the frozen native
+  MHA contract, complete Fast and Robust attention paths reach
+  1.27--6.37$\times$ and 1.08--4.12$\times$ from 8K to 128K.  Robust steady
+  whole-model decode reaches 1.32/2.22/3.98$\times$ at 32/64/128K, while a
+  64-token cold request including index construction reaches
+  .81/1.31/2.15$\times$.  Short requests may not amortize initialization;
+  persistent reuse is therefore an explicit evaluation regime rather than an
+  implicit assumption.
+Full RULER, cross-model, H100, and complete same-path Robust LongBench
 evaluation remain required before final submission.

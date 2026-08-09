@@ -1,0 +1,816 @@
+\section{扩展理论陈述}
+\label{app:analysis-statements}
+
+本节把精确代数性质与使混合位宽目标可分解所需的假设明确区分。证明见
+\cref{app:proofs}。所有 ``最优'' 结论都相对于文中写明的可行类、rate
+约束和损失函数，不把校准集上的结论外推为无条件的下游保证。
+
+\subsection{精确性与平衡的分数几何}
+
+\paragraph{命题 1（双正交变换精确保留分数）。}
+设 $\widetilde C_q,C_k\in\R^{d\times d}$ 正定，$A,D$ 按
+\cref{eq:qk-svd,eq:qk-factors}定义，则
+\begin{equation}
+ AD^\top=I.
+ \label{eq:prop-biorthogonal}
+\end{equation}
+因此对任意 $q,k\in\R^d$，而不仅是校准样本，都有
+\begin{equation}
+ (A^\top q)^\top(D^\top k)=q^\top k.
+ \label{eq:prop-score-exact}
+\end{equation}
+所以 \method 的 128 维 full-rank 坐标变换不是低秩近似，也不会产生
+full-precision score error；近似只来自后续低比特索引和候选选择。
+
+\paragraph{命题 2（同时平衡 Query 与 Key 的二阶矩）。}
+在相同条件下，
+\begin{equation}
+ A^\top\widetilde C_qA=D^\top C_kD=\Sigma.
+ \label{eq:prop-cov-balance}
+\end{equation}
+若变换后的 Query 与 Key 按构造二阶矩独立配对，则
+\begin{equation}
+ \mathbb E[({q'}^\top k')^2]
+ =\tr(\Sigma^2)=\sum_{\ell=1}^{d}\sigma_\ell^2.
+ \label{eq:score-energy}
+\end{equation}
+因此奇异值顺序暴露的是联合 score energy。保留前 $r$ 个未量化坐标时，
+剩余的期望 score energy 为 $\sum_{\ell>r}\sigma_\ell^2$。
+
+使用 shrinkage 与 spectral floor 后，\cref{eq:prop-cov-balance}对构造矩
+$\widetilde C_q,C_k$ 精确成立；它们与原始经验矩之间的残差为
+\begin{equation}
+ \Delta_q^{\rm mom}
+ =A^\top(\widehat C_q-\widetilde C_q)A,\qquad
+ \Delta_k^{\rm mom}
+ =D^\top(\widehat C_k-C_k)D.
+ \label{eq:shrinkage-residual}
+\end{equation}
+这些残差可以直接测量。命题 1 的精确分数恒等式只依赖
+$AD^\top=I$，不受这两个残差影响。
+
+\paragraph{定理（最优 rank-$r$ 分数子空间）。}
+设独立随机向量 $q,k$ 的非中心化二阶矩为正定矩阵 $C_q,C_k$，并用
+$q^\top B_rk$ 近似 $q^\top k$，其中
+$\operatorname{rank}(B_r)\le r$。若
+$C_q^{1/2}C_k^{1/2}=U\Sigma V^\top$，则全局最优映射为
+\begin{equation}
+ B_r^\star
+ =C_q^{-1/2}U_r\Sigma_rV_r^\top C_k^{-1/2}
+ =A_rD_r^\top ,
+ \label{eq:optimal-rank-score-map}
+\end{equation}
+且
+\begin{equation}
+ \min_{\operatorname{rank}(B_r)\le r}
+ \mathbb E[(q^\top k-q^\top B_rk)^2]
+ =\sum_{\ell>r}\sigma_\ell^2.
+ \label{eq:optimal-rank-score-error}
+\end{equation}
+这是 Query--Key metric 中的 Eckart--Young 结果。它说明前导
+QK-balanced 坐标是最佳 rank-$r$ 双线性分数近似；Key-PCA 则优化不同的
+Key reconstruction 目标。
+
+\paragraph{推论（陈旧 QK 坐标在相同 rate 下的代价）。}
+对条件 $c$，令
+$M_c=C_{q,c}^{1/2}C_{k,c}^{1/2}$ 的奇异值为 $\{\sigma_{c,j}\}$，
+而 $B_{c_0}$ 是在另一条件下冻结的任意 rank-$r$ 映射，则
+\begin{align}
+ L_c(B_{c_0})-L_c(B_c^\star)
+ &=
+ \|M_c-C_{q,c}^{1/2}B_{c_0}C_{k,c}^{1/2}\|_F^2
+ -\sum_{j>r}\sigma_{c,j}^2
+ \ge0 .
+ \label{eq:stale-qk-coordinate-excess}
+\end{align}
+若第 $r$ 个奇异值处存在严格 gap，则只有冻结映射实现当前前导奇异子空间时
+才能取等号。因此，request-local 坐标可在相同 rank 与 rate 下严格降低
+score distortion。混合位宽 \method 并非纯 rank truncation，但其 0-bit
+和低比特 tail 继承该机制。
+
+\paragraph{命题（成对 Query--Key 依赖下的残差）。}
+真实注意力中的 Query--Key pair 未必独立。定义
+\begin{equation}
+ H=\mathbb E[(k\otimes q)(k\otimes q)^\top],\quad
+ H_0=C_k\otimes C_q,\quad
+ \Delta_H=H-H_0 .
+\end{equation}
+令 $L_{\rm pair}(B)$ 为成对分布下的 score MSE，
+$L_{\rm ind}(B)$ 为具有相同二阶矩的独立配对损失，则
+\begin{equation}
+ |L_{\rm pair}(B)-L_{\rm ind}(B)|
+ \le \|\Delta_H\|_{\op}\|I-B\|_F^2.
+ \label{eq:paired-qk-dependence}
+\end{equation}
+所以二阶矩无法单独认证任意 dependent pair 下的 rank 最优性；
+$\Delta_H$ 正是缺失的四阶统计量。实验应报告 paired loss 与 Cartesian
+loss 的残差，而不能默认它为零。
+
+\paragraph{推论（Key-PCA 是各向同性 Query 的特例）。}
+若 $C_q=\alpha I$ 且 $C_k=V\Lambda V^\top$，则
+\cref{eq:qk-svd}的左右奇异向量均为 $V$，QK-balanced 与 Key-PCA 具有相同
+方向和排序，只差保持点积的互逆缩放。因此只有当所有 Query 方向同等重要时，
+Key-PCA 才与联合分数几何一致。
+
+\subsection{为什么应优化 Query 加权误差}
+
+\paragraph{命题 3（经验 logit-MSE 恒等式）。}
+对任意有限 Query 样本 $\{q'_j\}_{j=1}^{m_q}$ 和 Key 量化误差
+$\{e_i\}_{i=1}^{m_k}$，定义
+$C'_q=m_q^{-1}\sum_jq'_j{q'_j}^\top$、
+$C_e=m_k^{-1}\sum_ie_ie_i^\top$，则
+\begin{equation}
+ \frac{1}{m_qm_k}\sum_{j,i}({q'_j}^\top e_i)^2
+ =\tr(C'_qC_e).
+ \label{eq:trace-qmse}
+\end{equation}
+这是有限样本恒等式，不需要零均值、高斯性或样本独立。对
+\cref{eq:full-attn}中的归一化 logit，只需再除以共同因子 $d$，不会改变
+allocation minimizer。
+
+按 band 分块后，
+\begin{equation}
+ \tr(C'_qC_e)=
+ \sum_g\tr(C'_{q,gg}C_{e,gg})
+ +\sum_{g\ne h}\tr(C'_{q,gh}C_{e,hg}).
+ \label{eq:block-qmse}
+\end{equation}
+生产分配器最小化第一项。若两个矩中至少一个在这些 band 上 block diagonal，
+分解精确；否则遗漏的 cross-band 项满足
+\begin{equation}
+ \left|\sum_{g\ne h}\tr(C'_{q,gh}C_{e,hg})\right|
+ \le\sum_{g\ne h}
+ \|C'_{q,gh}\|_F\|C_{e,hg}\|_F.
+ \label{eq:cross-band-bound}
+\end{equation}
+右侧可直接审计，而不是隐藏的可分性假设。
+
+\paragraph{推论（rate 约束下的校准支配性）。}
+令 $\mathcal B_R$ 为满足物理 rate 约束的有限 allocation 集。由于动态规划
+全局求解可分目标，
+\begin{equation}
+ \sum_gD_g(b_g^\star)\le\sum_gD_g(\bar b_g),
+ \qquad \forall\bar b\in\mathcal B_R.
+ \label{eq:allocation-dominance}
+\end{equation}
+该结论只保证校准目标，不自动保证 held-out 质量。
+
+\paragraph{命题（联合谱的一次权重与二次权重）。}
+若构造矩精确，且
+$\mathbb E[q'q'^\top]=\mathbb E[k'k'^\top]
+=\Sigma=\operatorname{diag}(\sigma_1,\ldots,\sigma_d)$，并设理想逐坐标量化误差
+满足 $\mathbb E[e_j^2]=c_j(b_j)\sigma_j$，则
+\begin{equation}
+ J_{\rm K}(b)=\tr(C_e)
+ =\sum_{j=1}^{d}c_j(b_j)\sigma_j,
+ \label{eq:keymse-joint-spectrum}
+\end{equation}
+而 Query 加权的 logit-MSE 为
+\begin{equation}
+ J_{\rm QK}(b)=\tr(\Sigma C_e)
+ =\sum_{j=1}^{d}c_j(b_j)\sigma_j^2.
+ \label{eq:qmse-joint-spectrum}
+\end{equation}
+所以 QK-balanced 坐标中的 Key-MSE 已包含一次联合谱权重；logit-MSE 再乘
+一次谱权重，更偏向前导 band。二者谁在 held-out decoding 更好仍需实验，
+因为 block quantization、Query drift 与 ranking margin 都可能改变结论。
+
+\paragraph{定理（Query drift 下的 held-out regret）。}
+令
+\begin{align}
+ \widetilde J_t(b)
+ &=\sum_g\tr(C'_{q,t,gg}C_{e,gg}(b_g)),\\
+ \Gamma_t(b)
+ &=\sum_{g\ne h}\tr(C'_{q,t,gh}C_{e,hg}(b)),\qquad
+ J_t(b)=\widetilde J_t(b)+\Gamma_t(b),
+\end{align}
+其中 $t\in\{\mathrm{cal},\mathrm{dec}\}$。定义
+$\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$ 以及
+\begin{equation}
+ \Omega(b)=\sum_g\|\Delta_{gg}\|_{\op}
+                    \tr(C_{e,gg}(b_g)).
+ \label{eq:allocation-drift-penalty}
+\end{equation}
+对校准 minimizer $b^\star$ 和任意可行固定 allocation $\bar b$，
+\begin{equation}
+ J_{\mathrm{dec}}(b^\star)-J_{\mathrm{dec}}(\bar b)
+ \le \Omega(b^\star)+\Omega(\bar b)
+ +|\Gamma_{\mathrm{dec}}(b^\star)|
+ +|\Gamma_{\mathrm{dec}}(\bar b)|.
+ \label{eq:heldout-allocation-regret}
+\end{equation}
+当 diagonal-block covariance drift 与 cross-band interaction 都小时，
+自动分配在 held-out Query 上近似最优；反之，校准最优不能外推。
+
+\paragraph{连续 rate--distortion 解释。}
+若 $D_g(b_g)=\alpha_g2^{-2b_g}$，忽略 metadata 并允许 $b_g\ge0$，则
+\begin{equation}
+ b_g^\star=\left[\frac12\log_2\frac{\alpha_g}{\tau}\right]_+,
+ \qquad \sum_gb_g^\star=R.
+ \label{eq:waterfilling-bits}
+\end{equation}
+所有 band active 时，
+$b_g^\star=R/G+\frac12\log_2(\alpha_g/\bar\alpha)$，其中
+$\bar\alpha$ 为 $\alpha_g$ 的几何均值。与均匀 rate 相比，
+\begin{equation}
+ \frac{J_{\mathrm{uniform}}}{J_{\mathrm{mixed}}^\star}
+ =
+ \frac{G^{-1}\sum_g\alpha_g}
+      {(\prod_g\alpha_g)^{1/G}}\ge1,
+ \label{eq:uniform-mixed-ratio}
+\end{equation}
+且仅当所有 band sensitivity 相同时取等号。生产实现不依赖高 rate
+近似，而是枚举真实的 0/1/2/4/8-bit quantizer 与 scale metadata。
+
+\subsection{条件化固定 rate 与上下文长度}
+
+令条件 $c=(x,N,\ell,h,t)$ 表示请求、历史长度、层、KV head 与 decode
+位置。策略 $\theta\in\Theta_R$ 包含保分数的 QK transform 及物理 rate
+不超过 $R$ 的 mixed-bit allocation。对精确与 proxy score，写
+$\xi_i(\theta)=\widehat s_i(\theta)-s_i$、
+$\bar\xi=N^{-1}\sum_i\xi_i$，并定义
+\begin{equation}
+ \eta_c^2(\theta)=\frac1N\sum_{i=1}^{N}
+ [\xi_i(\theta)-\bar\xi(\theta)]^2 .
+\end{equation}
+设 $m_{r,B}(c)=s_{(r)}-s_{(B+1)}>0$，其中 $r\le B$。
+
+\paragraph{定理（条件化固定 rate 的核心证书）。}
+定义
+\begin{equation}
+ \mathcal C_R(c)=
+ \min_{\theta\in\Theta_R}
+ \frac{4N\eta_c^2(\theta)}{m_{r,B}^2(c)} .
+ \label{eq:fixed-rate-core-certificate}
+\end{equation}
+若 $\mathcal C_R(c)<1$，则存在一个 rate 不超过 $R$ 的策略，使 proxy
+top-$B$ 包含 exact top-$r$。一般地，最优策略漏掉的 exact top-$r$ token
+至多为
+\begin{equation}
+ \min\{r,\lfloor\mathcal C_R(c)\rfloor\}.
+ \label{eq:conditional-fixed-rate-misses}
+\end{equation}
+因此，同一 rate 可以覆盖一族条件，但每个条件的最优
+$\theta_c^\star$ 可以不同。该定理不意味着某个冻结模板或固定 240 bit 对
+所有请求都足够。
+
+\paragraph{定理（条件策略支配冻结模板）。}
+对任意可积的非负条件损失 $L(c,\theta)$，两侧使用相同可行集
+$\Theta_R$，则
+\begin{equation}
+ \underbrace{\mathbb E_c[
+  \min_{\theta\in\Theta_R}L(c,\theta)]}_{\mathcal L_{\rm adapt}(R)}
+ \le
+ \underbrace{\min_{\theta\in\Theta_R}
+  \mathbb E_c[L(c,\theta)]}_{\mathcal L_{\rm frozen}(R)} .
+ \label{eq:conditional-policy-dominance}
+\end{equation}
+当 $\Theta_R$ 有限时，只有存在一个几乎处处 conditionwise optimal 的冻结
+策略才取等号，否则严格小于。适配可以在不增加 per-condition rate 的情况下
+降低风险，但不能弥补可行策略类本身表达能力不足。
+
+实际中最小化的是估计损失 $\widehat L$。若
+$\widehat\theta(c)\in\arg\min_\theta\widehat L(c,\theta)$，则
+\begin{equation}
+ L(c,\widehat\theta(c))-\min_{\theta\in\Theta_R}L(c,\theta)
+ \le2\sup_{\theta\in\Theta_R}
+ |\widehat L(c,\theta)-L(c,\theta)|.
+ \label{eq:conditional-selection-regret}
+\end{equation}
+这把条件化策略的价值与有限样本校准误差、Query-distribution drift 分开。
+
+\paragraph{定理（crossing 的概率上界）。}
+条件于精确 score，假设中心化逐 token score error 独立、零均值且
+sub-Gaussian variance proxy 不超过 $\sigma_c^2(\theta)$，则
+\begin{equation}
+ \Pr[T_r(c)\not\subseteq\widehat T_B(\theta,c)]
+ \le r(N-B)
+ \exp\!\left[-\frac{m_{r,B}^2(c)}
+ {4\sigma_c^2(\theta)}\right].
+ \label{eq:crossing-probability}
+\end{equation}
+因此，若
+\begin{equation}
+ \sigma_c^2(\theta)
+ \le\frac{m_{r,B}^2(c)}
+ {4\log(r(N-B)/\delta)},
+ \label{eq:crossing-subgaussian-condition}
+\end{equation}
+则失败概率至多为 $\delta$。这是平均情形补充结果；本文不声称真实量化误差
+一定独立。
+
+\paragraph{可分的 crossing-risk 目标。}
+对 $i\in T_r,j\notin T_B$，令 $\Delta_{ij}=s_i-s_j>0$，并把 score error
+按 band 分解为 $\xi_i=\sum_g\xi_{i,g}$。Markov 不等式与 union bound 给出
+\begin{equation}
+ \Pr[T_r\not\subseteq\widehat T_B]
+ \le\sum_{\substack{i\in T_r\\j\notin T_B}}
+ \frac{\mathbb E[(\xi_j-\xi_i)^2]}{\Delta_{ij}^2}.
+ \label{eq:crossing-markov-objective}
+\end{equation}
+当 cross-band error term 为零时，右侧可写为
+\begin{align}
+ J_{\rm cross,c}(b)&=\sum_gD_{{\rm cross},c,g}(b_g),\\
+ D_{{\rm cross},c,g}(b)
+ &=\sum_{\substack{i\in T_r\\j\notin T_B}}
+ \frac{\mathbb E[(\xi_{j,g}(b)-\xi_{i,g}(b))^2]}
+ {\Delta_{ij}^2}.
+ \label{eq:crossing-band-distortion}
+\end{align}
+因此可以在完全相同物理 rate 下，用同一个有限动态规划优化 margin-weighted
+crossing surrogate。
+
+\paragraph{推论（条件化 water filling）。}
+在连续 surrogate
+$D_{{\rm cross},c,g}(b_g)=\alpha_{c,g}2^{-2b_g}$ 且
+$\sum_gb_g=R$ 下，
+\begin{equation}
+ b_{c,g}^\star=
+ \frac RG+\frac12\log_2
+ \frac{\alpha_{c,g}}{(\prod_u\alpha_{c,u})^{1/G}} .
+ \label{eq:conditional-waterfilling}
+\end{equation}
+总 rate 不变，但只要相对 crossing sensitivity
+$\alpha_{c,g}$ 变化，最优 band allocation 就会变化。若把
+$a=(\ell,h,g)$ 作为全局单元，且每 scalar bit 的物理权重为 $w_a$，则
+\begin{equation}
+ b_{c,a}^{\star}
+ =\left[\frac12\log_2\frac{\alpha_{c,a}}{\tau_cw_a}\right]_+,
+ \label{eq:global-conditional-waterfilling}
+\end{equation}
+其中 $\tau_c$ 由总 rate 约束确定。这给出了跨 layer--head--band 的同 rate
+分配形式。
+
+\paragraph{条件敏感性的输出来源。}
+对单个 head，$o=\sum_ip_iv_i$。score perturbation 的一阶项为
+\begin{equation}
+ \delta o=\sum_ip_i(v_i-o)\delta s_i
+ +O(\|\delta s\|_2^2).
+ \label{eq:attention-local-jacobian}
+\end{equation}
+因此 bandwise local output distortion 可以写为
+\begin{equation}
+ D_{{\rm out},c,\ell,h,g}(b)=
+ \mathbb E\left\|
+ \sum_ip_i(v_i-o)\delta s_{i,g}(b)
+ \right\|_2^2 .
+ \label{eq:output-aware-band-distortion}
+\end{equation}
+若 $J_{>\ell}$ 表示从第 $\ell$ 层 attention output 到最终 logits 的局部
+映射，$W_\ell^O$ 为 output projection，则
+\begin{equation}
+ H_\ell=(W_\ell^O)^\top J_{>\ell}^\top
+ J_{>\ell}W_\ell^O
+ \label{eq:layer-output-metric}
+\end{equation}
+给出一阶 logit-aware metric。Query 方向、attention mass、Value leverage
+和下游放大共同使 $\alpha_{c,\ell,h,g}$ 随条件变化。
+
+\paragraph{命题（不存在普适最优的冻结 allocation）。}
+存在两个 band、相同总 rate 的条件族，使任意冻结 allocation 至少在一个
+条件上失败，而 condition-specific allocation 在不增加 rate 时对所有条件
+成功。构造方法是：预算只能保留一个 band，第一个请求把全部 ranking signal
+放在 band 1，第二个请求放在 band 2。它同样可表示不同 layer/head；向固定
+Query 追加一个区分信号位于另一 band 的最高分 token，则得到 length-conditioned
+版本。
+
+\paragraph{order-statistic 机制。}
+对 $N$ 个独立均匀 score，相邻 order statistic 的期望间隔为
+\begin{equation}
+ \mathbb E[s_{(B)}-s_{(B+1)}]=\frac1{N+1}.
+ \label{eq:uniform-order-gap}
+\end{equation}
+一般地，对平滑 CDF $F$，令
+$u_N=F^{-1}(1-B/N)$ 且 $f(u_N)>0$，则局部近似为
+\begin{equation}
+ m_{B,N}\asymp\frac1{Nf(u_N)}.
+ \label{eq:general-order-gap}
+\end{equation}
+它不是对真实 attention 的 i.i.d.\ 假设，而是解释：即使 oracle budget
+仍足够，更多竞争 token 也会压缩 ranking precision。
+
+\paragraph{命题 4（Query-distribution shift）。}
+令 $C'_{q,\mathrm{cal}}$ 为分配器使用的 projected Query moment，
+$C'_{q,\mathrm{dec}}$ 为后续 decode Query moment。对任意固定
+$C_e\succeq0$，
+\begin{equation}
+ |\tr(C'_{q,\mathrm{dec}}C_e)
+ -\tr(C'_{q,\mathrm{cal}}C_e)|
+ \le
+ \|C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}\|_{\op}\tr(C_e).
+ \label{eq:query-drift-bound}
+\end{equation}
+因此 prompt-tail 校准可靠与否是可测条件，不是 allocator 内部的隐含假设。
+
+\paragraph{有限样本校准与真实 drift。}
+设 $C'_{q,\mathrm{cal}}$ 为总体校准矩，
+$\widehat C'_{q,m}$ 为 $m$ 个独立 Query 的经验矩。若
+$X_j=q'_j{q'_j}^\top-C'_{q,\mathrm{cal}}$ 满足
+$\|X_j\|_{\op}\le L$ 且
+$\|\mathbb EX_j^2\|_{\op}\le v$，则 Matrix Bernstein 给出
+\begin{align}
+ \|\widehat C'_{q,m}-C'_{q,\mathrm{dec}}\|_{\op}
+ \le&
+ \sqrt{\frac{2v\log(2d/\delta)}{m}}
+ +\frac{2L\log(2d/\delta)}{3m}\nonumber\\
+ &+\|C'_{q,\mathrm{cal}}-C'_{q,\mathrm{dec}}\|_{\op}
+ \label{eq:finite-query-bound}
+\end{align}
+的高概率上界。前两项是 sampling error，最后一项是真实 distribution
+shift。自回归 Query 通常并非 i.i.d.，因此该式用于指导而不能替代逐生成位置
+的实测 drift。
+
+\paragraph{定理（有限候选 allocation 的一致选择）。}
+先固定 QK transform 与每个 band 的 quantizer。令 $\mathcal B_R$ 为
+$M$ 个可行 assignment；本文八个 band、五种 bit level 和归一化 rate 15
+时 $M=13{,}817$。若 per-pair loss
+$\ell_b(q',k')=\sum_g({q'_g}^\top e_g(k';b_g))^2$
+一致有界在 $[0,L_{\rm loss}]$，并独立抽取 $m_q$ 个 Query 与 $m_k$ 个 Key，
+则以至少 $1-\delta$ 的概率，
+\begin{equation}
+ \sup_{b\in\mathcal B_R}|\widehat J(b)-J(b)|
+ \le L_{\rm loss}\left[
+ \sqrt{\frac{\log(4M/\delta)}{2m_q}}+
+ \sqrt{\frac{\log(4M/\delta)}{2m_k}}
+ \right]
+ =:\varepsilon_{\rm sel}.
+ \label{eq:allocation-uniform-bound}
+\end{equation}
+因此经验 minimizer $\widehat b$ 满足
+\begin{equation}
+ J(\widehat b)-\min_{b\in\mathcal B_R}J(b)
+ \le2\varepsilon_{\rm sel}.
+ \label{eq:allocation-selection-regret}
+\end{equation}
+若 full score MSE 还包含 cross-band 项 $\Gamma(b)$，则
+\begin{equation}
+ J_{\rm full}(\widehat b)-J_{\rm full}(b_{\rm full}^\star)
+ \le2\varepsilon_{\rm sel}
+ +|\Gamma(\widehat b)|+|\Gamma(b_{\rm full}^\star)|.
+ \label{eq:allocation-full-regret}
+\end{equation}
+Cartesian 表有 $m_qm_k$ 项，但它们并不独立，因此不能声称
+$(m_qm_k)^{-1/2}$ 的虚假收敛率。
+
+\paragraph{定理（估计 QK-sensitive 子空间的稳定性）。}
+令
+$M=C_q^{1/2}C_k^{1/2}$、
+$\widehat M=\widehat C_q^{1/2}\widehat C_k^{1/2}$，
+$\varepsilon_q=\|\widehat C_q-C_q\|_{\op}$、
+$\varepsilon_k=\|\widehat C_k-C_k\|_{\op}$，并定义
+\begin{align}
+ a_q&=\frac{\varepsilon_q}
+ {\sqrt{\lambda_{\min}(C_q)}
+ +\sqrt{\lambda_{\min}(\widehat C_q)}},\\
+ a_k&=\frac{\varepsilon_k}
+ {\sqrt{\lambda_{\min}(C_k)}
+ +\sqrt{\lambda_{\min}(\widehat C_k)}},\\
+ \varepsilon_M&=
+ a_q\sqrt{\|\widehat C_k\|_{\op}}
+ +\sqrt{\|C_q\|_{\op}}\,a_k .
+ \label{eq:qk-moment-product-perturbation}
+\end{align}
+则
+\begin{equation}
+ \|\widehat M-M\|_{\op}\le\varepsilon_M.
+ \label{eq:qk-product-stability}
+\end{equation}
+若第 $r$ 个总体奇异 gap
+$\gamma_r=\sigma_r(M)-\sigma_{r+1}(M)$ 满足
+$\varepsilon_M<\gamma_r/2$，则
+\begin{equation}
+ \max\{\|\sin\Theta(\widehat U_r,U_r)\|_{\op},
+ \|\sin\Theta(\widehat V_r,V_r)\|_{\op}\}
+ \le\frac{2\sqrt2\,\varepsilon_M}{\gamma_r}.
+ \label{eq:qk-subspace-stability}
+\end{equation}
+floor 与 Query shrinkage 保证分母非零；band boundary 处的奇异 gap 决定
+该 16-D 边界是否可由有限样本稳定识别。该式不声称八个 prompt-tail Query
+永远足够，而是规定需要报告的 covariance error、singular gap 和 subspace
+angle。
+
+\paragraph{命题 5（忽略 Query covariance 的代价）。}
+固定坐标系与可行 Key-error moment 家族 $C_e(b)\succeq0$。若
+$\mu I\preceq C'_q\preceq LI$，令 $b_K$ 最小化 $\tr(C_e(b))$，
+$b_{QK}$ 最小化 $\tr(C'_qC_e(b))$，且两者 rate 相同，则
+\begin{equation}
+ \tr(C'_qC_e(b_K))
+ \le\kappa(C'_q)\tr(C'_qC_e(b_{QK})),\qquad
+ \kappa(C'_q)=L/\mu.
+ \label{eq:key-only-condition-bound}
+\end{equation}
+Query 各向同性时因子为 1；高度各向异性或近似低秩时该因子可任意大。
+
+\paragraph{引理（随机旋转的 band 在期望上可交换）。}
+令 $R$ 为 orthogonal group 上的 Haar random rotation，
+$E_g$ 选择固定 $d_g$ 维 band。对任意 $C\succeq0$，
+\begin{equation}
+ \mathbb E_R\tr(CRE_gR^\top)
+ =\frac{d_g}{d}\tr(C).
+ \label{eq:random-band-exchangeability}
+\end{equation}
+随机正交变换虽精确保留 full-precision dot product，但其 band label 在期望
+上没有偏好，无法系统地把 QK-sensitive direction 放进高 rate band。
+
+\paragraph{Query 量化误差。}
+运行时还会量化变换后 Query：
+$\widehat{q'}=q'+e_q$、$\widehat{k'}=k'-e_k$。完整 proxy error 为
+\begin{equation}
+ {q'}^\top k'-{\widehat{q'}}^\top\widehat{k'}
+ ={q'}^\top e_k-e_q^\top k'+e_q^\top e_k.
+ \label{eq:query-key-quant-error}
+\end{equation}
+额外项由 $\|e_q\|_2\|k'-e_k\|_2$ 控制。INT8 Query error 单独报告，
+不归因给 mixed-bit Key allocator。
+
+\subsection{从 score error 到 attention output}
+
+令精确与 proxy score 为 $s_i,\widehat s_i$，
+$\delta_i=s_i-\widehat s_i$，
+$R_\delta=\max_i\delta_i-\min_i\delta_i$。
+
+\paragraph{引理（模公共平移的 softmax 稳定性）。}
+若 $p=\softmax(s)$、$\widehat p=\softmax(\widehat s)$，则
+\begin{equation}
+ \mathrm{KL}(p\|\widehat p)\le\frac{R_\delta^2}{8},\qquad
+ \|p-\widehat p\|_1\le
+ \min\left\{2,\frac{R_\delta}{2}\right\}.
+ \label{eq:softmax-range-bound}
+\end{equation}
+softmax 对共同平移不变，因此上界只依赖 error range。若 $i$ 是 exact
+top-$B$ token、$j$ 在 exact top-$B$ 外，则
+\begin{equation}
+ s_i-s_j>R_\delta\quad\Longrightarrow\quad
+ \widehat s_i>\widehat s_j.
+ \label{eq:ranking-margin}
+\end{equation}
+
+令 $\bar\delta=N^{-1}\sum_i\delta_i$，
+$\eta^2=N^{-1}\sum_i(\delta_i-\bar\delta)^2$，则
+$R_\delta\le2\sqrt N\eta$。若
+\begin{equation}
+ s_{(r)}-s_{(B+1)}>2\sqrt N\eta,
+ \label{eq:rmse-core-margin}
+\end{equation}
+则 exact top-$r$ 必须全部出现在 proxy top-$B$ 中。
+
+\paragraph{更细的计数证书。}
+令 $m_r=s_{(r)}-s_{(B+1)}>0$，并定义
+\begin{equation}
+ c_r=\left\lfloor\frac{4N\eta^2}{m_r^2}\right\rfloor,\qquad
+ b_r=\min\{r,c_r\}.
+ \label{eq:rmse-bad-count}
+\end{equation}
+即使\cref{eq:rmse-core-margin}不成立，proxy top-$B$ 至少包含
+$r-b_r$ 个 exact top-$r$ token，其 exact attention mass 至少为
+\begin{equation}
+ \sum_{i=b_r+1}^{r}p_{(i)}.
+ \label{eq:rmse-mass-count}
+\end{equation}
+
+\paragraph{推论（固定 rate 下的长度放大）。}
+对历史长度 $N$，
+\begin{equation}
+ R_{\delta,N}\le2\sqrt N\eta_N,\qquad
+ c_{r,N}\le
+ \left\lfloor\frac{4N\eta_N^2}{m_{r,N}^2}\right\rfloor.
+ \label{eq:length-amplification}
+\end{equation}
+若 $\eta_N$ 与 $m_{r,N}$ 不变，长度翻倍会使统一 range bound 放大
+$\sqrt2$，并使 bad-count bound 翻倍。这解释了为什么 exact top-$B$ oracle
+仍足够时，fixed-template low-bit selector 仍可能跨过长度相关的 ranking
+边界。
+
+\paragraph{定理（proxy top-$B$ 的遗漏 mass 放大）。}
+令 $T$ 为 exact top-$B$、$S$ 为 proxy top-$B$，
+$\epsilon_T=\sum_{i\notin T}p_i$、
+$\epsilon_S=\sum_{i\notin S}p_i$。则对任意确定性 tie breaking，
+\begin{equation}
+ \epsilon_S\le
+ \min\{1,\exp(R_\delta)\epsilon_T\}.
+ \label{eq:proxy-topb-mass-inflation}
+\end{equation}
+因此
+\begin{equation}
+ \|o-\widetilde o_S\|_2
+ \le\min\{1,\exp(R_\delta)\epsilon_T\}
+ \diam\{v_1,\ldots,v_N\}.
+ \label{eq:proxy-topb-output-bound}
+\end{equation}
+对任意选择集合 $S$，若遗漏 full-attention mass 为
+$\epsilon=\sum_{i\notin S}p_i$，精确限制并重归一化给出
+\begin{equation}
+ \|p-\widetilde p\|_1=2\epsilon,
+ \label{eq:l1-mass}
+\end{equation}
+\begin{equation}
+ \|o-\widetilde o\|_2
+ =\epsilon\|o_{\rm out}-o_{\rm in}\|_2
+ \le\epsilon\,\diam\{v_1,\ldots,v_N\}.
+ \label{eq:output-mass}
+\end{equation}
+若核心证书成立，还可取
+\begin{equation}
+ \epsilon\le1-\sum_{i=1}^{r}p_{(i)}.
+ \label{eq:certified-mass}
+\end{equation}
+
+\paragraph{命题（收缩 Value-tail 的误差与最优解）。}
+令 $Z_S,Z_T>0$ 为精确 selected/omitted partition，
+$p=Z_S/(Z_S+Z_T)$，$\mu_S,\mu_T$ 为对应精确条件 Value 均值。对任意
+$\widehat Z_T\ge0$、$\widehat\mu_T$ 与 $\alpha\in[0,1]$，定义
+\begin{equation}
+ \widehat p_\alpha=\frac{Z_S}{Z_S+\alpha\widehat Z_T},\qquad
+ \widehat o_\alpha=
+ \widehat p_\alpha\mu_S+(1-\widehat p_\alpha)\widehat\mu_T.
+\end{equation}
+则
+\begin{equation}
+ \widehat o_\alpha-o
+ = (\widehat p_\alpha-p)(\mu_S-\mu_T)
+ +(1-\widehat p_\alpha)(\widehat\mu_T-\mu_T).
+ \label{eq:robust-tail-exact-decomposition}
+\end{equation}
+该恒等式立即推出\cref{eq:tail-error-bound}。进一步假设
+$\widehat Z_T=Z_T$、$\widehat\mu_T=\mu_T+\xi$、
+$\mathbb E[\xi]=0$，并令
+$V=\mathbb E\|\xi\|_2^2$、$D=\|\mu_S-\mu_T\|_2^2$、
+$w_\alpha=\alpha(1-p)/(p+\alpha(1-p))$，则
+\begin{equation}
+ \mathbb E\|\widehat o_\alpha-o\|_2^2
+ =((1-p)-w_\alpha)^2D+w_\alpha^2V,
+\end{equation}
+且最优解为
+\begin{equation}
+ w^\star=\frac{(1-p)D}{D+V},\qquad
+ \alpha^\star=\frac{pD}{pD+V}.
+ \label{eq:robust-tail-optimal-alpha}
+\end{equation}
+当 $w_\alpha>0$ 时，该修正期望误差低于 Fast（$w=0$）的充要条件为
+\begin{equation}
+ 0<w_\alpha<\frac{2(1-p)D}{D+V}.
+ \label{eq:robust-tail-better-than-fast}
+\end{equation}
+
+\emph{证明。}
+Full 输出为 $o=p\mu_S+(1-p)\mu_T$。加减
+$(1-\widehat p_\alpha)\mu_T$ 即得
+\cref{eq:robust-tail-exact-decomposition}。tail partition 精确时，
+$1-\widehat p_\alpha=w_\alpha$；展开平方范数并用
+$\mathbb E[\xi]=0$ 消去交叉项。对 $w$ 求导得到 $w^\star$，再解
+$w=\alpha(1-p)/(p+\alpha(1-p))$ 得到
+\cref{eq:robust-tail-optimal-alpha}。减去 $w=0$ 的误差可得
+$w^2(D+V)-2w(1-p)D$；其小于零的区间即为
+\cref{eq:robust-tail-better-than-fast}。\hfill$\square$
+
+该命题不假设 proxy partition 必然精确，也不声称同一个 $\alpha$ 对所有 head
+最优；它解释了 tail estimate 噪声较大时完整补偿为何可能更差，以及为什么
+固定 $\alpha=.5$ 必须做 held-out 验证。
+
+\paragraph{命题 6（传播到 decoder logits）。}
+把稠密与稀疏 layer map 记为 $F_\ell,\widetilde F_\ell$。若在两条执行路径
+到达的状态上
+\[
+ \|\widetilde F_\ell(x)-\widetilde F_\ell(y)\|_2
+ \le L_\ell\|x-y\|_2,\qquad
+ \|\widetilde F_\ell(x)-F_\ell(x)\|_2\le a_\ell,
+\]
+则从相同 hidden state 出发，
+\begin{equation}
+ \|\widetilde h_L-h_L\|_2
+ \le\sum_{\ell=0}^{L-1}a_\ell
+       \prod_{u=\ell+1}^{L-1}L_u.
+ \label{eq:layer-propagation}
+\end{equation}
+令 $\rho=\|W_U\|_{2\to\infty}$ 乘以上式右端，则
+\begin{equation}
+ \mathrm{KL}(p_{\rm next}\|\widetilde p_{\rm next})\le\frac{\rho^2}{2},
+ \qquad
+ \|p_{\rm next}-\widetilde p_{\rm next}\|_1\le\min\{2,\rho\}.
+ \label{eq:next-token-stability}
+\end{equation}
+当 dense logit margin 大于 $2\rho$ 时，next-token argmax 不变。
+
+\paragraph{引理（尾部分辨率所需样本数）。}
+令 $T$ 为 top $B=rN$ 个 proxy score，均匀无放回抽取 $m$ 个位置。部署策略
+使用
+\begin{equation}
+ m(N)=\min\left\{N,m_{\max},
+ \max\left(m_0,\left\lceil\frac{c}{r(N)}\right\rceil\right)\right\},
+ \quad(m_0,c,m_{\max})=(256,16,512).
+ \label{eq:tail-resolution-samples}
+\end{equation}
+若 $X$ 是抽中 $T$ 中位置的个数，则
+\begin{equation}
+ \mathbb E[X]=mr,\qquad
+ \Pr(X=0)\le(1-r)^m\le e^{-mr}.
+ \label{eq:tail-sample-no-hit}
+\end{equation}
+因此仅在上限未生效时，$m\ge c/r$ 才能使目标尾部 anchor 的期望数至少为 $c$，
+并使无 anchor 概率不超过 $e^{-c}$。当 $m_{\max}=512$ 生效后，期望 anchor 数
+退化为 $mr$；该上限是经实测选择的吞吐--质量折中，不是与长度无关的理论保证。
+
+若阈值是 $m$ 个连续 score sample 中第 $j$ 大者，则其总体上尾 mass 满足
+\begin{equation}
+ \widehat r\sim\operatorname{Beta}(j,m+1-j),\qquad
+ \mathbb E[\widehat r]=\frac{j}{m+1},
+ \label{eq:sample-quantile-beta}
+\end{equation}
+\begin{equation}
+ \operatorname{Var}(\widehat r)
+ =\frac{j(m+1-j)}{(m+1)^2(m+2)}.
+ \label{eq:sample-quantile-variance}
+\end{equation}
+当 $j\approx mr=c$ 且 $r$ 较小时，候选数的相对标准差约为
+\begin{equation}
+ \frac{\sqrt{\operatorname{Var}(N\widehat r)}}
+ {\mathbb E[N\widehat r]}
+ \approx\frac1{\sqrt c}.
+ \label{eq:candidate-count-relative-std}
+\end{equation}
+这解释了为何 $c=16$ 虽几乎不会完全漏掉尾部，候选数仍可有约 25\% 的相对
+波动。
+
+\paragraph{逐 head straggler。}
+在 rare-tail 极限 $m\to\infty,r\to0,mr=c$ 下，
+\begin{equation}
+ Z=\frac{\widehat r}{r}\Longrightarrow\frac{Y}{c},
+ \qquad Y\sim\operatorname{Gamma}(c,1).
+ \label{eq:quantile-gamma-limit}
+\end{equation}
+对 $H$ 个 layer-head，Chernoff bound 与 union bound 给出
+\begin{equation}
+ \Pr\left[\max_{h\le H}\frac{\widehat C_h}{B}\ge1+\epsilon\right]
+ \lesssim
+ H\exp\{-c[\epsilon-\log(1+\epsilon)]\}.
+ \label{eq:quantile-headwise-straggler}
+\end{equation}
+因此增大 $c$ 虽会增加采样比较，却可能通过减少最大候选 capacity、split
+count 和 tail latency 获得更低系统延迟。
+
+\subsection{复杂度与请求级 crossover}
+
+忽略常数，稠密 decode attention 每层约需 $4H_qNd$ FLOP；\method 为
+\begin{equation}
+ 2H_qd^2+c_{\rm idx}H_qNR+C_{\rm select}
+ +4H_qB(N)d,
+ \label{eq:cost}
+\end{equation}
+其中 $R=240$ packed bit/token/KV-head。reference profile 的
+$C_{\rm select}=c_{\rm topk}H_qN$；deployment profile 使用
+$O(H_qm(N)R+H_qm(N)\log^2m(N))$ 的 sampled quantile，再在必需的 packed
+scan 中直接写候选。scan 仍为 $\Theta(N)$，并非次线性检索。
+
+设可见的一次性 index construction 成本为 $I$，同步 steady decode 为
+$t_{\rm full},t_{\method}$，生成 $G$ token 时
+\begin{equation}
+ T_{\rm full}=P_{\rm full}+Gt_{\rm full},\qquad
+ T_{\method}=P_{\rm full}+I+Gt_{\method}.
+ \label{eq:request-cost}
+\end{equation}
+当 $t_{\method}<t_{\rm full}$ 时，break-even output length 为
+\begin{equation}
+ G^\star=\frac{I}{t_{\rm full}-t_{\method}}.
+ \label{eq:break-even}
+\end{equation}
+
+\paragraph{命题 7（精确 crossover 与 Amdahl 上限）。}
+令 $f_t,s_t$ 是第 $t$ 个输出 step 的实测 Full 与 \method decode cost，
+$I_{\rm net}$ 是未被 prefill 隐藏的 index construction cost。则 \method
+请求更快当且仅当
+\begin{equation}
+ \sum_{t=1}^{G}(f_t-s_t)>I_{\rm net}.
+ \label{eq:exact-break-even}
+\end{equation}
+若每一步都有 $s_t\ge f_t$，任意输出长度都无法摊销该方法。把一步 Full
+写为 $f=t_{\rm base}+t_{\rm attn}$，并把所有检索开销计入
+$s=t_{\rm base}+\widetilde t_{\rm attn}$，则
+\begin{equation}
+ \mathrm{speedup}
+ =\frac{t_{\rm base}+t_{\rm attn}}
+ {t_{\rm base}+\widetilde t_{\rm attn}}
+ \le\frac{1}{1-\phi_{\rm attn}},
+ \qquad \phi_{\rm attn}=t_{\rm attn}/f.
+ \label{eq:amdahl-ceiling}
+\end{equation}
+最后一项是把 attention 成本置零时的理论上限，并非可实现 kernel 速度。
+
+\paragraph{命题 8（融合 Query-preparation 的数值证书）。}
+令 $\widehat z,\widetilde z$ 分别为 reference projection--quantization 与
+fused kernel 输出的反量化 Query。对固定 decoded proxy Key
+$\widehat k_i$，定义
+\begin{equation}
+ \epsilon_{\rm fuse}
+ =\|\widetilde z-\widehat z\|_2
+ \max_i\|\widehat k_i\|_2.
+ \label{eq:fused-query-epsilon}
+\end{equation}
+每个 proxy score 改变量不超过 $\epsilon_{\rm fuse}$，因而只要
+\begin{equation}
+ \widehat s_{(B)}-\widehat s_{(B+1)}
+ >2\epsilon_{\rm fuse},
+ \label{eq:fused-query-margin}
+\end{equation}
+top-$B$ 集合保持不变。若 fused kernel 产生完全相同的 INT8 code 与 scale，
+则 proxy score 与候选集合在非 tie 情况下精确一致；最终仍需用 code、score、
+selected set 与 sparse output 的实测一致性作为 kernel 上线门槛。

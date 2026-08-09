@@ -1,0 +1,254 @@
+\section{\method 方法}
+\label{sec:method}
+
+\subsection{问题定义}
+
+考虑一个 decoder layer，它具有 $H_q$ 个 Query head、$H_{kv}$ 个 KV head、
+head dimension $d$ 和历史长度 $N$。对映射到 KV head $g(h)$ 的 Query head
+$h$，稠密注意力为
+\begin{equation}
+ s_{h,i}=\frac{q_h^\top k_{g(h),i}}{\sqrt d},\qquad
+ p_h=\softmax(s_h),\qquad
+ o_h=\sum_{i=1}^{N}p_{h,i}v_{g(h),i}.
+ \label{eq:full-attn}
+\end{equation}
+我们的目标是构造 Query 相关集合 $\widehat S_h\subseteq[N]$，将 softmax
+限制并重新归一化到 $\widehat S_h$ 后，仍使用精确 Q/K/V 计算
+\cref{eq:full-attn}。与淘汰不同，每个历史 KV pair 始终可寻址，而且集合可以
+在每个 decode step 改变。
+
+\subsection{Request-local QK-balanced 坐标}
+
+\paragraph{二阶矩。}
+对每一层和每个 KV head，\method 以 stride 32 采样 post-RoPE prompt Key，
+并从映射到该 KV head 的全部 GQA Query head 收集最后八个 prompt Query
+位置。由此构造非中心化经验二阶矩
+\begin{equation}
+ \widehat C_k=\frac{1}{m_k}\sum_{i=1}^{m_k}k_i k_i^\top,\qquad
+ \widehat C_q=\frac{1}{m_q}\sum_{j=1}^{m_q}q_j q_j^\top .
+ \label{eq:qk-moments}
+\end{equation}
+由于 Query 样本较少，我们首先使用固定各向同性 shrinkage：
+\begin{equation}
+ S_q=(1-\lambda)\widehat C_q+
+ \lambda\frac{\tr(\widehat C_q)}{d}I,\qquad \lambda=0.75.
+ \label{eq:q-shrink}
+\end{equation}
+对半正定矩阵 $S=E\operatorname{diag}(\nu)E^\top$，定义
+$\mathcal F(S)=
+E\operatorname{diag}(\max\{\nu_\ell,\epsilon_S\})E^\top$，其中
+$\epsilon_S=10^{-8}\max_\ell\nu_\ell+10^{-12}$。实现中设置
+\begin{equation}
+ C_k=\mathcal F(\widehat C_k),\qquad
+ \widetilde C_q=\mathcal F(S_q)
+ \label{eq:moment-floor}
+\end{equation}
+并在平方根与逆平方根中使用完全相同的 floored eigenvalue。正是这一致的
+正则化保留了下面的精确双正交恒等式。估计过程不使用下游标签、任务身份或
+训练参数。
+
+\paragraph{双正交因子分解。}
+令 compact singular value decomposition 为
+\begin{equation}
+ \widetilde C_q^{1/2}C_k^{1/2}=U\Sigma V^\top
+ \label{eq:qk-svd}
+\end{equation}
+并定义
+\begin{equation}
+ A=\widetilde C_q^{-1/2}U\Sigma^{1/2},\qquad
+ D=C_k^{-1/2}V\Sigma^{1/2}.
+ \label{eq:qk-factors}
+\end{equation}
+对于列向量 Query 与 Key，令 $q'=A^\top q$、$k'=D^\top k$。当正则化后的
+二阶矩正定时，
+\begin{equation}
+ AD^\top=I,\qquad {q'}^\top k'=q^\top k,
+ \label{eq:qk-exact}
+\end{equation}
+且
+\begin{equation}
+ A^\top\widetilde C_qA=D^\top C_kD=\Sigma.
+ \label{eq:qk-covariance}
+\end{equation}
+因此坐标变换是 full rank 的，本身不引入任何近似。在构造二阶矩下，
+$\Sigma$ 的对角元素按 Query--Key 联合分数能量排序坐标。
+
+\subsection{逐 head 混合位宽率分配}
+
+当 $d=128$ 时，\method 将变换后的坐标划分为八个连续 16-D band
+$\mathcal G_1,\ldots,\mathcal G_8$。每个 band 获得
+$b_g\in\{0,1,2,4,8\}$ bit/coefficient。active band 保存 code，并为每个
+token 保存一个 FP16 scale；对于 16-D band，这等价于每个 coefficient 增加
+1 bit metadata。因此物理 rate 为
+\begin{equation}
+ R(b)=16\sum_{g=1}^{8}
+ \left(b_g+\1[b_g>0]\right)\le240\ {\rm bits}.
+ \label{eq:packed-rate}
+\end{equation}
+0-bit band 不保存 code 或 scale。
+
+令 $e_{i,g}(b)=k'_{i,g}-Q_b(k'_{i,g})$ 为 band $g$ 上的 Key 重建误差，并令
+\begin{equation}
+ C'_{q,g}=\frac{1}{m_q}\sum_j q'_{j,g}{q'_{j,g}}^\top,\qquad
+ C_{e,g}(b)=\frac{1}{m_k}\sum_i e_{i,g}(b)e_{i,g}(b)^\top .
+\end{equation}
+分配器使用精确的 Cartesian-sample band score distortion：
+\begin{equation}
+ D_g(b)=\frac{1}{m_qm_k}\sum_{j,i}
+ \left({q'_{j,g}}^\top e_{i,g}(b)\right)^2
+ =\tr\!\left(C'_{q,g}C_{e,g}(b)\right)
+ \label{eq:band-qmse}
+\end{equation}
+并求解
+\begin{equation}
+ b^\star=\arg\min_b\sum_{g=1}^{8}D_g(b_g)
+ \quad\text{s.t.}\quad R(b)\le240.
+ \label{eq:qmse-allocation}
+\end{equation}
+实现会完整枚举这个很小的可行集，并在 prefill 后为每一层和每个 KV head
+冻结一个 allocation。等价动态规划的复杂度为 $O(GLR')$，其中 $G=8$ 个
+band、$L=5$ 个 bit level、归一化 rate budget $R'=15$。选中的 plain
+symmetric quantizer 对 2/4/8-bit band 使用 max-absolute scaling，对 1-bit
+使用 sign 乘 mean absolute magnitude，对 0-bit 输出零。固定
+$(4,4,2,1,0,0,0,0)$ allocation 是一个等 rate 消融。
+
+一个部署消融改用 $D_g^{\rm K}(b)=\tr(C_{e,g}(b))$。它去掉 Query weighting，
+但保留 QK-balanced 坐标。\Cref{tab:allocation-causal,tab:allocation-deploy}
+中的因果消融显示二者质量匹配，而 Key-MSE 的优化延迟更低。为保证论文质量与
+速度来自同一路径，冻结主方法仍使用 Query-weighted
+\cref{eq:qmse-allocation}；Key-MSE 只作为消融。
+
+索引对每个 token 和 KV head 保存 240 bit，即 30 byte。$d=128$ 时，FP16
+K+V 占 $2\cdot128\cdot2=512$ byte，因此索引相对精确 KV 增加
+$30/512=5.86\%$。在 GQA 中，映射到同一 KV head 的 Query head 共享 $D$、
+allocation 与 packed Key；每个 Query head 仍独立计算变换后 Query、proxy
+score 和候选集合。
+
+\subsection{Packed 检索与精确稀疏注意力}
+
+在 decode step $t$，\method 变换并 INT8 量化当前 Query。融合 CUDA kernel
+扫描所有 packed Key band，并累加近似分数。参考路径对这些近似分数执行精确
+top-$B(N)$，其中 $B(N)$ 由\cref{eq:budget-intro}给出。该过程是对 30-byte
+索引项的线性扫描，而不是读取完整 FP16 Key；选择前不会对任何 token 计算
+精确 QK。
+
+所选位置 $\widehat S_h$ gather 对应的原始 GPU-resident FP16 Key 与 Value，
+并计算
+\begin{equation}
+ \widetilde p_{h,i}=
+ \frac{\exp(s_{h,i})}{\sum_{j\in\widehat S_h}\exp(s_{h,j})},
+ \qquad
+ \widetilde o_h=\sum_{i\in\widehat S_h}
+ \widetilde p_{h,i}v_{g(h),i}.
+ \label{eq:sparse-attn}
+\end{equation}
+最终 score 和 Value 算术都是精确的；近似只影响离散选择集合。方法不使用
+精确 rerank、router、任务规则、sink/recent 保留或 Full fallback。
+
+\subsection{Robust 当前 Query Value-tail 残差}
+
+即使 Key 排序准确，selected-only attention 仍可能失败：遗漏集合中的大量小
+权重可能携带方向一致的 Value。令 $S=\widehat S_h$、$T=[N]\setminus S$，并令
+$\widehat\tau$ 为 proxy-score 阈值。Robust 配置在 packed-Key 扫描中同时累积
+\begin{equation}
+ \widehat Z_T=\sum_{i\in T}e^{\widehat s_i-\widehat\tau},\qquad
+ \widehat c_T=\sum_{i\in T}e^{\widehat s_i-\widehat\tau}\widehat c_i.
+ \label{eq:value-tail-statistics}
+\end{equation}
+对每一层和每个 KV head，均匀分层采样的 request-local Value PCA 给出均值
+$\mu_v$、rank-16 基 $P_v$ 和系数 $c_i=P_v^\top(v_i-\mu_v)$。系数按 256-token
+block 使用 affine INT4 存储。Value code 为 64 bit/token，FP16 minimum/scale
+摊销为 2 bit，因此 Key+Value 索引相对 FP16 K+V 为
+$(240+66)/4096=7.47\%$。每个 request/layer/head 的均值与 basis 为常量状态，
+与逐 token rate 分开报告。
+
+consumer 从原始 K/V 计算精确选中分子 $u_S$、分母 $Z_S$ 和最大值 $m$，并返回
+\begin{equation}
+ \widehat o_\alpha=
+ \frac{u_S+\alpha e^{\widehat\tau-m}
+   (\widehat Z_T\mu_v+P_v\widehat c_T)}
+ {Z_S+\alpha e^{\widehat\tau-m}\widehat Z_T},
+ \qquad \alpha=0.5.
+ \label{eq:robust-tail-output}
+\end{equation}
+公共 anchor 使精确 selected 与 proxy tail 的组合数值稳定。固定收缩抑制噪声
+tail estimate，同时保留一致的聚合 Value；它在预注册弱项上选择，随后对新 seed
+冻结验证，并不是学习式 router。QKSieve-Fast 不使用
+\cref{eq:value-tail-statistics,eq:robust-tail-output}；QKSieve-Robust 使用它们，
+但不改变 $B(N)$，也不读取更多精确 K/V。
+
+\subsection{注册执行配置}
+
+\paragraph{参考配置。}
+质量参考从当前 prompt 构造 $(A,D)$ 和 Query 加权
+\cref{eq:qmse-allocation}解，物化全部 packed-index proxy score，并执行
+确定性 top-$B(N)$。它将表示近似与阈值估计误差分开，是完整 Llama LongBench
+结果所用配置。
+
+\paragraph{部署配置。}
+优化配置使用与参考配置相同的 request-local $(A,D)$ 和 Query-weighted
+allocation，只把完整 score materialization 与 top-$k$ 替换为 sampled threshold。
+令 active rate $r(N)=B(N)/N$。冻结样本数为
+\begin{equation}
+ m(N)=\min\{N,512,\max(256,\lceil16/r(N)\rceil)\}.
+ \label{eq:frozen-quantile-samples}
+\end{equation}
+在 512-sample 上限生效前，该规则使分位数样本中约含 16 个目标尾部项；上限
+用于约束长上下文的阈值估计开销，因此其质量依靠实验审计，而不是仅由采样
+启发式保证。kernel 评估 $m(N)$ 个
+规则分层的索引项，估计目标 score quantile，并对 packed index 扫描一次，
+同时把高于阈值的条目直接写入有界候选 buffer。它既不物化长度为 $N$ 的 score
+tensor，也不使用通用 top-$k$ workspace。实际候选数可在 $B(N)$ 附近波动；
+精确 sparse-attention consumer 保持不变。
+
+\paragraph{Robust 配置。}
+Robust consumer 复用部署配置的 Key index、sampled threshold 和候选集合，
+但把\cref{eq:value-tail-statistics}融合进扫描，并使用
+\cref{eq:robust-tail-output}中的 exact-selected-plus-tail kernel。因此它是
+consumer 侧稳健性配置，而不是不同 selector。
+
+\paragraph{冻结主配置。}
+论文主方法在所有评测长度都使用 $r_v=16,\alpha=.5$ 的 Robust consumer。
+我们不在人工指定的上下文长度切换到 Fast：该边界无法由误差恒等式推出，会使
+方法定义依赖经验补丁。Fast 仅作为 selected-only 消融，用于隔离遗漏 Value
+估计的质量贡献和系统成本。
+
+Reference、Fast 与 Robust 共享 request-local QK-balanced 表示、Query-weighted
+allocation、预算调度、精确 FP16 K/V，且都不使用 reranking 或 fallback；
+差别只在候选选择和是否估计遗漏 Value tail。本文对每项结果标明生成配置，而不把不同配置的质量和
+速度数字组合为同路径结论。
+
+\subsection{索引构建与更新}
+
+Dense chunked prefill 构造普通精确 KV cache。prompt-tail Query 可用后，参考与
+优化配置都为每一层和每个 KV head 计算 request-local $(A,D)$ 与 $b^\star$。
+两者都分 chunk 投影历史 Key，并直接写入 packed index。每生成一个 token，系统追加新的精确 K/V，并投影、打包
+一个新 Key 项。变换与 bit allocation 在整个生成过程中保持冻结。可选的
+memory-offload 扩展可把精确 KV 放入 pinned host memory，但主 GPU-resident
+质量与速度结论不使用该扩展。
+
+\paragraph{实现与计时口径。}
+参考路径先执行 Query transform，再调用 CUDA kernel 完成逐 band INT8 量化；
+另一 CUDA kernel 扫描 packed variable-bit index。对三个目标模型共有的
+GQA-4 架构，我们进一步把 $128\times128$ Query 投影与逐 band INT8 量化融合
+为一个 CUDA kernel，并在映射到同一 KV head 的四个 Query head 间复用 basis。
+部署 scan 使用 warp-level sampled quantile，并为少量实际出现的 bit pattern
+分派 compile-time specialization。在 GQA-4 中，它只读取一次每个 packed
+KV-head index，供四个映射 Query head 使用。冻结的原生 MHA 实现则让每个 Query
+head 对应自己的 KV head，不复制 K/V，并把精确稀疏 attention reduction 固定为
+八个 split。提高 split 数不是合法的加速手段：split 16 虽然单独测速更快，但在
+长上下文下无法通过输出等价性检查。FP32 累加结果在 INT8 量化前舍入到模型
+dtype，以匹配参考路径的数值边界。
+
+在 4K 与 32K 的 FP16/BF16 验证中，融合路径在注册容差内匹配 Query code、
+proxy score、selected set 和精确 sparse-attention output。MHA 实现同时支持
+Fast 与 Robust：两者的直接 attention 调用都包含 Query 投影与量化、sampled
+scan、候选压缩和精确稀疏 attention；Robust 还累积并消费 rank-16 INT4
+Value tail。两条路径也在真实 MHA 模型内直接计时。GQA 融合 kernel 不会被宣传为通用 GQA-8 优化：
+在这一配置下，32K 的完整选择反而更慢。因此本文
+明确报告架构对应路径，并让下游质量表绑定到实际生成数据的方法标识。
+Top-$k$、精确 KV gather、sparse attention 和逐 token 索引追加分别计时。
+整模型 decode 会同步 GPU，并包含 Query transform 与量化、packed scan、
+候选选择、gather、精确稀疏 QK--softmax--AV、cache update 及所有非 attention
+模型工作。Prefill 与 index construction 单独报告，并纳入请求级 break-even
+分析。

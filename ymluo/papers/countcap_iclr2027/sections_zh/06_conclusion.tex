@@ -1,0 +1,15 @@
+\section{局限与结论}
+\label{sec:conclusion}
+
+\method 的 5.86\% QK-balanced Key index 能保持完整 LongBench，但修正后的
+原生 128K 审计表明 selected-only attention 不是通用 consumer。7.47\% 的
+Robust 配置在 12 个主题/seed case 上修复了遗漏 Value 失真，而且不使用
+reranking、learning、稠密 fallback 或额外精确注意力 token。其代价也被直接
+测量。早期 64K 门控消融改善了 80 样本短上下文筛查，但该边界没有理论推导，
+不属于冻结主方法。在冻结的原生 MHA
+  协议下，Fast 与 Robust 完整 attention 路径从 8K 到 128K 分别达到
+  1.27--6.37$\times$ 与 1.08--4.12$\times$。Robust 在 32/64/128K 的稳态
+  整模型 decode 达到 1.32/2.22/3.98$\times$；64-token 冷请求计入索引构建后为
+  .81/1.31/2.15$\times$。短请求可能无法摊薄初始化，因此持久化复用是明确的
+  评测场景，不是隐含假设。投稿前仍需完成
+正式 RULER、跨模型、H100 和完整同路径 Robust LongBench 评测。

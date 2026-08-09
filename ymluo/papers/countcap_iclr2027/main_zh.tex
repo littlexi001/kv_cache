@@ -1,0 +1,137 @@
+\documentclass{article}
+
+% 中文阅读稿复用英文投稿稿件的版式、公式编号、图和参考文献。
+\usepackage{iclr2027_conference,times}
+\usepackage[UTF8,scheme=plain,fontset=fandol]{ctex}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{placeins}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\definecolor{tbdgray}{RGB}{238,240,242}
+\definecolor{qksieveblue}{RGB}{30,91,111}
+\hypersetup{
+  colorlinks=true,
+  citecolor=qksieveblue,
+  linkcolor=qksieveblue,
+  urlcolor=qksieveblue
+}
+\newcommand{\method}{\textsc{QKSieve}\xspace}
+\newcommand{\tbd}[1]{\colorbox{tbdgray}{\textbf{待补：} #1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\diam}{\operatorname{diam}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\op}{\mathrm{op}}
+\newcommand{\ie}{即 }
+\newcommand{\eg}{例如 }
+
+\renewenvironment{abstract}
+  {\vskip.075in\centerline{\large\bfseries 摘要}\vspace{0.5ex}\begin{quote}}
+  {\par\end{quote}\vskip 1ex}
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+
+\crefname{equation}{式}{式}
+\Crefname{equation}{式}{式}
+\crefname{figure}{图}{图}
+\Crefname{figure}{图}{图}
+\crefname{table}{表}{表}
+\Crefname{table}{表}{表}
+\crefname{section}{第}{第}
+\Crefname{section}{第}{第}
+
+\title{\method：面向高效长上下文注意力的\\
+Query--Key 平衡混合位宽检索}
+
+\author{Yiming Luo（罗一鸣）\\
+复旦大学\\
+中国上海}
+
+\iclrfinalcopy
+
+\begin{document}
+\maketitle
+\lhead{QKSieve ICLR 2027 中文阅读稿}
+
+\begin{abstract}
+自回归解码需要反复扫描不断增长的键值（KV）历史。Token 级稀疏注意力可以
+避免大部分精确注意力计算，但前提是检索索引既明显便宜于完整 QK 打分，又能
+忠实保持 Query 相关的分数几何。本文提出 \method：一种无需训练、完整精确 KV
+驻留 GPU 的检索加速器。对每一层和每个 KV head，我们利用 Query 与 Key 的
+二阶矩构造双正交坐标系；它精确保持所有未压缩点积，并按联合 QK 分数能量对
+坐标排序。\method 将变换后的 128 个坐标划分为八个 16 维 band，并在固定的
+240 bit/token/head 索引预算下，为各 band 分配 0/1/2/4/8 bit。冻结主路径最小化
+request-local 经验 attention-logit MSE；Key-MSE 简化目标只保留为部署消融。
+Packed scan 为每个 Query head 选择长度相关预算 $B(N)$，随后在原始 FP16 KV
+上执行精确稀疏 QK--softmax--AV；已注册的 128K 以内实验将 $B(N)$ 上限设为
+1,280。方法不使用学习式 router、任务规则、精确 QK 重排或 Full-attention
+回退。
+
+我们审计两个共享同一 request-local 变换和 allocation 的注册配置：使用完整
+proxy top-$k$ 的参考配置，以及采用融合 Query 准备、架构对应的 GQA/MHA 扫描
+和带上限 sampled quantile 的优化
+配置。Fast 配置的辅助索引占 FP16 K+V 的 5.86\%；Robust 配置增加 rank-16
+INT4 Value-tail sketch，总计占 7.47\%。两者的完整精确 KV 均仍驻留 GPU。
+Robust 冻结为论文中与长度无关的主 consumer；Fast 只作为 selected-only 消融。
+主方法不在人工指定的上下文长度切换路径。
+在 1\% active KV 下，相比忠实复现的 FIER-1b-g32，等索引率检索审计将
+精确 top-$k$ 召回率从 43.36\% 提升到 73.44\%，被选 attention mass 从
+76.40\% 提升到 83.48\%，且索引略小。在六主题 32K Key-MSE 消融中，
+QK-balanced 坐标相对 Key-PCA 将 KL 从 .0211 降至 .0084；paired NLL
+优势的 95\% 区间为 [.0008,.0189]。在完整的 3,750 样本、16 任务
+Llama-3.1-8B LongBench 上，参考配置保持 Full-attention 宏平均分数的
+99.88\%，paired bootstrap 95\% 区间为 [99.42\%,100.35\%]。在原生 128K
+边界前，另一个 160 样本严格同路径筛查评估早期 Fast/Robust 长度门控消融：
+其得分为 .453676，Full 为 .453019，保持率 100.145\%，
+paired-sample bootstrap 区间为 [97.915\%,102.051\%]。原生 128K 的修正审计
+暴露了 Fast 配置的真实弱点：
+六个主题/seed case 的 pooled PPL 保持率仅为 96.32\%，最差为 91.10\%。Robust
+配置估计遗漏 softmax 分区和当前 Query 加权的低秩 Value 残差，并以
+$\alpha=.5$ 收缩。它在 12 个主题/seed case（其中 6 个为独立新 seed）上保持
+99.805\% pooled PPL，case-bootstrap 区间为 [99.100\%,100.499\%]，最差为
+96.98\%。在 80 样本、16 任务同样本 LongBench 筛查中，always-on Robust
+保持 98.92\%，而早期长度门控消融保持 101.47\%，paired 区间为
+[99.25\%,104.45\%]。该结果作为失败诊断保留，不再定义主方法；投稿前必须
+完成冻结 Robust 的完整同路径 LongBench。在原生 32-query/32-KV-head MHA、FP16 K/V 常驻 GPU
+的协议下，冻结的 selector 加精确稀疏 attention 完整路径在 RTX 3090 的
+  8K--128K 上，直接计时的 Fast 与 Robust 完整 attention 路径分别达到
+  1.27--6.37$\times$ 与 1.08--4.12$\times$。该测速包含 Query 准备、低位索引
+  扫描、候选压缩、精确稀疏 attention，以及 Robust 的 Value-tail 扫描和
+  consumer。真实 MHA 7B 模型中，Robust 在 32/64/128K 的稳态整模型 decode
+  达到 1.32/2.22/3.98$\times$；64-token 冷请求计入一次性构建后为
+  .81/1.31/2.15$\times$。本文分别报告冷请求、稳态和持久化复用口径。
+  同路径筛查消除了“小规模质量与速度来自不同代码路径”
+的问题，但不能替代完整部署评测，因此 3,750 样本参考质量仍与部署速度分开
+表述。理论上，我们推导了精确因子分解、变换后协方差恒等式、Query 加权
+量化目标、排序保持条件以及遗漏 attention mass 到输出误差的上界；所有开销
+均直接测量，不使用延迟分解拼接总时间。
+\end{abstract}
+
+\input{sections_zh/01_introduction}
+\input{sections_zh/02_related_work}
+\input{sections_zh/03_method}
+\input{sections_zh/04_analysis}
+\input{sections_zh/05_experiments}
+\input{sections_zh/06_conclusion}
+
+\clearpage
+\renewcommand{\refname}{参考文献}
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+
+\clearpage
+\appendix
+\input{sections_zh/appendix}
+
+\end{document}

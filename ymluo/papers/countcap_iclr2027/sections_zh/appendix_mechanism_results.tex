@@ -1,0 +1,169 @@
+\section{机制诊断}
+\label{app:mechanism-results}
+
+本节单独考察索引几何与位宽分配。它们用于验证因果机制，不能替代最终投稿
+所需的同路径下游质量与系统对比。
+
+\begin{table}[H]
+\caption{Qwen3-4B 上的 Key-only 受控因果测试，共 12 个严格配对的 32K
+窗口。两行均使用 Key-MSE allocation、240-bit index、每 head 1,280 个
+精确 token，以及相同 exact-KV consumer。}
+\label{tab:key-only-causal}
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+坐标 & PPL 保持率 & Top-1 一致率 & KL & ms/token \\
+\midrule
+Key-PCA & 99.777\% & 93.620\% & .02106 & \textbf{57.698} \\
+QK-balanced & \textbf{100.723\%} & \textbf{95.573\%} &
+\textbf{.00844} & 58.167 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{320 个严格配对 LongBench 样本（每任务 20 个）上的坐标/分配因果
+消融。所有稀疏行使用同一个 240-bit index、exact-KV consumer 和完整
+proxy top-$k$。}
+\label{tab:allocation-causal}
+\centering
+\begin{tabular}{lrr}
+\toprule
+坐标 / allocation & Macro score & 保持率 \\
+\midrule
+Full KV & .459694 & 100.000\% \\
+QK-balanced / logit-MSE & .458648 & 99.772\% \\
+Key-PCA / Key-MSE & .458986 & 99.846\% \\
+\textbf{QK-balanced / Key-MSE} & \textbf{.459338} & \textbf{99.923\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+QK-balanced Key-MSE 相对 logit-MSE 的 macro 差为 .000690，按任务分层的
+paired-bootstrap 95\% 区间为 [$-.000717$, $.002160$]。因此 m20 实验支持
+二者质量等价，而不是 Key-MSE 显著更高。
+
+\begin{table}[H]
+\caption{同一个 32K、256-token Qwen3-4B 窗口上的 allocation 选择。两行
+均通过 WMMA/GQA-4/sampled-quantile 部署路径。}
+\label{tab:allocation-deploy}
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Allocation & PPL 保持率 & ms/token & 加速 \\
+\midrule
+Logit-MSE & 100.731\% & 46.696 & 1.889$\times$ \\
+\textbf{Key-MSE} & \textbf{100.751\%} & \textbf{45.577} &
+\textbf{1.936$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+两种部署模板共享完全相同的 QK-balanced Query/Key basis，仅 allocation
+不同。其实际 rate 结构如下。
+
+\begin{table}[H]
+\caption{全部 288 个 Qwen3-4B layer/KV-head pair 的 allocation 结构。
+物理 rate 包含每个 active 16-D band 的一个 FP16 scale。}
+\label{tab:allocation-structure}
+\centering
+\begin{tabular}{lrr}
+\toprule
+统计量 & Logit-MSE & Key-MSE \\
+\midrule
+平均 active band 数 & 3.649 & 5.948 \\
+band 1--4 的物理 rate & 99.812\% & 73.957\% \\
+band 5--8 的物理 rate & .188\% & 26.043\% \\
+平均 index / FP16 K+V & 5.771\% & 5.854\% \\
+最常见 layout & 4-4-4 (32.3\%) & 4-1-1-1-1-1 (97.6\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+这与\cref{eq:keymse-joint-spectrum,eq:qmse-joint-spectrum}预测的
+``集中--覆盖''差异一致：logit-MSE 对联合谱使用第二次权重，Key-MSE 则在
+低 rate tail 保留更多覆盖。该观察不能推出 tail coverage 对所有任务都有益。
+
+\begin{table}[H]
+\caption{1\% active token 下跨模型体育/医学 trace。``Oracle mass recall''
+按 Full-attention probability 加权 exact top-1\% token。}
+\label{tab:rate-allocation}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrr}
+\toprule
+Index & Index / FP16 K+V & Top-1\% recall & Oracle mass recall & Pearson \\
+\midrule
+固定 4-4-4 & 5.859\% & 69.13\% & 94.11\% & .9540 \\
+固定 8-4-0 & 5.469\% & 67.01\% & 95.69\% & .9503 \\
+\method 自动 240 bit & $\approx$5.8\% & \textbf{70.48\%} &
+\textbf{96.36\%} & \textbf{.9616} \\
+固定 8-4-4 & 7.422\% & 74.62\% & 97.44\% & .9710 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\caption{Qwen3-4B 32K 上全部 layer 的自动 allocation。两个 context 分别为
+体育与医学；它是机制诊断，不是泛化结论。}
+\label{tab:all-layer-allocation}
+\centering
+\begin{tabular}{lr}
+\toprule
+统计量 & 结果 \\
+\midrule
+Layer/KV-head pair & $36\times8=288$ \\
+Context-specific allocation & 576 \\
+平均物理 index rate & 1.857 bit/Key dimension \\
+平均 active 16-D band & 3.573 / 8 \\
+跨 context 完全相同的 allocation & 45.83\% \\
+最常见 layout & 4-4-4 (38.54\%); 4-4-2-1 (23.96\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+两个 context 间有 54.17\% 的 layer/head allocation 发生变化，支持
+request-local rate allocation 的研究动机；它仍需 Query drift 和跨域实验
+才能证明泛化。
+
+\begin{table}[H]
+\caption{Qwen3-4B 32K 上的 matched \method--FIER retrieval audit。
+18,432 个 held-out query-head condition 覆盖 36 层、两个 context，以及
+未参与 \method 校准的八个 Query step。由于当时无官方实现，FIER 行是论文
+规格的 1-bit RTN、sequence-group size 32 复现。}
+\label{tab:fier-heldout}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrrr}
+\toprule
+Index & Index / FP16 K+V & Active KV & Top-$k$ recall &
+Attention mass & Top-1 recall \\
+\midrule
+FIER-1b-g32 & 6.250\% & 1\% & 43.36\% & 76.40\% & 32.13\% \\
+\method & \textbf{5.859\%} & 1\% & \textbf{73.44\%} &
+\textbf{83.48\%} & \textbf{67.10\%} \\
+FIER-1b-g32 & 6.250\% & 2\% & 47.90\% & 81.61\% & 32.13\% \\
+\method & \textbf{5.859\%} & 2\% & \textbf{75.70\%} &
+\textbf{87.30\%} & \textbf{67.10\%} \\
+FIER-1b-g32 & 6.250\% & 4\% & 53.38\% & 86.63\% & 32.13\% \\
+\method & \textbf{5.859\%} & 4\% & \textbf{78.50\%} &
+\textbf{90.99\%} & \textbf{67.10\%} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\caption{八条独立 trace、59,200 个 layer/head/Query condition 上的公式级
+matched-rate 对比。正式投稿仍需官方 baseline kernel 与端到端质量。}
+\label{tab:rabitq}
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Index & Top-1\% recall & Selected attention mass & Pearson \\
+\midrule
+RaBitQ 公式，INT4 Query & 53.88\% & 71.32\% & .9087 \\
+\method，240 bit & \textbf{71.82\%} & \textbf{76.79\%} &
+\textbf{.9686} \\
+\bottomrule
+\end{tabular}
+\end{table}

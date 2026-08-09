@@ -1,0 +1,170 @@
+\section{实验}
+\label{sec:experiments}
+
+\subsection{实验协议}
+
+两个主配置都使用 $\lambda=0.75$、stride-32 Key sample、八个 prompt-tail Query、
+240-bit plain-scale index、request-local qMSE allocation 和
+\cref{eq:budget-intro}。参考配置物化全部 proxy score 并执行 top-$k$；优化配置用
+\cref{eq:frozen-quantile-samples}中的 capped sampled-quantile scan 替代它，
+request-local 变换、allocation、精确 KV consumer 和预算不变。我们注册
+Llama-3.1-8B-Instruct、Qwen3-4B-Instruct 与
+Mistral-7B-Instruct-v0.3，完整英文 LongBench、4K--128K RULER，以及 paired
+held-out-position PPL。
+
+同步 batch-one 计时分别报告完整 attention、整模型稳态 forward、直接测量的
+decode 区间，以及包含 prefill 与初始化的直接请求时间。每个辅助阶段也通过
+独立调用直接计时以定位瓶颈，但完整路径绝不由这些阶段数字相加得到。
+RTX 3090 数字是已审计诊断；仍需补充 matched H100/A100 测量。
+
+本文主张的范围是：对已经构建且可以复用的 KV cache 加速 decode-time
+attention，而不是 sparse prefill。最终系统实验将 cold single-use、warm
+persistent-cache、shared-prefix branching 和 append-only multi-turn 作为四种
+互不混写的计时协议。尚待填写的 workload 网格和 cache 生命周期检查预注册在
+\cref{app:persistent-kv-todo}；cold request latency 仍需如实报告为局限，不能与
+warm-path 加速混成同一结论。
+
+完整 LongBench 表使用 request-local 参考配置。随后的小规模严格筛查直接运行
+CUDA 测速所对应的 sampled-quantile 路径。
+
+\begin{table}[t]
+\caption{完整 reference-profile LongBench 结果。优化部署配置单独评测。}
+\label{tab:main-longbench}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+模型 & Full & \method & 保持率 & Paired 95\% CI \\
+\midrule
+Llama-3.1-8B & .459398 & .458852 & 99.881\% &
+[99.424\%, 100.347\%] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+该结果覆盖 3,750 个严格配对样本和全部 16 个任务；逐任务分数及 97.615\%
+的最低保持率见\cref{app:longbench}。
+
+在 160 个严格同样本 pair 上，早期 Fast/Robust 长度门控路径为 .453676，Full 为
+.453019，即保持 100.145\%；paired-sample bootstrap 区间为
+[97.915\%,102.051\%]。这在筛查规模上闭合了 reference/deployment 代码路径
+差异，但区间仍宽，且 Qasper/MultiNews 分任务保持率分别为 84.28/92.85\%，
+因此不能宣称部署质量等价或显著优越。完整 reference 结果仍是主要任务质量证据。
+
+另一个 targeted RULER 审计覆盖 8/16/32/64K 的 13 个任务，每任务、每长度
+分别取 2/2/2/1 条。91 个严格 pair 上，Full 与 \method 分别为
+.884776/.884135，即保持 99.928\%，paired-bootstrap 区间为
+[99.559\%, 100.294\%]。该小实验用于筛查任务族与长度失效模式，不作为
+正式大规模 RULER 表；quality harness 中的时间也不进入系统速度结论。
+
+\subsection{等 rate 索引质量}
+
+在 12 个 held-out 32K window 上，使用 240 index bit 和 1,280 个精确 token
+时，QK balancing 将 Full-token top-1 agreement 提高 1.95 个百分点，并以
+.81\% 延迟代价将 KL 降低 60\%（\cref{tab:key-only-causal}）。Key-MSE 的
+下游质量与 logit-MSE 匹配，同时快 2.46\%
+（\cref{tab:allocation-causal,tab:allocation-deploy}）。
+
+在 1\% active KV 下，automatic QK-MSE 达到 70.48\% exact-set recall 和
+96.36\% oracle-mass recall；其 matched-rate 结果接近 fixed 4-4-2-1。
+
+在 1/2/4\% active KV 下，相对 FIER 的 paired attention-mass 增益分别为
+7.08/5.68/4.35 个百分点，区间均排除零 \citep{wang2025fier}。在 59,200 个
+condition 上，matched-rate RaBitQ recall/mass 从 53.88/71.32\% 提升到
+71.82/76.79\%（\cref{app:mechanism-results}）。
+
+在严格的 160 样本 LongBench 筛查集上，Full macro 为 .45302。相同 active
+token schedule 下，门控消融、完整 top-$k$ 的 \method reference、审计过的
+FIER RTN-1 g32 reference、Quest-P16、RaBitQ 公式参考、SparQ-R32 selector-only、
+完整 SparQ 公式和按公开公式实现的 UNIQUE-P8 保持率分别为
+100.15/99.79/100.01/92.22/100.01/99.62/99.95/93.19\%。门控消融与 FIER 的
+绝对 macro 差为 .00061，该小筛查集不支持显著优越性结论。这些行只比较
+selector 公式与下游质量，不代表官方 kernel 速度。同一 160 pair 上，使用
+BinaryPC 发布的 Llama projection 时保持 99.25\%。该门控消融不使用任务 router
+或 Full fallback，但每任务 10 条仍不足以宣称显著优越。
+
+\subsection{长度扩展}
+
+\begin{table}[t]
+\caption{单张 RTX 3090 上冻结的原生 MHA attention 路径。Full 是不复制 KV
+的原生 FP16 SDPA；Fast 包含 selector 与精确稀疏 attention；Robust 还包含
+rank-16 INT4 Value-tail 扫描和 consumer。所有行均不含索引构建。}
+\label{tab:mha-main}
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+历史长度 & Full & Fast & Robust & Fast 加速 & Robust 加速 \\
+\midrule
+8K   & .1691 & .1327 & .1560 & 1.27$\times$ & 1.08$\times$ \\
+16K  & .3173 & .1900 & .2250 & 1.67$\times$ & 1.41$\times$ \\
+32K  & .6163 & .2324 & .2945 & 2.65$\times$ & 2.09$\times$ \\
+64K  & 1.2027 & .2646 & .3576 & 4.55$\times$ & 3.36$\times$ \\
+128K & 2.3708 & .3722 & .5757 & 6.37$\times$ & 4.12$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+冻结的计时形状为 batch one、32 个 Query head、32 个 KV head、$d=128$，FP16
+K/V 常驻 GPU。CUDA event 测量包含 10 次 warmup 和 40 次正式迭代；每行取三个
+独立 seed 的中位数。稀疏路径包含融合 Query 投影/量化、混合位宽扫描、
+sampled-threshold 候选压缩和精确 QK--softmax--AV。15 组 seed--长度对照中，
+Fast 与 Robust 的阈值、候选数和候选集合完全相同，唯一差别是是否估计遗漏
+Value。kernel 实际分配的 Key-only 与 Key+Value 辅助张量约占 FP16 K+V 的
+5.47\% 与 7.09\%；包含摊销 metadata 后的方法级硬上限为 5.86\% 与 7.47\%。
+
+\Cref{tab:mha-main}是 attention 子系统结果，不是端到端 decode 主张。它不含
+prefill 和历史索引构建，因此我们又在真实 MHA 模型中直接测量相同 Fast 与
+Robust 路径。
+
+\begin{table}[t]
+\caption{Yarn-Llama-2-7B-128K 上、精确 K/V 常驻时的稳态 greedy decode。
+每次生成 64 token，报告最后 48 个 token；数值为直接测得的整模型 ms/token。}
+\label{tab:mha-decode}
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+历史长度 & Full & Fast & Robust & Fast 加速 & Robust 加速 \\
+\midrule
+32K  & 84.18 & 51.56 & 63.97 & 1.63$\times$ & 1.32$\times$ \\
+64K  & 144.75 & 52.97 & 65.25 & 2.73$\times$ & 2.22$\times$ \\
+128K & 268.17 & 55.41 & 67.38 & 4.84$\times$ & 3.98$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Robust 在 32/64/128K 的索引构建时间为 1.375/1.488/1.839 秒，Fast 为
+.768/.774/.743 秒。相对 Full，Robust 的实测 break-even 生成长度为
+69/19/10 token，Fast 为 24/9/4 token。若冷请求只生成 64 token并计入构建，
+Robust 加速为 .81/1.31/2.15$\times$，Fast 为 1.01/1.64/2.75$\times$。
+多轮问答或共享前缀复用只支付一次构建成本，之后得到\cref{tab:mha-decode}的
+稳态加速；本文不混合冷请求和 warm reuse 两种口径。
+
+原生 128K 的修正同 seed 六主题审计推翻了早期结论。QKSieve-Fast 的 pooled
+PPL 保持率仅为 96.319\%（case macro 96.373\%），政治主题最差为 91.100\%。
+一个医学归因窗口中，Exact-QK top-1,280 也只有 94.74\%，预算加倍后为
+96.24\%；因此问题不只是低比特 Key 错排。额外保留 128/256 个 recent token
+使弱项 macro 变化不到 .1 个点。
+
+QKSieve-Robust rank-16 INT4 的 $\alpha=.5$ 在六个同 seed case 上冻结，并在
+六个新 seed 上独立评估。12 个 case 的 pooled PPL 保持率为 99.805\%，
+case-bootstrap 95\% 区间为 [99.100\%,100.499\%]，case macro 为 99.812\%，
+最差为 96.980\%。逐 token 辅助 rate 总计 7.471\%。较早的 GQA-4 子系统和
+整模型速度保留在\cref{app:system-diagnostics}中，不与\cref{tab:mha-main}的
+原生 MHA 速度合并。因此 Robust 是通用 128K
+分支，Fast 保留为低风险长度的速度分支。
+
+我们在同一组覆盖 16 任务的 80 个 LongBench 样本上检验早期 64K 长度门控。
+Full 为 .404779；always-on rank-16 Robust
+和仅 mean-tail 版本分别保持 98.924\% 与 98.873\%，General 得分 .410725，
+保持 101.469\%，paired-bootstrap 区间为 [99.249\%,104.449\%]。本文不把高于
+100\% 的点估计解释为提升。该结果暴露了短上下文 Robust 扰动，但 64K 边界
+无法由方法数学推出。因此 General 只作为诊断消融保留，always-on Robust 冻结为
+主方法；仍需完成其完整同路径 LongBench。
+
+在 256K，Exact-QK
+top-1,280 保持 100.24\%，但冻结 240-bit proxy 从 128K 的 98.99\% 降到
+80.77\%。Local 坐标配 fixed 240-bit allocation 恢复到 100.44\%，而冻结
+坐标配 local bit 只有 89.91\%。这说明根因是坐标外推，而不是精确预算不足
+（\cref{tab:128k-256k-selector-crossover,tab:256k-selector-cause}）。

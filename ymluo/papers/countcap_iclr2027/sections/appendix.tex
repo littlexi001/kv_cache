@@ -961,7 +961,7 @@ Query shrinkage & Fixed isotropic $\lambda=0.75$ \\
 Coordinates & Full 128-D QK-balanced biorthogonal transform \\
 Bands / levels & Eight 16-D bands; $\{0,1,2,4,8\}$ bits \\
 Rate & 240 bits/token/KV-head, including FP16 scales \\
-Allocation & Reference: logit-MSE; deployment: Key-MSE \\
+Allocation & Request-local query-weighted logit-MSE \\
 Scale & Plain per-token, per-active-band scale \\
 Query index type & Symmetric INT8 \\
 Selection & Reference: full top-$B(N)$; deployment: tail-calibrated quantile \\
@@ -973,7 +973,8 @@ Special paths & No rerank, router, task rule, recent/sink rule, or fallback \\
 
 The registered method identifiers are
 \texttt{qksieve\_fullprompt\_auto\_plain\_fulltopk} (reference) and
-\texttt{qksieve\_global\_qkbalanced\_keymse\_wmma\_sampled} (deployment).
+\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64\_k1280}
+(optimized Robust).
 The implementation resides under
 \path{ymluo/projects/qwen3_top2_head_limit3_ppl}.
 Before submission we will record the anonymous artifact commit, model and

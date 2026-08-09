@@ -7,12 +7,12 @@ overhead.
 
 \subsection{Protocol}
 
-The reference profile uses $\lambda=0.75$, stride-32 Key samples, eight
+Both main profiles use $\lambda=0.75$, stride-32 Key samples, eight
 prompt-tail Queries, 240-bit plain-scale indices, complete packed-index
-top-$k$, and \cref{eq:budget-intro}.  The deployment profile freezes a
-model-level QK-balanced/Key-MSE template from disjoint calibration texts and
-replaces complete top-$k$ by the capped tail-resolution-calibrated quantile
-scan in \cref{eq:frozen-quantile-samples}; its exact-KV consumer and budget are
+qMSE allocation, and \cref{eq:budget-intro}.  The reference materializes all
+proxy scores and applies top-$k$; the optimized path replaces it with the
+capped sampled-quantile scan in \cref{eq:frozen-quantile-samples}.  Its
+request-local transform, allocation, exact-KV consumer, and budget are
 unchanged.  We register Llama-3.1-8B-Instruct,
 Qwen3-4B-Instruct, and
 Mistral-7B-Instruct-v0.3, complete English LongBench, RULER from 4K to
@@ -34,8 +34,8 @@ unfilled workload grid and cache-lifecycle checks are preregistered in
 limitation rather than being mixed with the warm-path claim.
 
 The complete LongBench table uses the request-local reference profile.  A
-strict smaller screen then runs the exact frozen-template sampled-quantile
-deployment path used by the CUDA timing experiment.
+strict smaller screen then runs the sampled-quantile path used by the CUDA
+timing experiment.
 
 \begin{table}[t]
 \caption{Complete reference-profile LongBench result.  The optimized
@@ -55,7 +55,7 @@ Llama-3.1-8B & .459398 & .458852 & 99.881\% &
 This covers 3,750 strict pairs and all 16 tasks; per-task scores, including
 the 97.615\% minimum retention, are in \cref{app:longbench}.
 
-On 160 strict same-sample pairs, the registered General deployment path
+On 160 strict same-sample pairs, an earlier length-gated Fast/Robust path
 scores .453676 versus .453019 for Full, retaining 100.145\%.  A paired-sample
 bootstrap gives [97.915\%, 102.051\%].  This closes the
 reference/deployment code-path mismatch at screening scale, but the interval
@@ -87,57 +87,83 @@ Across 59,200 conditions, matched-rate RaBitQ recall/mass rises from
 53.88/71.32\% to 71.82/76.79\% (\cref{app:mechanism-results}).
 
 On a strict 160-sample LongBench screening set, the Full macro score is
-.45302.  At the same active-token schedule, General deployment, the
+.45302.  At the same active-token schedule, the gated ablation, the
 complete-top-$k$ \method reference, an audited FIER RTN-1 g32 reference,
 Quest-P16, a RaBitQ formula reference, SparQ-R32 selector-only, the complete
 SparQ formula, and a published-equation UNIQUE-P8 reference retain
 100.15/99.79/100.01/92.22/100.01/99.62/99.95/93.19\%, respectively.  The
-absolute macro difference between General and FIER is .00061; this small
+absolute macro difference between the gated ablation and FIER is .00061; this small
 screen does not support a superiority claim.  These rows compare selector
 formulas and downstream quality, not official kernel speed.  On the same
-160 pairs, BinaryPC's released Llama projection retains 99.25\%.  General
+160 pairs, BinaryPC's released Llama projection retains 99.25\%.  The gated ablation
 invokes neither a task router nor Full fallback, but ten examples per task
 remain too few for a superiority claim.
 
 \subsection{Length scaling}
 
 \begin{table}[t]
-\caption{Frozen native-MHA attention path on one RTX~3090.  Full is native
-FP16 SDPA without KV replication.  \method includes all selector overhead
-and exact sparse attention, but not index construction or ValueSketch.}
+\caption{Frozen native-MHA attention paths on one RTX~3090.  Full is native
+FP16 SDPA without KV replication.  Fast includes the selector and exact sparse
+attention; Robust additionally includes the rank-16 INT4 Value-tail scan and
+consumer.  Index construction is excluded from all rows.}
 \label{tab:mha-main}
 \centering
 \small
-\begin{tabular}{rrrrr}
+\begin{tabular}{rrrrrr}
 \toprule
-History & Full (ms) & \method (ms) & Speedup & Active/head \\
+History & Full & Fast & Robust & Fast sp. & Robust sp. \\
 \midrule
-8K   & .1692 & .1386 & 1.22$\times$ & 6.16\% \\
-16K  & .3186 & .1946 & 1.64$\times$ & 5.98\% \\
-32K  & .6157 & .2312 & 2.66$\times$ & 4.06\% \\
-64K  & 1.2031 & .2684 & 4.48$\times$ & 1.96\% \\
-128K & 2.3745 & .3810 & 6.23$\times$ & .98\% \\
+8K   & .1691 & .1327 & .1560 & 1.27$\times$ & 1.08$\times$ \\
+16K  & .3173 & .1900 & .2250 & 1.67$\times$ & 1.41$\times$ \\
+32K  & .6163 & .2324 & .2945 & 2.65$\times$ & 2.09$\times$ \\
+64K  & 1.2027 & .2646 & .3576 & 4.55$\times$ & 3.36$\times$ \\
+128K & 2.3708 & .3722 & .5757 & 6.37$\times$ & 4.12$\times$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 The frozen timing shape is batch one, 32 Query heads, 32 KV heads, and
-$d=128$, with resident FP16 K/V.  CUDA-event measurements use 20 warmup and
-80 timed iterations; each row is the median of six algorithmically identical
-same-GPU runs spanning three seeds.  The sparse path includes fused Query
+$d=128$, with resident FP16 K/V.  CUDA-event measurements use 10 warmup and
+40 timed iterations; each row is the median of three independent seeds.
+The sparse path includes fused Query
 projection/quantization, mixed-bit scanning, sampled-threshold candidate
-compaction, and exact QK--softmax--AV with eight reduction splits.  Its
-realized mixed-bit index averages 5.525\% of FP16 K+V; 5.859\% is the hard
-240-bit rate cap.  The frozen 512-sample ceiling improves long-context
-selection latency without changing the 8K sample count.  A 16-split variant
-reached 7.05$\times$ at 128K but failed output equivalence and is rejected.
+compaction, and exact QK--softmax--AV.  Fast and Robust have exactly equal
+thresholds, candidate counts, and candidate sets in all 15 seed--length
+comparisons.  Their only difference is omitted-Value estimation.  The
+allocated Key-only and Key-plus-Value auxiliary tensors occupy approximately
+5.47\% and 7.09\% of FP16 K+V in this kernel; the method-level hard rate caps,
+including amortized metadata, are 5.86\% and 7.47\%.
 
 \Cref{tab:mha-main} is an attention-subsystem result, not an end-to-end decode
-claim.  It excludes prefill and historical index construction, and the MHA
-kernel does not include the GQA-4-specific Value-tail correction.  Prior GQA
-and whole-model crossover measurements are retained only as audited
-diagnostics in \cref{app:system-diagnostics}; they show that short generations
-may not amortize initialization even when the attention path is faster.
+claim.  It excludes prefill and historical index construction.  We therefore
+measure the same Fast and Robust paths inside a real MHA model separately.
+
+\begin{table}[t]
+\caption{Steady greedy decode on Yarn-Llama-2-7B-128K with resident exact K/V.
+Each run generates 64 tokens and reports the final 48.  Values are directly
+timed whole-model milliseconds per token.}
+\label{tab:mha-decode}
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+History & Full & Fast & Robust & Fast sp. & Robust sp. \\
+\midrule
+32K  & 84.18 & 51.56 & 63.97 & 1.63$\times$ & 1.32$\times$ \\
+64K  & 144.75 & 52.97 & 65.25 & 2.73$\times$ & 2.22$\times$ \\
+128K & 268.17 & 55.41 & 67.38 & 4.84$\times$ & 3.98$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The Robust index takes 1.375/1.488/1.839 seconds to construct at
+32/64/128K, compared with .768/.774/.743 seconds for Fast.  Against Full,
+the measured break-even generation lengths are 69/19/10 tokens for Robust and
+24/9/4 for Fast.  For a cold request generating exactly 64 tokens, including
+construction, Robust reaches .81/1.31/2.15$\times$ and Fast reaches
+1.01/1.64/2.75$\times$.  Persistent multi-turn or shared-prefix reuse pays
+construction once and then receives the steady speedups in
+\cref{tab:mha-decode}; cold-request and warm-reuse claims are never mixed.
 
 At the native 128K boundary, a corrected same-seed six-topic audit reverses
 our initial conclusion.  QKSieve-Fast retains only 96.319\% pooled PPL
@@ -155,15 +181,15 @@ The total per-token auxiliary rate is 7.471\%.  Its earlier GQA-4 subsystem
 and whole-model timings are retained in \cref{app:system-diagnostics}; they
 are not combined with the native-MHA speed claim in \cref{tab:mha-main}.
 
-The length gate in \cref{eq:general-profile} is tested on the same 80
-LongBench examples from all 16 tasks.  Full scores .404779; always-on rank-16
+An earlier 64K length gate is tested on the same 80 LongBench examples from
+all 16 tasks.  Full scores .404779; always-on rank-16
 Robust and mean-tail-only variants retain 98.924\% and 98.873\%, while General
 scores .410725 and retains 101.469\%.  Its paired-bootstrap interval is
 [99.249\%, 104.449\%].  We do not interpret the point estimate above 100\% as
-an improvement claim; the result shows that the short-context Robust
-perturbation disappears without a task router or Full fallback.  General is
-therefore the registered deployment policy; Fast and always-on Robust remain
-mechanism ablations.
+an improvement claim.  The result exposes a short-context Robust perturbation,
+but a 64K switch is not implied by the method's mathematics.  We therefore
+retain General only as a diagnostic ablation and freeze always-on Robust as
+the main method.  Complete same-path Robust LongBench remains required.
 
 At 256K, Exact-QK top-1,280 retains 100.24\%, whereas the frozen 240-bit
 proxy falls from 98.99\% at 128K to 80.77\%.  Local coordinates with fixed

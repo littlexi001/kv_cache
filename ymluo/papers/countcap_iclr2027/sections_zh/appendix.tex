@@ -1,0 +1,514 @@
+\section{算法}
+\label{app:algorithm}
+
+\begin{figure}[h]
+\small
+\begin{minipage}{0.96\linewidth}
+\textbf{算法 1：单个请求上的 \method}\\[2pt]
+\textbf{输入：}稠密 prompt；GPU-resident 精确 KV；head dimension
+$d=128$；Key stride 32；Query-tail 长度 8；rate 240 bit。\\
+\textbf{完成 dense prefill 后：}\\
+1.\ 对每一层和每个 KV head，用 stride-32 的 post-RoPE Key 构造 $C_k$。\\
+2.\ 汇总映射到该 KV head 的全部 GQA Query head，用最后八个 prompt
+位置构造 $C_q$，并应用\cref{eq:q-shrink}。\\
+3.\ 计算\cref{eq:qk-svd,eq:qk-factors}，投影采样 Key 与 Query。\\
+4.\ 对每个 band 和 bit level 计算\cref{eq:band-qmse}，精确求解
+\cref{eq:qmse-allocation}并冻结 allocation。\\
+5.\ 分 chunk 投影全部 prompt Key，写入 packed mixed-bit index。\\
+\textbf{每生成一个 token：}\\
+6.\ 投影并 INT8 量化每个 Query head。\\
+7.\ 扫描完整 packed index，按 proxy score 取 top-$B(N)$。\\
+8.\ gather 原始 FP16 K/V，并执行精确 sparse QK--softmax--AV。\\
+9.\ 追加新 token 的精确 K/V 及其 projected packed-Key entry。\\
+\textbf{输出：}普通 decoder hidden state，以及更新后的精确 KV 与索引。
+\end{minipage}
+\end{figure}
+
+\input{sections_zh/appendix_analysis_statements}
+
+\section{证明与补充分析}
+\label{app:proofs}
+
+\subsection{命题 1 的证明}
+
+由\cref{eq:qk-factors}，
+\begin{align}
+ AD^\top
+ &=
+ \widetilde C_q^{-1/2}U\Sigma^{1/2}
+ \Sigma^{1/2}V^\top C_k^{-1/2}\nonumber\\
+ &=
+ \widetilde C_q^{-1/2}
+ (\widetilde C_q^{1/2}C_k^{1/2})
+ C_k^{-1/2}=I.
+\end{align}
+因此
+$(A^\top q)^\top(D^\top k)=q^\top AD^\top k=q^\top k$。
+注意，这里必须在矩阵平方根与逆平方根中使用同一套 floored eigenvalue；
+若两个路径采用不同 floor，第一行中的精确消去将不再成立。
+
+\subsection{命题 2 的证明}
+
+利用 $U^\top U=V^\top V=I$，
+\begin{align}
+ A^\top\widetilde C_qA
+ &=\Sigma^{1/2}U^\top
+ \widetilde C_q^{-1/2}\widetilde C_q
+ \widetilde C_q^{-1/2}U\Sigma^{1/2}
+ =\Sigma,\\
+ D^\top C_kD
+ &=\Sigma^{1/2}V^\top
+ C_k^{-1/2}C_kC_k^{-1/2}V\Sigma^{1/2}
+ =\Sigma.
+\end{align}
+若 $q',k'$ 独立且二阶矩都为 $\Sigma$，则
+\[
+ \mathbb E[({q'}^\top k')^2]
+ =\mathbb E_{q'}[{q'}^\top\Sigma q']
+ =\tr(\Sigma^2).
+\]
+shrinkage residual 只需把 $\widehat C_q,\widehat C_k$ 分别加减构造矩即可
+得到\cref{eq:shrinkage-residual}。
+
+\subsection{最优 rank-r 分数近似}
+
+对任意 $B$，
+\begin{align}
+ \mathbb E[(q^\top(I-B)k)^2]
+ &=\tr((I-B)^\top C_q(I-B)C_k)\\
+ &=\|C_q^{1/2}(I-B)C_k^{1/2}\|_F^2 .
+\end{align}
+令 $X=C_q^{1/2}BC_k^{1/2}$。由于 $C_q,C_k$ 可逆，
+$\operatorname{rank}(X)=\operatorname{rank}(B)$，优化等价于
+\[
+ \min_{\operatorname{rank}(X)\le r}
+ \|C_q^{1/2}C_k^{1/2}-X\|_F^2 .
+\]
+Eckart--Young--Mirsky 定理给出
+$X^\star=U_r\Sigma_rV_r^\top$，再左右 whitening 即得
+\cref{eq:optimal-rank-score-map,eq:optimal-rank-score-error}。
+
+对另一条件下冻结的 $B_{c_0}$，把同一等式应用于当前 $M_c$，并减去最佳
+rank-$r$ 残差 $\sum_{j>r}\sigma_{c,j}^2$，立即得到
+\cref{eq:stale-qk-coordinate-excess}。严格 singular gap 下，
+Eckart--Young 的 equality condition 要求当前前导左右子空间一致。
+
+\paragraph{dependent-pair 残差。}
+令 $z=k\otimes q$，并注意
+$q^\top(I-B)k=\operatorname{vec}(I-B)^\top z$。因此
+\[
+ L_{\rm pair}(B)-L_{\rm ind}(B)
+ =\operatorname{vec}(I-B)^\top
+ \Delta_H\operatorname{vec}(I-B).
+\]
+Rayleigh quotient 上界给出\cref{eq:paired-qk-dependence}。
+
+\subsection{经验 logit-MSE 与 drift}
+
+对固定 $q'_j$，
+\[
+ \frac1{m_k}\sum_i({q'_j}^\top e_i)^2
+ ={q'_j}^\top C_eq'_j.
+\]
+再对 $j$ 求平均并使用
+$x^\top Mx=\tr(Mxx^\top)$，得到\cref{eq:trace-qmse}。将矩阵按 band
+分块展开 trace，得到\cref{eq:block-qmse}；对每个 cross-band 项应用
+Cauchy--Schwarz
+$|\tr(X^\top Y)|\le\|X\|_F\|Y\|_F$，得到
+\cref{eq:cross-band-bound}。
+
+对任意 $C_e\succeq0$，
+\[
+ |\tr(\Delta C_e)|
+ \le\|\Delta\|_{\op}\|C_e\|_*
+ =\|\Delta\|_{\op}\tr(C_e),
+\]
+即\cref{eq:query-drift-bound}。对 $b^\star$ 与 $\bar b$，在
+$J_{\rm dec}(b^\star)-J_{\rm dec}(\bar b)$ 中加减两项
+$\widetilde J_{\rm cal}$，使用 calibration optimality，并分别对 drift
+项和 $\Gamma_{\rm dec}$ 取绝对值，即得
+\cref{eq:heldout-allocation-regret}。
+
+\subsection{连续 mixed-bit allocation}
+
+对
+$\min_{b_g\ge0}\sum_g\alpha_g2^{-2b_g}$、
+$\sum_gb_g=R$ 写 Lagrangian。active band 的一阶条件为
+$-2\ln2\,\alpha_g2^{-2b_g}+\nu=0$，故
+$b_g=\frac12\log_2(\alpha_g/\tau)$；非负约束产生
+\cref{eq:waterfilling-bits}中的截断。所有 band active 时，把约束代回可得
+\[
+ J_{\rm mixed}^\star
+ =G(\prod_g\alpha_g)^{1/G}2^{-2R/G},
+\]
+而 uniform allocation 为
+$J_{\rm uniform}=(\sum_g\alpha_g)2^{-2R/G}$。二者相除就是
+\cref{eq:uniform-mixed-ratio}，非负性来自 AM--GM 不等式。
+
+\subsection{条件化固定 rate 的证明}
+
+\paragraph{核心证书。}
+中心化误差满足
+$\sum_i(\xi_i-\bar\xi)^2=N\eta^2$。若一个 exact top-$r$ token 被某个
+exact top-$B$ 外 token 反超，则这两个 token 中至少一个的中心化误差绝对值
+不小于 $m_{r,B}/2$。由 Markov 计数，
+这类 token 总数至多 $4N\eta^2/m_{r,B}^2$。对 $\Theta_R$ 取最小即得
+\cref{eq:fixed-rate-core-certificate,eq:conditional-fixed-rate-misses}。
+
+\paragraph{条件策略支配。}
+对任意固定 $\theta_0$，逐条件最小值都不大于
+$L(c,\theta_0)$。取期望，再对 $\theta_0$ 取最小，得到
+\cref{eq:conditional-policy-dominance}。有限策略集下，只有同一
+$\theta_0$ 几乎处处达到逐条件最小时取等号。选择 regret 则由
+\[
+ L(c,\widehat\theta)-L(c,\theta^\star)
+ \le[L-\widehat L](\widehat\theta)
+ +[\widehat L-L](\theta^\star)
+\]
+以及两个偏差各不超过 uniform error 得到。
+
+\paragraph{概率 crossing。}
+对任意 $i\in T_r,j\notin T_B$，发生反超要求
+$\xi_j-\xi_i\ge m_{r,B}$。两个独立 sub-Gaussian error 之差的 variance
+proxy 至多 $2\sigma_c^2$，故其尾概率至多
+$\exp[-m_{r,B}^2/(4\sigma_c^2)]$。对至多 $r(N-B)$ 个 pair 使用 union
+bound，即得\cref{eq:crossing-probability}。
+
+\paragraph{条件 water filling。}
+对每个条件重复连续 Lagrangian 推导即可得到
+\cref{eq:conditional-waterfilling}。当单元具有物理权重 $w_a$ 时，一阶
+条件变为
+$-2\ln2\,\alpha_a2^{-2b_a}+\nu w_a=0$，得到
+\cref{eq:global-conditional-waterfilling}。这证明：总 rate 固定并不约束
+各 layer/head/band 的 bit 模板固定。
+
+\paragraph{不存在普适冻结 allocation。}
+两 band 构造中，令条件 1 的所有 margin 只依赖 band 1，条件 2 只依赖
+band 2；预算恰好只能保留一个 band。任一冻结策略必丢失其中一个条件的全部
+margin，而条件策略分别保留对应 band，在相同 rate 下都成功。该反例也说明
+条件支配不等式可严格。
+
+\subsection{有限样本与子空间稳定性}
+
+对每个固定 $b$，先固定 Key sample，Hoeffding inequality 控制 Query
+平均；再固定 Query population average，控制 Key 平均。对 $M$ 个可行
+allocation 和两次偏差使用 union bound，得到
+\cref{eq:allocation-uniform-bound}。经验风险最小化的标准三项分解给出
+两倍 uniform deviation，即\cref{eq:allocation-selection-regret}。加入
+未优化的 cross-band $\Gamma$ 后得到\cref{eq:allocation-full-regret}。
+
+矩阵平方根的扰动满足
+\begin{equation}
+ \|\widehat C^{1/2}-C^{1/2}\|_{\op}
+ \le
+ \frac{\|\widehat C-C\|_{\op}}
+ {\sqrt{\lambda_{\min}(C)}
+ +\sqrt{\lambda_{\min}(\widehat C)}}.
+ \label{eq:square-root-perturbation}
+\end{equation}
+把
+$\widehat C_q^{1/2}\widehat C_k^{1/2}
+-C_q^{1/2}C_k^{1/2}$
+拆成两个乘积并应用次乘性，得到
+\cref{eq:qk-moment-product-perturbation,eq:qk-product-stability}。
+最后对奇异子空间使用 Wedin sin-$\Theta$ theorem；在
+$\varepsilon_M<\gamma_r/2$ 时，以经验 gap 替换总体 gap 所需的保守因子
+给出\cref{eq:qk-subspace-stability}。
+
+\subsection{Key-MSE 与 logit-MSE 为什么会选出不同 bits}
+
+Key-MSE 是 $\tr(C_e)$，logit-MSE 是 $\tr(C'_qC_e)$。取二维
+$C'_q=\operatorname{diag}(L,\mu)$，$L\gg\mu$。一种量化方案只在第一维有
+小误差，另一方案只在第二维有稍大误差；前者可具有更小 Key-MSE，却因第一维
+Query 权重极大而具有更大 logit-MSE。因此除非 $C'_q\propto I$，两个目标
+不可能对所有 error covariance 保序。
+
+若 $\mu I\preceq C'_q\preceq LI$，则
+\[
+ \tr(C'_qC_e(b_K))\le L\tr(C_e(b_K))
+ \le L\tr(C_e(b_{QK}))
+ \le\frac L\mu\tr(C'_qC_e(b_{QK})),
+\]
+即\cref{eq:key-only-condition-bound}。随机旋转引理来自 Haar invariance：
+$\mathbb E_R[RE_gR^\top]$ 必与所有正交矩阵可交换，因此为标量倍 $I$；再由
+trace 为 $d_g$ 得到该标量为 $d_g/d$。
+
+\subsection{排序、attention mass 与输出误差}
+
+\paragraph{softmax range bound。}
+令 $\widehat s=s-\delta$。对 log-partition
+$A(s)=\log\sum_i e^{s_i}$，有
+$\mathrm{KL}(p\|\widehat p)=
+A(s-\delta)-A(s)+p^\top\delta$。
+把 $\delta$ 减去中点后，其取值区间长度为 $R_\delta$；Hoeffding lemma
+给出 KL 上界 $R_\delta^2/8$，再由 Pinsker inequality 得到
+\cref{eq:softmax-range-bound}中的 $L_1$ 上界。
+
+\paragraph{RMSE 核心证书。}
+对任意 $i,j$，
+$|(\delta_i-\bar\delta)-(\delta_j-\bar\delta)|
+\le2\sqrt N\eta$，所以 margin 大于该值时相对顺序不能翻转。更细的计数式
+来自：中心化误差绝对值至少 $m_r/2$ 的 token 不超过
+$4N\eta^2/m_r^2$ 个。删除至多 $b_r$ 个最高 mass core token 后，仍保证
+\cref{eq:rmse-mass-count}中的质量。
+
+\paragraph{proxy mass inflation。}
+对任意 $i,j$，
+$e^{-R_\delta}\le
+\exp(-\delta_i)/\exp(-\delta_j)\le e^{R_\delta}$。
+proxy top-$B$ 最大化 $\sum_{i\in S}\exp(\widehat s_i)$。将其与 exact
+top-$B$ 集合比较并用上述比值，可得
+$\epsilon_S\le e^{R_\delta}\epsilon_T$，再与平凡上界 1 取最小。
+
+对选择集合 $S$，写
+$o=(1-\epsilon)o_{\rm in}+\epsilon o_{\rm out}$，
+而限制并重归一化后的输出为 $o_{\rm in}$，因此
+$o-\widetilde o=\epsilon(o_{\rm out}-o_{\rm in})$。同理，概率向量在
+$S$ 内外的绝对差各求和为 $\epsilon$，故
+$\|p-\widetilde p\|_1=2\epsilon$。
+
+\paragraph{逐层传播。}
+在每层加入并减去 $\widetilde F_\ell(h_\ell)$，得到递推
+$e_{\ell+1}\le L_\ell e_\ell+a_\ell$。展开递推即为
+\cref{eq:layer-propagation}。unembedding logits 的
+$L_\infty$ 误差不超过 $\rho$；重复 softmax range argument 得到
+\cref{eq:next-token-stability}，而 argmax margin 大于 $2\rho$ 时排序不变。
+
+\subsection{sampled quantile 与 straggler}
+
+无放回抽样命中 top-$B$ 的概率是超几何分布，
+\[
+ \Pr(X=0)=\frac{\binom{N-B}{m}}{\binom Nm}
+ \le(1-B/N)^m.
+\]
+取 $m\ge c/r$ 即得\cref{eq:tail-sample-no-hit}。连续总体经 probability
+integral transform 后，sample order statistic 服从 Beta 分布，直接得到
+\cref{eq:sample-quantile-beta,eq:sample-quantile-variance}。在
+$j\approx mr=c$ 的 rare-tail 极限中，Beta 经缩放收敛到 Gamma；Gamma
+Chernoff bound 再对 $H$ 个 head 做 union bound，即得
+\cref{eq:quantile-headwise-straggler}。
+
+\subsection{请求级 crossover 与 fused Query 证书}
+
+Full 与 \method 共享 prompt prefill。将所有仅属于 \method 且未被 prefill
+隐藏的工作记为 $I_{\rm net}$，逐 step 相减即可得到
+\cref{eq:exact-break-even}的充要条件。Amdahl 上限则来自
+$\widetilde t_{\rm attn}\ge0$。它强调：attention 子系统即使很快，整模型
+速度仍受 dense projection、MLP 与 runtime 固定成本约束。
+
+对 fused Query，Cauchy--Schwarz 给出每个 proxy score 改变量
+\[
+ |(\widetilde z-\widehat z)^\top\widehat k_i|
+ \le\epsilon_{\rm fuse}.
+\]
+边界内 token 最坏下降 $\epsilon_{\rm fuse}$，边界外 token 最坏上升同样
+大小；因此 reference boundary gap 大于 $2\epsilon_{\rm fuse}$ 时集合不变，
+得到\cref{eq:fused-query-margin}。
+
+\clearpage
+\section{冻结配置与复现}
+\label{app:repro}
+
+\begin{table}[h]
+\caption{最终重跑所用的冻结 \method 配置。}
+\centering
+\begin{tabular}{ll}
+\toprule
+组件 & 设置 \\
+\midrule
+Exact KV & 完整 FP16 K/V，GPU resident \\
+Key sample & Post-RoPE prompt Key，stride 32 \\
+Query sample & 最后 8 个 prompt position，按 KV head 分组 \\
+Query shrinkage & 固定各向同性 $\lambda=0.75$ \\
+坐标 & 完整 128-D QK-balanced 双正交变换 \\
+Band / level & 八个 16-D band；$\{0,1,2,4,8\}$ bit \\
+Rate & 240 bit/token/KV-head，含 FP16 scale \\
+Allocation & Request-local Query-weighted logit-MSE \\
+Scale & 每 token、每 active band 的 plain scale \\
+Query index type & 对称 INT8 \\
+选择 & Reference: full top-$B(N)$；deployment: tail-calibrated quantile \\
+最终 attention & 候选上的原始 FP16 Q/K/V \\
+特殊路径 & 无 rerank、router、task rule、recent/sink 或 fallback \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+注册的方法标识为
+\texttt{qksieve\_fullprompt\_auto\_plain\_fulltopk}（reference）和
+\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64\_k1280}
+（优化 Robust）。实现位于
+\path{ymluo/projects/qwen3_top2_head_limit3_ppl}。正式提交前必须记录匿名
+artifact commit、模型与数据集 revision、PyTorch/Transformers/CUDA 版本、
+compiler flag、GPU clock、warm-up 次数、重复次数与随机种子。
+
+\paragraph{LLM 使用声明。}
+\label{app:llm-usage}
+
+本研究使用了基于 LLM 的编程助手，辅助研究构思、实现、调试、实验编排以及
+论文起草和编辑。作者选择并批准研究问题与实验协议，检查原始 artifact，
+验证所报告的测量与推导，并对论文主张、代码和表述承担责任。
+
+\input{sections_zh/appendix_mechanism_results}
+\FloatBarrier
+\input{sections_zh/appendix_system_diagnostics}
+
+\FloatBarrier
+\section{已完成的 Llama-3.1-8B LongBench 结果}
+\label{app:longbench}
+
+\begin{table}[h]
+\caption{完整 3,750-pair Llama-3.1-8B LongBench。实验使用冻结的
+auto+plain+full-topk 路径及官方 middle truncation。}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrr}
+\toprule
+任务 & 样本数 & Full & \method & 相对 Full \\
+\midrule
+2WikiMQA & 200 & .473495 & .475662 & 100.458\% \\
+GovReport & 200 & .337627 & .334587 & 99.100\% \\
+HotpotQA & 200 & .486550 & .492022 & 101.125\% \\
+LCC & 500 & .631943 & .635199 & 100.515\% \\
+MultiNews & 200 & .269995 & .269824 & 99.937\% \\
+MultiFieldQA-en & 150 & .562466 & .561067 & 99.751\% \\
+Musique & 200 & .273163 & .268762 & 98.389\% \\
+NarrativeQA & 200 & .242717 & .237154 & 97.708\% \\
+PassageCount & 200 & .099083 & .099583 & 100.505\% \\
+PassageRetrieval-en & 200 & .685000 & .685000 & 100.000\% \\
+Qasper & 200 & .457071 & .446171 & 97.615\% \\
+QMSum & 200 & .232550 & .230128 & 98.958\% \\
+RepoBench-P & 500 & .545507 & .548896 & 100.621\% \\
+SAMSum & 200 & .443306 & .444600 & 100.292\% \\
+TREC & 200 & .695000 & .690000 & 99.281\% \\
+TriviaQA & 200 & .914896 & .922980 & 100.884\% \\
+\midrule
+Macro & 3,750 & .459398 & .458852 & 99.881\% \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+七个任务超过 Full，PassageRetrieval-en 持平。最大相对下降来自
+Qasper（97.615\%）、NarrativeQA（97.708\%）和 Musique（98.389\%）；
+没有任务低于 97.6\% 保持率。按任务分层的 paired-bootstrap 95\% 区间为：
+macro-score difference [$-.002647$, $.001591$]，保持率
+[99.424\%, 100.347\%]。finalizer 已验证 7,500 行 CSV、3,750 个严格 pair、
+16 个任务、冻结路径字段、prompt limit 和 source hash。
+
+\clearpage
+\section{正式投稿仍需补齐的实验}
+\label{app:missing}
+
+\begin{table}[h]
+\caption{质量闭环。``门槛''是预注册目标，不是已测结果。}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{llll}
+\toprule
+实验 & 模型 & 必须报告 & 门槛 \\
+\midrule
+LongBench 16-task & 另外 2 个 & 分任务、macro、paired CI &
+$\ge99\%$ macro \\
+RULER 4K--128K & 3 个 & 分任务、分长度 & 无不可解释崩溃 \\
+PPL 16K--128K & 3 个 & 分窗口、aggregate CI & 128K $\ge99\%$ \\
+长输出 & 3 个 & 1K/2K/4K token & 保持率稳定 \\
+多轮对话 & 3 个 & 逐 turn Query drift & 保持率稳定 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{持久化 KV 使用场景协议（待完成）}
+\label{app:persistent-kv-todo}
+
+本文面向已经构建好的长上下文 KV cache 被反复用于 decode 的场景，包括多轮
+Agent、共享前缀的多分支 rollout，以及针对同一长期记忆的多次查询。这并不从
+统计中删除 prefill，而是区分 prefill 和索引构建究竟只支付一次，还是每次
+decode 都重复支付。正式投稿必须分别填写以下四种计时协议，不能拿其中一行的
+数字替代另一行。
+
+\begin{table}[h]
+\caption{预注册的 persistent-KV 系统实验。当前所有结果均为 TODO；每一行必须
+使用同一个通过质量检查的方法和匹配的 dense baseline。}
+\label{tab:persistent-kv-todo}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{llll}
+\toprule
+协议 & 计时范围 & 目标场景 & 必须报告 \\
+\midrule
+Cold single-use & Dense prefill + 建索引 + $G$ token decode & 单次请求 & E2E、TTFT、TPOT \\
+Warm persistent & Query setup + $G$ token decode；KV/index 常驻 & 缓存前缀查询 & E2E、首 token、TPOT \\
+Shared-prefix reuse & 一次 prefill/index 被 $R$ 个分支共享 & Agent rollout & 摊销延迟、吞吐、break-even \\
+Append-only turn & 增量 prefill + 增量索引追加 + decode & 多轮 Agent & 追加成本、TPOT、逐轮质量 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+令 $P$ 为共享 dense-prefill 成本，$I$ 为一次性的持久索引构建成本，$H_f$ 和
+$H_s$ 分别为 dense 与 sparse 的逐请求 setup，$D_f$ 和 $D_s$ 为直接测得的
+逐 token decode 成本，$A$ 为所有增量追加成本。对于复用 $R$ 次、每次生成
+$G$ 个 token 的工作负载，统一按以下方式统计：
+\begin{align}
+T_{\mathrm{full}} &= P + R(H_f + G D_f), \\
+T_{\mathrm{QKSieve}} &= P + I + R(H_s + G D_s) + A.
+\end{align}
+实测 break-even 必须满足
+\begin{equation}
+R G(D_f-D_s) > I + R(H_s-H_f) + A,
+\label{eq:persistent-break-even}
+\end{equation}
+不能仅根据稳态 attention 加速比推算请求级优势。
+
+实验网格为 $N\in\{16,32,64,128\}$K、$G\in\{32,64,256,1024\}$、
+$R\in\{1,2,4,8,16,32\}$，覆盖 repeated-query、append-only dialogue 和
+branching-rollout trace。每个单元报告 latency、throughput、峰值显存、索引
+字节数、active KV 和质量保持率。只有 Full 与 \method 的 cache lookup 完全
+一致时，resident-cache 计时才可以同时排除 lookup；发生 eviction 或 reload
+时必须单独报告其成本。
+
+任何 warm 或复用结果写入正文前，必须通过 cache 生命周期审计：辅助索引只
+构建一次并与精确 KV 一起持久化；请求边界处不得重新投影或量化未变化的历史
+Key；新增 token 只能触发增量索引维护；逐请求 Query preparation 必须包含在
+计时范围内。需要重新编码历史 Key 的 request-local basis 不能填写 warm 行。
+索引复用也不允许复用旧候选集合、使用 learned router 或回退 Full attention。
+
+\begin{table}[h]
+\caption{必须补齐的方法与系统对比。}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lll}
+\toprule
+组别 & Variant & 公平匹配规则 \\
+\midrule
+最近 baseline & FIER 1-bit，\method & index bytes 与 active token \\
+Selector 质量 & Quest-P16、SparQ-R32、\method & active policy 与 exact consumer \\
+原生系统 & Quest、SparQ、RetroInfer & 模型、硬件、完整系统 \\
+论文报告 & RetrievalAttention & 论文模型与 operating point \\
+坐标 & Key-PCA、random rotation、QK-balanced & index bytes \\
+Rate & uniform、固定 4-4-2-1、automatic & 240 bit \\
+Query estimate & 1/4/8/16/32 position；template & 冻结设置 \\
+Shrinkage & $0,.25,.5,.75,.9$ & held-out trace \\
+系统 & 16K/32K/64K/128K & 64/256/1,024 output \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Query-estimate 消融中，即使 trace 记录 32-position tail，生产 transform 与
+allocation 也只能使用最后八个 prompt position。需报告 moment operator-norm
+error、所有 16-D band boundary 的 singular gap 与 subspace angle、
+held-out allocation regret、centered score RMSE、top-2\% recall，以及按
+生成位置分桶的 oracle/proxy omitted mass。natural-EOS 与 teacher-forced
+continuation 必须作为不同 artifact；只有实际捕获到注册的 1K/2K/4K Query
+时，长输出覆盖才算完成。
+
+每个系统行必须包含 index build、逐 token index append、Query projection、
+low-bit scan、top-$k$、gather、exact sparse attention、剩余模型时间、总
+decode、请求级 latency、峰值 GPU memory 和 no-attention Amdahl ceiling。
+FIER 必须使用官方实现或审计过的忠实 port；公式级 trace simulation 只能标为
+mechanism study。Quest control 报告 page-rounded loaded token。SparQ 的
+selector-only control 不含 mean-Value correction；另一个 matched-budget
+formula reference 可包含 temperature、local mask、selected-mass estimate
+和 running mean-Value correction，但不能冒充官方优化系统。
+
+在合并任何最终质量与速度数字前，artifact verifier 必须检查冻结方法协议、
+当前 source hash、严格样本配对、模型/任务覆盖、长度/输出网格及 peak-memory
+字段。缺失 artifact 应视为 gate 失败，而不是隐式通过。

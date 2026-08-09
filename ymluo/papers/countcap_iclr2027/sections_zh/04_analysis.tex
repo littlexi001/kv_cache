@@ -1,0 +1,171 @@
+\section{理论分析}
+\label{sec:analysis}
+
+本节给出支撑方法主张所需的四条理论链路。扩展陈述与完整证明见
+\cref{app:analysis-statements,app:proofs}。
+
+\subsection{精确分数几何}
+
+令 $\widetilde C_q^{1/2}C_k^{1/2}=U\Sigma V^\top$，$A,D$ 为
+\cref{eq:qk-factors}中的因子，其中两个构造二阶矩都包含
+\cref{eq:moment-floor}中的一致 spectral floor。直接代入可得
+\begin{equation}
+ AD^\top=I,\qquad
+ A^\top\widetilde C_qA=D^\top C_kD=\Sigma.
+ \label{eq:main-exact-balance}
+\end{equation}
+因此对任意 Query 与 Key，
+$(A^\top q)^\top(D^\top k)=q^\top k$：完整 128-D 变换本身不引入 score
+近似。对 Cartesian Query--Key 二阶矩，最佳 rank-$r$ 双线性映射满足
+\begin{equation}
+ \min_{\operatorname{rank}(B_r)\le r}
+ \mathbb E[(q^\top k-q^\top B_rk)^2]
+ =\sum_{\ell>r}\sigma_\ell^2,
+ \label{eq:main-rank-optimal}
+\end{equation}
+所以奇异值顺序表示联合 score energy，而不是 Key reconstruction energy。
+只有 Query 各向同性时，Key-PCA 才是这一结果的特例。精确条件、正则化残差
+和显式 dependent-pair 四阶残差见
+\cref{eq:optimal-rank-score-map,eq:shrinkage-residual}。成对依赖边界见
+\cref{eq:paired-qk-dependence}；本文测量该残差，而不是假设它为零。
+
+\subsection{为什么分配器应优化 score error}
+
+对任意有限 projected Query 样本 $\{q'_j\}$ 和 Key 量化误差样本
+$\{e_i\}$，
+\begin{equation}
+ \frac{1}{m_qm_k}\sum_{j,i}({q'_j}^\top e_i)^2
+ =\tr(C'_qC_e).
+ \label{eq:main-qmse}
+\end{equation}
+该恒等式既不要求高斯分布，也不要求样本独立。QKSieve 使用测得的
+0/1/2/4/8-bit error 及\cref{eq:qmse-allocation}中的精确物理 rate 约束，
+最小化其 diagonal-band 分解。有限动态规划对这一可分校准目标全局最优；
+被忽略的跨 band 交互由\cref{eq:cross-band-bound}约束。
+
+校准最优并不等于 held-out 保证。若
+$\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$，则对任意固定 error moment，
+\begin{equation}
+ |\tr(\Delta C_e)|\le\|\Delta\|_{\op}\tr(C_e).
+ \label{eq:main-drift}
+\end{equation}
+完整 regret、变换稳定性与有限样本上界见
+\cref{eq:heldout-allocation-regret,eq:qk-subspace-stability,%
+eq:allocation-selection-regret}。它们要求使用独立 held-out Query，而不是
+无条件认证 prompt-tail calibration。在固定 basis 中，Key-MSE 只给出
+$\kappa(C'_q)$ 近似；Haar rotation 则不存在期望意义上的 QK-sensitive band
+顺序（\cref{eq:key-only-condition-bound,eq:random-band-exchangeability}）。
+配对消融分别检验了这两个推论。
+
+\paragraph{固定 rate 不等于固定模板。}
+对条件 $c=(x,N,\ell,h,t)$，在 rate-$R$ 的 QK 坐标与 bit 可行集上定义
+$\mathcal C_R(c)=\min_{\theta\in\Theta_R}
+4N\eta_c^2(\theta)/m_{r,B}^2(c)$。若 $\mathcal C_R(c)<1$，则 proxy
+top-$B$ 包含精确 top-$r$。更一般地，在固定 rate 下，
+$\mathbb E_c[\min_\theta L_c(\theta)]
+\le\min_\theta\mathbb E_c[L_c(\theta)]$；除非存在一个几乎处处共同最优的冻结
+模板，否则不等式严格。因此模板可以变化而无需增加 bit。上下文变长会增加
+crossing pair 并压缩 order-statistic margin；完整证明见
+\cref{eq:crossing-probability,eq:conditional-waterfilling,%
+eq:fixed-rate-core-certificate,eq:conditional-policy-dominance}。
+
+\subsection{从检索误差到模型输出}
+
+令精确与 proxy score 分别为 $s_i$ 和 $\widehat s_i$，
+$\delta_i=s_i-\widehat s_i$，并令
+$R_\delta=\max_i\delta_i-\min_i\delta_i$。所有 top-$B$ token 中，精确边界
+margin 大于 $R_\delta$ 的 token 必然仍在 proxy top-$B$ 中；中心化 score
+RMSE 进一步给出\cref{eq:rmse-core-margin,eq:rmse-mass-count}中的确定性
+保留核心证书。这些证书并非长度一致：$R_\delta\le2\sqrt N\eta$，认证 bad
+count 按 $4N\eta^2/m_r^2$ 增长。因此，即使 oracle top-$B$ 仍然足够，
+fixed-rate proxy 也可能随长度退化（\cref{eq:length-amplification}）。
+更直接地，若 $\epsilon_T$ 是 oracle exact top-$B$ 遗漏的 mass，则 proxy
+选择集合遗漏的 mass 至多为
+$\min\{1,\exp(R_\delta)\epsilon_T\}$
+（\cref{eq:proxy-topb-mass-inflation}）。
+
+对被选集合 $S$，令 $\epsilon=\sum_{i\notin S}p_i$ 为遗漏的 full-attention
+mass。由于 QKSieve 在 $S$ 上重新计算精确 score，
+\begin{equation}
+ \|p-\widetilde p\|_1=2\epsilon,\qquad
+ \|o-\widetilde o\|_2
+ =\epsilon\|o_{\rm out}-o_{\rm in}\|_2
+ \le\epsilon\,\diam\{v_i\}.
+ \label{eq:main-output-bound}
+\end{equation}
+条件化逐层传播与 next-token margin 结果见
+\cref{eq:layer-propagation,eq:next-token-stability}。这些是可审计的充分条件，
+不是对抗场景下的质量保证。
+
+\subsection{Robust 残差修复的误差}
+
+把精确 selected 和 omitted 分区归一化为质量 $p$ 与 $1-p$，其条件 Value 均值
+记为 $\mu_S$ 与 $\mu_T$。令 Robust estimate 诱导 selected mixture weight
+$\widehat p=Z_S/(Z_S+\alpha\widehat Z_T)$，遗漏条件均值估计为
+$\widehat\mu_T$。输出误差有精确分解
+\begin{equation}
+ \widehat o_\alpha-o
+ = (\widehat p-p)(\mu_S-\mu_T)
+ +(1-\widehat p)(\widehat\mu_T-\mu_T),
+ \label{eq:tail-error-decomposition}
+\end{equation}
+从而
+\begin{equation}
+ \|\widehat o_\alpha-o\|_2
+ \le |\widehat p-p|\,\|\mu_S-\mu_T\|_2
+ +(1-\widehat p)\|\widehat\mu_T-\mu_T\|_2.
+ \label{eq:tail-error-bound}
+\end{equation}
+第一项是分区/收缩误差，第二项是 Value-tail 估计误差。即使精确 top-$k$ 本身
+遗漏分散 Value 贡献，继续改进 Key selector 也无法消除第二类失真。
+
+在理想化的精确 tail partition 下，令 tail-mean 误差零均值，且
+$V=\mathbb E\|\widehat\mu_T-\mu_T\|_2^2$、
+$D=\|\mu_S-\mu_T\|_2^2$。Robust tail 权重为
+$w_\alpha=\alpha(1-p)/(p+\alpha(1-p))$，因此
+\begin{equation}
+ \mathbb E\|\widehat o_\alpha-o\|_2^2
+ =((1-p)-w_\alpha)^2D+w_\alpha^2V.
+ \label{eq:tail-bias-variance}
+\end{equation}
+最优解满足 $w^\star=(1-p)D/(D+V)$ 和
+$\alpha^\star=pD/(pD+V)$。所以只有 tail estimate 方差足够小时，完整补偿才
+合适。注册的 $\alpha=.5$ 是冻结的经验折中，而不是普适最优值，仍需独立验证。
+相对 Fast（$w=0$），任意正修正改善该理想化期望误差的充要条件是
+\begin{equation}
+ 0<w_\alpha<\frac{2(1-p)D}{D+V}.
+ \label{eq:tail-correction-benefit}
+\end{equation}
+因此 correction 并不对所有可能 Query 都一致有利。我们仍冻结一个长度无关的
+Robust consumer，而不引入人工上下文边界。held-out 下游评测、Fast 消融和最差
+case 报告用于量化这一经验权衡；本文不声称固定 shrinkage 最优估计 $D$ 或 $V$。
+
+\subsection{复杂度与 crossover}
+
+稠密注意力读取并处理完整 K/V，而 QKSieve 扫描 240-bit Key index，并对
+$B(N)=\min\{1280,\max(256,\lceil0.06N\rceil)\}$ 个 token 执行精确注意力。
+两者仍然都是 $\Theta(N)$，因为 packed scan 会穷举全部历史；收益来自每个
+扫描 token 的更少字节，以及有上限的精确注意力。
+Robust 配置还会为每个 token 扫描 66 个 Value bit 并累积 rank-16 分子，仍为
+$\Theta(N)$，但用部分 Fast 速度换取更小的遗漏 Value 误差。
+冻结主配置在所有长度支付该扫描。Fast 删除它并给出严格的系统成本消融；两者
+具有相同的渐近复杂度。
+
+令 $f_t$ 与 $s_t$ 分别表示第 $t$ 个输出 token 上同步计时的 Full 和 QKSieve
+decode 成本，且均包含全部检索开销；令 $I_{\rm net}$ 为未被 prefill 隐藏的
+索引构建时间。当且仅当
+\begin{equation}
+ \sum_{t=1}^{G}(f_t-s_t)>I_{\rm net}
+ \label{eq:main-break-even}
+\end{equation}
+时，生成 $G$ 个 token 的 QKSieve 请求更快。若短上下文区域始终有
+$s_t\ge f_t$，则只靠增加输出长度无法摊销，必须改变实现。把一次 Full step
+写成 $t_{\rm base}+t_{\rm attn}$，则把 attention 成本理想化为零时的 Amdahl
+上限为
+\begin{equation}
+ \mathrm{speedup}\le
+ \frac{t_{\rm base}+t_{\rm attn}}{t_{\rm base}}
+ =\frac{1}{1-\phi_{\rm attn}}.
+ \label{eq:main-amdahl}
+\end{equation}
+精确请求级计时与证明见\cref{eq:exact-break-even,eq:amdahl-ceiling}。

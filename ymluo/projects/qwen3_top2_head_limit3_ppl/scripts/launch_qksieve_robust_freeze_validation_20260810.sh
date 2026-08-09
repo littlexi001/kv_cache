@@ -9,6 +9,8 @@ DECODE_LAUNCHER="${ROOT}/scripts/launch_qksieve_mha_real_decode_20260809.sh"
 ATTENTION_RUNNER="${ROOT}/src/benchmark_qksieve_fier_mha_speed_20260808.py"
 
 export QKSIEVE_VALUE_SKETCH_TAIL_ALPHA=0.5
+export PATH="$(dirname "${PYTHON}"):/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
+export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 mkdir -p "${RUN_ROOT}/attention/logs" "${RUN_ROOT}/launcher_logs"
 
 run_attention() {
@@ -54,8 +56,10 @@ if [[ ${status} -eq 0 ]]; then
 fi
 
 if [[ ${status} -eq 0 ]]; then
+  rm -f "${RUN_ROOT}/FAILED"
   touch "${RUN_ROOT}/ALL_COMPLETE"
 else
+  rm -f "${RUN_ROOT}/ALL_COMPLETE"
   touch "${RUN_ROOT}/FAILED"
 fi
 exit "${status}"

@@ -123,13 +123,14 @@ The selected plain symmetric quantizers use max-absolute scaling for
 2/4/8-bit bands, sign times mean absolute magnitude at 1 bit, and zero at
 0 bits.
 A fixed $(4,4,2,1,0,0,0,0)$ allocation is an equal-rate ablation.
-The deployment allocator instead uses
+  A deployment ablation instead uses
 $D_g^{\rm K}(b)=\tr(C_{e,g}(b))$.
 It removes Query weighting but retains QK-balanced coordinates.
 The causal ablations in
 \cref{tab:allocation-causal,tab:allocation-deploy} find matched quality and
-lower optimized latency, so the reference uses logit-MSE and deployment uses
-Key-MSE.
+lower optimized latency.  To keep the paper's quality and speed paths
+identical, however, the frozen main method uses the query-weighted
+\cref{eq:qmse-allocation}; Key-MSE remains an ablation.
 
 The index stores 240 bits, or 30 bytes, per token and KV head.
 FP16 K+V at $d=128$ stores $2\cdot128\cdot2=512$ bytes, so the index adds
@@ -209,10 +210,10 @@ isolates the representational approximation from threshold estimation and is
 the profile used by the complete Llama LongBench result.
 
 \paragraph{Deployment profile.}
-The optimized profile averages moments from disjoint calibration requests
-once per model and freezes $(A,D)$ and the Key-MSE allocation for every
-layer/KV head.  Let $r(N)=B(N)/N$ be the active rate.  The frozen deployment
-count is
+The optimized profile uses the same request-local $(A,D)$ and query-weighted
+allocation as the reference, but replaces complete score materialization and
+top-$k$ with a sampled threshold.  Let $r(N)=B(N)/N$ be the active rate.  The
+frozen sample count is
 \begin{equation}
  m(N)=\min\{N,512,\max(256,\lceil16/r(N)\rceil)\}.
  \label{eq:frozen-quantile-samples}
@@ -234,38 +235,27 @@ and candidates, but fuses \cref{eq:value-tail-statistics} into the scan and
 uses the exact-selected-plus-tail kernel in \cref{eq:robust-tail-output}.
 It is therefore a consumer-side robustness profile, not a different selector.
 
-\paragraph{Registered General profile.}
-Always estimating the omitted Value tail is unnecessary when $B(N)/N$ is
-large and can perturb short-task generation.  We therefore register the
-deterministic policy
-\begin{equation}
- \operatorname{General}(N)=
- \begin{cases}
-  \operatorname{Fast}, & N\le 65{,}536,\\
-  \operatorname{Robust}_{r_v=16,\alpha=.5}, & N>65{,}536.
- \end{cases}
- \label{eq:general-profile}
-\end{equation}
-Under \cref{eq:budget-intro}, the switch occurs when the capped 1,280-token
-budget is approximately 2\% of history.  The short branch neither constructs
-nor scans the Value sketch.  The policy depends only on $N$, uses no task or
-output signal, and never falls back to Full attention.
+\paragraph{Frozen main profile.}
+The paper's main method is the Robust consumer at every evaluated length,
+with $r_v=16$ and $\alpha=.5$.  We deliberately do not switch to Fast at a
+hand-set context length: such a boundary is not implied by the error identity
+and would make the method definition depend on an empirical patch.  Fast is
+retained only as a selected-only ablation that isolates the cost and quality
+contribution of omitted-Value estimation.
 
-These profiles share the QK-balanced representation, budget schedule, exact
-FP16 K/V, and absence of reranking or fallback.  They differ in allocation
-objective, template scope, candidate selection, and whether the omitted
-Value tail is estimated.  We identify the producing profile for every result
+The reference, Fast, and Robust profiles share the request-local QK-balanced
+representation, query-weighted allocation, budget schedule, exact FP16 K/V,
+and absence of reranking or fallback.  They differ in candidate selection and
+whether the omitted Value tail is estimated.  We identify the producing profile for every result
 rather than combining their quality and speed measurements as a same-path
 claim.
 
 \subsection{Index construction and update}
 
 Dense chunked prefill constructs the ordinary exact KV cache.
-For the reference profile, after the prompt-tail Queries are available,
-\method computes $(A,D)$ and $b^\star$ for each layer and KV head.
-The deployment profile instead loads its model-level template beside the
-corresponding decoder layers.
-Both project historical Keys in chunks and write the packed index directly.
+After the prompt-tail Queries are available, both reference and optimized
+profiles compute request-local $(A,D)$ and $b^\star$ for each layer and KV
+head.  They project historical Keys in chunks and write the packed index directly.
 For each generated token it appends the new exact K/V and projects and packs
 one new Key entry.
 The transforms and bit allocations remain frozen throughout generation.
@@ -293,13 +283,13 @@ matching the numerical boundary of the reference path.
 Across FP16 and BF16 validation at 4K and 32K, the fused path matches Query
 codes, proxy scores, selected sets, and exact sparse-attention outputs within
 the registered tolerances.
-The MHA speed path contains Query projection/quantization, sampled scan and
-candidate compaction, and exact sparse attention.  It excludes the
-GQA-4-specific Value-tail sketch, so its timing is an attention-subsystem
-claim rather than a Robust or whole-model decode claim.  The same GQA fusion
-is not promoted as a generic GQA-8 optimization: complete
+The MHA implementation supports both Fast and Robust.  Their directly timed
+attention calls contain Query projection/quantization, sampled scan, candidate
+compaction, and exact sparse attention; Robust additionally accumulates and
+consumes the rank-16 INT4 Value tail.  We also time both paths inside a real
+MHA model.  The GQA fusion is not promoted as a generic GQA-8 optimization: complete
 selection is slower at 32K in that configuration.
-We therefore report the GQA-4 fused subsystem explicitly and keep downstream
+We report architecture-specific paths explicitly and keep downstream
 quality tables tied to the method identifier that actually produced them.
 Top-$k$, exact-KV gather, sparse attention, and per-token index append are
 measured separately.

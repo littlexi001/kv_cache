@@ -39,18 +39,18 @@ Under the moments used to construct them, the two transformed second moments
 are the same diagonal matrix.
 Its ordered coordinates therefore expose the joint QK score spectrum rather
 than the reconstruction spectrum of Keys alone.
-For deployment, the same construction can average moments from disjoint
-calibration requests once per model and freeze the resulting per-layer/head
-template; we evaluate request-local and model-level templates as separate
-registered profiles.
+The frozen main path constructs these moments from the current prompt and
+freezes the resulting per-layer/head transform for that request.  Averaging
+moments across disjoint calibration requests to obtain a model-level template
+is evaluated only as an ablation.
 
 \method then divides the 128 coordinates into eight 16-D bands.
 For every layer and KV head independently, it assigns
 $0/1/2/4/8$ bits to each band under a fixed 240-bit token/head budget.
-The reference allocation minimizes an empirical query-weighted
+The frozen allocation minimizes an empirical query-weighted
 Key-quantization error, which is exactly a Cartesian-sample estimate of
-attention-logit MSE.  A deployment simplification minimizes Key
-reconstruction MSE in the same QK-balanced coordinates.
+attention-logit MSE.  A Key-reconstruction-MSE simplification in the same
+QK-balanced coordinates is retained as an allocation ablation.
 A zero-bit band is physically absent.
 The resulting packed index occupies 30 bytes per token and KV head, or 5.86\%
 of the corresponding FP16 K+V footprint.
@@ -95,7 +95,7 @@ FP16 K+V, versus 5.86\% for Fast.
   \caption{\method keeps exact KV on GPU and adds a per-layer/per-KV-head
   mixed-bit Key index.  The reference profile freezes request-local
   QK-balanced transforms and allocations after prefill.  The deployment
-  profile instead loads a model-level template and uses capped
+  profile reuses the same request-local transform and uses capped
   sampled-quantile candidate writing.  Both apply exact sparse attention to
   original KV.}
   \label{fig:overview}
@@ -123,8 +123,7 @@ Our contributions are:
   \item We formulate per-layer/per-KV-head mixed-bit indexing as a
   query-weighted rate-distortion problem and solve it exactly over
   $0/1/2/4/8$-bit 16-D bands under a hardware-visible byte budget; a causal
-  ablation identifies Key-MSE as a simpler deployment allocator without
-  detectable LongBench loss.
+  ablation compares the frozen query-weighted objective with Key-MSE.
   \item We implement a deterministic packed-index reference and optimized
   architecture-specific GQA/MHA sampled-quantile deployment paths, both followed by exact
   GPU-resident sparse attention and neither using reranking, learned routing,
@@ -133,14 +132,16 @@ Our contributions are:
   ranking and introduce a current-Query, low-rank Value-tail residual with an
   analytically characterized shrinkage tradeoff.  On 12 native-128K
   topic/seed cases, the Robust profile retains 99.805\% pooled PPL quality
-  with a [99.100\%, 100.499\%] case-bootstrap interval.  A deterministic
-  length gate composes Fast and Robust without task signals or Full fallback.
+  with a [99.100\%, 100.499\%] case-bootstrap interval.  Robust is the frozen
+  length-agnostic main consumer; Fast is reported as a selected-only ablation.
   \item We provide equal-rate retrieval audits, all-layer allocation
   statistics, GPU kernel validation, and a complete 3,750-example,
   16-task Llama-3.1-8B LongBench evaluation with 99.88\% macro-score
-  retention, native-128K Fast/Robust stress tests, a same-path General screen,
+  retention, native-128K Fast/Robust stress tests, an earlier gated ablation,
   and direct CUDA and whole-model diagnostics from 8K to 128K.  On the frozen
-  native-MHA contract, the complete selector-plus-sparse-attention path reaches
-  1.22--6.23$\times$.  Profile-specific reporting keeps mechanism, downstream
-  quality, attention-subsystem speed, and end-to-end limitations separate.
+  native-MHA contract, complete Fast and Robust attention paths reach
+  1.27--6.37$\times$ and 1.08--4.12$\times$, respectively; Robust steady
+  whole-model decode reaches 1.32--3.98$\times$ from 32K to 128K.
+  Profile-specific reporting keeps mechanism, downstream quality,
+  attention-subsystem speed, cold construction, and steady reuse separate.
 \end{itemize}

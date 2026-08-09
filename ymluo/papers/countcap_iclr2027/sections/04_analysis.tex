@@ -157,9 +157,11 @@ expected error if and only if
  0<w_\alpha<\frac{2(1-p)D}{D+V}.
  \label{eq:tail-correction-benefit}
 \end{equation}
-This makes an always-on correction theoretically unjustified.  The General
-length gate is a deployable proxy for the low-active-rate regime in which
-omitted mass is empirically risky; it is not claimed to infer $D$ or $V$.
+This means the correction is not uniformly beneficial for every possible
+query.  We nevertheless freeze one length-agnostic Robust consumer rather
+than introduce a hand-set context boundary.  Held-out downstream evaluation,
+the Fast ablation, and worst-case reporting quantify that empirical tradeoff;
+we do not claim that the fixed shrinkage estimates $D$ or $V$ optimally.
 
 \subsection{Complexity and crossover}
 
@@ -171,9 +173,9 @@ smaller bytes per scanned token plus capped exact attention.
 The Robust profile additionally scans 66 Value bits per token and accumulates
 a rank-16 numerator; it remains $\Theta(N)$ and trades part of Fast's speed
 for a lower omitted-Value error.
-General incurs this scan only for $N>65{,}536$; below that boundary its
-operations and storage traffic are exactly Fast's.  The gate changes
-constants, not asymptotic complexity.
+The frozen main profile incurs this scan at every length.  Fast removes it and
+therefore provides the exact system-cost ablation; both profiles retain the
+same asymptotic complexity.
 
 Let $f_t$ and $s_t$ be synchronized Full and QKSieve decode costs at output
 step $t$, including every retrieval cost, and let $I_{\rm net}$ be index
