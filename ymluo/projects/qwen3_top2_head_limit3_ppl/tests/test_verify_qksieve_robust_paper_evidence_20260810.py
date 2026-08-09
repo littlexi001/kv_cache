@@ -58,8 +58,17 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         "qa_squad",
         "qa_hotpot",
     )
+    ruler_bootstrap = {
+        "resamples": 10000,
+        "macro_score_delta_95ci": [-0.01, 0.01],
+        "quality_retention_95ci": [0.99, 1.01],
+    }
     ruler_lengths = {
-        str(length): {"quality_retention": 1.0, "cells": 13}
+        str(length): {
+            "quality_retention": 1.0,
+            "cells": 13,
+            "bootstrap": dict(ruler_bootstrap),
+        }
         for length in ruler_length_samples
     }
     ruler_cells = {
@@ -67,6 +76,8 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "task": task,
             "length": length,
             "samples": samples,
+            "full_kv": {"score": 1.0},
+            "bootstrap": dict(ruler_bootstrap),
         }
         for task in ruler_tasks
         for length, samples in ruler_length_samples.items()

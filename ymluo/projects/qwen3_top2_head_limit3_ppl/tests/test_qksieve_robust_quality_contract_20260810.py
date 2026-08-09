@@ -161,6 +161,13 @@ def test_robust_ruler_summary_requires_strict_contract() -> None:
     assert payload["fallback_count"] == 0
     assert payload["overall"]["quality_retention"] == pytest.approx(0.99)
     assert math.isclose(payload["effective_sample_count_mean"], 512)
+    cell = payload["per_task_length"]["niah_single_1@4096"]
+    assert cell["bootstrap"]["quality_retention_95ci"] == pytest.approx(
+        [0.99, 0.99]
+    )
+    assert payload["per_length"]["4096"]["bootstrap"][
+        "quality_retention_95ci"
+    ] == pytest.approx([0.99, 0.99])
 
 
 def test_multimodel_summary_requires_identical_frozen_contract(

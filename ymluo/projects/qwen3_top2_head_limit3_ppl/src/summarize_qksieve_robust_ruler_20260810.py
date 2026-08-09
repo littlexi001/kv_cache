@@ -94,6 +94,72 @@ def _percentile(values: list[float], probability: float) -> float:
     return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
 
 
+def _bootstrap_pair_rows(
+    pairs: list[dict[str, dict[str, str]]],
+    resamples: int,
+    rng: random.Random,
+) -> dict[str, Any]:
+    retentions: list[float] = []
+    deltas: list[float] = []
+    for _ in range(max(0, resamples)):
+        sampled = [rng.choice(pairs) for _ in pairs]
+        full = base.mean(
+            [float(pair[base.REFERENCE_METHOD]["score"]) for pair in sampled]
+        )
+        ours = base.mean(
+            [float(pair[contract.METHOD]["score"]) for pair in sampled]
+        )
+        if full > 0.0:
+            retentions.append(ours / full)
+        deltas.append(ours - full)
+    result: dict[str, Any] = {}
+    if deltas:
+        result["macro_score_delta_95ci"] = [
+            _percentile(deltas, 0.025),
+            _percentile(deltas, 0.975),
+        ]
+    if retentions:
+        result["quality_retention_95ci"] = [
+            _percentile(retentions, 0.025),
+            _percentile(retentions, 0.975),
+        ]
+    result["retention_defined_resamples"] = len(retentions)
+    return result
+
+
+def _bootstrap_cells(
+    cells: list[dict[str, Any]],
+    resamples: int,
+    rng: random.Random,
+) -> dict[str, Any]:
+    retentions: list[float] = []
+    deltas: list[float] = []
+    for _ in range(max(0, resamples)):
+        sampled = [rng.choice(cells) for _ in cells]
+        full = base.mean(
+            [float(cell[base.REFERENCE_METHOD]["score"]) for cell in sampled]
+        )
+        ours = base.mean(
+            [float(cell[contract.METHOD]["score"]) for cell in sampled]
+        )
+        if full > 0.0:
+            retentions.append(ours / full)
+        deltas.append(ours - full)
+    result: dict[str, Any] = {}
+    if deltas:
+        result["macro_score_delta_95ci"] = [
+            _percentile(deltas, 0.025),
+            _percentile(deltas, 0.975),
+        ]
+    if retentions:
+        result["quality_retention_95ci"] = [
+            _percentile(retentions, 0.025),
+            _percentile(retentions, 0.975),
+        ]
+    result["retention_defined_resamples"] = len(retentions)
+    return result
+
+
 def summarize(
     rows: list[dict[str, str]],
     tasks: tuple[str, ...],
@@ -108,57 +174,57 @@ def summarize(
     ] = defaultdict(list)
     for (task, length, _), pair in grouped.items():
         by_cell[(task, length)].append(pair)
-    per_task_length = {
-        f"{task}@{length}": {
-            "task": task,
-            "length": length,
-            **base.cell_metrics(by_cell[(task, length)]),
-        }
-        for task in tasks
-        for length in length_samples
-    }
-    per_length = {
-        str(length): base.aggregate_cells(
-            [per_task_length[f"{task}@{length}"] for task in tasks]
-        )
-        for length in length_samples
-    }
-    overall = base.aggregate_cells(list(per_task_length.values()))
+    per_task_length: dict[str, dict[str, Any]] = {}
+    cell_index = 0
+    for task in tasks:
+        for length in length_samples:
+            key = f"{task}@{length}"
+            per_task_length[key] = {
+                "task": task,
+                "length": length,
+                **base.cell_metrics(by_cell[(task, length)]),
+                "bootstrap": {
+                    "unit": "paired example",
+                    "resamples": bootstrap_resamples,
+                    "seed": seed + cell_index,
+                    **_bootstrap_pair_rows(
+                        by_cell[(task, length)],
+                        bootstrap_resamples,
+                        random.Random(seed + cell_index),
+                    ),
+                },
+            }
+            cell_index += 1
 
-    rng = random.Random(seed)
-    cell_keys = sorted(per_task_length)
-    retention_samples: list[float] = []
-    delta_samples: list[float] = []
-    for _ in range(max(0, bootstrap_resamples)):
-        sampled = [rng.choice(cell_keys) for _ in cell_keys]
-        full = sum(
-            per_task_length[key][base.REFERENCE_METHOD]["score"]
-            for key in sampled
-        ) / len(sampled)
-        ours = sum(
-            per_task_length[key][contract.METHOD]["score"]
-            for key in sampled
-        ) / len(sampled)
-        if full > 0.0:
-            retention_samples.append(ours / full)
-        delta_samples.append(ours - full)
+    per_length: dict[str, dict[str, Any]] = {}
+    for length_index, length in enumerate(length_samples):
+        cells = [per_task_length[f"{task}@{length}"] for task in tasks]
+        per_length[str(length)] = {
+            **base.aggregate_cells(cells),
+            "bootstrap": {
+                "unit": "task cell",
+                "resamples": bootstrap_resamples,
+                "seed": seed + 1000 + length_index,
+                **_bootstrap_cells(
+                    cells,
+                    bootstrap_resamples,
+                    random.Random(seed + 1000 + length_index),
+                ),
+            },
+        }
+    overall = base.aggregate_cells(list(per_task_length.values()))
 
     sparse_rows = [pair[contract.METHOD] for pair in grouped.values()]
     bootstrap: dict[str, Any] = {
         "unit": "task-length cell",
         "resamples": bootstrap_resamples,
         "seed": seed,
+        **_bootstrap_cells(
+            list(per_task_length.values()),
+            bootstrap_resamples,
+            random.Random(seed),
+        ),
     }
-    if delta_samples:
-        bootstrap["macro_score_delta_95ci"] = [
-            _percentile(delta_samples, 0.025),
-            _percentile(delta_samples, 0.975),
-        ]
-    if retention_samples:
-        bootstrap["quality_retention_95ci"] = [
-            _percentile(retention_samples, 0.025),
-            _percentile(retention_samples, 0.975),
-        ]
     return {
         "schema": "qksieve_robust_ruler_summary_v1",
         "strict_pairs": len(grouped),

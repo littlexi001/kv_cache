@@ -12,7 +12,30 @@ import matplotlib.pyplot as plt
 
 
 ROOT = Path(__file__).resolve().parents[1]
-RULER_LENGTHS = {"4096", "8192", "16384", "32768", "65536", "131072"}
+RULER_LENGTH_SAMPLES = {
+    "4096": 10,
+    "8192": 10,
+    "16384": 10,
+    "32768": 10,
+    "65536": 5,
+    "131072": 5,
+}
+RULER_LENGTHS = set(RULER_LENGTH_SAMPLES)
+RULER_TASKS = {
+    "niah_single_1",
+    "niah_single_2",
+    "niah_single_3",
+    "niah_multikey_1",
+    "niah_multikey_2",
+    "niah_multikey_3",
+    "niah_multivalue",
+    "niah_multiquery",
+    "vt",
+    "cwe",
+    "fwe",
+    "qa_squad",
+    "qa_hotpot",
+}
 MODEL_ORDER = ("llama31_8b", "qwen3_4b", "mistral_7b")
 
 
@@ -76,14 +99,28 @@ def validate(ruler: dict[str, Any], multimodel: dict[str, Any]) -> str:
 
     if ruler.get("strict_pairs") != 650 or ruler.get("rows") != 1300:
         raise ValueError("RULER evidence is not the complete 650-pair run")
-    if len(ruler.get("tasks", [])) != 13:
-        raise ValueError("RULER evidence does not cover 13 tasks")
+    if set(ruler.get("tasks", [])) != RULER_TASKS:
+        raise ValueError("RULER evidence does not cover the formal 13 tasks")
+    length_samples = {
+        str(length): int(samples)
+        for length, samples in ruler.get("length_samples", {}).items()
+    }
+    if length_samples != RULER_LENGTH_SAMPLES:
+        raise ValueError("RULER sample grid drifted")
     if set(ruler.get("per_length", {})) != RULER_LENGTHS:
         raise ValueError("RULER evidence does not cover the frozen length grid")
     if ruler.get("fallback_count") != 0:
         raise ValueError("RULER evidence observed a Full fallback")
     if ruler.get("bootstrap", {}).get("quality_retention_95ci") is None:
         raise ValueError("RULER quality confidence interval is missing")
+    for length, row in ruler["per_length"].items():
+        if row.get("cells") != 13:
+            raise ValueError(f"RULER {length}: incomplete task aggregate")
+        if row.get("bootstrap", {}).get("quality_retention_95ci") is None:
+            raise ValueError(f"RULER {length}: confidence interval is missing")
+        for field in ("full_macro", "qksieve_macro"):
+            if field not in row:
+                raise ValueError(f"RULER {length}: missing {field}")
 
     models = multimodel.get("models", {})
     if set(models) != set(MODEL_ORDER):
@@ -91,6 +128,10 @@ def validate(ruler: dict[str, Any], multimodel: dict[str, Any]) -> str:
     for model, row in models.items():
         if row.get("strict_pairs") != 160 or row.get("tasks") != 16:
             raise ValueError(f"{model}: incomplete LongBench screen")
+        if row.get("full_fallback_count") != 0:
+            raise ValueError(f"{model}: Full fallback was observed")
+        if len(row.get("per_task", {})) != 16:
+            raise ValueError(f"{model}: per-task evidence is incomplete")
         if row.get("quality_retention_95ci") is None:
             raise ValueError(f"{model}: quality confidence interval is missing")
     return str(method)
@@ -100,15 +141,15 @@ def main() -> None:
     args = parse_args()
     ruler = read_json(args.ruler)
     multimodel = read_json(args.multimodel)
-    method = validate(ruler, multimodel)
+    validate(ruler, multimodel)
 
     lengths = sorted(int(value) for value in ruler["per_length"])
     full_scores = [
-        float(ruler["per_length"][str(length)]["full_kv"]["score"])
+        float(ruler["per_length"][str(length)]["full_macro"])
         for length in lengths
     ]
     ours_scores = [
-        float(ruler["per_length"][str(length)][method]["score"])
+        float(ruler["per_length"][str(length)]["qksieve_macro"])
         for length in lengths
     ]
 

@@ -246,12 +246,42 @@ def validate_ruler(payload: dict[str, Any]) -> dict[str, Any]:
         samples = int(row.get("samples", -1))
         if samples != RULER_LENGTH_SAMPLES[length]:
             raise AssertionError("RULER task-length cell sample count drifted")
+        cell_bootstrap = row.get("bootstrap", {})
+        if int(cell_bootstrap.get("resamples", 0)) < 10000:
+            raise AssertionError("RULER cell bootstrap is incomplete")
+        _validate_interval(
+            cell_bootstrap.get("macro_score_delta_95ci"),
+            "RULER cell macro-score interval",
+        )
+        full_cell = row.get("full_kv")
+        if not isinstance(full_cell, dict):
+            raise AssertionError("RULER cell lacks Full metrics")
+        full_score = _finite_number(
+            full_cell.get("score"),
+            "RULER cell Full score",
+        )
+        if full_score > 0.0:
+            _validate_interval(
+                cell_bootstrap.get("quality_retention_95ci"),
+                "RULER cell retention interval",
+            )
         observed_samples += samples
     if observed_samples != 650:
         raise AssertionError("RULER task-length samples do not sum to 650")
     for length, row in payload["per_length"].items():
         if int(row.get("cells", -1)) != len(RULER_TASKS):
             raise AssertionError(f"RULER {length} does not aggregate 13 tasks")
+        length_bootstrap = row.get("bootstrap", {})
+        if int(length_bootstrap.get("resamples", 0)) < 10000:
+            raise AssertionError(f"RULER {length} bootstrap is incomplete")
+        _validate_interval(
+            length_bootstrap.get("macro_score_delta_95ci"),
+            f"RULER {length} macro-score interval",
+        )
+        _validate_interval(
+            length_bootstrap.get("quality_retention_95ci"),
+            f"RULER {length} retention interval",
+        )
     if int(payload.get("overall", {}).get("cells", -1)) != 78:
         raise AssertionError("RULER overall aggregate does not contain 78 cells")
     bootstrap = payload.get("bootstrap", {})

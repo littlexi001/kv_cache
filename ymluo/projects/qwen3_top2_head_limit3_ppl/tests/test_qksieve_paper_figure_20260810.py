@@ -38,11 +38,12 @@ def frozen_contract() -> dict[str, object]:
 
 def valid_payloads() -> tuple[dict[str, object], dict[str, object]]:
     contract = frozen_contract()
-    method = str(contract["method"])
     per_length = {
         length: {
-            "full_kv": {"score": 1.0},
-            method: {"score": 0.99},
+            "full_macro": 1.0,
+            "qksieve_macro": 0.99,
+            "cells": 13,
+            "bootstrap": {"quality_retention_95ci": [0.98, 1.0]},
         }
         for length in MODULE.RULER_LENGTHS
     }
@@ -50,7 +51,8 @@ def valid_payloads() -> tuple[dict[str, object], dict[str, object]]:
         "schema": "qksieve_robust_ruler_summary_v1",
         "strict_pairs": 650,
         "rows": 1300,
-        "tasks": [f"task{i}" for i in range(13)],
+        "tasks": sorted(MODULE.RULER_TASKS),
+        "length_samples": dict(MODULE.RULER_LENGTH_SAMPLES),
         "per_length": per_length,
         "fallback_count": 0,
         "bootstrap": {"quality_retention_95ci": [0.98, 1.0]},
@@ -63,8 +65,10 @@ def valid_payloads() -> tuple[dict[str, object], dict[str, object]]:
             name: {
                 "strict_pairs": 160,
                 "tasks": 16,
+                "full_fallback_count": 0,
                 "quality_retention": 0.99,
                 "quality_retention_95ci": [0.98, 1.0],
+                "per_task": {f"task{i}": {"samples": 10} for i in range(16)},
             }
             for name in MODULE.MODEL_ORDER
         },
