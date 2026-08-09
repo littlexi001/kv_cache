@@ -25,7 +25,8 @@ linear transforms.  The transforms are biorthogonal: before quantization they
 preserve every dot product exactly, while both transformed second moments
 equal the same diagonal joint-energy spectrum.  \method groups the 128
 coordinates into eight 16-D bands and assigns each 0/1/2/4/8 bits by exactly
-minimizing empirical attention-logit MSE under a 240-bit token/head budget.
+minimizing a separable bandwise logit-MSE surrogate under a 240-bit
+token/head budget.
 The resulting Key index adds 5.86\% to FP16 K+V storage.
 
 At decode step $t$, a packed scan selects

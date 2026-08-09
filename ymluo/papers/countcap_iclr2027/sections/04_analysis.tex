@@ -26,7 +26,10 @@ Cartesian Query--Key sample gives
  \mathbb E(q'^\top e)^2=\tr(C'_qC_e),
  \label{eq:main-qmse}
 \end{equation}
-which is precisely the objective in \cref{eq:band-qmse}; Key-MSE
+The allocator minimizes the sum of its within-band blocks in
+\cref{eq:band-qmse}; this equals the full score MSE when either moment is
+block diagonal in the chosen bands.  Otherwise the omitted cross-band term is
+explicitly bounded and audited in \cref{eq:cross-band-bound}.  Key-MSE
 $\tr(C_e)$ is correct only for isotropic $C'_q$.  Under Query drift
 $\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$,
 \begin{equation}

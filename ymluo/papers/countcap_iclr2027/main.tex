@@ -64,7 +64,8 @@ GPU-resident exact-KV retrieval method.  Request-local Query and Key second
 moments define biorthogonal coordinates that preserve every unquantized dot
 product exactly and order dimensions by joint score energy.  A per-layer,
 per-KV-head allocator assigns 0/1/2/4/8 bits to eight 16-D bands under a
-240-bit token/head budget by minimizing empirical attention-logit MSE.  The
+240-bit token/head budget by minimizing a separable bandwise logit-MSE
+surrogate.  The
 packed index selects
 $B(N)=\min\{N,1280,\max(256,\lceil.06N\rceil)\}$ positions, after which
 original FP16 K/V receive exact sparse attention.  No learned router,

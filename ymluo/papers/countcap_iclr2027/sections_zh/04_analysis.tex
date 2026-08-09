@@ -23,8 +23,10 @@
  \mathbb E(q'^\top e)^2=\tr(C'_qC_e),
  \label{eq:main-qmse}
 \end{equation}
-这正是\cref{eq:band-qmse}的目标；Key-MSE $\tr(C_e)$ 只有在 $C'_q$ 各向
-同性时才正确。若 decode Query 发生漂移
+allocator 最小化\cref{eq:band-qmse}中各 band 的对角块之和；当任一二阶矩在
+这些 band 上为 block diagonal 时，它等于完整 score MSE。否则遗漏的
+cross-band 项由\cref{eq:cross-band-bound}显式约束并审计。Key-MSE
+$\tr(C_e)$ 只有在 $C'_q$ 各向同性时才正确。若 decode Query 发生漂移
 $\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$，则
 \begin{equation}
  |\tr(\Delta C_e)|\le\|\Delta\|_{\op}\tr(C_e).

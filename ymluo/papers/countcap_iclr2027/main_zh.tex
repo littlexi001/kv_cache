@@ -71,7 +71,8 @@ selector 明显便宜于稠密 QK 打分、同时忠实保持 Query--Key 联合�
 方法。每一层、每个 KV head 的 request-local Query 与 Key 二阶矩共同定义一组
 双正交坐标；它精确保持所有未量化点积，并按联合分数能量排列维度。随后，
 per-layer/per-head allocator 在 240 bit/token/head 预算下，为八个 16 维 band
-分配 0/1/2/4/8 bit，使经验 attention-logit MSE 最小。Packed index 为每个
+分配 0/1/2/4/8 bit，并精确最小化可分的 bandwise logit-MSE surrogate。
+Packed index 为每个
 Query head 选择
 $B(N)=\min\{N,1280,\max(256,\lceil.06N\rceil)\}$ 个位置，再对原始 FP16 K/V
 执行精确稀疏 attention。方法不使用学习式 router、精确 QK 重排、任务规则或

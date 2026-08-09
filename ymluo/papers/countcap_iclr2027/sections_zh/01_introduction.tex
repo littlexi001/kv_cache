@@ -19,8 +19,8 @@ K/V 执行精确 attention。FIER 表明 1-bit Key 也能保留有用的排序
 KV head，prompt 样本定义两个 request-local 线性变换。它们是双正交的：量化
 前精确保持每个点积，同时使变换后的 Query 与 Key 二阶矩等于同一个对角联合
 能量谱。\method 将 128 个坐标分成八个 16 维 band，并在
-240 bit/token/head 预算下精确求解 0/1/2/4/8-bit allocation，使经验
-attention-logit MSE 最小。Key index 额外占 FP16 K+V 的 5.86\%。
+240 bit/token/head 预算下精确求解 0/1/2/4/8-bit allocation，使可分的
+bandwise logit-MSE surrogate 最小。Key index 额外占 FP16 K+V 的 5.86\%。
 
 每一步 decode 中，packed scan 为每个 Query head 选择
 \begin{equation}
