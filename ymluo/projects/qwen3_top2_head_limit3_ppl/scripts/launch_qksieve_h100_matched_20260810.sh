@@ -9,6 +9,7 @@ ATTENTION_RUNNER="${ROOT}/src/benchmark_qksieve_fier_mha_speed_20260808.py"
 DECODE_LAUNCHER="${ROOT}/scripts/launch_qksieve_mha_real_decode_20260809.sh"
 PERSISTENT_CASE="${ROOT}/scripts/run_qksieve_persistent_kv_case_20260810.sh"
 SUMMARIZER="${ROOT}/src/summarize_qksieve_h100_20260810.py"
+FROZEN_CONFIG="${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json"
 SEEDS="${SEEDS:-20260810,20260811,20260812}"
 GPU_64K="${GPU_64K:-0}"
 GPU_128K="${GPU_128K:-0,1}"
@@ -45,10 +46,39 @@ for device in $(printf '%s\n' "${device_list[@]}" | sort -u); do
   fi
 done
 
-if [[ ! -f "${MODEL}/config.json" ]]; then
+if [[ ! -f "${MODEL}/config.json" ]] || [[ ! -f "${FROZEN_CONFIG}" ]]; then
   echo "missing MHA model: ${MODEL}" >"${RUN_ROOT}/logs/model_error.log"
   fail
 fi
+
+{
+  echo "schema=qksieve_h100_matched_protocol_v1"
+  echo "source_tree_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unavailable)"
+  "${PYTHON}" - "${FROZEN_CONFIG}" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+print(f"numerical_freeze_commit_sha={payload['numerical_freeze_commit_sha']}")
+print(
+    "audited_implementation_commit_sha="
+    f"{payload['audited_implementation_commit_sha']}"
+)
+PY
+  echo "model=${MODEL}"
+  echo "seeds=${SEEDS}"
+  echo "gpu_64k=${GPU_64K}"
+  echo "gpu_128k=${GPU_128K}"
+  nvidia-smi --query-gpu=index,name,uuid,memory.total,driver_version \
+    --format=csv,noheader,nounits
+  sha256sum \
+    "${FROZEN_CONFIG}" \
+    "${MODEL}/config.json" \
+    "${ATTENTION_RUNNER}" \
+    "${DECODE_LAUNCHER}" \
+    "${PERSISTENT_CASE}" \
+    "${SUMMARIZER}"
+} >"${RUN_ROOT}/manifest.txt" || fail
 
 IFS=',' read -r -a seed_list <<<"${SEEDS}"
 for seed in "${seed_list[@]}"; do

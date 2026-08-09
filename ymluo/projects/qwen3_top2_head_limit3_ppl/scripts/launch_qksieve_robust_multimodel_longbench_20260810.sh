@@ -8,6 +8,7 @@ RUN_ROOT="${RUN_ROOT:-${ROOT}/results/20260810_qksieve_robust_multimodel_m10_v1}
 RUNNER="${ROOT}/src/run_sample_calibrated_longbench_20260717.py"
 SUMMARIZER="${ROOT}/src/summarize_qksieve_robust_longbench_20260810.py"
 COMBINER="${ROOT}/src/summarize_qksieve_robust_multimodel_20260810.py"
+FROZEN_CONFIG="${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json"
 METHOD="qksieve_qmse_oas_requestlocal_valuesketch16_sorted_c64"
 TASKS="narrativeqa,qasper,multifieldqa_en,hotpotqa,2wikimqa,musique,gov_report,qmsum,multi_news,trec,triviaqa,samsum,passage_count,passage_retrieval_en,lcc,repobench-p"
 MAX_SAMPLES_PER_TASK="${MAX_SAMPLES_PER_TASK:-10}"
@@ -108,7 +109,18 @@ run_model() {
   mkdir -p "${output}/logs"
   {
     echo "schema=qksieve_robust_multimodel_longbench_v1"
-    echo "git_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+    echo "source_tree_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unavailable)"
+    "${PYTHON}" - "${FROZEN_CONFIG}" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+print(f"numerical_freeze_commit_sha={payload['numerical_freeze_commit_sha']}")
+print(
+    "audited_implementation_commit_sha="
+    f"{payload['audited_implementation_commit_sha']}"
+)
+PY
     echo "model=${model}"
     echo "prompt_wrapper=${wrapper}"
     echo "sample_offset_per_task=${SAMPLE_OFFSET_PER_TASK}"
@@ -119,7 +131,7 @@ run_model() {
     sha256sum \
       "${model}/config.json" \
       "${DATA_DIR}/manifest.json" \
-      "${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json" \
+      "${FROZEN_CONFIG}" \
       "${ROOT}/src/run_head_top2_targeted_ppl_20260714.py" \
       "${RUNNER}" "${SUMMARIZER}"
   } >"${output}/manifest.txt" || return 1

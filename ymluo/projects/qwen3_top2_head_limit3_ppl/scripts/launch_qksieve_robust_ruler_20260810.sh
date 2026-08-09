@@ -16,6 +16,7 @@ RUNNER="${ROOT}/src/run_sample_calibrated_ruler_20260717.py"
 PREPARE="${ROOT}/src/prepare_hierarchical_ruler_data_20260716.py"
 SUMMARIZER="${ROOT}/src/summarize_qksieve_robust_ruler_20260810.py"
 PROMPT_AUDITOR="${ROOT}/src/audit_qksieve_ruler_prompt_lengths_20260810.py"
+FROZEN_CONFIG="${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json"
 METHOD="qksieve_qmse_oas_requestlocal_valuesketch16_sorted_c64"
 TASKS="niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multivalue,niah_multiquery,vt,cwe,fwe,qa_squad,qa_hotpot"
 SHORT_LENGTHS="4096,8192,16384,32768"
@@ -156,7 +157,18 @@ prepare_data "${LONG_DATA}" "${LONG_LENGTHS}" 5 \
 
 {
   echo "schema=qksieve_robust_ruler_protocol_v1"
-  echo "git_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
+  echo "source_tree_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unavailable)"
+  "${PYTHON}" - "${FROZEN_CONFIG}" <<'PY'
+import json
+import sys
+
+payload = json.load(open(sys.argv[1], encoding="utf-8"))
+print(f"numerical_freeze_commit_sha={payload['numerical_freeze_commit_sha']}")
+print(
+    "audited_implementation_commit_sha="
+    f"{payload['audited_implementation_commit_sha']}"
+)
+PY
   echo "model=${MODEL}"
   echo "lm_eval_commit=$(git -C "${LM_EVAL}" rev-parse HEAD)"
   echo "tasks=${TASKS}"
@@ -166,7 +178,7 @@ prepare_data "${LONG_DATA}" "${LONG_LENGTHS}" 5 \
   echo "max_quantile_samples=${QKSIEVE_MAX_QUANTILE_SAMPLE_COUNT}"
   echo "value_tail_alpha=${QKSIEVE_VALUE_SKETCH_TAIL_ALPHA}"
   sha256sum \
-    "${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json" \
+    "${FROZEN_CONFIG}" \
     "${ROOT}/src/run_head_top2_targeted_ppl_20260714.py" \
     "${ROOT}/src/run_sample_calibrated_longbench_20260717.py" \
     "${RUNNER}" "${SUMMARIZER}" "${PROMPT_AUDITOR}" \

@@ -199,3 +199,17 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
         assert "QKSIEVE_VALUE_SKETCH_TAIL_ALPHA=0.5" in text
         assert "QKSIEVE_DEBUG_DISABLE_VALUE_SKETCH=0" in text
         assert "--minimum_sparse_prefix_tokens 0" in text
+        assert "numerical_freeze_commit_sha=" in text
+        assert "audited_implementation_commit_sha=" in text
+
+
+def test_h100_launcher_records_frozen_provenance() -> None:
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "scripts"
+        / "launch_qksieve_h100_matched_20260810.sh"
+    ).read_text(encoding="utf-8")
+    assert "schema=qksieve_h100_matched_protocol_v1" in script
+    assert "numerical_freeze_commit_sha=" in script
+    assert "audited_implementation_commit_sha=" in script
+    assert "nvidia-smi --query-gpu=" in script
