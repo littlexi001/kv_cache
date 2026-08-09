@@ -122,6 +122,7 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         {
             "history_tokens": length,
             "cold_speedup": 0.5,
+            "cold_end_to_end_speedup": 0.5,
             "warm_speedup": 2.0,
             "shared_prefix_amortized_speedup": 1.5,
             "append_only_speedup": 2.0,

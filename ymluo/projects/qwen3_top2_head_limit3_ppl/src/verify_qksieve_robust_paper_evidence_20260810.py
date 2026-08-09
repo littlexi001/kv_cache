@@ -412,6 +412,7 @@ def validate_h100(payload: dict[str, Any]) -> dict[str, Any]:
             "requests",
             (
                 "cold_speedup",
+                "cold_end_to_end_speedup",
                 "warm_speedup",
                 "shared_prefix_amortized_speedup",
                 "append_only_speedup",

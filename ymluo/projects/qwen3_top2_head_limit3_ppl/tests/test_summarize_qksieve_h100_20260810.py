@@ -71,6 +71,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
             common = {
                 "history_tokens": length,
                 "cold_persistent_request_ms_per_token": 20.0,
+                "cold_end_to_end_request_ms_per_token": 100.0,
                 "shared_prefix_warm_mean_ms_per_token": 10.0,
                 "shared_prefix_amortized_ms_per_token": 12.0,
                 "append_only_ms_per_token": 8.0,
@@ -91,6 +92,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "method": "qksieve_robust",
                     **common,
                     "cold_persistent_request_ms_per_token": 40.0,
+                    "cold_end_to_end_request_ms_per_token": 200.0,
                     "shared_prefix_warm_mean_ms_per_token": 5.0,
                     "shared_prefix_amortized_ms_per_token": 6.0,
                     "append_only_ms_per_token": 4.0,
@@ -107,6 +109,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
     assert payload["steady_decode"][0]["steady_decode_speedup"] == 3.0
     persistent = payload["persistent_requests"][0]
     assert persistent["cold_speedup"] == 0.5
+    assert persistent["cold_end_to_end_speedup"] == 0.5
     assert persistent["warm_speedup"] == 2.0
     assert payload["hardware"]["device_names"] == ["NVIDIA H100 80GB HBM3"]
     assert payload["frozen_contract"] == contract.contract_payload()

@@ -159,6 +159,7 @@ def summarize_persistent(run_root: Path, expected_seeds: int) -> list[dict[str, 
     )
     metric_fields = {
         "cold_speedup": "cold_persistent_request_ms_per_token",
+        "cold_end_to_end_speedup": "cold_end_to_end_request_ms_per_token",
         "warm_speedup": "shared_prefix_warm_mean_ms_per_token",
         "shared_prefix_amortized_speedup": "shared_prefix_amortized_ms_per_token",
         "append_only_speedup": "append_only_ms_per_token",
@@ -219,7 +220,8 @@ def summarize(run_root: Path, expected_seeds: int) -> dict[str, Any]:
         "claim_boundary": (
             "Matched H100 measurements with resident GPU K/V. Attention is a "
             "single MHA-layer path; decode is whole-model steady generation; "
-            "persistent requests separately include per-request index build."
+            "persistent cold speed separately includes per-request index build, "
+            "while cold_end_to_end also includes directly timed dense prefill."
         ),
     }
 

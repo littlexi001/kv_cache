@@ -188,7 +188,9 @@ H100 汇总和总 evidence verifier 会再次检查设备名必须包含 `H100`�
 必须报告：
 
 - 稳态 whole-model decode speed；
-- 包含 prefill 和 index build 的请求级 speed；
+- 不含 dense prefill、但包含 index build 的 cold persistent speed；
+- 从 dense prefill 前开始直接 wall-clock 计时、同时包含 index build 和首个完整
+  decode branch 的 cold end-to-end request speed；两者不得混写；
 - fixed overhead、break-even token 数；
 - Full/QKSieve PPL；
 - 每卡和总 peak allocated/reserved memory；

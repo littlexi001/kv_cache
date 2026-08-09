@@ -242,6 +242,7 @@ def main() -> None:
     rewind_records: list[dict[str, int]] = []
     persistent_snapshots: list[dict[str, Any]] = []
     initial_persistent_snapshot: dict[str, Any] = {}
+    cold_end_to_end_wall_seconds: float | None = None
     method_name = "direct_countcap" if sparse else "full_attention"
 
     with direct.sparse_context(args, method_name):
@@ -312,6 +313,11 @@ def main() -> None:
             )
             branch["branch_index"] = branch_index
             branches.append(branch)
+            if branch_index == 0:
+                sync(input_device)
+                cold_end_to_end_wall_seconds = (
+                    time.perf_counter() - prefill_start
+                )
             if sparse:
                 snapshot = active_qksieve_persistent_state_signature()
                 validate_sparse_snapshot(
@@ -410,6 +416,8 @@ def main() -> None:
             == expected_sparse_layers
         )
     )
+    if cold_end_to_end_wall_seconds is None:
+        raise RuntimeError("cold end-to-end request timing was not recorded")
     result = {
         "schema": "qksieve_persistent_kv_lifecycle_v2",
         "method": args.method,
@@ -431,6 +439,10 @@ def main() -> None:
         ),
         "cold_persistent_request_ms_per_token": 1000.0
         * (prebuild_wall_seconds + float(branches[0]["wall_seconds"]))
+        / args.branch_steps,
+        "cold_end_to_end_request_seconds": cold_end_to_end_wall_seconds,
+        "cold_end_to_end_request_ms_per_token": 1000.0
+        * cold_end_to_end_wall_seconds
         / args.branch_steps,
         "shared_prefix_warm_mean_ms_per_token": shared_prefix_warm_mean_ms,
         "shared_prefix_amortized_ms_per_token": 1000.0
