@@ -13,6 +13,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import qksieve_robust_contract_20260810 as contract  # noqa: E402
+import run_sample_calibrated_longbench_20260717 as long_runner  # noqa: E402
 import summarize_qksieve_robust_longbench_20260810 as long_summary  # noqa: E402
 import summarize_qksieve_robust_multimodel_20260810 as multi_summary  # noqa: E402
 import summarize_qksieve_robust_ruler_20260810 as ruler_summary  # noqa: E402
@@ -104,6 +105,14 @@ def test_contract_distinguishes_configured_and_effective_samples() -> None:
     assert contract.expected_configured_sample_count(131072) == 6656
     assert contract.expected_effective_sample_count(131072) == 512
     contract.audit_sparse_row(_sparse_fields(131072))
+
+
+def test_frozen_method_is_registered_by_the_shared_runner() -> None:
+    assert long_runner.parse_methods(f"full_kv,{contract.METHOD}") == [
+        "full_kv",
+        contract.METHOD,
+    ]
+    assert long_runner.QKSIEVE_FROZEN_C64_METHOD == contract.METHOD
 
 
 def test_contract_rejects_wrong_tail_alpha() -> None:
