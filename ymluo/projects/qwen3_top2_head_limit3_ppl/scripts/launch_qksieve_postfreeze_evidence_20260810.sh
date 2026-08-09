@@ -13,6 +13,7 @@ EVIDENCE_ROOT="${ROOT}/results/20260810_qksieve_postfreeze_evidence_v1"
 export PATH="$(dirname "${PYTHON}"):/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export QKSIEVE_VALUE_SKETCH_TAIL_ALPHA=0.5
+export QKSIEVE_TRUST_REMOTE_CODE=0
 mkdir -p "${EVIDENCE_ROOT}/logs"
 touch "${EVIDENCE_ROOT}/RUNNING"
 rm -f "${EVIDENCE_ROOT}/ALL_COMPLETE" "${EVIDENCE_ROOT}/FAILED"
