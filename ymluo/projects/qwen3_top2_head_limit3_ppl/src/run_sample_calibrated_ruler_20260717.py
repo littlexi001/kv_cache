@@ -164,6 +164,30 @@ def method_audit_fields(
         "qk_batched_allocation_layers": result.get(
             "qk_batched_allocation_layers", 0
         ),
+        "packed_qmse_sample_count": result.get(
+            "packed_qmse_sample_count", 0.0
+        ),
+        "packed_qmse_value_sketch_rank": result.get(
+            "packed_qmse_value_sketch_rank", 0.0
+        ),
+        "packed_qmse_value_sketch_bits": result.get(
+            "packed_qmse_value_sketch_bits", 0.0
+        ),
+        "packed_qmse_value_sketch_executed": result.get(
+            "packed_qmse_value_sketch_executed", 0.0
+        ),
+        "packed_qmse_value_sketch_tail_alpha": result.get(
+            "packed_qmse_value_sketch_tail_alpha", 0.0
+        ),
+        "packed_qmse_debug_value_sketch_disabled": result.get(
+            "packed_qmse_debug_value_sketch_disabled", 0.0
+        ),
+        "sampled_candidate_overflow_fraction": result.get(
+            "sampled_candidate_overflow_fraction", 0.0
+        ),
+        "sampled_quantile_fallback": result.get(
+            "sampled_quantile_fallback", 0.0
+        ),
     }
 
 

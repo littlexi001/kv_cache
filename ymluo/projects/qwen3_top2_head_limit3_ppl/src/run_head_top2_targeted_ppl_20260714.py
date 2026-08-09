@@ -17096,14 +17096,11 @@ def _qksieve_frozen_decode_fast_attention(
     if query_groups != 4 or head_dim != 128:
         return None
 
-    sample_count = min(
+    sample_count = _resolve_packed_qmse_sample_count(
         history_count,
-        8192,
-        max(
-            256,
-            runtime["configured_sample_count"],
-            math.ceil(runtime["minimum_tail_samples"] / selected_fraction),
-        ),
+        runtime["configured_sample_count"],
+        selected_fraction,
+        maximum_sample_count=8192,
     )
     threshold_selected_rank = max(
         1,
@@ -25669,7 +25666,9 @@ def rewind_active_qksieve_cache(
             f"cannot rewind cache from {cache_length} to {active_length}"
         )
 
-    rewinds: list[tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]] = []
+    rewinds: list[
+        tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]
+    ] = []
     for layer_index, state in _ACTIVE_QABS_PCA_STATES.items():
         indexed_count = state.get("packed_qmse_indexed_count")
         if indexed_count is None:
@@ -25682,8 +25681,8 @@ def rewind_active_qksieve_cache(
         packed_index = state.get("packed_qmse_index")
         if not isinstance(packed_index, dict):
             raise RuntimeError(f"layer {layer_index} lacks a packed Key index")
-        value_runtime = state.get("qksieve_frozen_value_sketch_runtime")
-        if isinstance(value_runtime, dict):
+        value_runtime = _active_value_sketch_runtime_view(state)
+        if value_runtime is not None:
             value_indexed_count = int(value_runtime.get("indexed_count", 0))
             if value_indexed_count < active_length:
                 raise RuntimeError(
@@ -25707,6 +25706,9 @@ def rewind_active_qksieve_cache(
             prefix = value_runtime.get("prefix")
             if isinstance(prefix, str) and prefix:
                 state[f"{prefix}_indexed_count"] = active_length
+            frozen_runtime = value_runtime.get("_frozen_runtime")
+            if isinstance(frozen_runtime, dict):
+                frozen_runtime["indexed_count"] = active_length
             value_layers += 1
         for name in tuple(state):
             if (
@@ -25734,9 +25736,7 @@ def active_qksieve_persistent_state_signature() -> dict[str, Any]:
         packed_index = state.get("packed_qmse_index")
         if not isinstance(packed_index, dict):
             continue
-        value_runtime = state.get("qksieve_frozen_value_sketch_runtime")
-        if not isinstance(value_runtime, dict):
-            value_runtime = {}
+        value_runtime = _active_value_sketch_runtime_view(state) or {}
         layers.append(
             {
                 "layer": int(layer_index),
@@ -25749,6 +25749,9 @@ def active_qksieve_persistent_state_signature() -> dict[str, Any]:
                 "key_rebuild_count": int(
                     state.get("packed_qmse_rebuild_count", 0)
                 ),
+                "value_rebuild_count": int(
+                    value_runtime.get("rebuild_count", 0)
+                ),
                 "key_code_ptr": pointer(packed_index.get("packed_codes")),
                 "key_scale_ptr": pointer(packed_index.get("key_scales")),
                 "value_code_ptr": pointer(value_runtime.get("packed_codes")),
@@ -25759,6 +25762,158 @@ def active_qksieve_persistent_state_signature() -> dict[str, Any]:
     if not layers:
         raise RuntimeError("no initialized QKSieve indexes are active")
     return {"layer_count": len(layers), "layers": layers}
+
+
+def _active_value_sketch_runtime_view(
+    state: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Normalize fast-path and generic Value-sketch state for audits."""
+    frozen_runtime = state.get("qksieve_frozen_value_sketch_runtime")
+    if isinstance(frozen_runtime, dict):
+        prefix = frozen_runtime.get("prefix")
+        if not isinstance(prefix, str) or not prefix:
+            raise RuntimeError("frozen Value-sketch runtime lacks a prefix")
+        return {
+            "prefix": prefix,
+            "indexed_count": int(frozen_runtime.get("indexed_count", 0)),
+            "rebuild_count": int(
+                state.get(f"{prefix}_rebuild_count", 0)
+            ),
+            "packed_codes": frozen_runtime.get("packed_codes"),
+            "minimum": frozen_runtime.get("minimum"),
+            "scale": frozen_runtime.get("scale"),
+            "_frozen_runtime": frozen_runtime,
+        }
+
+    suffix = "_packed_codes"
+    prefixes = sorted(
+        name[: -len(suffix)]
+        for name, value in state.items()
+        if name.startswith("qksieve_value_sketch_")
+        and name.endswith(suffix)
+        and isinstance(value, torch.Tensor)
+    )
+    if not prefixes:
+        return None
+    if len(prefixes) != 1:
+        raise RuntimeError(
+            "multiple generic Value-sketch indexes are active: "
+            + ", ".join(prefixes)
+        )
+    prefix = prefixes[0]
+    required = {
+        "packed_codes": state.get(f"{prefix}_packed_codes"),
+        "minimum": state.get(f"{prefix}_minimum"),
+        "scale": state.get(f"{prefix}_scale"),
+    }
+    missing = [
+        name for name, value in required.items()
+        if not isinstance(value, torch.Tensor)
+    ]
+    indexed_key = f"{prefix}_indexed_count"
+    if indexed_key not in state:
+        missing.append("indexed_count")
+    if missing:
+        raise RuntimeError(
+            f"generic Value-sketch {prefix} lacks: {', '.join(missing)}"
+        )
+    return {
+        "prefix": prefix,
+        "indexed_count": int(state[indexed_key]),
+        "rebuild_count": int(state.get(f"{prefix}_rebuild_count", 0)),
+        **required,
+    }
+
+
+@torch.inference_mode()
+def prebuild_active_packed_qmse_key_indices(
+    cache: Any,
+    max_workers: int = 12,
+) -> dict[str, float | int]:
+    """Build request-local packed Key indexes after QK factors are ready."""
+    if _ACTIVE_QABS_PCA_STATES is None:
+        raise RuntimeError("packed qMSE mode must be active before prebuilding")
+    if max_workers <= 0:
+        raise ValueError("max_workers must be positive")
+    key_cache = getattr(cache, "key_cache", None)
+    if key_cache is None:
+        raise TypeError("cache does not expose key_cache")
+    get_seq_length = getattr(cache, "get_seq_length", None)
+    score_mode, projection_dim = _ACTIVE_QABS_INDEX_CONFIG
+    if projection_dim != 128:
+        raise ValueError("packed qMSE prebuild requires projection_dim=128")
+
+    total_start = time.perf_counter()
+    extension_start = time.perf_counter()
+    import variablebit_spectral_cuda_20260727 as variablebit_cuda
+
+    variablebit_cuda.load_extension()
+    extension_load_seconds = time.perf_counter() - extension_start
+    jobs: list[tuple[torch.Tensor, dict[str, Any]]] = []
+    touched_devices: set[torch.device] = set()
+    existing_layers = 0
+    for layer_index, key_storage in enumerate(key_cache):
+        if not isinstance(key_storage, torch.Tensor) or not key_storage.numel():
+            continue
+        active_count = (
+            int(get_seq_length(layer_index))
+            if callable(get_seq_length)
+            else int(key_storage.shape[-2])
+        )
+        if not 0 < active_count <= int(key_storage.shape[-2]):
+            raise RuntimeError(
+                f"invalid active cache length {active_count} for layer "
+                f"{layer_index}"
+            )
+        state = _ACTIVE_QABS_PCA_STATES.setdefault(layer_index, {})
+        state["layer_index"] = layer_index
+        _configure_packed_qmse_state(state, score_mode)
+        if "packed_qmse_index" in state:
+            existing_layers += 1
+            continue
+        if (
+            str(state.get("packed_qmse_transform")) == "qk_metric"
+            and "packed_qmse_precomputed_qk_factors" not in state
+            and "packed_qmse_precomputed_initialization" not in state
+        ):
+            raise RuntimeError(
+                f"layer {layer_index} lacks precomputed QK factors"
+            )
+        jobs.append((key_storage[..., :active_count, :], state))
+        touched_devices.add(key_storage.device)
+
+    def build(job: tuple[torch.Tensor, dict[str, Any]]) -> None:
+        key_history, state = job
+        _packed_qmse_initialize(key_history, state)
+
+    build_start = time.perf_counter()
+    workers = min(max_workers, max(1, len(jobs))) if jobs else 0
+    if workers == 1:
+        for job in jobs:
+            build(job)
+    elif workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            list(executor.map(build, jobs))
+    for device in touched_devices:
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+    build_seconds = time.perf_counter() - build_start
+
+    for key_history, state in jobs:
+        if not isinstance(state.get("packed_qmse_index"), dict):
+            raise RuntimeError("packed Key-index prebuild did not create an index")
+        if int(state.get("packed_qmse_indexed_count", 0)) != int(
+            key_history.shape[-2]
+        ):
+            raise RuntimeError("packed Key-index prebuild has the wrong length")
+    return {
+        "layers": len(jobs),
+        "existing_layers": existing_layers,
+        "workers": workers,
+        "extension_load_seconds": extension_load_seconds,
+        "build_seconds": build_seconds,
+        "total_seconds": time.perf_counter() - total_start,
+    }
 
 
 @torch.inference_mode()

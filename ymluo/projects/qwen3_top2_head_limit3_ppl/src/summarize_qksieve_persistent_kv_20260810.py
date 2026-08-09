@@ -20,7 +20,7 @@ def load_rows(run_root: Path) -> dict[tuple[int, int], dict[str, dict[str, Any]]
     pairs: dict[tuple[int, int], dict[str, dict[str, Any]]] = {}
     for path in run_root.glob("n*/seed*/*.json"):
         payload = json.loads(path.read_text(encoding="utf-8"))
-        if payload.get("schema") != "qksieve_persistent_kv_lifecycle_v1":
+        if payload.get("schema") != "qksieve_persistent_kv_lifecycle_v2":
             continue
         key = (int(payload["history_tokens"]), int(path.parent.name[4:]))
         pairs.setdefault(key, {})[str(payload["method"])] = payload
@@ -78,14 +78,23 @@ def summarize(run_root: Path) -> dict[str, Any]:
                     "append_only_ms_per_token",
                 ),
                 "qksieve_prebuild_seconds": sparse["prebuild_wall_seconds"],
+                "qksieve_first_step_ms": sparse["branches"][0][
+                    "first_step_ms"
+                ],
                 "reuse_tokens_equal": bool(sparse["reuse_tokens_equal"]),
                 "index_buffers_reused_without_rebuild": bool(
                     sparse["index_buffers_reused_without_rebuild"]
                 ),
+                "rewind_value_layers_correct": bool(
+                    sparse["rewind_value_layers_correct"]
+                ),
+                "persistent_contract_passed": bool(
+                    sparse["persistent_contract_passed"]
+                ),
             }
         )
     return {
-        "schema": "qksieve_persistent_kv_summary_v1",
+        "schema": "qksieve_persistent_kv_summary_v2",
         "run_root": str(run_root),
         "rows": rows,
         "missing_pairs": missing,
@@ -94,7 +103,14 @@ def summarize(run_root: Path) -> dict[str, Any]:
         and all(
             row["reuse_tokens_equal"]
             and row["index_buffers_reused_without_rebuild"]
+            and row["rewind_value_layers_correct"]
+            and row["persistent_contract_passed"]
             for row in rows
+        ),
+        "claim_boundary": (
+            "Token equality checks deterministic rewind/replay within each "
+            "method. Quality relative to Full is measured by the separate "
+            "LongBench and RULER suites."
         ),
     }
 

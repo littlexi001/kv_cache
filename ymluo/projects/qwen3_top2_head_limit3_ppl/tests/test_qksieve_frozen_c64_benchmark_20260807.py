@@ -204,7 +204,7 @@ def test_ruler_records_the_same_frozen_execution_contract() -> None:
             "qk_batched_allocation_layers": 36,
         },
     )
-    assert fields == {
+    expected = {
         "executed_path": longbench.QKSIEVE_FROZEN_C64_METHOD,
         "configured_sampled_quantile_sample_count": 1280,
         "configured_index_bits_per_token": 306.0,
@@ -213,6 +213,18 @@ def test_ruler_records_the_same_frozen_execution_contract() -> None:
         "qk_prebuild_layers": 36,
         "qk_batched_allocation_layers": 36,
     }
+    assert {key: fields[key] for key in expected} == expected
+    for key in (
+        "packed_qmse_sample_count",
+        "packed_qmse_value_sketch_rank",
+        "packed_qmse_value_sketch_bits",
+        "packed_qmse_value_sketch_executed",
+        "packed_qmse_value_sketch_tail_alpha",
+        "packed_qmse_debug_value_sketch_disabled",
+        "sampled_candidate_overflow_fraction",
+        "sampled_quantile_fallback",
+    ):
+        assert fields[key] == 0.0
 
 
 def test_ruler_summary_requires_strict_frozen_pairs() -> None:

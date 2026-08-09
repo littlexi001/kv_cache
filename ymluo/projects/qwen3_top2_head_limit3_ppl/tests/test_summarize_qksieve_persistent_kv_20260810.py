@@ -16,7 +16,7 @@ def write_result(root: Path, method: str, warm: float, cold: float) -> None:
     path = root / "n32768" / "seed7" / f"{method}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema": "qksieve_persistent_kv_lifecycle_v1",
+        "schema": "qksieve_persistent_kv_lifecycle_v2",
         "method": method,
         "history_tokens": 32768,
         "shared_prefix_warm_mean_ms_per_token": warm,
@@ -26,6 +26,9 @@ def write_result(root: Path, method: str, warm: float, cold: float) -> None:
         "prebuild_wall_seconds": 1.25 if method == "qksieve_robust" else 0.0,
         "reuse_tokens_equal": True,
         "index_buffers_reused_without_rebuild": True,
+        "rewind_value_layers_correct": True,
+        "persistent_contract_passed": True,
+        "branches": [{"first_step_ms": warm}],
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 

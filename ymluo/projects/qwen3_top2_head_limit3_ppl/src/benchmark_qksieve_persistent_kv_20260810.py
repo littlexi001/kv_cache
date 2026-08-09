@@ -20,8 +20,10 @@ from run_head_top2_targeted_ppl_20260714 import (
     active_qksieve_persistent_state_signature,
     install_llama_head_top_fraction_patch,
     install_resident_value_sketch_cache,
+    prebuild_active_packed_qmse_key_indices,
     prebuild_resident_value_sketch_cache,
     prefill_query_tail_mode,
+    preload_qksieve_runtime_extensions,
     rewind_active_qksieve_cache,
     seed_packed_qmse_prefill_queries,
 )
@@ -71,6 +73,7 @@ def stable_index_signature(snapshot: dict[str, Any]) -> list[tuple[int | None, .
     return [
         (
             layer["key_rebuild_count"],
+            layer["value_rebuild_count"],
             layer["key_code_ptr"],
             layer["key_scale_ptr"],
             layer["value_code_ptr"],
@@ -79,6 +82,36 @@ def stable_index_signature(snapshot: dict[str, Any]) -> list[tuple[int | None, .
         )
         for layer in snapshot["layers"]
     ]
+
+
+def validate_sparse_snapshot(
+    snapshot: dict[str, Any],
+    expected_length: int,
+    expected_layers: int,
+) -> None:
+    if int(snapshot["layer_count"]) != expected_layers:
+        raise RuntimeError(
+            "persistent snapshot has the wrong layer count: "
+            f"expected {expected_layers}, got {snapshot['layer_count']}"
+        )
+    pointer_fields = (
+        "key_code_ptr",
+        "key_scale_ptr",
+        "value_code_ptr",
+        "value_minimum_ptr",
+        "value_scale_ptr",
+    )
+    for layer in snapshot["layers"]:
+        if int(layer["key_indexed_count"]) != expected_length:
+            raise RuntimeError("persistent Key index has the wrong length")
+        if int(layer["value_indexed_count"]) != expected_length:
+            raise RuntimeError("persistent Value index has the wrong length")
+        missing = [name for name in pointer_fields if layer[name] is None]
+        if missing:
+            raise RuntimeError(
+                f"persistent layer {layer['layer']} lacks buffers: "
+                + ", ".join(missing)
+            )
 
 
 @torch.inference_mode()
@@ -146,8 +179,17 @@ def main() -> None:
     if sparse:
         speed.configure_sparse_args(args, score_mode, budget)
         rate_table_timings = speed.preload_qksieve_qmse_rate_tables(model)
+        runtime_extension_timings = (
+            preload_qksieve_runtime_extensions()
+            if os.environ.get("QKSIEVE_PRELOAD_EXTENSIONS", "")
+            .strip()
+            .lower()
+            in {"1", "true", "yes"}
+            else {}
+        )
     else:
         rate_table_timings = {}
+        runtime_extension_timings = {}
 
     history = speed.repeated_stream(tokenizer, args.text_file, args.history_tokens)
     prefill_context = prefill_query_tail_mode(8) if sparse else direct.nullcontext({})
@@ -178,11 +220,13 @@ def main() -> None:
         ).indices.tolist()
     ]
     qk_prebuild: dict[str, Any] = {}
+    key_index_prebuild: dict[str, Any] = {}
     value_prebuild: dict[str, Any] = {}
     value_install: dict[str, Any] = {}
     branches: list[dict[str, Any]] = []
     rewind_records: list[dict[str, int]] = []
     persistent_snapshots: list[dict[str, Any]] = []
+    initial_persistent_snapshot: dict[str, Any] = {}
     method_name = "direct_countcap" if sparse else "full_attention"
 
     with direct.sparse_context(args, method_name):
@@ -195,6 +239,12 @@ def main() -> None:
                 cache,
                 max_workers=int(os.environ.get("QKSIEVE_PARALLEL_QK_WORKERS", "12")),
             )
+            key_index_prebuild = prebuild_active_packed_qmse_key_indices(
+                cache,
+                max_workers=int(
+                    os.environ.get("QKSIEVE_PARALLEL_QK_WORKERS", "12")
+                ),
+            )
             value_prebuild = prebuild_resident_value_sketch_cache(
                 cache,
                 model,
@@ -206,6 +256,16 @@ def main() -> None:
             value_install = install_resident_value_sketch_cache(cache)
         sync(input_device)
         prebuild_wall_seconds = time.perf_counter() - prebuild_start
+        expected_sparse_layers = int(qk_prebuild.get("layers", 0))
+        if sparse:
+            initial_persistent_snapshot = (
+                active_qksieve_persistent_state_signature()
+            )
+            validate_sparse_snapshot(
+                initial_persistent_snapshot,
+                prefix_length,
+                expected_sparse_layers,
+            )
 
         for branch_index, seed_token in enumerate(branch_seed_ids):
             if branch_index:
@@ -223,9 +283,13 @@ def main() -> None:
             branch["branch_index"] = branch_index
             branches.append(branch)
             if sparse:
-                persistent_snapshots.append(
-                    active_qksieve_persistent_state_signature()
+                snapshot = active_qksieve_persistent_state_signature()
+                validate_sparse_snapshot(
+                    snapshot,
+                    prefix_length + args.branch_steps,
+                    expected_sparse_layers,
                 )
+                persistent_snapshots.append(snapshot)
 
         rewind_records.append(crop_for_next_branch(cache, prefix_length, sparse))
         repeated_branch = run_branch(
@@ -239,9 +303,13 @@ def main() -> None:
         repeated_branch["branch_index"] = "repeat_0"
         branches.append(repeated_branch)
         if sparse:
-            persistent_snapshots.append(
-                active_qksieve_persistent_state_signature()
+            snapshot = active_qksieve_persistent_state_signature()
+            validate_sparse_snapshot(
+                snapshot,
+                prefix_length + args.branch_steps,
+                expected_sparse_layers,
             )
+            persistent_snapshots.append(snapshot)
 
         rewind_records.append(crop_for_next_branch(cache, prefix_length, sparse))
         append_only = run_branch(
@@ -253,9 +321,13 @@ def main() -> None:
             input_device,
         )
         if sparse:
-            persistent_snapshots.append(
-                active_qksieve_persistent_state_signature()
+            snapshot = active_qksieve_persistent_state_signature()
+            validate_sparse_snapshot(
+                snapshot,
+                prefix_length + args.append_steps,
+                expected_sparse_layers,
             )
+            persistent_snapshots.append(snapshot)
 
     reuse_tokens_equal = (
         branches[0]["generated_token_ids"]
@@ -268,8 +340,13 @@ def main() -> None:
     all_branch_decode_seconds = sum(
         float(branch["wall_seconds"]) for branch in branches[:-1]
     )
+    snapshots_for_reuse_audit = (
+        [initial_persistent_snapshot, *persistent_snapshots]
+        if sparse
+        else []
+    )
     stable_signatures = [
-        stable_index_signature(snapshot) for snapshot in persistent_snapshots
+        stable_index_signature(snapshot) for snapshot in snapshots_for_reuse_audit
     ]
     index_buffers_reused = (
         not sparse
@@ -278,8 +355,30 @@ def main() -> None:
             for signature in stable_signatures[1:]
         )
     )
+    rewind_value_layers_correct = (
+        not sparse
+        or all(
+            int(record["value_layers"]) == expected_sparse_layers
+            for record in rewind_records
+        )
+    )
+    persistent_contract_passed = (
+        not sparse
+        or (
+            bool(initial_persistent_snapshot)
+            and index_buffers_reused
+            and rewind_value_layers_correct
+            and int(key_index_prebuild.get("layers", 0))
+            + int(key_index_prebuild.get("existing_layers", 0))
+            == expected_sparse_layers
+            and int(value_prebuild.get("layers", 0))
+            == expected_sparse_layers
+            and int(value_install.get("layers", 0))
+            == expected_sparse_layers
+        )
+    )
     result = {
-        "schema": "qksieve_persistent_kv_lifecycle_v1",
+        "schema": "qksieve_persistent_kv_lifecycle_v2",
         "method": args.method,
         "score_mode": score_mode,
         "history_tokens": args.history_tokens,
@@ -311,15 +410,20 @@ def main() -> None:
             == repeated_branch["generated_token_sha256"]
         ),
         "index_buffers_reused_without_rebuild": index_buffers_reused,
+        "rewind_value_layers_correct": rewind_value_layers_correct,
+        "persistent_contract_passed": persistent_contract_passed,
         "branch_seed_token_ids": branch_seed_ids,
         "branches": branches,
         "append_only": append_only,
         "rewinds": rewind_records,
         "persistent_state_snapshots": persistent_snapshots,
+        "initial_persistent_state_snapshot": initial_persistent_snapshot,
         "qk_prebuild": qk_prebuild,
+        "key_index_prebuild": key_index_prebuild,
         "value_prebuild": value_prebuild,
         "value_install": value_install,
         "qmse_rate_table_preload": rate_table_timings,
+        "runtime_extension_preload": runtime_extension_timings,
         "value_sketch_tail_alpha": (
             float(os.environ["QKSIEVE_VALUE_SKETCH_TAIL_ALPHA"])
             if sparse
@@ -343,6 +447,10 @@ def main() -> None:
         raise RuntimeError("shared-prefix rewind changed repeated-branch tokens")
     if not index_buffers_reused:
         raise RuntimeError("persistent branch execution rebuilt an index buffer")
+    if not rewind_value_layers_correct:
+        raise RuntimeError("persistent rewind missed a Value-sketch layer")
+    if not persistent_contract_passed:
+        raise RuntimeError("persistent QKSieve lifecycle contract failed")
 
 
 if __name__ == "__main__":
