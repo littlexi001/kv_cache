@@ -42,6 +42,12 @@ R_P: n <- P, indexed_K <- P, indexed_V <- P.
 5. 保留所有底层张量、basis、allocation、metadata 与 CUDA workspace。
 6. 后续 Decode 通过已有 append kernel 覆盖旧后缀。
 
+Decode 使用延迟一 token 的索引维护：当前输入 token 的 K/V 已写入精确 cache，
+但它在下一步成为历史 token 时才追加到检索索引。因此，刚完成一个非空 Decode
+区间时必须满足 `indexed_K = indexed_V = cache_length - 1`；请求开始前完成显式
+预建时则必须满足三者完全相等。审计只接受这两个精确定义的状态，不接受更大的
+长度误差。
+
 审计接口 `active_qksieve_persistent_state_signature()` 同时识别普通执行路径的
 `qksieve_value_sketch_*` 状态和 Python 快路径的 runtime 状态，输出每层 Key/Value
 有效长度、重建计数及张量地址。任何分支后地址或重建计数发生变化都视为失败；不能

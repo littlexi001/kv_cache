@@ -28,6 +28,10 @@
 7. `rewind_value_layers_correct`：每次回退是否覆盖模型的全部 ValueSketch 层。
 8. `persistent_contract_passed`：完整 Key 预建、Value 预建/安装、长度、指针和回退检查是否同时通过。
 
+长度检查区分两个时刻：预建结束时 Key/Value index 必须与 cache 等长；Decode
+结束时二者必须严格落后 cache 一个 token，因为最后输入 token 会在下一步才转为
+可检索历史。lag 为 0 或大于 1 都视为失败。
+
 ## 通过、失败与证据不足
 
 通过：

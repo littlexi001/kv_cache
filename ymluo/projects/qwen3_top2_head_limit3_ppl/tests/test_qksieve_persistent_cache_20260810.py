@@ -13,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import run_head_top2_targeted_ppl_20260714 as qksieve  # noqa: E402
+import benchmark_qksieve_persistent_kv_20260810 as lifecycle  # noqa: E402
 
 
 class CropCache:
@@ -32,6 +33,37 @@ class KeyCache:
 
     def get_seq_length(self, layer_index: int = 0) -> int:
         return int(self.key_cache[layer_index].shape[-2])
+
+
+def test_post_decode_snapshot_requires_exactly_one_token_lag() -> None:
+    snapshot = {
+        "layer_count": 1,
+        "layers": [
+            {
+                "layer": 0,
+                "key_indexed_count": 12,
+                "value_indexed_count": 12,
+                "key_code_ptr": 1,
+                "key_scale_ptr": 2,
+                "value_code_ptr": 3,
+                "value_minimum_ptr": 4,
+                "value_scale_ptr": 5,
+            }
+        ],
+    }
+
+    lifecycle.validate_sparse_snapshot(
+        snapshot,
+        expected_length=13,
+        expected_layers=1,
+        index_lag=1,
+    )
+    with pytest.raises(RuntimeError, match="expected 13"):
+        lifecycle.validate_sparse_snapshot(
+            snapshot,
+            expected_length=13,
+            expected_layers=1,
+        )
 
 
 def test_key_index_prebuild_consumes_precomputed_qk_factors(monkeypatch) -> None:

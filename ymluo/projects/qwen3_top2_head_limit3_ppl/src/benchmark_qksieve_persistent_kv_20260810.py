@@ -88,7 +88,12 @@ def validate_sparse_snapshot(
     snapshot: dict[str, Any],
     expected_length: int,
     expected_layers: int,
+    *,
+    index_lag: int = 0,
 ) -> None:
+    if index_lag not in {0, 1}:
+        raise ValueError("persistent index lag must be zero or one")
+    expected_index_length = expected_length - index_lag
     if int(snapshot["layer_count"]) != expected_layers:
         raise RuntimeError(
             "persistent snapshot has the wrong layer count: "
@@ -102,10 +107,20 @@ def validate_sparse_snapshot(
         "value_scale_ptr",
     )
     for layer in snapshot["layers"]:
-        if int(layer["key_indexed_count"]) != expected_length:
-            raise RuntimeError("persistent Key index has the wrong length")
-        if int(layer["value_indexed_count"]) != expected_length:
-            raise RuntimeError("persistent Value index has the wrong length")
+        key_length = int(layer["key_indexed_count"])
+        if key_length != expected_index_length:
+            raise RuntimeError(
+                f"persistent Key index at layer {layer['layer']} has length "
+                f"{key_length}, expected {expected_index_length} "
+                f"(cache length {expected_length}, lag {index_lag})"
+            )
+        value_length = int(layer["value_indexed_count"])
+        if value_length != expected_index_length:
+            raise RuntimeError(
+                f"persistent Value index at layer {layer['layer']} has length "
+                f"{value_length}, expected {expected_index_length} "
+                f"(cache length {expected_length}, lag {index_lag})"
+            )
         missing = [name for name in pointer_fields if layer[name] is None]
         if missing:
             raise RuntimeError(
@@ -261,6 +276,21 @@ def main() -> None:
             initial_persistent_snapshot = (
                 active_qksieve_persistent_state_signature()
             )
+            print(
+                json.dumps(
+                    {
+                        "event": "persistent_prebuild_audit",
+                        "prefix_length": prefix_length,
+                        "qk_prebuild": qk_prebuild,
+                        "key_index_prebuild": key_index_prebuild,
+                        "value_prebuild": value_prebuild,
+                        "value_install": value_install,
+                        "state": initial_persistent_snapshot,
+                    },
+                    ensure_ascii=False,
+                ),
+                flush=True,
+            )
             validate_sparse_snapshot(
                 initial_persistent_snapshot,
                 prefix_length,
@@ -288,6 +318,7 @@ def main() -> None:
                     snapshot,
                     prefix_length + args.branch_steps,
                     expected_sparse_layers,
+                    index_lag=1,
                 )
                 persistent_snapshots.append(snapshot)
 
@@ -308,6 +339,7 @@ def main() -> None:
                 snapshot,
                 prefix_length + args.branch_steps,
                 expected_sparse_layers,
+                index_lag=1,
             )
             persistent_snapshots.append(snapshot)
 
@@ -326,6 +358,7 @@ def main() -> None:
                 snapshot,
                 prefix_length + args.append_steps,
                 expected_sparse_layers,
+                index_lag=1,
             )
             persistent_snapshots.append(snapshot)
 
@@ -412,6 +445,7 @@ def main() -> None:
         "index_buffers_reused_without_rebuild": index_buffers_reused,
         "rewind_value_layers_correct": rewind_value_layers_correct,
         "persistent_contract_passed": persistent_contract_passed,
+        "post_decode_index_lag_tokens": 1 if sparse else 0,
         "branch_seed_token_ids": branch_seed_ids,
         "branches": branches,
         "append_only": append_only,
