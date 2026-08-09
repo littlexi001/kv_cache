@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "description": "Four matched continued-pretraining conditions for one independent Alibaba Cloud instance each.",
+  "machines": [
+    {
+      "machine_id": 0,
+      "strategy": "native_rope",
+      "role": "matched-token native RoPE control"
+    },
+    {
+      "machine_id": 1,
+      "strategy": "deep_highfreq_drop",
+      "role": "deep-layer high-frequency removal"
+    },
+    {
+      "machine_id": 2,
+      "strategy": "uniform_slow_rope",
+      "role": "uniformly slower RoPE"
+    },
+    {
+      "machine_id": 3,
+      "strategy": "smooth_layer_frequency",
+      "role": "smooth layer-by-frequency PE candidate"
+    }
+  ],
+  "held_fixed": [
+    "model checkpoint",
+    "DCLM root and deterministic manifest",
+    "training seed and data seed",
+    "sequence length",
+    "global batch and training-token milestones",
+    "optimizer hyperparameters",
+    "evaluation prompts and decoding"
+  ],
+  "second_wave": [
+    "smooth_remote_warp"
+  ]
+}

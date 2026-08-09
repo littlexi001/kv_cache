@@ -1,0 +1,20 @@
+{
+  "mode": "bf16_smoke",
+  "specs": [
+    {
+      "name": "native_rope",
+      "atoms": []
+    },
+    {
+      "name": "l18_23_g4_f47_a0",
+      "atoms": [
+        {
+          "layers": [18, 19, 20, 21, 22, 23],
+          "head_groups": [4],
+          "frequency_pairs": [47],
+          "frequency_scale": 0.0
+        }
+      ]
+    }
+  ]
+}

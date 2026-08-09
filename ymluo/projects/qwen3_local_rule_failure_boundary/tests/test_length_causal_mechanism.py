@@ -8,7 +8,11 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT / "src"))
 
 from run_data_protocol_audit_20260717 import protocol_events  # noqa: E402
-from run_length_causal_mechanism_20260717 import build_bundle, mechanism_rows  # noqa: E402
+from run_length_causal_mechanism_20260717 import (  # noqa: E402
+    ENGLISH_SINGLE_TOKEN_WORDS,
+    build_bundle,
+    mechanism_rows,
+)
 
 
 def test_fixed_candidate_pool_contains_start_and_all_diagnostic_answers() -> None:
@@ -67,3 +71,10 @@ def test_mechanism_uses_input_excluded_cloze_for_access_diagnosis() -> None:
     assert detailed[0]["oracle_hop2_cloze_strict_correct"] == 0
     assert detailed[0]["oracle_hop2_cloze_correct"] == 1
     assert summary[0]["failure_mechanism"] == "composition_or_state_update_failure"
+
+
+def test_english_single_token_pool_starts_with_fixed_unrelated_nouns() -> None:
+    assert ENGLISH_SINGLE_TOKEN_WORDS[:3] == ("river", "window", "basket")
+    assert len(ENGLISH_SINGLE_TOKEN_WORDS) >= 64
+    assert len(set(ENGLISH_SINGLE_TOKEN_WORDS)) == len(ENGLISH_SINGLE_TOKEN_WORDS)
+    assert all(word.isascii() and word.isalpha() and word.islower() for word in ENGLISH_SINGLE_TOKEN_WORDS)

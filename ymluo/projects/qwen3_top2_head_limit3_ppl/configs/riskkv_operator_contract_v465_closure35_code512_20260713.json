@@ -1,0 +1,54 @@
+{
+  "__extends": "riskkv_operator_contract_base_v460_20260713.json",
+  "__comment": "v465 runnable Pareto configuration: 35% bounded entity-evidence closure for retrieve and a 512-token recent-heavy code action.",
+  "__operator_router": {
+    "mode": "request_schema_v1",
+    "default_action": "retrieve",
+    "actions": {
+      "retrieve": {
+        "budget_tokens": 1024,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 64,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false,
+        "graph_bridge": true,
+        "graph_bridge_budget_fraction": 0.35,
+        "graph_bridge_seed_pages": 12,
+        "graph_bridge_max_terms": 32,
+        "graph_bridge_min_score": 0.0
+      },
+      "aggregate": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_spread_flow",
+        "direct_structured_answer": true,
+        "direct_summary_max_words": 256
+      },
+      "structured": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "structured_fingerprint": true,
+        "structured_fingerprint_budget_fraction": 0.3,
+        "direct_structured_answer": true
+      },
+      "code": {
+        "budget_tokens": 512,
+        "page_tokens": 64,
+        "sink_tokens": 32,
+        "recent_tokens": 256,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false
+      },
+      "full": {
+        "full_fallback": true,
+        "direct_structured_answer": false
+      }
+    }
+  }
+}

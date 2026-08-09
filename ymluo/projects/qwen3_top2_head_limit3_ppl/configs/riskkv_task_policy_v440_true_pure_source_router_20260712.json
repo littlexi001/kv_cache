@@ -1,0 +1,4 @@
+{
+  "__extends": "riskkv_task_policy_v439_pure_source_router_20260712.json",
+  "__comment": "v440 true RiskKV-Pure rerun. Runtime constraints are re-applied after the action router so no routed action can re-enable direct structured answers."
+}

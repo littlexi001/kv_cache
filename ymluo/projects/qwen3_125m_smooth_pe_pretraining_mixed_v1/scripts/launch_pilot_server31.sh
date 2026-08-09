@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+EXP=/home/fdong/ymluo/projects/qwen3_125m_smooth_pe_pretraining/experiments/natural95_synth5_v1
+PYTHON=/home/fdong/miniconda3/envs/moe/bin/python
+
+launch() {
+  local variant=$1 gpu_list=$2 port=$3
+  local output="$EXP/outputs/pilot100m_${variant}"
+  if [[ -e "$output/config.json" || -e "$output/DONE" ]]; then
+    echo "refusing to reuse $output" >&2; return 1
+  fi
+  mkdir -p "$output"
+  CUDA_VISIBLE_DEVICES="$gpu_list" OMP_NUM_THREADS=1 nohup "$PYTHON" -m torch.distributed.run \
+    --nproc_per_node=2 --master_port="$port" "$EXP/src/train_mixed_pe.py" \
+    --variant "$variant" --output-dir "$output" \
+    --train-bin "$EXP/data/train_150m.uint16" \
+    --validation-bin "$EXP/data/validation_16m.uint16" \
+    --tokenizer-meta "$EXP/data/tokenizer.meta.json" \
+    --tokens 100000000 --sequence-length 2048 --micro-batch 2 --grad-accum 4 \
+    --synthetic-fraction 0.05 --training-queries 32 --answer-weight 16 \
+    --learning-rate 3e-4 --warmup-steps 100 --log-every 25 \
+    --eval-every 750 --save-every 1500 --eval-samples 32 --natural-eval-samples 32 \
+    > "$output/launcher.log" 2>&1 < /dev/null &
+  echo $! > "$output/launcher.pid"
+  echo "$variant pid=$(cat "$output/launcher.pid") GPUs=$gpu_list"
+}
+
+launch native 0,1 29762
+launch complementary_smooth 2,3 29763
+

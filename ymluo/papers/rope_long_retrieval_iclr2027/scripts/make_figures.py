@@ -142,10 +142,10 @@ def make_overview() -> None:
     ax.text(0.50, 0.53, r"$s_i(\Delta)=\rho_i\cos(\Delta\omega_i-\psi_i)$",
             ha="center", fontsize=8.6, fontweight="bold")
     boxes = [
-        (0.02, "gold QK\ndrops"),
-        (0.27, "evidence mass\ndrops"),
-        (0.52, "residual states\ndiverge"),
-        (0.77, "margin\ncrosses 0"),
+        (0.02, "RoPE phase\nchanges QK"),
+        (0.27, "softmax mix\nchanges"),
+        (0.52, "centered Value\nwrite changes"),
+        (0.77, "margin may\ncross 0"),
     ]
     for pos, label in boxes:
         rounded_box(ax, (pos, 0.12), 0.20, 0.16, label,
@@ -154,25 +154,26 @@ def make_overview() -> None:
         arrow(ax, (left, 0.20), (left + 0.045, 0.20), color=GRAY)
 
     ax = axes[2]
-    ax.text(0.01, 0.96, "C   Mechanism-derived repair", fontsize=10,
+    ax.text(0.01, 0.96, "C   Amount is not directed utility", fontsize=10,
             fontweight="bold", va="top")
-    rounded_box(ax, (0.04, 0.68), 0.25, 0.16, "sink + local\nstandard RoPE",
+    rounded_box(ax, (0.02, 0.68), 0.27, 0.16, "attention\namount  $a_j$",
                 fc="#EEF3FB", ec=BLUE, fontsize=8, weight="bold")
-    rounded_box(ax, (0.04, 0.38), 0.25, 0.16, "remote history\npre-RoPE proposal",
-                fc="#E6F4F1", ec=GREEN, fontsize=8, weight="bold")
-    rounded_box(ax, (0.38, 0.51), 0.24, 0.18, "2% candidate\nunion",
-                fc="#FFF5E9", ec=ORANGE, fontsize=8.5, weight="bold")
-    rounded_box(ax, (0.68, 0.51), 0.29, 0.18, "exact post-RoPE\nsoftmax + V",
-                fc="#E6F4F1", ec=GREEN, fontsize=8.2, weight="bold")
-    arrow(ax, (0.29, 0.76), (0.38, 0.63), color=BLUE)
-    arrow(ax, (0.29, 0.46), (0.38, 0.57), color=GREEN)
-    arrow(ax, (0.62, 0.60), (0.68, 0.60), color=ORANGE)
-    ax.text(0.50, 0.27, "Proposal removes phase from remote admission;",
+    rounded_box(ax, (0.365, 0.68), 0.27, 0.16,
+                "centered Value\n$v_j-\\bar v$", fc="#FFF5E9", ec=ORANGE,
+                fontsize=8, weight="bold")
+    rounded_box(ax, (0.71, 0.68), 0.27, 0.16,
+                "answer direction\n$\\nabla_o m$", fc="#E6F4F1", ec=GREEN,
+                fontsize=8, weight="bold")
+    rounded_box(ax, (0.17, 0.34), 0.66, 0.18,
+                r"$U_j=a_j\nabla_o m^\top W_O(v_j-\bar v)$",
+                fc="#F7F8FA", ec=GRAY, fontsize=8.5, weight="bold")
+    arrow(ax, (0.155, 0.68), (0.30, 0.52), color=BLUE)
+    arrow(ax, (0.50, 0.68), (0.50, 0.52), color=ORANGE)
+    arrow(ax, (0.845, 0.68), (0.70, 0.52), color=GREEN)
+    ax.text(0.50, 0.20, "Gold and conflict may receive similar mass",
             ha="center", fontsize=7.5)
-    ax.text(0.50, 0.18, "consumption preserves the pretrained geometry.",
+    ax.text(0.50, 0.10, "yet write in opposite answer directions.",
             ha="center", fontsize=7.5, fontweight="bold")
-    ax.text(0.50, 0.06, "SAGE-Post: conservative, training-free intervention",
-            ha="center", fontsize=7.4, color=GREEN)
 
     fig.subplots_adjust(left=0.01, right=0.995, top=0.98, bottom=0.02, wspace=0.08)
     fig.savefig(FIGURES / "overview.pdf", bbox_inches="tight",
@@ -240,7 +241,7 @@ def make_heldout_results() -> None:
     names = {
         "full_rope": "Full RoPE",
         "rope_top2": "post-RoPE Top-2%",
-        "local_global_postscore": "SAGE-Post",
+        "local_global_postscore": "pre-RoPE diagnostic",
     }
     colors = {"full_rope": GRAY, "rope_top2": BLUE, "local_global_postscore": GREEN}
     markers = {"full_rope": "o", "rope_top2": "s", "local_global_postscore": "D"}

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT=/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl
+PYTHON=/home/fdong/miniconda3/envs/moe/bin/python
+MODEL06=/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-0.6B/snapshots/c1899de289a04d12100db370d81485cdf75e47ca
+MODEL8=/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218
+DATA="$ROOT/data/20260802_jointkv"
+OUTPUT="$ROOT/results/20260802_jointkv_local_error_diagnostics"
+CACHE06="$ROOT/results/20260802_jointkv_all_layer_ppl/qwen06b_train5_cal1024_jointkv_binres48_codebooks_remote.pt"
+CACHE8="$ROOT/results/20260802_jointkv_8b/qwen8b_train5_cal1024_jointkv_binres48_codebooks.pt"
+RUNNER="$ROOT/src/run_jointkv_residual_ppl_20260802.py"
+mkdir -p "$OUTPUT"
+
+TRAIN=(
+  "$ROOT/data/war_and_peace_pg2600.txt"
+  "$ROOT/data/count_monte_cristo_pg1184.txt"
+  "$DATA/long_textbook_distributed_systems.txt"
+  "$DATA/long_news_supply_chain_dossier.txt"
+  "$DATA/long_dialogue_tool_transcript.txt"
+)
+
+run_one() {
+  local gpu=$1 name=$2 model=$3 cache=$4 text=$5 history=$6 mode=$7 fraction=$8
+  local adaptive=0 coupling=independent
+  if [[ "$mode" == loo ]]; then
+    adaptive=0.05
+    coupling=previous_layer_quantile
+  fi
+  CUDA_VISIBLE_DEVICES="$gpu" OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+    "$PYTHON" "$RUNNER" --model "$model" --train_texts "${TRAIN[@]}" \
+    --test_texts "$DATA/$text" --calibration_tokens 1024 \
+    --history_tokens "$history" --eval_tokens 8 \
+    --query_samples_per_text 256 --key_samples_per_text 512 \
+    --fraction "$fraction" --recent_tokens 128 --sink_tokens 4 --sparse_layers all \
+    --binary_bits 64 --projection_iterations 6 \
+    --residual_vq_bits 6 --residual_vq_iterations 6 \
+    --residual_binary_bits 48 --residual_binary_iterations 6 \
+    --residual_binary_candidate_fraction 1.0 \
+    --adaptive_error_tolerance "$adaptive" --adaptive_action_mode full_residual \
+    --adaptive_budget_coupling "$coupling" --adaptive_budget_quantile -1 \
+    --joint_value_weight 0.5 --risk_lambda 1.0 --priority_mode output_bound \
+    --risk_error_bits 4 --risk_error_block_size 256 --metric_shrinkage oas \
+    --value_mean_bits 4 --refit_key_bits 8 --tail_mode joint_tail \
+    --device cuda --dtype float16 --attn_implementation sdpa --threads 1 \
+    --codebook_cache "$cache" --store_budget_records \
+    --output "$OUTPUT/$name.json" >"$OUTPUT/$name.log" 2>&1
+}
+
+run_one 0 q06_author4k_loo "$MODEL06" "$CACHE06" qksieve_author_text.txt 4096 loo 0.02 &
+run_one 1 q06_biomed8k_loo "$MODEL06" "$CACHE06" biomed_long_range_facts_hard_compact.txt 8192 loo 0.02 &
+run_one 2 q8_author4k_loo "$MODEL8" "$CACHE8" qksieve_author_text.txt 4096 loo 0.02 &
+run_one 3 q8_author4k_fixed10 "$MODEL8" "$CACHE8" qksieve_author_text.txt 4096 fixed 0.10 &
+run_one 4 q8_author4k_fixed20 "$MODEL8" "$CACHE8" qksieve_author_text.txt 4096 fixed 0.20 &
+run_one 5 q06_author4k_fixed20 "$MODEL06" "$CACHE06" qksieve_author_text.txt 4096 fixed 0.20 &
+wait

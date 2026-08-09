@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${ROOT:-/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl}"
+export RUN_ROOT="${RUN_ROOT:-$ROOT/results/20260728_qksieve_uniform1_fier_longbench_m20_paired_5gpu}"
+export METHODS="full_kv,qksieve_fullprompt_auto_plain_fulltopk,qksieve_fullprompt_keypca_uniform1_fulltopk,qksieve_fullprompt_qkbalanced_uniform1_fulltopk,qksieve_fullprompt_random_uniform1_fulltopk,qksieve_fullprompt_keypca_autokey_fulltopk,qksieve_fullprompt_qkbalanced_autokey_fulltopk,fier_rtn1_g32_packed_fulltopk"
+export MAX_SAMPLES_PER_TASK=20
+export EXPECTED_PAIRS=320
+
+exec "$ROOT/scripts/launch_qksieve_fier_packed_longbench_5gpu_20260728.sh"

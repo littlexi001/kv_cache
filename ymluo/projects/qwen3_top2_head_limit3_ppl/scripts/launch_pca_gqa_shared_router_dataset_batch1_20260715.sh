@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${ROOT:-/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl}"
+PYTHON_BIN="${PYTHON_BIN:-/home/fdong/miniconda3/envs/moe/bin/python}"
+MODEL="${MODEL:-/home/fdong/models/LLM-Research-Meta-Llama-3.1-8B-Instruct-ms}"
+RUN_ROOT="${RUN_ROOT:-${ROOT}/results/20260715_pca_gqa_shared_mean_router_dataset_32k_w012}"
+mkdir -p "${RUN_ROOT}"
+
+LOW_ROOT="${ROOT}/results/20260715_pca_gqa_shared_low_budget_probe_32k_w0"
+HIGH_ROOT="${ROOT}/results/20260715_pca_gqa_shared_probe_32k_w0_f0.02"
+for topic in sports medicine; do
+  for fraction in 0.005 0.01; do
+    target="${RUN_ROOT}/${topic}_w0_f${fraction}"
+    [[ -d "${target}" ]] || cp -a "${LOW_ROOT}/${topic}_w0_shared_mean_f${fraction}" "${target}"
+  done
+  target="${RUN_ROOT}/${topic}_w0_f0.02"
+  [[ -d "${target}" ]] || cp -a "${HIGH_ROOT}/${topic}_w0_shared_mean_f0.02" "${target}"
+done
+
+topics=(sports medicine sports medicine sports medicine sports)
+windows=(1 1 1 1 1 1 2)
+fractions=(0.005 0.005 0.01 0.01 0.02 0.02 0.005)
+for slot in {0..6}; do
+  gpu=$((slot + 1))
+  topic="${topics[$slot]}"
+  window="${windows[$slot]}"
+  fraction="${fractions[$slot]}"
+  name="${topic}_w${window}_f${fraction}"
+  nohup env \
+    CUDA_VISIBLE_DEVICES="${gpu}" \
+    PYTHONPATH="${ROOT}/src" \
+    PATH="/home/fdong/miniconda3/envs/moe/bin:/usr/local/cuda/bin:/usr/bin:/bin" \
+    "${PYTHON_BIN}" "${ROOT}/src/run_adaptive_mass_budget_ppl_20260715.py" \
+      --model_name_or_path "${MODEL}" \
+      --output_dir "${RUN_ROOT}/${name}" \
+      --topics "${topic}" \
+      --window_indices "${window}" \
+      --history_tokens 32000 \
+      --query_tokens 256 \
+      --eval_tokens 256 \
+      --window_stride_tokens 32512 \
+      --mass_thresholds 0.000001 \
+      --budget_fractions "${fraction}" \
+      --mass_estimator qabs_sampled_tail \
+      --sample_fraction 0.0025 \
+      --qabs_dim_count 16 \
+      --candidate_fraction "${fraction}" \
+      --qabs_use_cuda_kernels \
+      --qabs_skip_candidate_rerank \
+      --qabs_score_mode pca_int8 \
+      --qabs_projection_dim 32 \
+      --qabs_gqa_candidate_mode shared_mean \
+      --prefill_chunk_tokens 2048 \
+      >"${RUN_ROOT}/${name}.log" 2>&1 </dev/null &
+  echo "launched pid=$! gpu=${gpu} name=${name}"
+done

@@ -1,0 +1,75 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "tasks": {
+    "*": {
+      "ours_learned_router_model_path": "outputs/riskkv_v19_learned_budget_router_v4_clean_budget_preselection_both_conf050_20260711/model.pkl",
+      "ours_learned_router_action_policy_json": "configs/riskkv_learned_budget_action_policy_v4_20260711.json",
+      "ours_learned_router_confidence_threshold": 0.50,
+      "ours_learned_router_default_action": "reference"
+    },
+    "narrativeqa": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "qasper": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "multifieldqa_en": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "hotpotqa": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "2wikimqa": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "musique": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "gov_report": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "qmsum": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "multi_news": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "trec": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "triviaqa": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "samsum": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "passage_count": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "passage_retrieval_en": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "lcc": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    },
+    "repobench-p": {
+      "action_router": true,
+      "action_router_mode": "learned_budget_v1"
+    }
+  }
+}

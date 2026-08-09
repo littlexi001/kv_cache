@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "description": "Runtime-safe action mapping for learned_budget_v1. Unmapped labels fall back to reference.",
+    "base_policy": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json"
+  },
+  "actions": {
+    "v311_speed": {
+      "qmsum": {
+        "ours_short_decode_tasks": "qmsum",
+        "ours_short_decode_max_tokens": 64
+      },
+      "repobench-p": {
+        "ours_score_risk_tasks": "repobench-p",
+        "ours_score_risk_budget_tokens": 1536,
+        "ours_retry_budget_tokens": 1536,
+        "ours_retry_full_fallback_tasks": "__EMPTY__",
+        "ours_short_decode_tasks": "repobench-p",
+        "ours_short_decode_max_tokens": 16
+      }
+    },
+    "v329_2wiki_b128_bm25bridge_with_v300_other_20260711": {
+      "2wikimqa": {
+        "budget_tokens": 1536,
+        "page_tokens": 128,
+        "ours_scorer": "hybrid_late_mmr_multiscale_bm25_bridge_flow",
+        "ours_bm25_mix": 0.9,
+        "semantic_weight": 0.35,
+        "lexical_weight": 0.45,
+        "entity_weight": 0.15,
+        "structural_weight": 0.05,
+        "coverage_weight": 0.0,
+        "ours_mmr_lambda": 0.78,
+        "ours_multiscale_group_pages": 3,
+        "ours_multiscale_weight": 0.18,
+        "ours_flow_neighbor_radius": 1,
+        "ours_flow_neighbor_budget_fraction": 0.16,
+        "ours_flow_neighbor_min_score": 0.10,
+        "ours_flow_score_smooth_weight": 0.14,
+        "ours_flow_anchor_boost": 0.20,
+        "ours_bridge_budget_fraction": 0.18,
+        "ours_bridge_min_score": 0.0,
+        "ours_bridge_max_terms": 28,
+        "ours_coverage_certificate_tasks": "2wikimqa",
+        "ours_coverage_certificate_budget_fraction": 0.14,
+        "ours_coverage_certificate_min_terms": 1,
+        "ours_coverage_mmr_weight": 0.20,
+        "ours_coverage_mmr_max_terms": 12,
+        "ours_score_risk_tasks": "__EMPTY__",
+        "ours_output_verifier_tasks": "2wikimqa",
+        "ours_grounding_verifier_tasks": "2wikimqa",
+        "ours_retry_budget_tokens": 1536,
+        "ours_consistency_verifier_tasks": "2wikimqa",
+        "ours_consistency_budget_tokens": 1536
+      }
+    },
+    "v331_2wiki_bm25_multifield_shortdecode_with_v300_other_20260711": {
+      "2wikimqa": {
+        "budget_tokens": 1536,
+        "page_tokens": 128,
+        "ours_scorer": "hybrid_late_mmr_multiscale_bm25_bridge_flow",
+        "ours_bm25_mix": 0.9,
+        "semantic_weight": 0.35,
+        "lexical_weight": 0.45,
+        "entity_weight": 0.15,
+        "structural_weight": 0.05,
+        "coverage_weight": 0.0,
+        "ours_mmr_lambda": 0.78,
+        "ours_multiscale_group_pages": 3,
+        "ours_multiscale_weight": 0.18,
+        "ours_flow_neighbor_radius": 1,
+        "ours_flow_neighbor_budget_fraction": 0.16,
+        "ours_flow_neighbor_min_score": 0.10,
+        "ours_flow_score_smooth_weight": 0.14,
+        "ours_flow_anchor_boost": 0.20,
+        "ours_bridge_budget_fraction": 0.18,
+        "ours_bridge_min_score": 0.0,
+        "ours_bridge_max_terms": 28,
+        "ours_coverage_certificate_tasks": "2wikimqa",
+        "ours_coverage_certificate_budget_fraction": 0.14,
+        "ours_coverage_certificate_min_terms": 1,
+        "ours_coverage_mmr_weight": 0.20,
+        "ours_coverage_mmr_max_terms": 12,
+        "ours_score_risk_tasks": "__EMPTY__",
+        "ours_output_verifier_tasks": "2wikimqa",
+        "ours_grounding_verifier_tasks": "2wikimqa",
+        "ours_retry_budget_tokens": 1536,
+        "ours_consistency_verifier_tasks": "2wikimqa",
+        "ours_consistency_budget_tokens": 1536
+      },
+      "multifieldqa_en": {
+        "ours_short_decode_tasks": "multifieldqa_en",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v330_multifield_shortdecode_with_v300_other_20260711": {
+      "multifieldqa_en": {
+        "ours_short_decode_tasks": "multifieldqa_en",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v316_v300_shortdecode_balanced_narrativeqa_20260711_qa_shortdecode_smoke": {
+      "narrativeqa": {
+        "ours_short_decode_tasks": "narrativeqa",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v316_v300_shortdecode_balanced_qasper_20260711_qa_shortdecode_smoke": {
+      "qasper": {
+        "ours_short_decode_tasks": "qasper",
+        "ours_short_decode_max_tokens": 64
+      }
+    },
+    "v316_v300_shortdecode_balanced_multifieldqa_en_20260711_qa_shortdecode_smoke": {
+      "multifieldqa_en": {
+        "ours_short_decode_tasks": "multifieldqa_en",
+        "ours_short_decode_max_tokens": 48
+      }
+    },
+    "v316_v300_shortdecode_balanced_hotpotqa_20260711_qa_shortdecode_smoke": {
+      "hotpotqa": {
+        "ours_short_decode_tasks": "hotpotqa",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v316_v300_shortdecode_balanced_2wikimqa_20260711_qa_shortdecode_smoke": {
+      "2wikimqa": {
+        "ours_short_decode_tasks": "2wikimqa",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v316_v300_shortdecode_balanced_musique_20260711_qa_shortdecode_smoke": {
+      "musique": {
+        "ours_short_decode_tasks": "musique",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v317_v300_shortdecode_aggressive_narrativeqa_20260711_qa_shortdecode_smoke": {
+      "narrativeqa": {
+        "ours_short_decode_tasks": "narrativeqa",
+        "ours_short_decode_max_tokens": 24
+      }
+    },
+    "v317_v300_shortdecode_aggressive_qasper_20260711_qa_shortdecode_smoke": {
+      "qasper": {
+        "ours_short_decode_tasks": "qasper",
+        "ours_short_decode_max_tokens": 48
+      }
+    },
+    "v317_v300_shortdecode_aggressive_multifieldqa_en_20260711_qa_shortdecode_smoke": {
+      "multifieldqa_en": {
+        "ours_short_decode_tasks": "multifieldqa_en",
+        "ours_short_decode_max_tokens": 32
+      }
+    },
+    "v317_v300_shortdecode_aggressive_hotpotqa_20260711_qa_shortdecode_smoke": {
+      "hotpotqa": {
+        "ours_short_decode_tasks": "hotpotqa",
+        "ours_short_decode_max_tokens": 24
+      }
+    },
+    "v317_v300_shortdecode_aggressive_2wikimqa_20260711_qa_shortdecode_smoke": {
+      "2wikimqa": {
+        "ours_short_decode_tasks": "2wikimqa",
+        "ours_short_decode_max_tokens": 24
+      }
+    },
+    "v317_v300_shortdecode_aggressive_musique_20260711_qa_shortdecode_smoke": {
+      "musique": {
+        "ours_short_decode_tasks": "musique",
+        "ours_short_decode_max_tokens": 24
+      }
+    }
+  }
+}

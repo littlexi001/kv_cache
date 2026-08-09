@@ -1,0 +1,10 @@
+{
+  "name": "deep_nope_quarter",
+  "kind": "band_layer_scale",
+  "layer_mode": "hard_deep",
+  "deep_layer_fraction": 0.25,
+  "pair_start": 0,
+  "pair_end_exclusive": -1,
+  "modified_scale": 0.0,
+  "description": "Remove all RoPE pairs only in the deepest quarter of layers."
+}

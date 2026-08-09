@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "description": "Sixteen matched Qwen3-0.6B from-scratch PE pretraining conditions; one eight-GPU machine per condition.",
+  "machines": [
+    {"machine_id": 0, "strategy": "native_rope", "family": "control", "method_doc": "docs/methods/00_native_rope.md"},
+    {"machine_id": 1, "strategy": "all_nope", "family": "control", "method_doc": "docs/methods/01_all_nope.md"},
+    {"machine_id": 2, "strategy": "rnope_every4", "family": "layer", "method_doc": "docs/methods/02_rnope_every4.md"},
+    {"machine_id": 3, "strategy": "deep_nope_quarter", "family": "layer", "method_doc": "docs/methods/03_deep_nope_quarter.md"},
+    {"machine_id": 4, "strategy": "deep_highfreq_drop", "family": "frequency", "method_doc": "docs/methods/04_deep_highfreq_drop.md"},
+    {"machine_id": 5, "strategy": "deep_highfreq_soft025", "family": "frequency", "method_doc": "docs/methods/05_deep_highfreq_soft025.md"},
+    {"machine_id": 6, "strategy": "deep_highfreq_soft050_f16", "family": "frequency", "method_doc": "docs/methods/06_deep_highfreq_soft050_f16.md"},
+    {"machine_id": 7, "strategy": "deep_midfreq_soft", "family": "frequency", "method_doc": "docs/methods/07_deep_midfreq_soft.md"},
+    {"machine_id": 8, "strategy": "deep_lowfreq_soft", "family": "frequency", "method_doc": "docs/methods/08_deep_lowfreq_soft.md"},
+    {"machine_id": 9, "strategy": "uniform_slow075", "family": "global_scale", "method_doc": "docs/methods/09_uniform_slow075.md"},
+    {"machine_id": 10, "strategy": "uniform_slow_rope", "family": "global_scale", "method_doc": "docs/methods/10_uniform_slow050.md"},
+    {"machine_id": 11, "strategy": "deep_allfreq_smooth", "family": "smooth_layer", "method_doc": "docs/methods/11_deep_allfreq_smooth.md"},
+    {"machine_id": 12, "strategy": "smooth_layer_frequency", "family": "smooth_factorized", "method_doc": "docs/methods/12_smooth_layer_frequency.md"},
+    {"machine_id": 13, "strategy": "smooth_remote_warp", "family": "position_warp", "method_doc": "docs/methods/13_smooth_remote_warp.md"},
+    {"machine_id": 14, "strategy": "period_aware_smooth", "family": "period_aware", "method_doc": "docs/methods/14_period_aware_smooth.md"},
+    {"machine_id": 15, "strategy": "phase_diverse_deep", "family": "phase_diversity", "method_doc": "docs/methods/15_phase_diverse_deep.md"}
+  ],
+  "held_fixed": {
+    "initialization": "from_scratch with Qwen3-0.6B config and tokenizer",
+    "target_tokens_per_task": 100000000000,
+    "global_batch_size_sequences": 256,
+    "sequence_length": 8192,
+    "learning_rate": 0.0001,
+    "machines_per_task": 1,
+    "gpus_per_machine": 8,
+    "training_seed": 20260808,
+    "data_seed": 1701
+  }
+}

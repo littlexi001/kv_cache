@@ -1,0 +1,145 @@
+\documentclass{article}
+
+% Provisional ICLR 2027 draft. The official 2027 style had not been released
+% when this draft was created; iclr2027_conference.sty is a locally renamed
+% copy of the official ICLR 2026 style.
+\usepackage{iclr2027_conference,times}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{graphicx}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{placeins}
+\usepackage{tabularx}
+\usepackage{xcolor}
+\usepackage{xspace}
+\usepackage{url}
+\usepackage{hyperref}
+\usepackage[capitalize,noabbrev]{cleveref}
+
+\definecolor{tbdgray}{RGB}{238,240,242}
+\definecolor{qksieveblue}{RGB}{30,91,111}
+\hypersetup{
+  colorlinks=true,
+  citecolor=qksieveblue,
+  linkcolor=qksieveblue,
+  urlcolor=qksieveblue
+}
+\newcommand{\method}{\textsc{QKSieve}\xspace}
+\newcommand{\tbd}[1]{\colorbox{tbdgray}{\textbf{TBD:} #1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\1}{\mathbf{1}}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\diam}{\operatorname{diam}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\op}{\mathrm{op}}
+\newcommand{\ie}{i.e.,\ }
+\newcommand{\eg}{e.g.,\ }
+
+\title{\method: Query--Key Balanced Mixed-Bit Retrieval\\
+for Efficient Long-Context Attention}
+
+\author{Yiming Luo\\
+Fudan University\\
+Shanghai, China}
+
+% Keep this undefined for an anonymous submission. main_author.tex defines it.
+\ifdefined\QKSIEVEAUTHORVERSION
+  \iclrfinalcopy
+\fi
+
+\begin{document}
+\maketitle
+\ifdefined\QKSIEVEAUTHORVERSION
+  \lhead{Author draft for ICLR 2027}
+\fi
+
+\begin{abstract}
+Autoregressive decoding repeatedly scans an increasingly long key--value
+(KV) history.  Token-level sparse attention can avoid most exact attention,
+but only if its retrieval index is both cheaper than full QK scoring and
+faithful to the query-dependent score geometry.
+We present \method, a training-free, GPU-resident exact-KV retrieval
+accelerator.
+For every layer and KV head, query and key second moments define a
+biorthogonal coordinate system that preserves every uncompressed dot product
+exactly and orders coordinates by joint score energy.
+\method partitions the 128 transformed coordinates into eight 16-D bands and
+assigns each band 0/1/2/4/8 bits under a fixed 240-bit token/head index
+budget.  The reference allocator minimizes empirical attention-logit MSE;
+the deployment allocator uses a Key-MSE simplification selected by a causal
+ablation.
+A packed scan selects a length-dependent budget $B(N)$ per query head,
+followed by exact sparse QK--softmax--AV over the original FP16 KV; the
+registered experiments through 128K cap $B(N)$ at 1,280.
+The method has no learned router, task rule, exact-QK reranking, or
+full-attention fallback.
+We audit two registered profiles: a request-local reference using complete
+proxy top-$k$, and a deployment profile using a frozen model-level template,
+fused Query preparation, architecture-specific GQA/MHA scanning, and a
+capped sampled quantile that avoids score materialization and generic top-$k$.
+The Fast profile adds 5.86\% to the FP16 K+V footprint.  A Robust profile
+adds a rank-16 INT4 Value-tail sketch for a total 7.47\%; the exact KV itself
+remains GPU resident in both profiles.
+The registered General profile deterministically uses Fast through 64K and
+activates Robust only beyond 64K, where the capped token budget falls below
+approximately 2\% of history; this is a length rule, not a learned router.
+At 1\% active KV, a held-out equal-rate retrieval audit improves exact
+top-$k$ recall from 43.36\% to 73.44\% and selected attention mass from
+76.40\% to 83.48\% relative to a faithful FIER-1b-g32 reproduction, despite
+using a slightly smaller index.
+In a controlled six-topic 32K test with Key-MSE allocation, QK-balanced
+coordinates reduce KL from .0211 to .0084 over Key-PCA; the paired NLL
+advantage has a 95\% interval of [.0008, .0189].
+On the complete 3,750-example, 16-task Llama-3.1-8B LongBench evaluation,
+\method's reference profile retains 99.88\% of the Full-attention macro
+score, with a paired bootstrap 95\% interval of [99.42\%, 100.35\%].
+A strict 160-example same-path screen evaluates the frozen-template,
+sampled-quantile General deployment path itself: it scores .453676 versus
+.453019 for Full and retains 100.145\%, with a paired-sample bootstrap
+interval of [97.915\%, 102.051\%].
+At the native 128K boundary, the Fast profile exposes a real failure mode:
+six topic/seed cases retain only 96.32\% pooled PPL quality and fall to
+91.10\% in the worst case.  The Robust profile estimates the omitted
+softmax partition and a current-Query-weighted low-rank Value residual, then
+shrinks that residual by $\alpha=.5$.  Across 12 topic/seed cases, including
+six held-out seeds, it retains 99.805\% pooled PPL quality with a
+case-bootstrap interval of [99.100\%, 100.499\%] and a 96.98\% worst case.
+On an 80-example, 16-task same-sample LongBench screen, always-on Robust
+retains 98.92\%, whereas the registered length-gated profile retains
+101.47\% with a paired interval of [99.25\%, 104.45\%].
+On native 32-query/32-KV-head MHA with resident FP16 K/V, the frozen
+selector-plus-exact-sparse-attention path reaches
+1.22/1.64/2.66/4.48/6.23$\times$ at 8/16/32/64/128K on RTX~3090.
+These directly timed complete attention calls include Query preparation,
+low-bit scanning, candidate compaction, and exact sparse attention; they do
+not include the GQA-specific Value-tail sketch or imply whole-model decode
+speedup.  The realized mixed-bit index is 5.53\% of FP16 K+V, below its
+5.86\% hard rate cap.
+The same-path screen closes the execution-path mismatch at screening scale,
+but its uncertainty does not replace a full deployment-profile evaluation;
+we therefore keep the 3,750-example reference claim separate from deployment
+speed.
+We derive the exact factorization, transformed covariance identity,
+query-weighted quantization objective, ranking conditions, and
+omitted-attention-mass output bound, and we report all index construction and
+selection overhead with direct measurements rather than latency decomposition.
+\end{abstract}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_analysis}
+\input{sections/05_experiments}
+\input{sections/06_conclusion}
+
+\clearpage
+\bibliography{references}
+\bibliographystyle{iclr2027_conference}
+
+\clearpage
+\appendix
+\input{sections/appendix}
+
+\end{document}

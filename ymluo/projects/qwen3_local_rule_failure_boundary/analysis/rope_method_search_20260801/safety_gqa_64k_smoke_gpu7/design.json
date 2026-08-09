@@ -1,0 +1,170 @@
+{
+  "config": {
+    "model_name_or_path": "/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+    "output_dir": "outputs/20260801_safety_gqa_64k_smoke_gpu7",
+    "lengths": "65536",
+    "seed_start": 0,
+    "num_seeds": 1,
+    "class_sample_count": 2,
+    "matched_tokens": 1,
+    "packet_gap_tokens": 16,
+    "anchor_distances": "1,128",
+    "fixed_anchor_distance": 128,
+    "trigger_threshold": 0.0,
+    "prefill_chunk_size": 64,
+    "native_max_context_tokens": 32768,
+    "dtype": "bfloat16",
+    "load_in_4bit": true,
+    "attn_implementation": "eager",
+    "original_max_position_embeddings": 40960,
+    "bootstrap_replicates": 200,
+    "bootstrap_seed": 2026080119,
+    "minimum_bootstrap_seeds": 1,
+    "merge_shards": "",
+    "dry_run": false,
+    "resolved_lengths": [
+      65536
+    ],
+    "resolved_anchor_distances": [
+      1,
+      128
+    ],
+    "class_order": [
+      "gold_evidence",
+      "conflict_evidence",
+      "lexical_format_distractor",
+      "filler"
+    ],
+    "certificate_fields": [
+      "pre_suppression",
+      "anchor_suppression",
+      "grid_envelope_suppression",
+      "phase_upper_suppression"
+    ],
+    "cuda_visible_devices": "7",
+    "frozen_final_query": true,
+    "explicit_truth_status_markers_in_prompt": false,
+    "instrumented_attention_implementation": "grouped_gqa_einsum_v1",
+    "primary_baseline": "instrumented_none"
+  },
+  "cases": [
+    {
+      "total_tokens": 65536,
+      "seed": 0,
+      "query_span": [
+        65508,
+        65536
+      ],
+      "decisive_positions": {
+        "gold_evidence": [
+          91
+        ],
+        "conflict_evidence": [
+          9
+        ],
+        "lexical_format_distractor": [
+          36,
+          63,
+          118,
+          145
+        ],
+        "filler": []
+      },
+      "sample_positions": {
+        "gold_evidence": [
+          87,
+          91
+        ],
+        "conflict_evidence": [
+          5,
+          9
+        ],
+        "lexical_format_distractor": [
+          36,
+          63
+        ],
+        "filler": [
+          12,
+          136
+        ]
+      },
+      "records": [
+        {
+          "category": "conflict_evidence",
+          "text": "A family note lists Xiaoming's age as four years.\n",
+          "span": [
+            0,
+            12
+          ],
+          "decisive_positions": [
+            9
+          ]
+        },
+        {
+          "category": "lexical_format_distractor",
+          "text": "The school register lists Carol's age as five years.\n",
+          "span": [
+            28,
+            39
+          ],
+          "decisive_positions": [
+            36
+          ]
+        },
+        {
+          "category": "lexical_format_distractor",
+          "text": "The school register lists Alice's age as seven years.\n",
+          "span": [
+            55,
+            66
+          ],
+          "decisive_positions": [
+            63
+          ]
+        },
+        {
+          "category": "gold_evidence",
+          "text": "The school register lists Xiaoming's age as nine years.\n",
+          "span": [
+            82,
+            94
+          ],
+          "decisive_positions": [
+            91
+          ]
+        },
+        {
+          "category": "lexical_format_distractor",
+          "text": "The school register lists David's age as one year.\n",
+          "span": [
+            110,
+            121
+          ],
+          "decisive_positions": [
+            118
+          ]
+        },
+        {
+          "category": "lexical_format_distractor",
+          "text": "The school register lists Bob's age as three years.\n",
+          "span": [
+            137,
+            148
+          ],
+          "decisive_positions": [
+            145
+          ]
+        }
+      ],
+      "filler_count": 65440,
+      "packet_filler_count": 80,
+      "query_text": "\nQuestion: According to the school register, what is Xiaoming's age? Reply with exactly one digit and nothing else. Answer: ",
+      "gold_answer": "nine",
+      "conflict_answer": "four",
+      "gold_output": "9",
+      "conflict_output": "4",
+      "filler_token_id": 13,
+      "filler_token_text": "."
+    }
+  ]
+}

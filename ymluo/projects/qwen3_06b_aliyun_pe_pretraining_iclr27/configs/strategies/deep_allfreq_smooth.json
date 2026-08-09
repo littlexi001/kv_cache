@@ -1,0 +1,11 @@
+{
+  "name": "deep_allfreq_smooth",
+  "kind": "band_layer_scale",
+  "layer_mode": "sigmoid_deep",
+  "layer_center_fraction": 0.65,
+  "layer_temperature_fraction": 0.08,
+  "pair_start": 0,
+  "pair_end_exclusive": -1,
+  "modified_scale": 0.5,
+  "description": "Smoothly transition all frequency pairs from native in shallow layers toward 50% in deep layers."
+}

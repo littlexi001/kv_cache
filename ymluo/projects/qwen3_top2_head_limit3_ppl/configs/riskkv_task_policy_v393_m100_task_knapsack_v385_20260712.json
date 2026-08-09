@@ -1,0 +1,54 @@
+{
+  "__extends": "riskkv_task_policy_v365_ultra_skeleton_all_20260712.json",
+  "__comment": "v393: strict-10-ish task-level knapsack after v385 M100. It keeps v385 only on tasks where the completed M100 result showed useful quality gain, then fills the rest with completed low-KV M100 winners.",
+  "__task_sources": {
+    "2wikimqa": {
+      "policy": "riskkv_task_policy_v384_task_gated_v377_plus_v380_20260712.json"
+    },
+    "gov_report": {
+      "policy": "riskkv_task_policy_v376_strict10_pareto_fused_20260712.json"
+    },
+    "hotpotqa": {
+      "policy": "riskkv_task_policy_v382_policy_multiclass_base_v377_20260712.json"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "multi_news": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v377_global_pareto_knapsack_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v384_task_gated_v377_plus_v380_20260712.json"
+    },
+    "narrativeqa": {
+      "policy": "riskkv_task_policy_v385_quality10_v384_plus_v363_qmsumlow_20260712.json"
+    },
+    "passage_count": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "passage_retrieval_en": {
+      "policy": "riskkv_task_policy_v384_task_gated_v377_plus_v380_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v383_policy_multiclass_base_v377_conf040_20260712.json"
+    },
+    "qmsum": {
+      "policy": "riskkv_task_policy_v385_quality10_v384_plus_v363_qmsumlow_20260712.json"
+    },
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "samsum": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "trec": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "triviaqa": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    }
+  }
+}

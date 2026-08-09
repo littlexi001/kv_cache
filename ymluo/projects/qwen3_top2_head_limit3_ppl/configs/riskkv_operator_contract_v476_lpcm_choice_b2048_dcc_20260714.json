@@ -1,0 +1,12 @@
+{
+  "__extends": "riskkv_operator_contract_v469_lpcm_choice_b2048_20260714.json",
+  "__comment": "Long-ICL diagnostic: use 16-token pages as locators, then complete selected demonstration evidence and option/answer tails under the same 2048-token budget.",
+  "tasks": {
+    "lbv2_long_in_context_learning": {
+      "demonstration_closure": true,
+      "demonstration_closure_budget_fraction": 0.55,
+      "demonstration_closure_radius_pages": 1,
+      "demonstration_closure_tail_pages": 4
+    }
+  }
+}

@@ -1,0 +1,146 @@
+\section{Introduction}
+\label{sec:introduction}
+
+Long-context decoding repeatedly reads the complete key--value (KV) history.
+For each generated token, every query head scores all historical keys and
+aggregates their values, so attention traffic and arithmetic grow linearly
+with context length \citep{dao2022flashattention,dao2023flashattention2}.
+KV eviction reduces this cost by permanently discarding tokens
+\citep{zhang2023h2o,li2024snapkv,cai2024pyramidkv,feng2024adakv}, but a token
+that is unimportant now can become relevant to a later query.
+Query-aware retrieval keeps the history addressable and selects a new subset
+at every decode step \citep{tang2024quest,ribar2023sparq,singhania2024loki}.
+Its central systems constraint is severe: finding the subset must cost much
+less than the exact attention it removes.
+
+Token-level low-bit retrieval is a particularly direct design.
+An auxiliary Key index estimates all QK scores, top-$k$ identifies candidate
+positions, and exact attention consumes the original K/V at those positions.
+FIER shows that even 1-bit Keys can preserve useful token rankings
+\citep{wang2025fier}.
+However, a uniform Key quantizer treats all coordinates and attention heads
+alike, although the retrieval error that matters is not
+$\|k-\widehat k\|_2^2$ but
+$(q^\top k-q^\top\widehat k)^2$.
+The two objectives coincide only for isotropic queries.
+This leaves a numerical question with direct systems consequences:
+\emph{under a fixed index-byte budget, how should representation capacity be
+distributed according to the joint geometry of the Queries and Keys?}
+
+We answer this question with \method, a training-free, GPU-resident exact-KV
+retrieval accelerator.
+For each layer and KV head, the reference profile estimates request-local
+second moments from uniformly sampled prompt Keys and prompt-tail Queries.
+It constructs two different linear transforms, one for Queries and one for
+Keys.
+At full dimension the transforms are biorthogonal and preserve every dot
+product exactly.
+Under the moments used to construct them, the two transformed second moments
+are the same diagonal matrix.
+Its ordered coordinates therefore expose the joint QK score spectrum rather
+than the reconstruction spectrum of Keys alone.
+For deployment, the same construction can average moments from disjoint
+calibration requests once per model and freeze the resulting per-layer/head
+template; we evaluate request-local and model-level templates as separate
+registered profiles.
+
+\method then divides the 128 coordinates into eight 16-D bands.
+For every layer and KV head independently, it assigns
+$0/1/2/4/8$ bits to each band under a fixed 240-bit token/head budget.
+The reference allocation minimizes an empirical query-weighted
+Key-quantization error, which is exactly a Cartesian-sample estimate of
+attention-logit MSE.  A deployment simplification minimizes Key
+reconstruction MSE in the same QK-balanced coordinates.
+A zero-bit band is physically absent.
+The resulting packed index occupies 30 bytes per token and KV head, or 5.86\%
+of the corresponding FP16 K+V footprint.
+This is an \emph{additional retrieval index}: \method keeps the complete exact
+KV resident on the GPU and does not claim a 1\% physical KV footprint.
+
+At each decode step, the transformed INT8 Query scans the packed index and
+selects
+\begin{equation}
+ B(N)=\min\{N,1280,\max(256,\lceil0.06N\rceil)\}
+ \label{eq:budget-intro}
+\end{equation}
+positions per query head.
+This is the registered 4K--128K schedule, not a claim that a 1,280-token cap
+transfers unchanged to longer contexts.
+The reference profile applies deterministic top-$B(N)$ to all proxy scores.
+The deployment profile estimates the corresponding threshold from the
+capped tail-calibrated sample count in \cref{eq:frozen-quantile-samples} and writes
+candidates during the scan, avoiding an $N$-length score tensor and generic
+top-$k$.
+The selected original FP16 Keys and Values are gathered on GPU and consumed
+by exact sparse QK--softmax--AV.
+There is no exact-QK reranking of a larger candidate pool, learned router,
+task-family rule, protected sink/recent heuristic, or full-attention fallback.
+Every quality and latency result names its producing profile; we do not merge
+cross-profile measurements into a same-path claim.
+\Cref{fig:overview} summarizes the pipeline.
+
+At extreme native lengths, accurate selection alone is not always enough:
+many individually small omitted weights can carry a coherent aggregate
+Value.  We therefore register two consumers.  \emph{QKSieve-Fast} performs
+selected-only exact attention.  \emph{QKSieve-Robust} additionally estimates
+the omitted proxy partition and its rank-16 INT4 Value residual during the
+same index scan, and combines it with the exact selected numerator using a
+fixed $\alpha=.5$ shrinkage.  This adds no exact-attention token, router,
+reranking, or Full fallback.  Its per-token auxiliary footprint is 7.47\% of
+FP16 K+V, versus 5.86\% for Fast.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figures/qksieve_overview.pdf}
+  \caption{\method keeps exact KV on GPU and adds a per-layer/per-KV-head
+  mixed-bit Key index.  The reference profile freezes request-local
+  QK-balanced transforms and allocations after prefill.  The deployment
+  profile instead loads a model-level template and uses capped
+  sampled-quantile candidate writing.  Both apply exact sparse attention to
+  original KV.}
+  \label{fig:overview}
+\end{figure}
+
+The construction supports a clean error chain.
+The unquantized transform contributes exactly zero score error.
+For Key quantization error $e$, empirical score MSE is
+$\tr(C'_q C_e)$, not $\tr(C_e)$.
+The mixed-bit allocator minimizes a blockwise version of this quantity.
+A score-error radius and the exact top-$k$ margin certify a subset of selected
+tokens.
+Finally, if the selected set omits full-attention probability mass
+$\epsilon$, restricting and renormalizing exact attention changes the
+probability vector by exactly $2\epsilon$ in $\ell_1$, and changes the
+attention output by at most $\epsilon$ times the Value-set diameter.
+These are conditional guarantees, not a claim that near-tied adversarial
+scores are always preserved.
+
+Our contributions are:
+\begin{itemize}
+  \item We derive QK-balanced biorthogonal coordinates that preserve the full
+  dot product exactly and place Query and Key second moments in the same
+  diagonal spectrum.
+  \item We formulate per-layer/per-KV-head mixed-bit indexing as a
+  query-weighted rate-distortion problem and solve it exactly over
+  $0/1/2/4/8$-bit 16-D bands under a hardware-visible byte budget; a causal
+  ablation identifies Key-MSE as a simpler deployment allocator without
+  detectable LongBench loss.
+  \item We implement a deterministic packed-index reference and optimized
+  architecture-specific GQA/MHA sampled-quantile deployment paths, both followed by exact
+  GPU-resident sparse attention and neither using reranking, learned routing,
+  or dense fallback.
+  \item We identify omitted Value mass as a failure mode independent of Key
+  ranking and introduce a current-Query, low-rank Value-tail residual with an
+  analytically characterized shrinkage tradeoff.  On 12 native-128K
+  topic/seed cases, the Robust profile retains 99.805\% pooled PPL quality
+  with a [99.100\%, 100.499\%] case-bootstrap interval.  A deterministic
+  length gate composes Fast and Robust without task signals or Full fallback.
+  \item We provide equal-rate retrieval audits, all-layer allocation
+  statistics, GPU kernel validation, and a complete 3,750-example,
+  16-task Llama-3.1-8B LongBench evaluation with 99.88\% macro-score
+  retention, native-128K Fast/Robust stress tests, a same-path General screen,
+  and direct CUDA and whole-model diagnostics from 8K to 128K.  On the frozen
+  native-MHA contract, the complete selector-plus-sparse-attention path reaches
+  1.22--6.23$\times$.  Profile-specific reporting keeps mechanism, downstream
+  quality, attention-subsystem speed, and end-to-end limitations separate.
+\end{itemize}

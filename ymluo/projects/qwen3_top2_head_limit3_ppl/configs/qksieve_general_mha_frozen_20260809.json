@@ -1,0 +1,40 @@
+{
+  "schema": "qksieve_frozen_method_v1",
+  "method_id": "qksieve_general_mha_frozen_20260809",
+  "frozen_at": "2026-08-09",
+  "freeze_scope": "numerical method and native-MHA attention-subsystem implementation",
+  "numerical_contract": {
+    "coordinates": "request-local QK-balanced",
+    "index": "mixed-band low-bit Key proxy",
+    "full_kv": "GPU-resident FP16/BF16 K/V",
+    "active_budget": "min(1280, max(256, ceil(0.06 * history_tokens)))",
+    "selection": "sampled-quantile proxy scan followed by exact sparse attention",
+    "full_attention_fallback": false,
+    "router": false
+  },
+  "mha_speed_contract": {
+    "layout": "32 query heads, 32 KV heads, head dimension 128",
+    "quantile_sample_count": "min(history_tokens, 512, max(256, ceil(16 / active_fraction)))",
+    "runtime_env": {
+      "QKSIEVE_MAX_QUANTILE_SAMPLE_COUNT": "512",
+      "QKSIEVE_ATTENTION_SPLIT_OVERRIDE": "8"
+    },
+    "exact_attention_split_count": 8,
+    "query_prepare_included": true,
+    "selector_scan_included": true,
+    "exact_sparse_attention_included": true,
+    "valuesketch_included": false,
+    "full_kv_replication": false,
+    "index_ratio_of_full_fp16_kv": 0.05525
+  },
+  "benchmark_contract": {
+    "gpu": "NVIDIA RTX 3090 24GB",
+    "lengths": [8192, 16384, 32768, 65536, 131072],
+    "seeds": [20260808, 20260809, 20260810],
+    "warmup": 20,
+    "iterations": 80,
+    "timing": "CUDA events with synchronization",
+    "reporting": "median across six equivalent same-GPU runs per length"
+  },
+  "claim_boundary": "The frozen MHA table is an attention-subsystem result, not whole-model decode. ValueSketch is excluded because the released fast path is GQA4-specific."
+}

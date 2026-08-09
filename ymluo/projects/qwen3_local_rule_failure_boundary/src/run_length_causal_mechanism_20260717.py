@@ -5,6 +5,7 @@ import csv
 import json
 import math
 import random
+import re
 import statistics
 import time
 from collections import defaultdict
@@ -73,12 +74,189 @@ def make_event(
     )
 
 
-def build_bundle(seed: int) -> dict[str, Any]:
+ENGLISH_SINGLE_TOKEN_WORDS = (
+    # The first three form the fixed clean chain for seed 0.  They are common,
+    # concrete nouns without an obvious semantic transition between them.
+    "river", "window", "basket",
+    "forest", "orange", "silver", "rabbit", "planet", "hammer", "bridge",
+    "camera", "cloud", "flower", "engine", "mirror", "anchor", "castle",
+    "table", "chair", "apple", "banana", "grape", "lemon", "cherry", "peach",
+    "bread", "cheese", "coffee", "sugar", "salt", "pepper", "water", "stone",
+    "paper", "book", "letter", "clock", "bell", "door", "roof", "floor",
+    "wall", "road", "train", "boat", "horse", "sheep", "tiger", "lion",
+    "bear", "eagle", "whale", "shark", "beach", "ocean", "lake", "mountain",
+    "valley", "field", "grass", "tree", "leaf", "seed", "branch", "wood",
+    "metal", "glass", "cotton", "leather", "shirt", "shoe", "hat", "coat",
+    "ring", "plate", "spoon", "knife", "cup", "bowl", "box", "bag", "rope",
+    "chain", "brush", "drum", "piano", "radio", "phone", "screen", "wheel",
+    "motor", "tower", "tunnel", "market", "school", "hotel", "farm", "village",
+    "city", "summer", "winter", "spring", "autumn", "morning", "evening",
+    "night", "light", "shadow", "shape", "circle", "square", "line", "point",
+    "sound", "music", "song", "story", "picture", "dream", "smile", "friend",
+    "family", "child", "doctor", "teacher", "baker", "farmer", "sailor", "pilot",
+    "actor", "king", "queen", "giant", "angel", "desert", "harbor", "garden",
+    "candle", "pocket", "ladder", "marble", "bottle", "carpet", "island",
+    "pencil", "velvet", "lantern", "pillow",
+)
+
+
+def _surface_token_ids(tokenizer: Any, text: str, surface: str) -> list[list[int]]:
+    encoded = tokenizer(text, add_special_tokens=False, return_offsets_mapping=True)
+    offsets = encoded.get("offset_mapping")
+    if offsets is None:
+        raise RuntimeError("fast-tokenizer offset_mapping is required for single-token codes")
+    output: list[list[int]] = []
+    cursor = 0
+    while True:
+        char_start = text.find(surface, cursor)
+        if char_start < 0:
+            break
+        char_end = char_start + len(surface)
+        hits = [
+            index
+            for index, (left, right) in enumerate(offsets)
+            if right > char_start and left < char_end
+        ]
+        output.append([int(encoded["input_ids"][index]) for index in hits])
+        cursor = char_end
+    return output
+
+
+def build_english_single_token_code_pool(tokenizer: Any, required: int = 64) -> list[str]:
+    """Choose ordinary English words that stay one token in every used context.
+
+    A word may have a different bare-answer token id and leading-space token id,
+    but every rule/note/query occurrence must be one stable contextual token.
+    Words appearing in the filler corpus are excluded to avoid accidental keys.
+    """
+
+    filler_words = {
+        word.lower()
+        for paragraph in base.FILLER_PARAGRAPHS
+        for word in re.findall(r"[A-Za-z]+", paragraph)
+    }
+    output: list[str] = []
+    for word in ENGLISH_SINGLE_TOKEN_WORDS:
+        if word.lower() in filler_words:
+            continue
+        bare_ids = base.token_ids(tokenizer, word)
+        if len(bare_ids) != 1:
+            continue
+        decoded = tokenizer.decode(
+            bare_ids,
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=False,
+        )
+        if decoded != word:
+            continue
+        contexts = (
+            base.rule_line("VERIFIED RULE", "T0", word, word),
+            base.note_line("L0", word),
+            base.build_prompt_suffix(word, 2),
+        )
+        contextual_ids: list[int] = []
+        valid = True
+        for text in contexts:
+            occurrences = _surface_token_ids(tokenizer, text, word)
+            if not occurrences or any(len(ids) != 1 for ids in occurrences):
+                valid = False
+                break
+            contextual_ids.extend(ids[0] for ids in occurrences)
+        if not valid or len(set(contextual_ids)) != 1:
+            continue
+        output.append(word)
+        if len(output) >= required:
+            return output
+    raise RuntimeError(f"found only {len(output)} stable English single-token words; need {required}")
+
+
+def build_single_token_code_pool(tokenizer: Any, seed: int, required: int = 64) -> list[str]:
+    """Choose opaque CJK identifiers that are one stable token in every template.
+
+    The previous GA89-987-style identifiers span several BPE tokens.  For the
+    single-token control we deliberately use one Han character per identifier,
+    and require that the same token id covers that character in rule, note, and
+    query contexts.  The shuffled Unicode scan avoids hard-coding an ordered or
+    semantically related trio such as 甲/乙/丙.
+    """
+
+    rng = random.Random(2026071701 + seed * 1009)
+    codepoints = list(range(0x4E00, 0xA000))
+    rng.shuffle(codepoints)
+    output: list[str] = []
+    for codepoint in codepoints:
+        code = chr(codepoint)
+        standalone = base.token_ids(tokenizer, code)
+        if len(standalone) != 1:
+            continue
+        expected_id = standalone[0]
+        contexts = (
+            base.rule_line("VERIFIED RULE", "T0", code, code),
+            base.note_line("L0", code),
+            base.build_prompt_suffix(code, 2),
+        )
+        stable = True
+        for text in contexts:
+            encoded = tokenizer(
+                text,
+                add_special_tokens=False,
+                return_offsets_mapping=True,
+            )
+            offsets = encoded.get("offset_mapping")
+            if offsets is None:
+                raise RuntimeError("fast-tokenizer offset_mapping is required for single-token codes")
+            for char_index, character in enumerate(text):
+                if character != code:
+                    continue
+                hits = [
+                    index
+                    for index, (left, right) in enumerate(offsets)
+                    if right > char_index and left < char_index + 1
+                ]
+                if len(hits) != 1 or int(encoded["input_ids"][hits[0]]) != expected_id:
+                    stable = False
+                    break
+            if not stable:
+                break
+        if stable:
+            output.append(code)
+            if len(output) >= required:
+                return output
+    raise RuntimeError(f"found only {len(output)} stable single-token codes; need {required}")
+
+
+def build_bundle(seed: int, tokenizer: Any | None = None, code_mode: str = "legacy") -> dict[str, Any]:
     """Build every potential evidence item once so candidates stay fixed across conditions."""
 
     rng = random.Random(2026071701 + seed * 1009)
-    gold_codes = [base.make_code(rng, "G", index) for index in range(3)]
-    conflict_codes = [gold_codes[0], base.make_code(rng, "X", 1), base.make_code(rng, "X", 2)]
+    if code_mode not in {"legacy", "single_token", "english_single_token"}:
+        raise ValueError(f"unknown code mode: {code_mode}")
+    single_codes: list[str] = []
+    if code_mode != "legacy":
+        if tokenizer is None:
+            raise ValueError("tokenizer is required for single-token code modes")
+        single_codes = (
+            build_single_token_code_pool(tokenizer, seed)
+            if code_mode == "single_token"
+            else build_english_single_token_code_pool(tokenizer)
+        )
+    next_single_index = 0
+
+    def make_code(family: str, index: int) -> str:
+        nonlocal next_single_index
+        if code_mode == "legacy":
+            return base.make_code(rng, family, index)
+        code = single_codes[next_single_index]
+        next_single_index += 1
+        return code
+
+    def mutate_code(code: str) -> str:
+        if code_mode == "legacy":
+            return base.mutate_code(code, rng)
+        return make_code("M", next_single_index)
+
+    gold_codes = [make_code("G", index) for index in range(3)]
+    conflict_codes = [gold_codes[0], make_code("X", 1), make_code("X", 2)]
 
     gold_events = [
         make_event("relevant", f"T{step}", "VERIFIED RULE", gold_codes[step], gold_codes[step + 1], step)
@@ -99,8 +277,8 @@ def build_bundle(seed: int) -> dict[str, Any]:
     high_events: list[base.RuleEvent] = []
     for index in range(4):
         step = index % 2
-        antecedent = base.mutate_code(gold_codes[step], rng)
-        consequent = base.mutate_code(gold_codes[step + 1], rng)
+        antecedent = mutate_code(gold_codes[step])
+        consequent = mutate_code(gold_codes[step + 1])
         high_events.append(
             make_event("distractor", f"H{index}", "VERIFIED RULE", antecedent, consequent, step)
         )
@@ -108,7 +286,7 @@ def build_bundle(seed: int) -> dict[str, Any]:
     competitor_chains: list[list[base.RuleEvent]] = []
     competitor_finals: list[str] = []
     for chain_index, family in enumerate(("U", "V")):
-        codes = [base.make_code(rng, family, chain_index * 10 + step) for step in range(3)]
+        codes = [make_code(family, chain_index * 10 + step) for step in range(3)]
         competitor_finals.append(codes[-1])
         competitor_chains.append(
             [
@@ -126,7 +304,7 @@ def build_bundle(seed: int) -> dict[str, Any]:
 
     low_events: list[base.RuleEvent] = []
     for index in range(16):
-        code = base.make_code(rng, "L", index)
+        code = make_code("L", index)
         low_events.append(
             base.RuleEvent(
                 "distractor",
@@ -154,7 +332,7 @@ def build_bundle(seed: int) -> dict[str, Any]:
     # The start code is intentionally retained.  Excluding it made candidate
     # accuracy look correct even when greedy generation merely copied the key.
     while len(candidates) < 13:
-        candidates.append(base.make_code(rng, "Z", len(candidates)))
+        candidates.append(make_code("Z", len(candidates)))
     candidates = candidates[:13]
     roles = {
         gold_codes[-1]: "gold_final",
@@ -171,6 +349,13 @@ def build_bundle(seed: int) -> dict[str, Any]:
         roles.setdefault(candidate, "random")
 
     return {
+        "code_mode": code_mode,
+        "code_token_ids": {
+            code: base.token_ids(tokenizer, code)[0]
+            for code in single_codes[:next_single_index]
+        }
+        if code_mode != "legacy"
+        else {},
         "gold_codes": gold_codes,
         "conflict_codes": conflict_codes,
         "gold_events": gold_events,
@@ -277,10 +462,11 @@ def build_body(
     target_context_tokens: int,
     condition: str,
     placement: str,
+    code_mode: str = "legacy",
 ) -> dict[str, Any]:
     if placement not in PLACEMENTS:
         raise ValueError(f"unknown placement: {placement}")
-    bundle = build_bundle(seed)
+    bundle = build_bundle(seed, tokenizer=tokenizer, code_mode=code_mode)
     extra_blocks = condition_blocks(bundle, condition)
     placed: list[base.RuleEvent] = []
 
@@ -340,7 +526,7 @@ def build_suffix(style: str, start_code: str, steps: int, query_mode: str) -> st
         return (
             "\nVERIFIED RULE LOOKUP\n"
             "Complete the consequent of this exact applicable VERIFIED RULE.\n"
-            f"IF {start_code} IS ACTIVE THEN "
+            f"IF {start_code} IS ACTIVE THEN"
         )
     if style == "legacy":
         return base.build_prompt_suffix(start_code, steps)

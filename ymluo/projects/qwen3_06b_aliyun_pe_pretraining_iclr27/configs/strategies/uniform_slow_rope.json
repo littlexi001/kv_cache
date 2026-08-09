@@ -1,0 +1,7 @@
+{
+  "name": "uniform_slow_rope",
+  "kind": "uniform_scale",
+  "phase_scale": 0.5,
+  "description": "Use native RoPE in every layer and pair, but accumulate all phases at half speed."
+}
+

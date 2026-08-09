@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="${ROOT:-/home/fdong/ymluo/projects/qwen3_top2_head_limit3_ppl}"
+cd "$ROOT"
+
+PY="${PY:-/home/fdong/miniconda3/envs/moe/bin/python}"
+GPUS="${GPUS:-6,7,2,4,0,1,3,5}"
+RUNNER="${RUNNER:-scripts/run_riskkv_task_policy_v19_one_20260709.sh}"
+LABEL="${LABEL:?LABEL is required}"
+STAMP="${STAMP:?STAMP is required}"
+POLICY="${POLICY:?POLICY path is required}"
+LOG_DIR="${LOG_DIR:-outputs/logs}"
+LOCK_ROOT="${LOCK_ROOT:-/tmp/riskkv_gpu_locks_${USER:-user}}"
+ALL_TASKS="${ALL_TASKS:-narrativeqa,qasper,multifieldqa_en,hotpotqa,2wikimqa,musique,gov_report,qmsum,multi_news,trec,triviaqa,samsum,passage_count,passage_retrieval_en,lcc,repobench-p}"
+FULL_SCORE="${FULL_SCORE:-0.3658}"
+FULL_ONLINE="${FULL_ONLINE:-3.0988}"
+MIN_VS_FULL="${MIN_VS_FULL:-0.95}"
+MAX_KV="${MAX_KV:-0.10}"
+MIN_SPEED="${MIN_SPEED:-2.5}"
+mkdir -p "$LOG_DIR"
+
+launch_sync() {
+  local samples="$1"
+  local out="outputs/riskkv_v19_${LABEL}_${STAMP}_m${samples}_bDyn_pDyn"
+  local log="$LOG_DIR/launch_${LABEL}_${STAMP}_m${samples}.log"
+  if [[ -f "$out/task_results.csv" ]]; then
+    echo "SKIP existing ${out}/task_results.csv $(date -Is)"
+    return 0
+  fi
+  echo "RUN fixed policy label=${LABEL} samples=${samples} policy=${POLICY} $(date -Is)"
+  env GPUS="$GPUS" LOCK_ROOT="$LOCK_ROOT" GPU_MAX_USED_MB="${GPU_MAX_USED_MB:-2500}" GPU_MAX_UTIL="${GPU_MAX_UTIL:-101}" SAMPLES="$samples" LABEL="$LABEL" STAMP="$STAMP" POLICY="$POLICY" TASKS="$ALL_TASKS" bash "$RUNNER" > "$log" 2>&1
+}
+
+launch_sync 20
+
+"$PY" - <<'PY'
+import csv
+import os
+from pathlib import Path
+
+label = os.environ["LABEL"]
+stamp = os.environ["STAMP"]
+full_score = float(os.environ.get("FULL_SCORE", "0.3658"))
+full_online = float(os.environ.get("FULL_ONLINE", "3.0988"))
+min_vs_full = float(os.environ.get("MIN_VS_FULL", "0.95"))
+max_kv = float(os.environ.get("MAX_KV", "0.10"))
+min_speed = float(os.environ.get("MIN_SPEED", "2.5"))
+path = Path(f"outputs/riskkv_v19_{label}_{stamp}_m20_bDyn_pDyn/task_results.csv")
+flag = Path(f"outputs/riskkv_v19_{label}_m100_gate_20260712.flag")
+rows = list(csv.DictReader(path.open(newline="", encoding="utf-8")))
+score = sum(float(row.get("score") or 0.0) for row in rows) / len(rows)
+kv = sum(float(row.get("keep_fraction") or 0.0) for row in rows) / len(rows)
+online = sum(float(row.get("online_seconds") or 0.0) for row in rows) / len(rows)
+speed = full_online / max(1e-9, online)
+passed = score / full_score >= min_vs_full and 0.01 <= kv <= max_kv + 1e-9 and speed >= min_speed
+flag.write_text("1\n" if passed else "0\n", encoding="utf-8")
+print(f"{label}_M20_GATE score={score:.4f} vs_full={score/full_score:.2%} kv={kv:.2%} speed_full={speed:.2f}x passed={passed}")
+PY
+
+if [[ "$(cat "outputs/riskkv_v19_${LABEL}_m100_gate_20260712.flag")" == "1" ]]; then
+  launch_sync 100
+else
+  echo "SKIP ${LABEL} M100 because M20 gate failed $(date -Is)"
+fi
+
+"$PY" scripts/parse_lowkv_running_progress_20260712.py || true

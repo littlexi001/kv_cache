@@ -1,0 +1,35 @@
+{
+  "schema": "fier_official_release_audit_v1",
+  "fier_commit": "e0b34153591dd7a55171f09f30abee35b0f08356",
+  "method": "full_same_backend",
+  "model_path": "/home/fdong/qksieve_iclr2027/models/longchat-7b-v1.5-32k",
+  "context_len": 8192,
+  "decode_len": 256,
+  "iterations": 3,
+  "requested_token_budget": 8960,
+  "page_size_argument": 8,
+  "controller_page_size": 8,
+  "configured_page_budget": 1120,
+  "effective_token_budget_upper_bound": 8960,
+  "prefill_ms": [
+    2143.307561054826,
+    1837.4239578843117,
+    1842.9621821269393
+  ],
+  "decode_ms_per_token": [
+    23.863270616857335,
+    23.83230454142904,
+    23.848765766160795
+  ],
+  "decode_median_ms_per_token": 23.848765766160795,
+  "decode_p10_ms_per_token": 23.83230454142904,
+  "decode_p90_ms_per_token": 23.863270616857335,
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "torch": "2.5.0+cu121",
+  "claim_boundary": [
+    "Uses the released FIER model and CUDA backend with synchronized timing.",
+    "Uses synthetic hidden states, matching the released speed protocol.",
+    "Full uses the same paged-KV backend and reuses the prefilled cache.",
+    "The released FIER selector currently creates random 2-bit packed tensors during decode; this run is a systems-path audit, not a joint quality-speed reproduction."
+  ]
+}

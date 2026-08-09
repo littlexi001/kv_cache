@@ -1,0 +1,10 @@
+{
+  "name": "period_aware_smooth",
+  "kind": "period_aware_scale",
+  "period_center_tokens": 2048.0,
+  "period_log_temperature": 0.75,
+  "layer_center_fraction": 0.65,
+  "layer_temperature_fraction": 0.08,
+  "alpha_min": 0.25,
+  "description": "Use the model's live RoPE periods to smoothly slow short-period pairs in deep layers."
+}

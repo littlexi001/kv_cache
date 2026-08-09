@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "b2048": {
+      "budget_tokens": 2048
+    }
+  }
+}

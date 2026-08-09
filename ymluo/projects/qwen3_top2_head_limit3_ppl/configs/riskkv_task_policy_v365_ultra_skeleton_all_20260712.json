@@ -1,0 +1,145 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "__overlay_all_tasks": {
+    "budget_tokens": 128,
+    "sink_tokens": 16,
+    "recent_tokens": 16,
+    "page_tokens": 16,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.78,
+    "ours_multiscale_group_pages": 8,
+    "ours_multiscale_weight": 0.30,
+    "coverage_mmr_weight": 0.46,
+    "coverage_mmr_max_terms": 20,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.50,
+    "coverage_certificate_min_terms": 1,
+    "anchor_window": true,
+    "anchor_window_tokens": 32,
+    "short_decode": true,
+    "short_decode_max_tokens": 24,
+    "score_risk": false,
+    "full_fallback": false
+  },
+  "tasks": {
+    "qasper": {
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.28,
+      "short_decode_max_tokens": 48
+    },
+    "hotpotqa": {
+      "budget_tokens": 192,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.48,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 28,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0
+    },
+    "2wikimqa": {
+      "budget_tokens": 192,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.48,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 28,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0
+    },
+    "musique": {
+      "budget_tokens": 256,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.52,
+      "graph_bridge_seed_pages": 10,
+      "graph_bridge_max_terms": 32,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 4.0
+    },
+    "repobench-p": {
+      "budget_tokens": 128,
+      "sink_tokens": 16,
+      "recent_tokens": 96,
+      "page_tokens": 64,
+      "scorer": "hybrid_late_mmr_multiscale_flow",
+      "coverage_certificate": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 16,
+      "output_verifier": true,
+      "retry_budget_tokens": 512
+    },
+    "lcc": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 64,
+      "coverage_certificate": false,
+      "short_decode_max_tokens": 48
+    },
+    "qmsum": {
+      "budget_tokens": 256,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "short_decode_max_tokens": 96
+    },
+    "triviaqa": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "short_decode_max_tokens": 4
+    },
+    "samsum": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "short_decode_max_tokens": 32
+    },
+    "gov_report": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "multi_news": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "trec": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "passage_count": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "passage_retrieval_en": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow"
+  },
+  "gov_report": {
+    "budget_tokens": 128,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "direct_structured_answer": true,
+    "direct_summary_max_words": 512,
+    "short_decode": true,
+    "short_decode_max_tokens": 0,
+    "score_risk": false
+  }
+}

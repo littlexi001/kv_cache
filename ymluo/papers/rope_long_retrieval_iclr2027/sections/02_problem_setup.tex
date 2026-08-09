@@ -1,16 +1,23 @@
-\section{Problem setup}
+\section{Controlled failures and causal estimands}
 \label{sec:setup}
 
-Consider one attention head with pre-RoPE query $\preq_t\in\mathbb R^d$ at
-position $t$ and pre-RoPE key $\prek_j\in\mathbb R^d$ at position $j$.  Let
-$\Rope_x$ be the block-diagonal RoPE rotation for position $x$.  The standard
-attention logit and weight are
+\paragraph{Attention notation.}
+Consider layer $l$ and query head $h$.  Let $g(h)$ denote its KV group; under
+grouped-query attention (GQA), multiple query heads share the physical cached
+Key $K_{l,g(h),j}$ and Value $V_{l,g(h),j}$ at prefix position $j$.  For query
+position $t$, let $\preq_{l,h,t},\prek_{l,g(h),j}\in\mathbb R^d$ be the
+pre-RoPE vectors, $\Rope_x$ the pure block-diagonal rotation built from the
+active configuration's effective inverse frequencies, and $\kappa$ the scalar
+rotary scale applied to each of Q and K.  The standard score and attention
+probability are
 \begin{align}
-  s^R(t,j)
-  &= \frac{(\Rope_t\preq_t)^\top(\Rope_j\prek_j)}{\sqrt d},
+  s^R_{l,h}(t,j)
+  &=\frac{\kappa^2(\Rope_t\preq_{l,h,t})^\top
+  (\Rope_j\prek_{l,g(h),j})}{\sqrt d},
   &
-  a(t,j)
-  &= \frac{\exp s^R(t,j)}{\sum_{r\le t}\exp s^R(t,r)}.
+  a_{l,h}(t,j)
+  &=\frac{\exp s^R_{l,h}(t,j)}
+  {\sum_{r\le t}\exp s^R_{l,h}(t,r)}.
   \label{eq:standard-attn}
 \end{align}
 For a gold evidence-token set $E$, its attention mass is
@@ -18,31 +25,57 @@ For a gold evidence-token set $E$, its attention mass is
   m_E(t)=\sum_{j\in E}a(t,j).
   \label{eq:evidence-mass}
 \end{equation}
-We evaluate the first answer token $y^\star$ using its negative log likelihood
-$\ell=-\log p(y^\star\mid x)$, \GoldPPL $=\exp(\ell)$, and its decision margin
-against the strongest non-gold token,
+This is an amount-of-reading statistic; it is not yet a signed measure of
+whether the read supports the correct answer.
+
+\paragraph{Output targets.}
+For the correct first answer token $y^\star$, we report negative log likelihood
+$\ell=-\log p(y^\star\mid x)$, \GoldPPL $=\exp(\ell)$, and the top-one margin
 \begin{equation}
   \gamma=z_{y^\star}-\max_{v\ne y^\star}z_v.
   \label{eq:margin}
 \end{equation}
-A first-token failure occurs when $\gamma<0$.  We additionally report free
-generation only after the first-token mechanism is established, because
-formatting and later decoding can otherwise obscure the boundary.
+A first-token failure occurs when $\gamma<0$.  When a plausible conflicting
+answer $y^c$ is known, the smoother causal estimand is the pair margin
+\begin{equation}
+  m=z_{y^\star}-z_{y^c}.
+  \label{eq:pair-margin}
+\end{equation}
+We use first-token decisions to expose a precise boundary; free generation is
+secondary because formatting and later decoding can conceal that boundary.
 
-Our central intervention keeps the evidence text, query text, and model
-parameters fixed while varying their relative distance $\Delta=t-j$ through
-filler insertion or controlled position changes.  ``Phase-sensitive'' does
-not mean that score or accuracy must decrease monotonically with $\Delta$.
-It means that changing $\Delta$ changes the RoPE phase and can reverse the
-relative priority of an otherwise fixed semantic match.  We distinguish this
-from two adjacent effects: extra filler also introduces more keys into the
-softmax denominator, and later layers can change the content vectors
-themselves.  \Cref{sec:mechanism} separates these stages.
+\paragraph{Intervention and answer-directed score utility.}
+For one pre-softmax layer--head--token coordinate, define a singleton intervention
+\begin{equation}
+  s_{l,h,j}(\epsilon)=s_{l,h,j}+\epsilon,
+  \qquad
+  U_{l,h,j}=\left.\frac{\partial m}{\partial\epsilon}\right|_{\epsilon=0}
+  =\frac{\partial m}{\partial s_{l,h,j}}.
+  \label{eq:score-intervention}
+\end{equation}
+$U_{l,h,j}$ is answer-directed: positive values support gold relative to conflict,
+while negative values support conflict.  Every finite intervention is compared
+with an $\epsilon=0$ execution through the identical instrumented graph.  We
+call this the \emph{same-path no-op}; it separates a score effect from numerical
+drift introduced by custom attention instrumentation.
 
-The main method experiment uses a two-hop rule chain.  Each entity is an
-ordinary English word that is exactly one tokenizer token in every template.
-Two verified rules near the beginning map $c_0\rightarrow c_1\rightarrow c_2$;
-random English filler occupies the rest of the context, and a concise query at
-the end asks for $c_2$.  This construction makes the gold token, evidence
-spans, and chain completion unambiguous while retaining natural tokenization.
-
+\paragraph{Controlled data and controls.}
+We triangulate four regimes and never pool them as one end-to-end mediation
+sample.  First, an NF4-loaded, BF16-compute Qwen3-8B with YaRN factor 2 provides
+the layer-0 analytic check on a seeded English two-hop chain and random filler.
+Second, an unquantized BF16 model with YaRN factor 4 provides the
+$143{,}424$-to-$143{,}488$ trajectory case: ``Xiaoming's age is nine years,''
+and a fixed 144K body stream whose full version contains $4{,}607$ wrong-age
+records about other people interleaved with period filler; the answer word is
+\texttt{nine}.  Third, the native-window population audit uses unquantized BF16
+at 8K/16K/24K on a distinct, source-conditioned task: a school register gives
+the gold age, a plausible family note gives another age, and the requested
+answer is digit \texttt{9}.  Fourth, a held-out NF4 two-hop retrieval diagnostic
+appears only in \cref{app:diagnostic-retrieval}.  Length sweeps fix evidence and
+query wording and model parameters but vary the intervening body, jointly
+changing relative distance $\Delta=t-j$, the competing candidate set, and later
+Query states.  The analytic reconstruction instead fixes layer-0 pre-RoPE Q/K
+content and one candidate while varying only $\Delta$; the singleton audit holds
+the entire prompt fixed and changes one score coordinate.  These controls
+separate fixed-content phase effects, softmax redistribution, and the signed
+margin effect of the resulting centered Value write.

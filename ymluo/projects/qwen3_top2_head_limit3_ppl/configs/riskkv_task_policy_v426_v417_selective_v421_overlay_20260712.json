@@ -1,0 +1,49 @@
+{
+  "__extends": "riskkv_task_policy_v417_expanded_knapsack030_20260712.json",
+  "__comment": "v426: fast v417 base plus selective v421 frontier-router overlay only on tasks where M20 showed positive score delta without large latency regression: narrativeqa, qasper, musique, multifieldqa_en, lcc.",
+  "narrativeqa": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v421_frontier_router035_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v421_frontier_router035_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  },
+  "qasper": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v421_frontier_router035_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v421_frontier_router035_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  },
+  "musique": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v421_frontier_router035_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v421_frontier_router035_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  },
+  "multifieldqa_en": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v421_frontier_router035_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v421_frontier_router035_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  },
+  "lcc": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v421_frontier_router035_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v421_frontier_router035_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  }
+}

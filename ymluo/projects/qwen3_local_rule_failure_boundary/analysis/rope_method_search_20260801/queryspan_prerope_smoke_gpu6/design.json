@@ -1,0 +1,14 @@
+{
+  "selector_inputs": [
+    "question-span pre-RoPE Q anchors",
+    "pre-RoPE history K"
+  ],
+  "forbidden_selector_inputs": [
+    "gold span",
+    "conflict span",
+    "answer token",
+    "gradient"
+  ],
+  "shared_budget": "same sink + remote + local + current token count",
+  "consumer": "unmodified post-RoPE QK and V on selected support"
+}

@@ -1,0 +1,179 @@
+\section{Mechanism Diagnostics}
+\label{app:mechanism-results}
+
+These diagnostics isolate index geometry and allocation behavior.  They do
+not replace the same-path downstream and systems comparisons required for
+the final submission.
+
+\begin{table}[H]
+\caption{Controlled Key-only causal test on Qwen3-4B, 12 paired 32K
+windows.  Both rows use Key-MSE allocation, a 240-bit index, 1,280 exact
+tokens, and the same exact-KV consumer.}
+\label{tab:key-only-causal}
+\centering
+\begin{tabular}{lrrrr}
+\toprule
+Coordinates & PPL retention & Top-1 agree. & KL & ms/token \\
+\midrule
+Key-PCA & 99.777\% & 93.620\% & .02106 & \textbf{57.698} \\
+QK-balanced & \textbf{100.723\%} & \textbf{95.573\%} &
+\textbf{.00844} & 58.167 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\caption{Causal allocation/coordinate ablation on 320 strictly paired
+LongBench examples (20 per task).  All sparse rows use the same 240-bit
+index, exact-KV consumer, and complete proxy top-$k$.}
+\label{tab:allocation-causal}
+\centering
+\begin{tabular}{lrr}
+\toprule
+Coordinates / allocation & Macro score & Retention \\
+\midrule
+Full KV & .459694 & 100.000\% \\
+QK-balanced / logit-MSE & .458648 & 99.772\% \\
+Key-PCA / Key-MSE & .458986 & 99.846\% \\
+\textbf{QK-balanced / Key-MSE} & \textbf{.459338} & \textbf{99.923\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The direct QK-balanced Key-MSE minus logit-MSE macro difference is .000690;
+the task-stratified paired-bootstrap 95\% interval is
+[$-.000717$, $.002160$].  Thus this experiment supports equivalence at m20,
+not a significant Key-MSE quality improvement.
+
+\begin{table}[H]
+\caption{Allocation choice on one shared 32K, 256-token Qwen3-4B window
+through the same WMMA/GQA-4/sampled-quantile deployment path.}
+\label{tab:allocation-deploy}
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Allocation & PPL retention & ms/token & Speedup \\
+\midrule
+Logit-MSE & 100.731\% & 46.696 & 1.889$\times$ \\
+\textbf{Key-MSE} & \textbf{100.751\%} & \textbf{45.577} &
+\textbf{1.936$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The two deployment templates use identical QK-balanced Query/Key bases and
+differ only in allocation.  Their realized rate structure is:
+
+\begin{table}[H]
+\caption{Allocation structure over all 288 Qwen3-4B layer/KV-head pairs.
+Physical rate includes one FP16 scale for every active 16-D band.}
+\label{tab:allocation-structure}
+\centering
+\begin{tabular}{lrr}
+\toprule
+Statistic & Logit-MSE & Key-MSE \\
+\midrule
+Mean active bands & 3.649 & 5.948 \\
+Physical rate in bands 1--4 & 99.812\% & 73.957\% \\
+Physical rate in bands 5--8 & .188\% & 26.043\% \\
+Mean index / FP16 K+V & 5.771\% & 5.854\% \\
+Most common layout & 4-4-4 (32.3\%) & 4-1-1-1-1-1 (97.6\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This is the predicted concentration--coverage difference from
+\cref{eq:keymse-joint-spectrum,eq:qmse-joint-spectrum}: logit-MSE applies
+the joint spectrum a second time, while Key-MSE preserves low-rate tail
+coverage.  It is a mechanism observation, not evidence that tail coverage
+always improves a task.
+
+\begin{table}[H]
+\caption{Cross-model sports/medicine traces at 1\% active tokens.
+``Oracle mass recall'' weights exact top-$1\%$ tokens by their Full-attention
+probability.}
+\label{tab:rate-allocation}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrr}
+\toprule
+Index & Index / FP16 K+V & Top-1\% recall & Oracle mass recall & Pearson \\
+\midrule
+Fixed 4-4-4 & 5.859\% & 69.13\% & 94.11\% & .9540 \\
+Fixed 8-4-0 & 5.469\% & 67.01\% & 95.69\% & .9503 \\
+\method auto, 240 bit & $\approx$5.8\% & \textbf{70.48\%} &
+\textbf{96.36\%} & \textbf{.9616} \\
+Fixed 8-4-4 & 7.422\% & 74.62\% & 97.44\% & .9710 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\caption{All-layer automatic allocations on Qwen3-4B at 32K.  The two
+contexts are sports and medicine; this is a mechanism diagnostic rather than
+a generalization claim.}
+\label{tab:all-layer-allocation}
+\centering
+\begin{tabular}{lr}
+\toprule
+Statistic & Result \\
+\midrule
+Layer/KV-head pairs & $36\times8=288$ \\
+Context-specific allocations & 576 \\
+Mean physical index rate & 1.857 bit/Key dimension \\
+Mean active 16-D bands & 3.573 of 8 \\
+Exact allocation agreement across contexts & 45.83\% \\
+Most frequent layouts & 4-4-4 (38.54\%); 4-4-2-1 (23.96\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\FloatBarrier
+The allocator spends nearly all rate on the first four QK-balanced bands, but
+the exact layout changes for 54.17\% of layer/head pairs between the two
+contexts.  This supports request-local rate allocation while also motivating
+the required Query-drift and cross-domain experiments; it does not establish
+that every allocation change improves downstream quality.
+
+\begin{table}[H]
+\caption{Matched QKSieve--FIER retrieval audit on Qwen3-4B at 32K.
+The 18,432 held-out query-head conditions span all 36 layers, two contexts,
+and eight Query steps not used by QKSieve calibration.  FIER is our
+paper-specification reproduction of 1-bit RTN with sequence-group size 32
+because no official implementation was available.}
+\label{tab:fier-heldout}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{lrrrrr}
+\toprule
+Index & Index / FP16 K+V & Active KV & Top-$k$ recall &
+Attention mass & Top-1 recall \\
+\midrule
+FIER-1b-g32 & 6.250\% & 1\% & 43.36\% & 76.40\% & 32.13\% \\
+\method & \textbf{5.859\%} & 1\% & \textbf{73.44\%} &
+\textbf{83.48\%} & \textbf{67.10\%} \\
+FIER-1b-g32 & 6.250\% & 2\% & 47.90\% & 81.61\% & 32.13\% \\
+\method & \textbf{5.859\%} & 2\% & \textbf{75.70\%} &
+\textbf{87.30\%} & \textbf{67.10\%} \\
+FIER-1b-g32 & 6.250\% & 4\% & 53.38\% & 86.63\% & 32.13\% \\
+\method & \textbf{5.859\%} & 4\% & \textbf{78.50\%} &
+\textbf{90.99\%} & \textbf{67.10\%} \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[H]
+\caption{Formula-level matched-rate comparison on eight independent traces
+(59,200 layer/head/Query conditions).  Official baseline kernels and
+end-to-end quality remain required.}
+\label{tab:rabitq}
+\centering
+\begin{tabular}{lrrr}
+\toprule
+Index & Top-1\% recall & Selected attention mass & Pearson \\
+\midrule
+RaBitQ formula, INT4 Query & 53.88\% & 71.32\% & .9087 \\
+\method, 240 bit & \textbf{71.82\%} & \textbf{76.79\%} & \textbf{.9686} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,0 +1,8 @@
+{
+  "__extends": "riskkv_operator_contract_v471_lpcm_choice_uniform896_20260714.json",
+  "__comment": "Choice-aware evidence probe: add candidate support and top-1/top-2 contrast signals while keeping the uniform 896-token budget fixed.",
+  "*": {
+    "ours_choice_support_weight": 0.18,
+    "ours_choice_contrast_weight": 0.22
+  }
+}

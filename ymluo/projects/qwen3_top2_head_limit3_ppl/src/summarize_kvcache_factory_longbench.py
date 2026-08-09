@@ -116,7 +116,14 @@ def main() -> None:
             answers = pick_answers(record)
             if not answers:
                 continue
-            scores.append(score_prediction(str(LONG_BENCH_PROMPTS[task]["metric"]), prediction, answers))
+            scores.append(
+                score_prediction(
+                    str(LONG_BENCH_PROMPTS[task]["metric"]),
+                    prediction,
+                    answers,
+                    task=task,
+                )
+            )
         rows.append(
             {
                 "model_budget": model_budget,

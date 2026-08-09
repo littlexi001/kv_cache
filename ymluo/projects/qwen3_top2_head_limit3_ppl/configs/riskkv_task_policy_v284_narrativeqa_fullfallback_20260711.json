@@ -1,0 +1,12 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow"
+  },
+  "narrativeqa": {
+    "full_fallback": true
+  }
+}

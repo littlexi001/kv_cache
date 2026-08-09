@@ -1,0 +1,16 @@
+\section{Limitations and Conclusion}
+\label{sec:conclusion}
+
+\method's 5.86\% QK-balanced Key index preserves complete LongBench, but a
+corrected native-128K audit shows that selected-only attention is not a
+universal consumer.  The 7.47\% Robust profile closes this omitted-Value
+failure on 12 topic/seed cases without reranking, learning, dense fallback,
+or additional exact-attention tokens.  A deterministic General profile uses
+Fast through 64K and Robust beyond it; an 80-example same-path LongBench
+screen removes the short-context Robust regression.  Under the frozen native
+MHA contract, the selector-plus-exact-sparse-attention path reaches
+1.22--6.23$\times$ from 8K to 128K with a 5.53\% realized index.  This path
+excludes the GQA-specific Value-tail sketch and is not a whole-model decode
+claim.  Short requests still may not amortize initialization.
+Full RULER, cross-model, H100, and complete same-path General LongBench
+evaluation remain required before final submission.

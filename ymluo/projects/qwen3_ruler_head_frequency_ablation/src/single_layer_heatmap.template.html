@@ -1,0 +1,126 @@
+<div id="rope-single-layer-complete">
+  <h2>逐层 RoPE Head × Frequency 完整扫描</h2>
+  <div class="card text-small overview">
+    <p><strong>设置：</strong>Qwen3-8B，6 条固定 RULER-32K 发现样本。每次只在一个层、一个 KV Head 组和一个连续 8 频率对的频带中，将 RoPE 旋转设为单位旋转；其余层保持原生 RoPE。</p>
+    <p><strong>每格指标：</strong>默认显示干预后的 Gold answer PPL，即 <code>exp(mean Gold token NLL)</code>，越低越好。也可切换为相对原生 RoPE 的 PPL 变化率或官方分数变化。</p>
+    <p><strong>读图：</strong>每层各有一张 8×8 表；横向为 KV Head 组，纵向为 RoPE 频带。蓝色表示改善，橙色表示退化；G0–G7 对应 Query Heads Q0–3、Q4–7、…、Q28–31。</p>
+    <p><strong>结果边界：</strong>共 18 层 × 8 Head 组 × 8 频带 = 1,152 个真实配置，每个配置使用同一组 6 个样本。PPL 是 Gold token 概率的连续指标，适合观察官方分数没有翻转时的内部变化。</p>
+  </div>
+  <div class="viz-controls">
+    <label class="form-label" for="single-metric">每格显示
+      <select id="single-metric" class="form-select">
+        <option value="ppl">Gold PPL</option>
+        <option value="ppl-relative">Gold PPL 相对变化</option>
+        <option value="official">RULER 分数变化</option>
+      </select>
+    </label>
+  </div>
+  <div id="single-selected" class="card text-small" aria-live="polite"></div>
+  <div id="single-maps"></div>
+  <div class="legend text-small" aria-label="颜色图例">
+    <span>退化</span><i class="n3"></i><i class="n2"></i><i class="n1"></i><i class="z"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><span>改善</span><strong id="single-unit">单位：PPL</strong>
+  </div>
+</div>
+<style>
+#rope-single-layer-complete{color:var(--foreground);width:100%}
+#rope-single-layer-complete h2{margin:0 0 12px}
+#rope-single-layer-complete .overview{margin-bottom:10px}
+#rope-single-layer-complete .overview p{margin:0 0 7px}
+#rope-single-layer-complete .overview p:last-child{margin-bottom:0}
+#rope-single-layer-complete .viz-controls{margin:0 0 10px}
+#single-selected{margin-bottom:18px;font-variant-numeric:tabular-nums}
+#single-maps{display:grid;gap:30px;min-width:0}
+#rope-single-layer-complete .layer-block{display:grid;gap:18px;min-width:0}
+#rope-single-layer-complete .layer-block>h3{margin:0;color:var(--muted-foreground)}
+#rope-single-layer-complete .panel{min-width:0}
+#rope-single-layer-complete .panel h3{margin:0 0 7px}
+#rope-single-layer-complete .hm{display:grid;grid-template-columns:74px repeat(8,minmax(64px,1fr));gap:4px;align-items:center;min-width:650px}
+#rope-single-layer-complete .ax{text-align:center;color:var(--muted-foreground)}
+#rope-single-layer-complete .row{text-align:right;padding-right:7px}
+#rope-single-layer-complete .hm .btn{min-width:0;font-variant-numeric:tabular-nums}
+#rope-single-layer-complete .legend{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:18px;color:var(--muted-foreground);flex-wrap:wrap}
+#rope-single-layer-complete .legend i{width:22px;height:10px}
+#rope-single-layer-complete .legend strong{margin-left:8px;font-weight:500}
+#rope-single-layer-complete .z{background:var(--muted)}
+#rope-single-layer-complete .p1{background:color-mix(in srgb,var(--viz-series-1) 22%,transparent)}
+#rope-single-layer-complete .p2{background:color-mix(in srgb,var(--viz-series-1) 45%,transparent)}
+#rope-single-layer-complete .p3{background:color-mix(in srgb,var(--viz-series-1) 72%,transparent)}
+#rope-single-layer-complete .n1{background:color-mix(in srgb,var(--destructive) 20%,transparent)}
+#rope-single-layer-complete .n2{background:color-mix(in srgb,var(--destructive) 42%,transparent)}
+#rope-single-layer-complete .n3{background:color-mix(in srgb,var(--destructive) 68%,transparent)}
+</style>
+<script>
+(function(){
+  const data=__DATA__;
+  const root=document.getElementById('rope-single-layer-complete');
+  const maps=root.querySelector('#single-maps');
+  const selected=root.querySelector('#single-selected');
+  const metricSelect=root.querySelector('#single-metric');
+  const unit=root.querySelector('#single-unit');
+  const bands=['F0-7','F8-15','F16-23','F24-31','F32-39','F40-47','F48-55','F56-63'];
+  const buttons=[];
+  function format(value,digits){const rounded=Math.abs(value)<Math.pow(10,-digits)/2?0:value;return(rounded>0?'+':'')+rounded.toFixed(digits)}
+  function metric(){return metricSelect.value}
+  function improvementValue(cell){
+    if(metric()==='official')return cell.d;
+    return -cell.r;
+  }
+  function color(cell){
+    const value=improvementValue(cell);const magnitude=Math.abs(value);
+    const neutral=metric()==='official'?0.05:0.1;
+    if(magnitude<neutral)return'z';
+    const prefix=value>0?'p':'n';
+    const medium=metric()==='official'?4:1;
+    const strong=metric()==='official'?10:5;
+    return prefix+(magnitude>=strong?3:magnitude>=medium?2:1);
+  }
+  function visibleValue(cell){
+    if(metric()==='ppl')return cell.p.toFixed(1);
+    if(metric()==='ppl-relative')return format(cell.r,2)+'%';
+    return format(cell.d,1);
+  }
+  function metricSentence(cell){
+    if(metric()==='ppl')return 'Gold PPL：<strong>'+cell.p.toFixed(3)+'</strong>（相对原生 '+format(cell.r,2)+'%，越低越好）';
+    if(metric()==='ppl-relative')return 'Gold PPL 相对变化：<strong>'+format(cell.r,3)+'%</strong>（干预后 PPL '+cell.p.toFixed(3)+'，负数为改善）';
+    return '官方分变化：<strong>'+format(cell.d,2)+' pp</strong>（干预后 '+(100*cell.s).toFixed(2)+'%）';
+  }
+  function detailText(cell){return 'L'+cell.l+'，G'+cell.g+'，'+cell.f+'；Gold PPL '+cell.p.toFixed(3)+'；PPL 相对变化 '+format(cell.r,3)+'%；官方分变化 '+format(cell.d,2)+' 个百分点'}
+  function describe(cell){selected.innerHTML='<strong>L'+cell.l+' · G'+cell.g+' ('+cell.q+') · '+cell.f+'</strong><br>'+metricSentence(cell)+'；平均 Gold NLL 改善 '+format(cell.n,4)+'；6 个样本中官方分提高/下降 '+cell.i+'/'+cell.e+'。'}
+  [[18,23],[24,29],[30,35]].forEach(function(range){
+    const block=document.createElement('section');block.className='layer-block';block.innerHTML='<h3>L'+range[0]+'–L'+range[1]+'</h3>';
+    for(let layer=range[0];layer<=range[1];layer+=1){
+      const section=document.createElement('section');section.className='panel';section.innerHTML='<h3>L'+layer+'</h3>';
+      const scroll=document.createElement('div');scroll.className='table-responsive';
+      const grid=document.createElement('div');grid.className='hm';grid.setAttribute('role','grid');grid.setAttribute('aria-label','L'+layer+' 单层 Gold PPL 表');
+      grid.innerHTML='<span class="ax">频带＼Head</span>'+Array.from({length:8},function(_,group){return'<span class="ax">G'+group+'</span>'}).join('');
+      bands.forEach(function(band){
+        grid.insertAdjacentHTML('beforeend','<span class="ax row">'+band+'</span>');
+        for(let group=0;group<8;group+=1){
+          const cell=data.find(function(item){return item.l===layer&&item.g===group&&item.f===band});
+          const button=document.createElement('button');button.type='button';button.className='btn viz-tile '+color(cell);button.textContent=visibleValue(cell);button.setAttribute('aria-pressed','false');
+          const detail=detailText(cell);
+          button.setAttribute('aria-label',detail);button.setAttribute('data-tooltip',detail);
+          button.addEventListener('click',function(){root.querySelectorAll('.hm button').forEach(function(other){other.setAttribute('aria-pressed','false')});button.setAttribute('aria-pressed','true');describe(cell)});
+          buttons.push({button:button,cell:cell});
+          grid.appendChild(button);
+        }
+      });
+      scroll.appendChild(grid);section.appendChild(scroll);block.appendChild(section);
+    }
+    maps.appendChild(block);
+  });
+  function update(){
+    buttons.forEach(function(entry){
+      entry.button.className='btn viz-tile '+color(entry.cell);
+      entry.button.textContent=visibleValue(entry.cell);
+      const detail=detailText(entry.cell);
+      entry.button.setAttribute('aria-label',detail);entry.button.setAttribute('data-tooltip',detail);
+    });
+    unit.textContent=metric()==='ppl'?'单位：PPL':metric()==='ppl-relative'?'单位：%（负数更好）':'单位：pp';
+    const best=data.reduce(function(current,cell){return improvementValue(cell)>improvementValue(current)?cell:current},data[0]);
+    describe(best);
+  }
+  metricSelect.addEventListener('change',update);
+  update();
+})();
+</script>

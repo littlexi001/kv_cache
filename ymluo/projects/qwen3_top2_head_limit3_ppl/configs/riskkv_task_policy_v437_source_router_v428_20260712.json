@@ -1,0 +1,14 @@
+{
+  "__extends": "riskkv_task_policy_v417_expanded_knapsack030_20260712.json",
+  "__comment": "v437: source-router distilled from v428. The router predicts the source policy from raw prompt/context/query text; it does not use the benchmark task name as a model feature.",
+  "__source_router": {
+    "model_path": "outputs/riskkv_v19_v437_source_router_v428_20260712/model.pkl",
+    "confidence_threshold": 0.88,
+    "default_source": "base",
+    "sources": {
+      "v421": {
+        "policy": "configs/riskkv_task_policy_v421_frontier_router035_20260712.json"
+      }
+    }
+  }
+}

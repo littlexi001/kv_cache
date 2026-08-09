@@ -1,0 +1,59 @@
+{
+  "__extends": "riskkv_task_policy_v396_m100_task_knapsack05_exact_20260712.json",
+  "__comment": "v413 expanded exact task frontier at avg KV<=3.0%. Adds legacy question-aware fixed-budget policies to the completed-M100 candidate pool.",
+  "__task_sources": {
+    "2wikimqa": {
+      "policy": "riskkv_task_policy_v413_legacy_b128_20260712.json",
+      "task": "*"
+    },
+    "gov_report": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "hotpotqa": {
+      "policy": "riskkv_task_policy_v413_legacy_b256_20260712.json",
+      "task": "*"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v393_m100_task_knapsack_v385_20260712.json"
+    },
+    "multi_news": {
+      "policy": "riskkv_task_policy_v389_m100_task_knapsack_v2_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v393_m100_task_knapsack_v385_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v413_legacy_b128_20260712.json",
+      "task": "*"
+    },
+    "narrativeqa": {
+      "policy": "riskkv_task_policy_v413_legacy_b128_20260712.json",
+      "task": "*"
+    },
+    "passage_count": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "passage_retrieval_en": {
+      "policy": "riskkv_task_policy_v395_m100_task_knapsack075_exact_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "qmsum": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v413_legacy_b128_20260712.json",
+      "task": "*"
+    },
+    "samsum": {
+      "policy": "riskkv_task_policy_v381_policy_multiclass_nopost_20260712.json"
+    },
+    "trec": {
+      "policy": "riskkv_task_policy_v393_m100_task_knapsack_v385_20260712.json"
+    },
+    "triviaqa": {
+      "policy": "riskkv_task_policy_v389_m100_task_knapsack_v2_20260712.json"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "model_name_or_path": "",
+  "output_dir": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_value_mediated_singleton_v2_bf16_noop_8seed_gpu67/merged",
+  "lengths": "8192,32768",
+  "seed_start": 0,
+  "num_seeds": 4,
+  "class_sample_count": 8,
+  "packet_gap_tokens": 16,
+  "anchor_distances": "1,2,4,8,16,32,64,128",
+  "fixed_anchor_distance": 128,
+  "score_lift": 0.25,
+  "singleton_top_n": 16,
+  "singleton_ranking_metric": "abs_positive_suppression_x_dm_dscore",
+  "run_joint_interventions": false,
+  "prefill_chunk_size": 64,
+  "dtype": "bfloat16",
+  "load_in_4bit": false,
+  "attn_implementation": "eager",
+  "original_max_position_embeddings": 40960,
+  "merge_shards": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_value_mediated_singleton_v2_bf16_noop_8seed_gpu67/shard_gpu6,/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_value_mediated_singleton_v2_bf16_noop_8seed_gpu67/shard_gpu7",
+  "dry_run": false,
+  "resolved_sources": [
+    "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_value_mediated_singleton_v2_bf16_noop_8seed_gpu67/shard_gpu6",
+    "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_value_mediated_singleton_v2_bf16_noop_8seed_gpu67/shard_gpu7"
+  ]
+}

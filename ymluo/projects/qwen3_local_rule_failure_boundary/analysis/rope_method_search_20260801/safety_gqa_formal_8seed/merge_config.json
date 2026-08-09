@@ -1,0 +1,28 @@
+{
+  "model_name_or_path": "",
+  "output_dir": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_suppression_certificate_safety_gpu67_v3_gqa/merged",
+  "lengths": "8192,32768,65536",
+  "seed_start": 0,
+  "num_seeds": 4,
+  "class_sample_count": 8,
+  "matched_tokens": 1,
+  "packet_gap_tokens": 16,
+  "anchor_distances": "1,2,4,8,16,32,64,128",
+  "fixed_anchor_distance": 128,
+  "trigger_threshold": 0.0,
+  "prefill_chunk_size": 128,
+  "native_max_context_tokens": 0,
+  "dtype": "bfloat16",
+  "load_in_4bit": false,
+  "attn_implementation": "sdpa",
+  "original_max_position_embeddings": 40960,
+  "bootstrap_replicates": 2000,
+  "bootstrap_seed": 2026080119,
+  "minimum_bootstrap_seeds": 4,
+  "merge_shards": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_suppression_certificate_safety_gpu67_v3_gqa/shard_gpu6,/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_suppression_certificate_safety_gpu67_v3_gqa/shard_gpu7",
+  "dry_run": false,
+  "resolved_sources": [
+    "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_suppression_certificate_safety_gpu67_v3_gqa/shard_gpu6",
+    "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_suppression_certificate_safety_gpu67_v3_gqa/shard_gpu7"
+  ]
+}

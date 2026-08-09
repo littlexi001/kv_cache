@@ -1,0 +1,39 @@
+{
+  "__extends": "riskkv_task_policy_v417_expanded_knapsack030_20260712.json",
+  "__comment": "v433: exact DP source composer, avg KV<=6%, speed>=6x, per-task KV<=20%.",
+  "__task_sources": {
+    "2wikimqa": {
+      "policy": "riskkv_task_policy_v428_v427_plus_repobench_20260712.json"
+    },
+    "gov_report": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "hotpotqa": {
+      "policy": "riskkv_task_policy_v397_cost_aware_router_after_pareto_20260712.json"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v424_latency_frontier_router060_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v413_expanded_knapsack035_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "qmsum": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v396_m100_task_knapsack05_exact_20260712.json"
+    },
+    "samsum": {
+      "policy": "riskkv_task_policy_v397_cost_aware_router_after_pareto_20260712.json"
+    },
+    "triviaqa": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    }
+  }
+}

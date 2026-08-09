@@ -1,0 +1,10 @@
+{
+  "name": "deep_highfreq_soft050_f16",
+  "kind": "band_layer_scale",
+  "layer_mode": "hard_deep",
+  "deep_layer_fraction": 0.3333333333,
+  "pair_start": 0,
+  "pair_end_exclusive": 16,
+  "modified_scale": 0.5,
+  "description": "Slow F0-F15 to 50% in the deepest third."
+}

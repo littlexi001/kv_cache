@@ -1,0 +1,6 @@
+{
+  "name": "all_nope",
+  "kind": "uniform_scale",
+  "phase_scale": 0.0,
+  "description": "Remove RoPE rotation from every attention layer; strong position-free control."
+}

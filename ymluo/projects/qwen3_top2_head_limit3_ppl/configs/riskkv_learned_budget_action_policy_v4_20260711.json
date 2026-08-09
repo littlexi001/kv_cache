@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "description": "Budget-only action mapping for clean learned budget router v4.",
+    "base_policy": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json"
+  },
+  "actions": {
+    "budget_b256": {
+      "*": {
+        "budget_tokens": 256
+      }
+    },
+    "budget_b384": {
+      "*": {
+        "budget_tokens": 384
+      }
+    },
+    "budget_b512": {
+      "*": {
+        "budget_tokens": 512
+      }
+    },
+    "budget_b768": {
+      "*": {
+        "budget_tokens": 768
+      }
+    },
+    "budget_b1024": {
+      "*": {
+        "budget_tokens": 1024
+      }
+    },
+    "budget_b1536": {
+      "*": {
+        "budget_tokens": 1536
+      }
+    },
+    "budget_b2048": {
+      "*": {
+        "budget_tokens": 2048
+      }
+    },
+    "budget_b3072": {
+      "*": {
+        "budget_tokens": 3072
+      }
+    }
+  }
+}

@@ -1,26 +1,28 @@
-\section{From RoPE phase to answer failure}
+\section{From RoPE phase to directed answer utility}
 \label{sec:mechanism}
 
 \subsection{First layer: fixed content, distance-dependent score}
 
-RoPE groups the head dimension into $d/2$ two-dimensional pairs.  For pair
-$i$, let
+RoPE groups the head dimension into $d/2$ two-dimensional pairs.  Let
+$\omega_i$ denote the effective inverse frequency exposed by the active rotary
+module; without frequency rescaling, $\omega_i=\theta^{-2i/d}$.  Let $\kappa$
+be the fixed multiplicative rotary scale applied to each of Q and K.  For pair
+$i$, write
 \begin{equation}
-  \omega_i=\theta^{-2i/d},\qquad
   \preq_i=\begin{bmatrix}q_{i,x}\\q_{i,y}\end{bmatrix},\qquad
   \prek_i=\begin{bmatrix}k_{i,x}\\k_{i,y}\end{bmatrix}.
 \end{equation}
 Because rotations form a group,
 \begin{equation}
-  (\Rope_t\preq)^{\top}(\Rope_j\prek)
-  =\preq^{\top}\Rope_{j-t}\prek
-  =\preq^{\top}\Rope_{-\Delta}\prek.
+  (\kappa\Rope_t\preq)^{\top}(\kappa\Rope_j\prek)
+  =\kappa^2\preq^{\top}\Rope_{j-t}\prek
+  =\kappa^2\preq^{\top}\Rope_{-\Delta}\prek.
   \label{eq:relative-rope}
 \end{equation}
 Expanding one pair gives
 \begin{align}
   s_i(\Delta)
-  &=A_i\cos(\Delta\omega_i)+B_i\sin(\Delta\omega_i),
+  &=\kappa^2\!\left[A_i\cos(\Delta\omega_i)+B_i\sin(\Delta\omega_i)\right],
   \label{eq:pair-score}\\
   A_i&=q_{i,x}k_{i,x}+q_{i,y}k_{i,y},\qquad
   B_i=q_{i,x}k_{i,y}-q_{i,y}k_{i,x}.
@@ -28,139 +30,166 @@ Expanding one pair gives
 Equivalently, with $\rho_i=\sqrt{A_i^2+B_i^2}$ and
 $\psi_i=\operatorname{atan2}(B_i,A_i)$,
 \begin{equation}
-  s_i(\Delta)=\rho_i\cos(\Delta\omega_i-\psi_i).
+  s_i(\Delta)=\kappa^2\rho_i\cos(\Delta\omega_i-\psi_i).
   \label{eq:amplitude-phase}
 \end{equation}
 The content vectors determine amplitude and preferred phase; position supplies
 the phase shift.  A semantically useful pair can therefore contribute
-positively at one distance and negatively at another.  The full head logit is
-$s^R(\Delta)=d^{-1/2}\sum_i s_i(\Delta)$, a finite mixture of oscillatory
-terms rather than a monotone distance penalty.
+positively at one distance and negatively at another.  The full head score is
+$s^R(\Delta)=d^{-1/2}\sum_i s_i(\Delta)$, a finite mixture of oscillatory terms
+rather than a monotone distance penalty.
 
-If $m$ filler tokens move the query while the key remains fixed, the exact
+If $m_f$ filler tokens move the query while the key remains fixed, the exact
 change for pair $i$ is
 \begin{align}
   \delta s_i
-  &=2\sin\!\left(\frac{m\omega_i}{2}\right)
+  &=2\kappa^2\sin\!\left(\frac{m_f\omega_i}{2}\right)
   \left[
-  -A_i\sin\!\left(\frac{(2\Delta+m)\omega_i}{2}\right)
-  +B_i\cos\!\left(\frac{(2\Delta+m)\omega_i}{2}\right)
+  -A_i\sin\!\left(\frac{(2\Delta+m_f)\omega_i}{2}\right)
+  +B_i\cos\!\left(\frac{(2\Delta+m_f)\omega_i}{2}\right)
   \right],
   \label{eq:pair-delta}\\
   |\delta s_i|
-  &\le 2\rho_i\left|\sin\!\left(\frac{m\omega_i}{2}\right)\right|.
+  &\le 2\kappa^2\rho_i\left|\sin\!\left(\frac{m_f\omega_i}{2}\right)\right|.
   \label{eq:pair-bound}
 \end{align}
-High frequency increases local sensitivity, but only frequency pairs with
-large content amplitude $\rho_i$ matter.  Consequently, neither ``high
-frequency means local head'' nor ``longer always means worse'' follows from
-RoPE alone.
+High frequency increases local sensitivity, but only pairs with large content
+amplitude $\rho_i$ matter.  Thus neither ``high frequency means local head''
+nor ``longer always means worse'' follows from RoPE alone.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/mechanism_evidence.pdf}
   \caption{Mechanism evidence in Qwen3-8B.  \textbf{Left:} with identical
-  pre-RoPE Q/K, the measured first-layer gold QK changes with distance; the
+  pre-RoPE Q/K, the measured first-layer gold QK changes with distance and the
   64-pair analytic sum reconstructs it within $1.98\times10^{-3}$.
   \textbf{Middle:} a 64-token diagnostic perturbation creates a nonzero
-  residual difference at layer 0 and the difference grows across depth.
-  \textbf{Right:} replacing the failed run's residual input with the successful
-  state at intermediate layers crosses the zero-margin decision boundary.}
+  residual difference at layer 0 that grows across depth.  \textbf{Right:}
+  replacing the failed run's residual input with the successful state at
+  intermediate layers crosses the zero-margin decision boundary.}
   \label{fig:mechanism}
 \end{figure}
 
 \paragraph{Exact first-layer check.}
-In a Qwen3-8B diagnostic with $d=128$, $\theta=10^6$, and YaRN scaling, we
-freeze the same first-layer $\preq$ and $\prek$ and vary only their relative
-positions.  Their norms and every pre-RoPE coordinate are identical across
-the four runs.  Mean post-RoPE gold QK over 32 query heads changes from
-$-5.588$ at distance 7,996 to $-33.586$ at 65,340
-(\cref{fig:mechanism}).  Reconstructing the explicit rotation by summing
-\cref{eq:pair-score} over all 64 pairs has maximum absolute error 0.00198.
-This experiment does not claim that a negative layer-0 mean alone determines
-the answer; it isolates the first causal input: phase can change a fixed
-content score.
+In a seeded two-hop diagnostic, we load Qwen3-8B in NF4 with BF16 compute,
+$d=128$, $\theta=10^6$, and YaRN factor 2.  We freeze the same first-layer
+$\preq$ and $\prek$ and vary only their relative positions.  Every pre-RoPE
+coordinate and norm is identical across four runs.  Reconstruction uses the
+model's saved effective YaRN inverse frequencies and $\kappa=1.05359$ on each
+rotated vector, not the unscaled base-frequency formula alone.
+Mean post-RoPE gold QK over 32 query heads changes from $-5.588$ at distance
+7,996 to $-33.586$ at 65,340.  Summing \cref{eq:pair-score} over all 64 pairs
+reconstructs the explicit rotation with maximum absolute error 0.00198.  This
+does not claim that a negative layer-0 mean determines the answer; it isolates
+the first causal input: phase can change a fixed content score.
 
-\subsection{Softmax converts score loss into weaker evidence writes}
+\subsection{Softmax amount is not directed evidence utility}
 
 For a gold token $g$ and competitor $c$ in the same softmax,
 \begin{equation}
   \frac{a_g}{a_c}=\exp(s_g-s_c).
   \label{eq:attention-ratio}
 \end{equation}
-Reducing the relative gold score by one therefore multiplies its attention
-advantage by $e^{-1}\approx0.368$.  More generally, differentiating softmax
-gives
+Reducing the relative gold score by one multiplies its attention advantage by
+$e^{-1}\approx0.368$.  More generally,
 \begin{equation}
-  \delta a_g
-  \approx a_g\left(\delta s_g-\sum_j a_j\delta s_j\right).
+  \frac{\partial a_p}{\partial s_j}
+  =a_p(\mathbf 1[p=j]-a_j).
   \label{eq:softmax-jacobian}
 \end{equation}
-The gold mass falls when its score changes less favorably than the current
-attention-weighted mean competitor change.  Added filler can hurt through two
-separable routes: it may change $s_g$ through phase, and its own exponentiated
-scores enlarge the denominator.  Their effects interact multiplicatively,
-but they are not the same mechanism.
+Added filler can therefore hurt in two separable ways: relative position can
+change $s_g$, while additional exponentiated scores enlarge the denominator.
+Both affect how much evidence is read, but neither determines the direction of
+its downstream effect.
 
-The attention output written to the residual is
+Let the attention-weighted Value mean for head $h$ and its block contribution
+through the output projection be
 \begin{equation}
-  o_l=W_{O,l}\sum_j a_{l,j}v_{l,j},
+  \bar v_{l,h}=\sum_p a_{l,h,p}v_{l,g(h),p},
+  \qquad
+  o_{l,h}=W_{O,l}^{[h]}\bar v_{l,h},
+  \label{eq:value-mean}
 \end{equation}
-with first-order change
+Differentiating through softmax yields the exact local identity
 \begin{equation}
-  \delta o_l\approx W_{O,l}
-  \left(\sum_j\delta a_{l,j}v_{l,j}
-  +\sum_j a_{l,j}\delta v_{l,j}\right).
-  \label{eq:value-write}
+  \frac{\partial o_{l,h}}{\partial s_{l,h,j}}
+  =a_{l,h,j}W_{O,l}^{[h]}(v_{l,g(h),j}-\bar v_{l,h}).
+  \label{eq:centered-value-derivative}
 \end{equation}
-The first term changes \emph{which} content is written; the second changes the
-content vectors themselves.
+Let $g_{l,h}=\nabla_{o_{l,h}}m$ denote the gradient of the final gold--conflict
+margin through all subsequent computation.  The answer-directed score utility of
+coordinate $(l,h,j)$ is
+\begin{equation}
+  U_{l,h,j}
+  =\frac{\partial m}{\partial s_{l,h,j}}
+  =a_{l,h,j}\,g_{l,h}^\top W_{O,l}^{[h]}
+  (v_{l,g(h),j}-\bar v_{l,h}).
+  \label{eq:directed-utility}
+\end{equation}
+This factorization separates \emph{amount} $a_{l,h,j}$, \emph{content direction}
+$v_{l,g(h),j}-\bar v_{l,h}$, and \emph{answer direction} $g_{l,h}$.  A high-attention token
+can have negative utility; a low-attention token can have positive utility.
+For a small singleton intervention,
+\begin{equation}
+  m(s_{l,h,j}+\epsilon)-m(s_{l,h,j})
+  =\epsilon U_{l,h,j}+O(\epsilon^2).
+  \label{eq:first-order-margin}
+\end{equation}
+The derivative is an oracle diagnostic because computing $g_{l,h}$ uses the known
+answer margin.  It explains a mechanism; it is not a deployable selector.
 
 \subsection{Later layers: phase-triggered state divergence}
 
-For a pre-norm Transformer layer, write the exact real-valued update as
+For each case $c\in\{S,T\}$, let $H_{l,c}$ be the complete token-state array
+entering layer $l$, with positions $P_c$ and mask $M_c$, and let
+$h_{l,c}=\pi_qH_{l,c}$ be only its final Query row.  Define the Query-row branch
+outputs and exact real-valued update as
 \begin{align}
-  u_l&=h_l+\mathcal A_l(h_l;P,M),\\
-  h_{l+1}&=u_l+\mathcal M_l(u_l),
+  \mathcal A_{l,c}&=\pi_q\mathcal A_l(H_{l,c};P_c,M_c),&
+  u_{l,c}&=h_{l,c}+\mathcal A_{l,c},\\
+  \mathcal M_{l,c}&=\mathcal M_l(u_{l,c}),&
+  h_{l+1,c}&=u_{l,c}+\mathcal M_{l,c}.
 \end{align}
-where $P$ contains position information and $M$ the causal mask.  Comparing a
-short trajectory $S$ with a longer trajectory $T$ gives the finite-difference
-identity
+The two complete arrays may have different lengths; we subtract only their
+Query-row quantities, writing $\delta x=x_T-x_S$.  This gives
 \begin{equation}
   \delta h_{l+1}
   =\delta h_l+\delta\mathcal A_l+\delta\mathcal M_l.
   \label{eq:layer-difference}
 \end{equation}
-This is a vector identity: the three norms do not add because their pairwise
-inner products matter.  In BF16, inserting the two actual rounding operators
-replays all 36 layers with zero recorded error; the full expression appears in
-\cref{app:layerwise}.
+This is a Query-row vector identity: the three norms do not add because pairwise
+inner products matter.  In BF16, inserting the two actual rounding operators replays
+all 36 layers with zero recorded error; \cref{app:layerwise} gives the full
+expression.
 
-The score change in later layers has three first-order sources,
+The score change in a later layer has three first-order sources,
 \begin{equation}
-  \delta s_{l,j}\approx\frac{1}{\sqrt d}\left[
+  \delta s_{l,j}\approx\frac{\kappa^2}{\sqrt d}\left[
   \delta q_l^\top\Rope_{\Delta_j}k_{l,j}
   +q_l^\top\Rope_{\Delta_j}\delta k_{l,j}
   +q_l^\top\delta\Rope_{\Delta_j}k_{l,j}
   \right].
   \label{eq:three-score-sources}
 \end{equation}
-At layer 0, the final query embedding and hence $\delta q_0$ may be zero; the
-phase and competing K/V sets still change attention.  From layer 1 onward,
-\cref{eq:value-write} makes $\delta q_l$ and $\delta k_{l,j}$ nonzero.  The
-proper description is therefore not ``RoPE rotates the same Q/K more at every
-layer,'' but ``an initial phase perturbation sends the model onto a different
-nonlinear state trajectory.''
+where both trajectories use the same rotary scale $\kappa$.
+At layer 0, the final query embedding and hence $\delta q_0$ can be zero while
+phase and the competing K/V set still alter attention.  From layer 1 onward,
+\cref{eq:centered-value-derivative} makes projected query and key content
+diverge as well.  The mechanism is therefore a changed nonlinear trajectory,
+not repeated rotation of one fixed Q/K pair.
 
 \paragraph{Exact replay and causal patching.}
-For the 143,424-to-143,488 diagnostic in \cref{fig:mechanism}, the query input
-difference is zero, while the layer-0 attention and MLP differences have norms
-0.542 and 1.293 and produce residual difference 1.466.  The residual difference
-reaches 312.676 after layer 35.  Applying the real final RMSNorm and unembedding
-reconstructs the target margin to $3.81\times10^{-6}$ and the gold probability
-to $3.73\times10^{-8}$.  This exact replay is descriptive; causal evidence
-comes from patching.  Copying the successful run's residual input into the
-failed run at layer 16 changes the gold margin from $-2.75$ to $+0.625$; at
-layer 20 it restores $+1.00$.  Thus the intermediate divergence is sufficient
-to switch the decision.
-
+For the separate, unquantized BF16 one-hop age diagnostic at
+$143{,}424$-to-$143{,}488$ with YaRN factor 4 in \cref{fig:mechanism}, the query
+input difference is zero.  Layer-0 attention and MLP differences have norms 0.542 and
+1.293 and produce residual difference 1.466; the residual difference reaches
+312.676 after layer 35.  The final RMSNorm and unembedding reconstruct the
+target margin to $3.81\times10^{-6}$ and gold probability to
+$3.73\times10^{-8}$.  Replay is descriptive, so we also patch the successful
+residual state into the failed run.  Patching at layer 16 changes the margin
+from $-2.75$ to $+0.625$; at layer 20 it restores $+1.00$.  This single
+high-resolution case shows that intermediate state divergence is sufficient to
+switch the decision.  The population intervention in \cref{sec:experiments}
+tests the local score-to-margin link across lengths; it does not yet estimate a
+complete mediated fraction for every arrow in \cref{fig:overview}, nor is it the
+same prompt protocol as this trajectory case.

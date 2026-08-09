@@ -1,0 +1,54 @@
+{
+  "__extends": "riskkv_operator_contract_base_v460_20260713.json",
+  "__comment": "v466 sub-10% KV frontier probe: v465 evidence closure with retrieve=896 and code=256. The two operator changes are evaluated independently before composing the final action set.",
+  "__operator_router": {
+    "mode": "request_schema_v1",
+    "default_action": "retrieve",
+    "actions": {
+      "retrieve": {
+        "budget_tokens": 896,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 64,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false,
+        "graph_bridge": true,
+        "graph_bridge_budget_fraction": 0.35,
+        "graph_bridge_seed_pages": 12,
+        "graph_bridge_max_terms": 32,
+        "graph_bridge_min_score": 0.0
+      },
+      "aggregate": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_spread_flow",
+        "direct_structured_answer": true,
+        "direct_summary_max_words": 256
+      },
+      "structured": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "structured_fingerprint": true,
+        "structured_fingerprint_budget_fraction": 0.3,
+        "direct_structured_answer": true
+      },
+      "code": {
+        "budget_tokens": 256,
+        "page_tokens": 32,
+        "sink_tokens": 32,
+        "recent_tokens": 160,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false
+      },
+      "full": {
+        "full_fallback": true,
+        "direct_structured_answer": false
+      }
+    }
+  }
+}

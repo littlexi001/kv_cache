@@ -1,155 +1,179 @@
 \section{Experiments}
 \label{sec:experiments}
 
-Our experiments answer three questions: (1) does the first-layer phase formula
-reconstruct a real model's QK score; (2) does the resulting state divergence
-causally affect the output; and (3) does a mechanism-derived semantic proposal
-improve retrieval at a matched sparse budget?  The first two were reported in
-\cref{sec:mechanism}; this section focuses on the method evaluation and its
-current limits.
+We ask four questions.  Does the frequency-pair formula reconstruct a real
+model's QK score?  Does the resulting state divergence affect the output?  Can
+attention amount or phase suppression identify useful evidence?  Finally, can
+the directed derivative in \cref{eq:directed-utility} predict a measured local
+intervention across context lengths?
 
 \subsection{Protocol}
 
-\paragraph{Model and contexts.}
-We use Qwen3-8B with NF4 weights and BF16 computation for the held-out method
-evaluation.  Filler-body targets are 8,192, 16,384, 32,768, and 65,536 tokens;
-after the chat wrapper and query suffix, exact prompt lengths are 8,284, 16,476,
-32,860, and 65,628 tokens.  The model's configured native window is 40,960;
-the 64K condition uses dynamic YaRN scaling, while the first three conditions
-remain within that window.
-Results from native and position-extended conditions are always identified.
+\paragraph{Analytic phase reconstruction.}
+We load Qwen3-8B in NF4 with BF16 compute and YaRN factor 2.  One seeded English
+two-hop case supplies a gold token near the prefix and the terminal Query token.
+We save their layer-0 pre-RoPE Q/K once, reuse those identical vectors at four
+relative distances, and compare the explicit rotation with the 64-pair formula.
+No answer-level conclusion is inferred from this single analytic case.
 
-\paragraph{Data.}
-Each example samples three ordinary English words that are stable single
-tokens in the tokenizer and absent from the filler corpus.  Two lines encode a
-verified chain $c_0\rightarrow c_1\rightarrow c_2$ near token 256.  Randomized
-English paragraphs fill the remaining body, and a fixed concise query at the
-end asks for the two-step result.  The gold output is the single token $c_2$.
-Seeds 0--7 were used for development; all reported main results use frozen
-seeds 32--55, i.e., 24 unseen examples at every length and 96 paired
-length--example points.
+\paragraph{Extended-position trajectory.}
+A separate, unquantized BF16 Qwen3-8B run uses SDPA and YaRN factor 4 on the
+one-hop age-distractor protocol in \cref{sec:setup}.  Both cases derive from a
+fixed 144K body stream whose full version contains $4{,}607$ wrong-age records
+and period filler.  The shorter case uses its first $143{,}401$ body tokens;
+the longer inserts the next 64 before the identical Query text: 47 periods and
+17 distractor-record tokens, including 2 age tokens.  We save query-row Q/K, attention and MLP outputs,
+residual states, and answer logits; then replay each BF16 update and patch one
+residual input at a time.  This is one high-resolution, position-extended case,
+not a population estimate or evidence about the checkpoint's native window.
 
-\paragraph{Baselines.}
-\textbf{Full RoPE} is the unmodified dense attention.  \textbf{post-RoPE
-Top-2\%} computes all standard logits and retains the exact highest 2\% per
-layer and query head.  It is an exact score-based sparse reference whose
-selection itself costs a full score scan.  \textbf{\methodpost} uses the same
-2\% budget, 128 local tokens, and 16 sinks, but proposes the remaining remote
-tokens with \cref{eq:content-score} before exact post-RoPE consumption.
+\paragraph{Population singleton intervention.}
+The main causal audit uses unquantized Qwen3-8B in BF16 eager mode at 8,192,
+16,384, and 24,576 tokens on the source-conditioned single-hop age task defined
+in \cref{sec:setup}.  Each length has 8 independent seeds.  Per seed, an
+oracle ranks one coordinate from each of four classes---gold evidence, plausible
+conflict, lexical/format distractor, and filler---by the absolute product of
+positive grid-envelope suppression and $\partial m/\partial s$.  Each target is
+paired with a random coordinate from the same layer, head, and class.  We add
+$\epsilon=0.25$ to exactly one pre-softmax score and compare against the
+identical $\epsilon=0$ path.  Replay, single-coordinate, prefix-cache, and
+target/random-position audits must all pass.  The primary closure analysis uses
+the 16 gold/conflict target events at each length.  Because decisive-token
+identity is not matched, random coordinates are numerical controls rather than
+a fair magnitude or signal-to-noise baseline.
 
-\paragraph{Metrics and statistics.}
-We report first-token accuracy and \GoldPPL, computed by averaging gold NLL and
-then exponentiating.  Candidate recall is the fraction of gold evidence tokens
-selected, averaged over layer--head rows.  Chain completion is the fraction of
-rows that select at least one token from both evidence lines.  Evidence mass is
-the post-softmax mass on gold spans.  Confidence intervals use 20,000 paired
-bootstrap resamples over seeds; heads and layers are never treated as
-independent samples.
+\paragraph{Statistics and memory boundary.}
+Confidence intervals use 50,000 percentile bootstrap samples with seed as the
+cluster; layers, heads, and coordinates are not treated as independent
+experimental units.  The 32,768-token BF16 extension produced no result: on
+both 24GB RTX 3090 devices, native eager GQA \texttt{repeat\_kv} failed while
+requesting an additional 256 MiB.  We report this as OOM rather than changing
+the protocol after inspection.
 
-\subsection{Main results}
+The three protocols above support adjacent links under different controls; we
+do not combine their measurements into a single same-example mediated fraction.
 
-\begin{figure}[t]
-  \centering
-  \includegraphics[width=\linewidth]{figures/heldout_results.pdf}
-  \caption{Held-out two-hop results (24 seeds per length).  Lower is better for
-  \GoldPPL; higher is better otherwise.  SAGE-Post is strongest at 16K and
-  32K.  Non-monotonic curves are expected under the phase-sensitive account
-  and caution against summarizing the problem as simple distance decay.}
-  \label{fig:heldout}
-\end{figure}
+\subsection{Answer-directed score utility predicts local effects}
 
-\begin{table}[t]
-  \caption{Held-out gold-answer quality.  Accuracy is exact first-token
-  accuracy.  All methods use the same prompts; sparse methods retain 2\% of
-  tokens per layer and query head.}
-  \label{tab:quality}
-  \centering
-  \small
-  \setlength{\tabcolsep}{4.1pt}
-  \begin{tabular}{r rr rr rr}
-    \toprule
-    & \multicolumn{2}{c}{Full RoPE}
-    & \multicolumn{2}{c}{post-RoPE Top-2\%}
-    & \multicolumn{2}{c}{\methodpost}\\
-    \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
-    Length & PPL & Acc. & PPL & Acc. & PPL & Acc.\\
-    \midrule
-    8K  & 3.120  & 62.5 & 2.914  & 70.8 & \textbf{2.541}  & \textbf{75.0}\\
-    16K & 12.885 & 29.2 & 5.858  & 50.0 & \textbf{3.080}  & \textbf{62.5}\\
-    32K & 39.079 & 12.5 & 21.636 & 16.7 & \textbf{10.840} & \textbf{25.0}\\
-    64K & 8.823  & 29.2 & 8.063  & \textbf{33.3} & \textbf{6.573} & 29.2\\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\Cref{tab:closure} compares the first-order prediction
+$\epsilon U_{l,h,j}$ with the finite score intervention.  Agreement remains
+high at all three lengths.  The slope stays near one and its intercept covers
+zero in every run (full values in \cref{app:closure}).  ``Sign'' is the sign of
+the measured margin change, not model answer accuracy.
 
-\methodpost improves \GoldPPL over Full at all four point estimates and
-first-token accuracy at three of four lengths (\cref{tab:quality}).  With equal
-weight per length--seed pair, geometric \GoldPPL falls from 10.851 to 4.859,
-and mean accuracy rises from 33.3\% to 47.9\%.  The full-attention comparison
-is statistically significant at 8K, 16K, and 32K; at 64K the NLL interval is
-$[-0.615,0.004]$ and does not establish a reliable gain.
-
-The stricter comparison is exact post-RoPE Top-2\%, which isolates candidate
-choice at the same budget.  At 16K, \methodpost reduces mean NLL by 0.643
-(95\% CI $[-0.973,-0.342]$), corresponding to a $1.90\times$ geometric
-quality ratio.  At 32K the reduction is 0.691
-($[-1.035,-0.308]$), or $2.00\times$.  The 8K and 64K intervals cross zero.
-Thus the current evidence supports a long-range compensation region, not an
-unconditional replacement for post-RoPE selection.
-
-\begin{table}[t]
-  \caption{Candidate and attention diagnostics.  Rec. is gold evidence-token
-  recall; Chain is the fraction of layer--head rows hitting both evidence
-  lines; Mass is post-softmax gold evidence mass.}
-  \label{tab:mechanism-metrics}
+\begin{table*}[t]
   \centering
   \small
-  \setlength{\tabcolsep}{4.4pt}
-  \begin{tabular}{r l rrr}
+  \setlength{\tabcolsep}{5.5pt}
+  \caption{No-op-matched causal closure on oracle-selected evidence score
+  coordinates.  Each row contains 8 seeds and 16 interventions.  Intervals are
+  seed-cluster 95\% CIs.}
+  \label{tab:closure}
+  \begin{tabular}{@{}rcccc@{}}
     \toprule
-    Length & Method & Rec. (\%) & Chain (\%) & Mass (\%)\\
+    Length & Pearson [95\% CI] & Spearman [95\% CI] & Sign & Slope [95\% CI] \\
     \midrule
-    \multirow{2}{*}{8K}
-      & post-RoPE Top-2\% & 32.10 & 64.48 & 5.11\\
-      & \methodpost        & 14.07 & 55.72 & 5.23\\
-    \midrule
-    \multirow{2}{*}{16K}
-      & post-RoPE Top-2\% & 35.64 & 60.00 & 4.95\\
-      & \methodpost        & \textbf{40.50} & \textbf{78.56} & \textbf{5.11}\\
-    \midrule
-    \multirow{2}{*}{32K}
-      & post-RoPE Top-2\% & 38.98 & 60.59 & 4.72\\
-      & \methodpost        & \textbf{46.71} & \textbf{80.05} & \textbf{5.04}\\
-    \midrule
-    \multirow{2}{*}{64K}
-      & post-RoPE Top-2\% & 35.12 & 54.92 & \textbf{3.75}\\
-      & \methodpost        & \textbf{44.45} & \textbf{78.16} & 3.67\\
+    8K  & 0.960 [0.938, 0.993] & 0.947 [0.850, 1.000] & 15/16 & 1.075 [0.932, 1.209] \\
+    16K & 0.973 [0.946, 0.988] & 0.976 [0.910, 1.000] & 15/16 & 1.160 [1.031, 1.321] \\
+    24K & 0.936 [0.849, 0.972] & 0.900 [0.757, 0.991] & 13/16 & 1.055 [0.846, 1.240] \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-The internal metrics localize the benefit.  At 16K and 32K, where paired NLL
-improves reliably, \methodpost also increases token recall, two-line chain
-completion, and evidence mass (\cref{tab:mechanism-metrics}).  At 64K it
-improves recall and chain completion but not mass or accuracy, indicating that
-candidate recovery alone is insufficient when selected evidence still
-receives weak post-RoPE weight.  At 8K, lower token recall coexists with better
-PPL, showing that undifferentiated span recall is not a complete proxy for
-answer-relevant head behavior.  These exceptions are useful: they argue for a
-distance- and head-aware gate rather than a universal semantic branch.
+Matched-random coordinates do not show a comparably stable relationship:
+Pearson/Spearman are 0.582/$-0.065$ at 8K, with Pearson CI
+[$-0.288$, 0.948]; 0.051/$-0.047$ at 16K; and $-0.226$/$-0.024$ at 24K.
+However, target and random sets are not fully matched signal-to-noise controls:
+the target selector is an answer-gradient oracle and the decisive-token fraction
+differs.  The warranted conclusion is therefore local: the derivative closes
+the chosen score-to-margin step, not that magnitude artifacts are excluded or
+that the ranking rule is available at inference time.
 
-\subsection{Ablations and missing validation}
+\subsection{Answer-directed score utility reveals a mean gap}
 
-Calibrated pre/post score mixtures and mass-preserving remote reranking improve
-the aggregate pilot point estimate beyond \methodpost, but they modify the
-pretrained attention logits and are therefore kept as appendix ablations.  We
-select \methodpost as the primary result because it provides the cleanest
-causal attribution.
+We next average all baseline sampled layer--head--token rows within each seed
+and class, then compare gold and conflict seed means.  Each seed/class contains
+$2\times36\times32=2304$ rows: two sampled positions across 36 layers and 32
+query heads.  These rows are not the 16 oracle intervention targets.
+\Cref{tab:gold-conflict} reports four quantities.  ``Direct centered-OV'' is
+$a_j(w_g-w_c)^\top W_O^{[h]}(v_j-\bar v_h)$ at the measured layer, where
+$w_g,w_c$ are the gold and conflict rows of the LM-head unembedding.  It omits
+all later normalization, residual, attention, and MLP Jacobians and is therefore
+a local proxy, not a factor of the exact utility $U$.  ``RoPE suppression'' is the
+grid-envelope gap
+\begin{equation}
+  \Gamma_j=\max_{d\in\mathcal D}s_j^{(d)}-s_j^{\mathrm{native}},
+  \qquad
+  \mathcal D=\{1,2,4,8,16,32,64,128\},
+  \label{eq:grid-envelope-suppression}
+\end{equation}
+where $s_j^{(d)}$ reuses the same pre-RoPE Q/K content at anchor relative
+distance $d$.  It is not simply a pre-minus-post score.  The exact downstream
+utility and the local direct centered-OV proxy have positive gold-minus-conflict
+mean gaps at all lengths with confidence intervals excluding zero.  The
+attention-probability and grid-envelope-suppression intervals include zero.
 
-The present evaluation is intentionally narrow.  \todoexp{Add RULER and a
-natural multi-hop benchmark under the same paired protocol.}
-\todoexp{Replicate on at least one native long-context RoPE architecture.}
-\todoexp{Measure short-context language-model PPL and local order tasks.}
-\todoexp{Replace the exact semantic proposal scan with an approximate index and
-measure end-to-end systems cost.}  Until these tests are complete, our method
-claim is limited to controlled long-range evidence retrieval.
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4.5pt}
+  \caption{Gold-minus-conflict class gaps over baseline sampled coordinates
+  after within-seed aggregation.  Intervals are seed-cluster 95\% CIs.  The
+  directed mean gaps exclude zero; amount and suppression mean-gap intervals
+  include zero.}
+  \label{tab:gold-conflict}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Metric & 8K & 16K & 24K \\
+    \midrule
+    $\Delta U\times10^3$ & 1.248 [0.829, 1.694] & 1.284 [0.815, 1.861] & 1.617 [1.160, 2.161] \\
+    Direct centered-OV & 0.02427 [0.02080, 0.02727] & 0.02632 [0.02185, 0.03018] & 0.02693 [0.02358, 0.03010] \\
+    $\Delta$ attention probability & $-0.000398$ [$-0.002866$, 0.002036] & 0.000504 [$-0.001639$, 0.002753] & $-0.001355$ [$-0.003306$, 0.000802] \\
+    $\Delta$ RoPE suppression & 0.1504 [$-0.0497$, 0.3518] & 0.0939 [$-0.0257$, 0.2319] & 0.0422 [$-0.0852$, 0.1900] \\
+    \bottomrule
+  \end{tabular}%
+  }
+\end{table*}
+
+The result answers a central ambiguity.  RoPE phase and softmax competition
+govern how much a token enters the attention mixture.  They do not certify that
+the token is true or useful.  Whether increasing its score helps depends on the
+centered Value direction and its alignment with the downstream answer gradient.
+We detect positive directed seed-macro mean gaps, but no reliable attention or
+suppression mean gap.  This is not an equivalence test, a token-level
+classification result, or a claim that every gold coordinate is positive and
+every conflict coordinate negative.
+
+\subsection{Audits, earlier links, and non-results}
+
+For every intervention case, the instrumented baseline and its same-path no-op
+have exactly zero margin and NLL drift.  The custom no-op is not numerically
+identical to the native kernel: the maximum absolute pair-margin drift is
+0.2838/0.2388/0.4638 at 8K/16K/24K, although top-one decisions agree for 8/8
+seeds at every length.  We therefore identify local effects inside a
+decision-preserving custom graph; we do not add the deltas to native logits.
+
+The earlier links remain useful but have different evidential roles.  Exact
+frequency reconstruction establishes phase-to-score equivalence.  Residual
+replay accounts for the observed layerwise difference, and activation patching
+shows sufficiency in one extended-position transition.  The population
+singleton experiment closes the local score-to-Value/residual-to-margin step.
+Together they form a coherent mechanism account, but they do not yet estimate
+the fraction of an output change mediated by phase, denominator competition,
+Value writes, and later Query drift separately.
+
+Finally, the intervention is not a quality method.  Paired gold-NLL differences
+between oracle evidence targets and matched randoms are $-0.02239$
+[$-0.09654$, 0.03315], $-0.00569$ [$-0.04247$, 0.02227], and $-0.00325$
+[$-0.04373$, 0.03686] at 8K/16K/24K; all intervals include zero.  We therefore
+make no PPL, free-generation, or accuracy-improvement claim.  A separate NF4
+pre-RoPE proposal diagnostic is reported in \cref{app:diagnostic-retrieval}
+only as evidence that phase-suppressed candidates can sometimes be recovered.
+
+\todoexp{Replicate the no-op-matched closure on a second RoPE architecture and
+on a native long-context checkpoint.}
+\todoexp{Estimate the complete phase, denominator, Value, residual, and later-
+Query mediated effects with registered interventions.}
+\todoexp{Repeat activation patching across counterbalanced natural and public
+retrieval tasks rather than one extended-position transition.}

@@ -1,0 +1,6 @@
+# Copy this file to configs/four_hosts.conf and replace the four SSH targets.
+# Format: SSH_HOST GPU_LIST
+user@machine-0 0,1,2,3,4,5,6,7
+user@machine-1 0,1,2,3,4,5,6,7
+user@machine-2 0,1,2,3,4,5,6,7
+user@machine-3 0,1,2,3,4,5,6,7

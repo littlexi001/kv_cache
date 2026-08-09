@@ -1,0 +1,39 @@
+{
+  "schema": "fier_official_release_audit_v1",
+  "fier_commit": "e0b34153591dd7a55171f09f30abee35b0f08356",
+  "method": "full_same_backend",
+  "model_path": "/home/fdong/qksieve_iclr2027/models/longchat-7b-v1.5-32k",
+  "context_len": 16384,
+  "decode_len": 256,
+  "iterations": 3,
+  "requested_token_budget": 16640,
+  "page_size_argument": 8,
+  "extra_cache_tokens": 0,
+  "prefill_chunk_size": 2048,
+  "unused_dense_causal_mask_materialized": false,
+  "controller_page_size": 8,
+  "configured_page_budget": 2080,
+  "effective_token_budget_upper_bound": 16640,
+  "prefill_ms": [
+    4812.259453348815,
+    4606.501268222928,
+    4640.088463202119
+  ],
+  "decode_ms_per_token": [
+    28.69732668114011,
+    28.735415482515236,
+    28.786379840312293
+  ],
+  "decode_median_ms_per_token": 28.735415482515236,
+  "decode_p10_ms_per_token": 28.69732668114011,
+  "decode_p90_ms_per_token": 28.786379840312293,
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "torch": "2.5.0+cu121",
+  "claim_boundary": [
+    "Uses the released FIER model and CUDA backend with synchronized timing.",
+    "Uses synthetic hidden states, matching the released speed protocol.",
+    "Full uses the same paged-KV backend and reuses the prefilled cache.",
+    "The unused O(N^2) dense causal mask is skipped unless explicitly requested; Quest's prefill kernel remains causal.",
+    "The released FIER selector currently creates random 2-bit packed tensors during decode; this run is a systems-path audit, not a joint quality-speed reproduction."
+  ]
+}

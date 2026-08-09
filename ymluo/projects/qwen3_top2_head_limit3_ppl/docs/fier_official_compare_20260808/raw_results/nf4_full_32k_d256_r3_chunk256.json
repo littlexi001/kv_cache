@@ -1,0 +1,42 @@
+{
+  "schema": "fier_official_release_audit_v1",
+  "fier_commit": "e0b34153591dd7a55171f09f30abee35b0f08356",
+  "method": "full_same_backend",
+  "model_path": "/home/fdong/qksieve_iclr2027/models/longchat-7b-v1.5-32k",
+  "context_len": 32768,
+  "decode_len": 256,
+  "iterations": 3,
+  "requested_token_budget": 33024,
+  "page_size_argument": 8,
+  "extra_cache_tokens": 0,
+  "prefill_chunk_size": 256,
+  "unused_dense_causal_mask_materialized": false,
+  "controller_page_size": 8,
+  "configured_page_budget": 4128,
+  "effective_token_budget_upper_bound": 33024,
+  "prefill_ms": [
+    18317.411152645946,
+    18374.422622844577,
+    18825.307907536626
+  ],
+  "decode_ms_per_token": [
+    49.55976906057913,
+    49.46108163858298,
+    49.54832963994704
+  ],
+  "decode_median_ms_per_token": 49.54832963994704,
+  "decode_p10_ms_per_token": 49.46108163858298,
+  "decode_p90_ms_per_token": 49.55976906057913,
+  "gpu": "NVIDIA GeForce RTX 3090",
+  "torch": "2.5.0+cu121",
+  "model_weight_mode": "nf4_double_quant",
+  "model_allocated_bytes_after_load": 3865846784,
+  "allocated_bytes_after_cache_init": 23344194560,
+  "claim_boundary": [
+    "Uses the released FIER model and CUDA backend with synchronized timing.",
+    "Uses synthetic hidden states, matching the released speed protocol.",
+    "Full uses the same paged-KV backend and reuses the prefilled cache.",
+    "The unused O(N^2) dense causal mask is skipped unless explicitly requested; Quest's prefill kernel remains causal.",
+    "The released FIER selector currently creates random 2-bit packed tensors during decode; this run is a systems-path audit, not a joint quality-speed reproduction."
+  ]
+}

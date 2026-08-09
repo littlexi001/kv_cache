@@ -1,0 +1,49 @@
+{
+  "__extends": "riskkv_operator_contract_base_v460_20260713.json",
+  "__comment": "v463 code locality frontier: generic contract router with a recent-heavy code action; all non-code actions are unchanged from v461.",
+  "__operator_router": {
+    "mode": "request_schema_v1",
+    "default_action": "retrieve",
+    "actions": {
+      "retrieve": {
+        "budget_tokens": 1024,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 64,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false
+      },
+      "aggregate": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_spread_flow",
+        "direct_structured_answer": true,
+        "direct_summary_max_words": 256
+      },
+      "structured": {
+        "budget_tokens": 128,
+        "page_tokens": 16,
+        "sink_tokens": 32,
+        "recent_tokens": 32,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "structured_fingerprint": true,
+        "structured_fingerprint_budget_fraction": 0.3,
+        "direct_structured_answer": true
+      },
+      "code": {
+        "budget_tokens": 1536,
+        "page_tokens": 128,
+        "sink_tokens": 64,
+        "recent_tokens": 768,
+        "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+        "direct_structured_answer": false
+      },
+      "full": {
+        "full_fallback": true,
+        "direct_structured_answer": false
+      }
+    }
+  }
+}

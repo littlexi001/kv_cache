@@ -1,0 +1,9 @@
+{
+  "__extends": "riskkv_operator_contract_v466_direct_off_20260714.json",
+  "__comment": "v467 correctness fix: preserve original RoPE coordinates and use an explicit physical-cache causal mask for sparse query replay.",
+  "*": {
+    "sparse_query_physical_mask": true,
+    "sparse_query_tokenwise": false,
+    "sparse_position_mode": "original"
+  }
+}

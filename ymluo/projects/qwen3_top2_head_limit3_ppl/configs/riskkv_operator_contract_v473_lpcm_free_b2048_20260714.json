@@ -1,0 +1,7 @@
+{
+  "__extends": "riskkv_operator_contract_v469_lpcm_choice_b2048_20260714.json",
+  "__comment": "Official free-generation counterpart of the uniform 2048-token LPCM diagnostic. Selection is unchanged; only constrained A-D decoding is disabled.",
+  "*": {
+    "constrained_choice_decode": false
+  }
+}

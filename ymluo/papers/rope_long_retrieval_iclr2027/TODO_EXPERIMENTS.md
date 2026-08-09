@@ -1,64 +1,60 @@
-# Experiments required for a submission-ready paper
+# Experiments required for a submission-ready mechanism paper
 
-This list separates the **verified controlled result** already used in the
-draft from the experiments still needed to support broader claims.
+The completed evidence supports a local, no-op-matched mechanism claim in
+Qwen3-8B. It does not yet establish a universal or fully mediated explanation.
 
 ## P0 — required before submission
 
-1. **Natural long-context benchmarks.** Evaluate Full, exact post-RoPE Top-2%,
-   and SAGE-Post on RULER retrieval/multi-hop subsets and LongBench v2 or an
-   equivalent public suite. Report per-task paired confidence intervals, not
-   only a macro average.
-2. **Cross-model replication.** Repeat the mechanism and method experiments on
-   at least one additional RoPE architecture (for example Llama-3.1-8B or a
-   native 128K Qwen variant). Separate native-window and position-extended
-   settings.
-3. **Local-language control.** Measure short-context language-model PPL and
-   local order/syntax tasks to test that keeping the local window avoids
-   damaging order-sensitive behavior.
-4. **Efficient index.** Replace the full pre-RoPE scan with the intended
-   approximate index. Report proposal recall, end-to-end latency, throughput,
-   peak memory, index memory, and build/update cost at matched batch sizes.
-5. **More seeds at 64K.** The current paired NLL interval against Full and
-   exact Top-2% crosses zero. Increase sample count under a frozen protocol.
+1. **Second-model replication.** Repeat first-layer reconstruction and BF16
+   singleton closure on another RoPE family, ideally one native long-context
+   checkpoint. Preserve the same-path `epsilon=0` audit.
+2. **Complete mediation interventions.** Under a frozen plan, separately change
+   effective phase, softmax cardinality/denominator, Value writes, residual
+   states, and later pre-RoPE Query states. Report mediated effects rather than
+   only correlations between adjacent links.
+3. **Counterbalanced natural/public tasks.** Randomize evidence position,
+   conflict value, record order, filler source, block boundary, and query
+   template. Include RULER retrieval, a natural multi-hop task, and a local-order
+   control.
+4. **Population activation patching.** Register success→failure transitions,
+   patch multiple layers, and include same-position and random-vector negative
+   controls.
+5. **Native-window failure boundaries.** Reproduce dense non-monotone crossings
+   entirely inside a model's native evaluated window.
 
-## P1 — strengthens the mechanism claim
+## P1 — strengthens identification
 
-1. **Phase intervention at fixed distractor set.** Hold token identities and
-   softmax cardinality fixed while changing only effective relative phase
-   (position remapping or controlled RoPE rotation).
-2. **Denominator-only control.** Keep evidence post-RoPE score fixed and vary
-   the number/strength of distractors to isolate softmax competition.
-3. **Query/key/content decomposition across seeds.** Quantify the three terms
-   in the first-order score change (query drift, key drift, and phase) with
-   uncertainty across examples and layers.
-4. **Activation patching across examples.** The present patch result is a
-   high-resolution causal case study. Repeat on a registered set of successful
-   and failed transitions.
-5. **Distance sweeps without extension confounds.** Run dense sweeps entirely
-   inside each model's native training/evaluation window.
+1. **Grouped-GQA 32K control.** Implement an exactly validated native-equivalent
+   kernel that avoids materializing repeated KV heads, then rerun the unquantized
+   BF16 audit. The present 32K attempt is OOM and has no result.
+2. **Intervention-size curve.** Sweep small positive and negative score changes
+   to quantify the Taylor-linear region and second-order error.
+3. **Non-oracle probes.** Evaluate whether answer-independent centered-Value or
+   gradient-proxy signals preserve the causal ranking. Do not conflate this with
+   a deployable method unless selection quality and task quality both improve.
+4. **Conflict taxonomy.** Separate plausible contradictory facts, same-format
+   decoys, lexical competitors, and filler at matched length and token count.
+5. **Cache theorem checks.** Numerically construct separable repairs that reuse
+   one GQA cache and non-separable four-cycle violations that require recompute
+   or multiple bases.
 
-## P2 — method ablations
+## P2 — optional diagnostic-system work
 
-1. Candidate budget: fixed 0.5/1/2/4% and capped length-dependent budgets.
-2. Local window and sink sizes: 0/64/128/256 and 0/4/16.
-3. Proposal choices: pre-RoPE only, post-RoPE only, their union, and calibrated
-   score mixtures.
-4. Per-head gating and confidence: show whether the method can turn itself off
-   at short range, where current gains are not uniformly strong.
-5. Block retrieval and position repair: test whether retrieving evidence blocks
-   while preserving within-block order improves multi-token reasoning.
-6. Conflict and semantic distractors: distinguish ordinary filler, plausible
-   distractors, and contradictory chains at a matched total length.
+1. Compare exact pre-RoPE proposal with SALS, LongHeads/InfLLM-style retrieval,
+   exact post-RoPE Top-2%, and Full at a matched token budget.
+2. If sparse retrieval remains, replace the full pre-RoPE scan with a real
+   index and report latency, throughput, memory, gather bytes, build cost, and
+   update cost.
+3. Treat any semantic-phase adapter as future work unless it satisfies the
+   single-cache four-cycle constraint and outperforms direct prior art.
 
-## Claims that must remain scoped until these TODOs are complete
+## Claims that must remain scoped
 
-- Do not call the phenomenon universal across RoPE models.
-- Do not equate the configured context window with the training distribution.
-- Do not claim end-to-end speedup while the prototype performs a full pre-RoPE
-  scan.
-- Do not say that relevance decreases monotonically with distance; the phase
-  model predicts oscillation.
-- Do not say remote position is useless. The current hypothesis is narrower:
-  fine-grained distance should not dominate remote candidate relevance.
-
+- Do not say RoPE is the unique cause of long-context failure.
+- Do not say attention mass, evidence recall, or suppression certifies utility.
+- Do not call the 15/16 intervention sign agreement answer accuracy.
+- Do not claim PPL or free-generation gains from the singleton experiment; all
+  target-versus-random NLL intervals cross zero.
+- Do not call query-specific pairwise phase edits a reusable positional encoding.
+- Do not claim a 32K BF16 closure result; the registered run is OOM.
+- Do not call pre-RoPE proposal novel or accelerated while it scans full history.

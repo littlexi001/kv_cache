@@ -15,6 +15,8 @@ LABEL="${LABEL:-safe_budget}"
 POLICY="${POLICY:-configs/riskkv_task_policy_v19_safe_budget_20260709.json}"
 LOG_ROOT="outputs/logs"
 LOCK_ROOT="${LOCK_ROOT:-/tmp/riskkv_gpu_locks_${USER:-user}}"
+GPU_MAX_USED_MB="${GPU_MAX_USED_MB:-1000}"
+GPU_MAX_UTIL="${GPU_MAX_UTIL:-15}"
 mkdir -p "$LOG_ROOT"
 mkdir -p "$LOCK_ROOT"
 
@@ -25,7 +27,7 @@ choose_gpu() {
       gpu="${gpu//[[:space:]]/}"
       [[ -z "$gpu" ]] && continue
       read -r used util < <(nvidia-smi --query-gpu=memory.used,utilization.gpu --format=csv,noheader,nounits -i "$gpu" | tr -d ',' | awk '{print $1, $2}')
-      if [[ "${used:-99999}" -lt 1000 && "${util:-100}" -lt 15 ]]; then
+      if [[ "${used:-99999}" -lt "$GPU_MAX_USED_MB" && "${util:-100}" -lt "$GPU_MAX_UTIL" ]]; then
         local lock_dir="$LOCK_ROOT/gpu${gpu}.lock"
         if mkdir "$lock_dir" 2>/dev/null; then
           echo "$$" > "$lock_dir/pid"

@@ -1,0 +1,1129 @@
+\section{Extended Theoretical Statements}
+\label{app:analysis-statements}
+
+We separate exact algebraic properties from assumptions used to make the
+mixed-bit objective separable.  Full proofs are in \cref{app:proofs}.
+
+\subsection{Exactness and balanced score geometry}
+
+\paragraph{Proposition 1 (exact biorthogonal score preservation).}
+Let $\widetilde C_q,C_k\in\R^{d\times d}$ be positive definite and let
+$A,D$ be defined by \cref{eq:qk-svd,eq:qk-factors}.
+Then
+\begin{equation}
+ AD^\top=I.
+ \label{eq:prop-biorthogonal}
+\end{equation}
+Consequently, for every $q,k\in\R^d$, not only for calibration samples,
+\begin{equation}
+ (A^\top q)^\top(D^\top k)=q^\top k.
+ \label{eq:prop-score-exact}
+\end{equation}
+Thus \method's transform is not a low-rank approximation and adds no
+full-precision score error.
+
+\paragraph{Proposition 2 (simultaneous second-moment balance).}
+Under the same conditions,
+\begin{equation}
+ A^\top\widetilde C_qA=D^\top C_kD=\Sigma.
+ \label{eq:prop-cov-balance}
+\end{equation}
+If transformed Queries and Keys are paired independently according to these
+second moments, their expected squared dot product is
+\begin{equation}
+ \mathbb E[({q'}^\top k')^2]=\tr(\Sigma^2)
+ =\sum_{\ell=1}^{d}\sigma_\ell^2.
+ \label{eq:score-energy}
+\end{equation}
+Therefore the singular order exposes joint score energy: retaining the first
+$r$ unquantized coordinates leaves expected tail score energy
+$\sum_{\ell>r}\sigma_\ell^2$ under the construction moments.
+With shrinkage and the spectral floor,
+\cref{eq:prop-cov-balance} holds exactly for the construction moments
+$\widetilde C_q$ and $C_k$, while the empirical moments differ by
+\begin{equation}
+ \Delta_q^{\rm mom}
+ =A^\top(\widehat C_q-\widetilde C_q)A,\qquad
+ \Delta_k^{\rm mom}
+ =D^\top(\widehat C_k-C_k)D.
+ \label{eq:shrinkage-residual}
+\end{equation}
+These residuals are deterministic and measurable.  The exact score identity
+in Proposition~1 is unaffected because it depends on $AD^\top=I$, not on
+either empirical second moment being equal to its construction moment.
+
+\paragraph{Theorem (optimal rank-$r$ score subspace).}
+Let independent $q$ and $k$ have positive-definite uncentered second moments
+$C_q$ and $C_k$, and approximate $q^\top k$ by $q^\top B_r k$ with
+$\operatorname{rank}(B_r)\le r$.  If
+$C_q^{1/2}C_k^{1/2}=U\Sigma V^\top$, then
+\begin{equation}
+ B_r^\star=C_q^{-1/2}U_r\Sigma_rV_r^\top C_k^{-1/2}
+ =A_rD_r^\top
+ \label{eq:optimal-rank-score-map}
+\end{equation}
+globally minimizes the expected squared score error, and
+\begin{equation}
+ \min_{\operatorname{rank}(B_r)\le r}
+ \mathbb E[(q^\top k-q^\top B_rk)^2]
+ =\sum_{\ell>r}\sigma_\ell^2.
+ \label{eq:optimal-rank-score-error}
+\end{equation}
+This is an Eckart--Young result in the Query--Key metric.  It gives a precise
+meaning to ``joint score energy'': before quantization, the leading
+QK-balanced coordinates are the optimal rank-$r$ bilinear approximation,
+whereas Key-PCA is optimal for a different Key-reconstruction objective.
+The theorem assumes independent draws from the construction moments; the
+finite Cartesian-sample identity below is what the allocator actually
+measures.
+
+\paragraph{Corollary (same-rate cost of stale QK coordinates).}
+For condition $c$, let
+$M_c=C_{q,c}^{1/2}C_{k,c}^{1/2}$ have singular values
+$\{\sigma_{c,j}\}$ and let $B_{c_0}$ be any rank-$r$ map frozen under
+another condition.  Then
+\begin{align}
+ L_c(B_{c_0})-L_c(B_c^\star)
+ &=
+ \|M_c-C_{q,c}^{1/2}B_{c_0}C_{k,c}^{1/2}\|_F^2
+ -\sum_{j>r}\sigma_{c,j}^2
+ \geq0 .
+ \label{eq:stale-qk-coordinate-excess}
+\end{align}
+With a strict $r$th singular gap, equality requires the frozen map to
+realize the current leading singular subspaces.  Thus request-local
+coordinates can strictly reduce score distortion at identical rank and
+rate.  Mixed-bit QKSieve is not a pure rank truncation, but its zero- and
+low-bit tail inherits this mechanism.
+
+\paragraph{Proposition (residual under paired Query--Key dependence).}
+Independence is sufficient for the preceding rank result but need not hold
+for Query--Key pairs observed in attention.  Define
+\begin{equation}
+ H=\mathbb E[(k\otimes q)(k\otimes q)^\top],\qquad
+ H_0=C_k\otimes C_q,\qquad
+ \Delta_H=H-H_0 .
+\end{equation}
+For any bilinear map $B$, let
+$L_{\rm pair}(B)=\mathbb E[(q^\top(I-B)k)^2]$ under the paired law and let
+$L_{\rm ind}(B)$ be the same loss under independent draws with the same
+second moments.  Then
+\begin{equation}
+ |L_{\rm pair}(B)-L_{\rm ind}(B)|
+ \le \|\Delta_H\|_{\op}\|I-B\|_F^2.
+ \label{eq:paired-qk-dependence}
+\end{equation}
+Thus second moments alone cannot certify rank optimality for arbitrary
+dependent pairs.  The bound isolates the missing fourth-order statistic;
+our audit reports paired-versus-Cartesian loss residuals for the frozen
+candidate maps rather than assuming it is zero.
+
+\paragraph{Corollary (Key-PCA is the isotropic-Query special case).}
+If $C_q=\alpha I$ and
+$C_k=V\Lambda V^\top$, then the left and right singular vectors in
+\cref{eq:qk-svd} are both $V$, with
+$\Sigma=\alpha^{1/2}\Lambda^{1/2}$.
+Consequently, QK-balanced coordinates have the same directions and ordering
+as Key-PCA, differing only by reciprocal Query/Key scalings that preserve
+dot products.  QK balancing therefore reduces to Key-PCA when all Query
+directions are equally important; its additional rotation and allocation
+are needed precisely when the Query moment is anisotropic.
+
+\subsection{Why query-weighted error is the correct allocation target}
+
+\paragraph{Proposition 3 (empirical logit-MSE identity).}
+Let $\{q'_j\}_{j=1}^{m_q}$ be any Query sample and
+$\{e_i\}_{i=1}^{m_k}$ any Key-quantization errors.
+Define their uncentered second moments
+$C'_q=m_q^{-1}\sum_jq'_j{q'_j}^\top$ and
+$C_e=m_k^{-1}\sum_ie_ie_i^\top$.
+Then the Cartesian empirical score MSE is exactly
+\begin{equation}
+ \frac{1}{m_qm_k}\sum_{j,i}({q'_j}^\top e_i)^2
+ =\tr(C'_qC_e).
+ \label{eq:trace-qmse}
+\end{equation}
+No zero-mean, Gaussian, or sample-independence assumption is needed for this
+finite-sample identity.
+For normalized attention logits in \cref{eq:full-attn}, the MSE is the
+right-hand side divided by $d$; this common factor does not change the
+allocation minimizer.
+
+Partitioning the coordinates into bands gives
+\begin{equation}
+ \tr(C'_qC_e)=
+ \sum_g\tr(C'_{q,gg}C_{e,gg})
+ +\sum_{g\ne h}\tr(C'_{q,gh}C_{e,hg}).
+ \label{eq:block-qmse}
+\end{equation}
+The production allocator minimizes the first sum.
+This is exact when either moment is block diagonal in the QK-balanced bands.
+Otherwise the omitted cross-band term obeys
+\begin{equation}
+ \left|\sum_{g\ne h}\tr(C'_{q,gh}C_{e,hg})\right|
+ \le\sum_{g\ne h}
+ \|C'_{q,gh}\|_F\|C_{e,hg}\|_F.
+ \label{eq:cross-band-bound}
+\end{equation}
+The right-hand side is an auditable diagnostic for the separability
+approximation.
+
+\paragraph{Corollary (rate-constrained dominance).}
+Let $\mathcal B_R$ be the finite set of band allocations satisfying the
+physical rate budget in \cref{eq:qmse-allocation}.  Because the dynamic
+program solves the separable objective globally,
+\begin{equation}
+ \sum_gD_g(b_g^\star)\le\sum_gD_g(\bar b_g)
+ \quad\text{for every }\bar b\in\mathcal B_R.
+ \label{eq:allocation-dominance}
+\end{equation}
+Thus automatic allocation cannot have larger calibration distortion than
+any feasible fixed allocation under the same quantizers and separable
+objective.  This statement does not by itself guarantee lower held-out
+distortion; \cref{eq:query-drift-bound,eq:finite-query-bound} quantify the
+two ways calibration dominance can fail to transfer.
+
+\paragraph{Proposition (one versus two joint-spectrum weights).}
+Assume the QK-balanced construction moments are exact, so that
+$\mathbb E[q'q'^\top]=\mathbb E[k'k'^\top]
+=\Sigma=\operatorname{diag}(\sigma_1,\ldots,\sigma_d)$.
+For an idealized coordinatewise quantizer, assume zero-mean uncorrelated
+errors with
+$\mathbb E[e_j^2]=c_j(b_j)\sigma_j$, where $c_j(b_j)\ge0$ is its
+rate-dependent relative distortion.  Then its Key-MSE is
+\begin{equation}
+ J_{\rm K}(b)=\tr(C_e)
+ =\sum_{j=1}^{d}c_j(b_j)\sigma_j,
+ \label{eq:keymse-joint-spectrum}
+\end{equation}
+whereas its calibration logit-MSE is
+\begin{equation}
+ J_{\rm QK}(b)=\tr(\Sigma C_e)
+ =\sum_{j=1}^{d}c_j(b_j)\sigma_j^2.
+ \label{eq:qmse-joint-spectrum}
+\end{equation}
+Thus Key-MSE in QK-balanced coordinates already carries one factor of the
+joint Query--Key spectrum; it is not equivalent to Key-MSE in a
+Query-independent Key-PCA basis.  Logit-MSE applies a second factor and can
+concentrate rate more strongly on the leading spectrum.  The proposition
+does not rank the two objectives for held-out decoding: block quantization,
+nonproportional error, Query drift, and ranking margins can favor either.
+
+\paragraph{Theorem (held-out regret under Query drift).}
+For allocation $b$, let
+\begin{align}
+ \widetilde J_t(b)
+ &=\sum_g\tr(C'_{q,t,gg}C_{e,gg}(b_g)),\\
+ \Gamma_t(b)
+ &=\sum_{g\ne h}\tr(C'_{q,t,gh}C_{e,hg}(b)),
+ \qquad J_t(b)=\widetilde J_t(b)+\Gamma_t(b),
+\end{align}
+where $t\in\{\mathrm{cal},\mathrm{dec}\}$.
+Define $\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$ and
+\begin{equation}
+ \Omega(b)=\sum_g\|\Delta_{gg}\|_{\op}
+                    \tr(C_{e,gg}(b_g)).
+ \label{eq:allocation-drift-penalty}
+\end{equation}
+For the calibration minimizer $b^\star$ and every fixed feasible allocation
+$\bar b$,
+\begin{equation}
+ J_{\mathrm{dec}}(b^\star)-J_{\mathrm{dec}}(\bar b)
+ \le \Omega(b^\star)+\Omega(\bar b)
+ +|\Gamma_{\mathrm{dec}}(b^\star)|
+ +|\Gamma_{\mathrm{dec}}(\bar b)|.
+ \label{eq:heldout-allocation-regret}
+\end{equation}
+Thus the automatic allocation is near-optimal on held-out decode Queries
+when diagonal-block covariance drift and cross-band error interactions are
+small.  Every term on the right is measurable without task labels.  The
+result also states precisely why calibration optimality alone is
+insufficient.
+
+\paragraph{Idealized rate-distortion interpretation.}
+Suppose a continuous high-rate surrogate has band distortion
+$D_g(b_g)=\alpha_g2^{-2b_g}$, ignores metadata, and permits $b_g\ge0$.
+The exact solution of
+$\min\sum_gD_g(b_g)$ subject to $\sum_gb_g\le R$ is
+\begin{equation}
+ b_g^\star=\left[\frac12\log_2\frac{\alpha_g}{\tau}\right]_+,
+ \qquad
+ \sum_g b_g^\star=R,
+ \label{eq:waterfilling-bits}
+\end{equation}
+for a threshold $\tau$ fixed by the rate constraint.
+When every band is active,
+$b_g^\star=R/G+\frac12\log_2(\alpha_g/\bar\alpha)$, where
+$\bar\alpha$ is the geometric mean of the $\alpha_g$.
+The formula predicts more bits for bands with larger Query-weighted score
+sensitivity.  It is an interpretation, not the production optimizer:
+\method's discrete program evaluates the actual 0/1/2/4/8-bit quantizers and
+scale metadata exactly.
+
+\paragraph{Corollary (heterogeneity gap against uniform rate).}
+Under the same all-active high-rate model, compare the optimum above with
+the uniform allocation $b_g=R/G$.  Their distortions satisfy
+\begin{equation}
+ \frac{J_{\mathrm{uniform}}}{J_{\mathrm{mixed}}^\star}
+ =
+ \frac{\frac1G\sum_{g=1}^{G}\alpha_g}
+      {(\prod_{g=1}^{G}\alpha_g)^{1/G}}
+ \ge 1,
+ \label{eq:uniform-mixed-ratio}
+\end{equation}
+with equality if and only if every band has identical score sensitivity.
+Thus the idealized gain from mixed rate is exactly the
+arithmetic-to-geometric-mean ratio of Query-weighted band sensitivities.
+This yields a falsifiable prediction: layer--head groups with larger
+sensitivity heterogeneity should show larger uniform-to-automatic QK-MSE
+gains.  The statement compares rates in a fixed coordinate system; our
+uniform-bit QK-balanced ablation isolates this effect, while the FIER
+comparison additionally changes the coordinate system.
+
+\subsection{Conditional fixed-rate allocation and length}
+
+Let a condition
+$c=(x,N,\ell,h,t)$ specify request, history length, layer, KV head, and
+decode position.  A policy $\theta\in\Theta_R$ contains a score-preserving
+QK transform and a feasible mixed-bit allocation with physical index rate
+at most $R$; assume the evaluated policy class contains a minimizer.  For
+exact and proxy scores, write
+$\xi_i(\theta)=\widehat s_i(\theta)-s_i$,
+$\bar\xi=N^{-1}\sum_i\xi_i$, and
+\begin{equation}
+ \eta_c^2(\theta)=
+ \frac1N\sum_{i=1}^{N}
+ [\xi_i(\theta)-\bar\xi(\theta)]^2 .
+\end{equation}
+Let $m_{r,B}(c)=s_{(r)}-s_{(B+1)}>0$ for $r\le B$.
+
+\paragraph{Theorem (conditional fixed-rate core certificate).}
+Define
+\begin{equation}
+ \mathcal C_R(c)=
+ \min_{\theta\in\Theta_R}
+ \frac{4N\eta_c^2(\theta)}{m_{r,B}^2(c)} .
+ \label{eq:fixed-rate-core-certificate}
+\end{equation}
+If $\mathcal C_R(c)<1$, there exists a policy of rate at most $R$ whose
+proxy top-$B$ contains exact top-$r$.  More generally, the minimizing policy
+misses at most
+\begin{equation}
+ \min\{r,\lfloor\mathcal C_R(c)\rfloor\}
+ \label{eq:conditional-fixed-rate-misses}
+\end{equation}
+exact top-$r$ tokens.  Consequently, if
+$\mathcal C_R(c)<1$ for every $c$ in a condition family, one common rate
+$R$ suffices for the family even when the minimizing
+$\theta_c^\star$ differs across requests, lengths, layers, or heads.
+The statement does not imply that a single frozen policy, or rate $R=240$,
+is sufficient for arbitrary conditions.
+
+\paragraph{Theorem (conditional policies dominate frozen templates).}
+Let $L(c,\theta)\geq0$ be any integrable condition-specific loss and use
+the same rate-constrained policy class $\Theta_R$ on both sides.  Then
+\begin{equation}
+ \underbrace{\mathbb E_c\!
+  \left[\min_{\theta\in\Theta_R}L(c,\theta)\right]}
+ _{\mathcal L_{\rm adapt}(R)}
+ \le
+ \underbrace{\min_{\theta\in\Theta_R}
+  \mathbb E_c[L(c,\theta)]}
+ _{\mathcal L_{\rm frozen}(R)} .
+ \label{eq:conditional-policy-dominance}
+\end{equation}
+For finite $\Theta_R$, equality holds if and only if an optimal frozen
+policy is conditionwise optimal almost surely.  Otherwise the inequality
+is strict.  Thus adaptation can reduce the rate required for a target
+risk without increasing the per-condition rate; it cannot make an
+insufficient feasible policy class sufficient.
+
+In practice QKSieve minimizes an estimated loss
+$\widehat L(c,\theta)$.  If
+$\widehat\theta(c)\in\arg\min_\theta\widehat L(c,\theta)$, then
+\begin{equation}
+ L(c,\widehat\theta(c))-\min_{\theta\in\Theta_R}L(c,\theta)
+ \le
+ 2\sup_{\theta\in\Theta_R}
+ |\widehat L(c,\theta)-L(c,\theta)|.
+ \label{eq:conditional-selection-regret}
+\end{equation}
+This separates the value of conditional allocation from finite-sample
+calibration and Query-distribution drift.
+
+\paragraph{Theorem (probabilistic crossing bound).}
+Condition on the exact scores.  Suppose the centered per-token score errors
+are independent, zero-mean, and sub-Gaussian with variance proxy at most
+$\sigma_c^2(\theta)$.  Then
+\begin{equation}
+ \Pr\!\left[
+  T_r(c)\not\subseteq\widehat T_B(\theta,c)
+ \right]
+ \le
+ r(N-B)
+ \exp\!\left[
+  -\frac{m_{r,B}^2(c)}{4\sigma_c^2(\theta)}
+ \right].
+ \label{eq:crossing-probability}
+\end{equation}
+Thus failure probability at most $\delta$ is certified by
+\begin{equation}
+ \sigma_c^2(\theta)
+ \le
+ \frac{m_{r,B}^2(c)}
+ {4\log(r(N-B)/\delta)} .
+ \label{eq:crossing-subgaussian-condition}
+\end{equation}
+This average-case result complements the assumption-free deterministic
+certificate above; quantization errors in a realized request are not claimed
+to be independent.
+
+\paragraph{A separable crossing-risk objective.}
+For $i\in T_r$, $j\notin T_B$, let
+$\Delta_{ij}=s_i-s_j>0$, and decompose score error by band as
+$\xi_i=\sum_g\xi_{i,g}$.  Markov's inequality and a union bound give
+\begin{equation}
+ \Pr[T_r\not\subseteq\widehat T_B]
+ \le
+ \sum_{\substack{i\in T_r\\j\notin T_B}}
+ \frac{\mathbb E[(\xi_j-\xi_i)^2]}{\Delta_{ij}^2}.
+ \label{eq:crossing-markov-objective}
+\end{equation}
+When cross-band error terms vanish, the right-hand side decomposes as
+\begin{align}
+ J_{\rm cross,c}(b)
+ &=\sum_g D_{{\rm cross},c,g}(b_g),\\
+ D_{{\rm cross},c,g}(b)
+ &=\sum_{\substack{i\in T_r\\j\notin T_B}}
+ \frac{\mathbb E[(\xi_{j,g}(b)-\xi_{i,g}(b))^2]}
+ {\Delta_{ij}^2}.
+ \label{eq:crossing-band-distortion}
+\end{align}
+The same finite dynamic program as \cref{eq:qmse-allocation} can therefore
+minimize a margin-weighted crossing surrogate under the unchanged physical
+rate.  Nonzero cross-band terms admit the same Frobenius audit as
+\cref{eq:cross-band-bound}.
+
+\paragraph{Corollary (condition-dependent water filling).}
+Under the continuous all-active surrogate
+$D_{{\rm cross},c,g}(b_g)=\alpha_{c,g}2^{-2b_g}$ and
+$\sum_gb_g=R$,
+\begin{equation}
+ b_{c,g}^\star=
+ \frac RG+
+ \frac12\log_2
+ \frac{\alpha_{c,g}}
+ {(\prod_u\alpha_{c,u})^{1/G}} .
+ \label{eq:conditional-waterfilling}
+\end{equation}
+The total rate is unchanged, but the optimal band allocation changes
+whenever the relative crossing sensitivities $\alpha_{c,g}$ change.  A
+uniform change in margin tightens the achievable certificate but does not,
+by itself, change relative band rates; request- or length-induced
+nonuniform sensitivity is what moves bits between bands.
+
+\paragraph{Corollary (global layer--head--band allocation).}
+Index units by $a=(\ell,h,g)$, let $w_a$ be physical rate per scalar bit,
+and consider
+\begin{equation}
+ \min_{b_a\geq0}\sum_a\alpha_{c,a}2^{-2b_a}
+ \quad\text{s.t.}\quad
+ \sum_aw_ab_a\leq R_{\rm total}.
+\end{equation}
+The continuous optimum is
+\begin{equation}
+ b_{c,a}^{\star}
+ =
+ \left[
+ \frac12\log_2\frac{\alpha_{c,a}}{\tau_cw_a}
+ \right]_+ ,
+ \label{eq:global-conditional-waterfilling}
+\end{equation}
+where $\tau_c$ enforces the unchanged total rate.  Separate per-head rate
+constraints give one multiplier per $(\ell,h)$; a ragged global packed
+layout permits one multiplier across all units.
+
+\paragraph{Output-aware source of conditional sensitivity.}
+For one head, $o=\sum_ip_iv_i$ and $p=\softmax(s)$.  The exact first-order
+term under score perturbation is
+\begin{equation}
+ \delta o
+ =
+ \sum_i p_i(v_i-o)\delta s_i
+ +O(\|\delta s\|_2^2).
+ \label{eq:attention-local-jacobian}
+\end{equation}
+Consequently, the bandwise local output distortion is
+\begin{equation}
+ D_{{\rm out},c,\ell,h,g}(b)
+ =
+ \mathbb E\left\|
+  \sum_i p_i(v_i-o)\delta s_{i,g}(b)
+ \right\|_2^2 .
+ \label{eq:output-aware-band-distortion}
+\end{equation}
+If tokenwise errors are conditionally uncorrelated, this reduces to
+$\sum_i p_i^2\|v_i-o\|_2^2
+\operatorname{Var}[\delta s_{i,g}(b)]$.
+Let $J_{>\ell}$ map the layer-$\ell$ attention output locally to final
+logits and let $W_\ell^O$ be its output projection.  Replacing the Euclidean
+metric in \cref{eq:output-aware-band-distortion} by
+\begin{equation}
+ H_\ell=(W_\ell^O)^\top J_{>\ell}^\top J_{>\ell}W_\ell^O
+ \label{eq:layer-output-metric}
+\end{equation}
+gives a first-order logit-aware distortion.  Hence Query direction,
+attention mass, Value leverage, and downstream amplification all make
+$\alpha_{c,\ell,h,g}$ condition dependent.  QKSieve uses the cheaper
+crossing surrogate rather than computing full downstream Jacobians.
+
+\paragraph{Proposition (no universally optimal frozen allocation).}
+There are two-band, equal-rate condition families for which every frozen
+allocation fails on at least one condition, while a condition-specific
+allocation succeeds on every condition at the same total rate.  One
+construction lets the budget retain exactly one band: one request places
+all ranking signal in band one and another places it in band two.  The same
+construction can represent different layers or heads.  Keeping a fixed
+Query and appending a new highest-scoring token whose distinguishing signal
+lies in the other band gives a length-conditioned version.
+
+\paragraph{Order-statistic mechanism.}
+For $N$ independent uniform scores, every adjacent order-statistic spacing
+has expectation
+\begin{equation}
+ \mathbb E[s_{(B)}-s_{(B+1)}]=\frac1{N+1}.
+ \label{eq:uniform-order-gap}
+\end{equation}
+For a smooth score CDF $F$, with
+$u_N=F^{-1}(1-B/N)$ and density $f(u_N)>0$, the probability integral
+transform gives the local approximation
+\begin{equation}
+ m_{B,N}\asymp\frac1{Nf(u_N)}.
+ \label{eq:general-order-gap}
+\end{equation}
+This is a mechanism, not an i.i.d.\ model of real attention.  It shows why
+more competitors can tighten ranking precision even when the oracle
+attention budget remains adequate; empirical margins must still be reported
+per layer and head.
+
+\paragraph{Proposition 4 (Query-distribution shift).}
+Let $C'_{q,\mathrm{cal}}$ be the projected Query moment used by the
+allocator, and let $C'_{q,\mathrm{dec}}$ be the moment of later decode
+Queries.  For any fixed Key-error moment $C_e\succeq0$,
+\begin{equation}
+ \left|\tr(C'_{q,\mathrm{dec}}C_e)
+       -\tr(C'_{q,\mathrm{cal}}C_e)\right|
+ \le
+ \|C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}\|_{\op}\tr(C_e).
+ \label{eq:query-drift-bound}
+\end{equation}
+Thus prompt-tail calibration remains reliable when its projected second
+moment is close to that of generation Queries.  This is a measurable
+condition, not an assumption hidden inside the allocator: we report the
+left-hand distortion and the covariance-drift factor separately by layer,
+head, and generation position.
+
+\paragraph{Finite-sample calibration versus genuine drift.}
+Let $C'_{q,\mathrm{cal}}$ denote the population calibration moment and
+$\widehat C'_{q,m}$ the moment of $m$ independent calibration Queries.
+For $X_j=q'_j{q'_j}^\top-C'_{q,\mathrm{cal}}$, assume
+$\|X_j\|_{\op}\le L$ almost surely and
+$\|\mathbb E X_j^2\|_{\op}\le v$.
+Matrix Bernstein implies that, with probability at least $1-\delta$,
+\begin{equation}
+ \|\widehat C'_{q,m}-C'_{q,\mathrm{dec}}\|_{\op}
+ \le
+ \underbrace{\sqrt{\frac{2v\log(2d/\delta)}{m}}+
+ \frac{2L\log(2d/\delta)}{3m}}_{\text{finite-sample term}}
+ +\underbrace{\|C'_{q,\mathrm{cal}}-C'_{q,\mathrm{dec}}\|_{\op}}
+ _{\text{distribution-shift term}}.
+ \label{eq:finite-query-bound}
+\end{equation}
+Combining this with \cref{eq:query-drift-bound} gives a high-probability
+bound on allocator distortion.  Autoregressive Queries are not generally
+i.i.d.; therefore \cref{eq:finite-query-bound} motivates, but does not
+replace, the generation-position drift measurements in our evaluation.
+
+\paragraph{Theorem (uniform finite-candidate allocation selection).}
+Fix the QK transform and deterministic per-band quantizers before drawing
+the allocation-calibration samples.  Let $\mathcal B_R$ contain the $M$
+feasible assignments under \cref{eq:qmse-allocation}; for our eight bands,
+five bit levels, and normalized rate at most 15, exact enumeration gives
+$M=13{,}817$.  Define the separable per-pair loss
+\begin{equation}
+ \ell_b(q',k')=
+ \sum_g\left({q'_g}^{\top}e_g(k';b_g)\right)^2
+\end{equation}
+and suppose $0\le\ell_b(q',k')\le L_{\rm loss}$ uniformly.
+Draw $m_q$ i.i.d.\ Queries and $m_k$ i.i.d.\ Keys independently of each
+other.  Let $J(b)=\mathbb E[\ell_b(q',k')]$ and let $\widehat J(b)$ be the
+Cartesian empirical average over the two sample sets.
+Then, with probability at least $1-\delta$,
+\begin{equation}
+ \sup_{b\in\mathcal B_R}|\widehat J(b)-J(b)|
+ \le
+ \varepsilon_{\rm sel}:=
+ L_{\rm loss}\!\left[
+ \sqrt{\frac{\log(4M/\delta)}{2m_q}}+
+ \sqrt{\frac{\log(4M/\delta)}{2m_k}}
+ \right].
+ \label{eq:allocation-uniform-bound}
+\end{equation}
+Consequently, if $\widehat b$ minimizes $\widehat J$, then
+\begin{equation}
+ J(\widehat b)-\min_{b\in\mathcal B_R}J(b)
+ \le2\varepsilon_{\rm sel}.
+ \label{eq:allocation-selection-regret}
+\end{equation}
+For the full score MSE
+$J_{\rm full}(b)=J(b)+\Gamma(b)$ and its minimizer
+$b_{\rm full}^\star$,
+\begin{equation}
+ J_{\rm full}(\widehat b)-J_{\rm full}(b_{\rm full}^\star)
+ \le
+ 2\varepsilon_{\rm sel}
+ +|\Gamma(\widehat b)|+|\Gamma(b_{\rm full}^\star)|.
+ \label{eq:allocation-full-regret}
+\end{equation}
+The Cartesian table contains $m_qm_k$ entries, but they are not independent;
+the bound therefore has separate $m_q^{-1/2}$ and $m_k^{-1/2}$ terms rather
+than an artificial $(m_qm_k)^{-1/2}$ rate.  The finite class enters only
+through $\log M$.
+
+This theorem applies directly to a split-sample audit in which the transform
+is frozen before independent allocation samples are drawn.  Production
+reuses prompt samples to estimate both the transform and the allocation, so
+the theorem is not presented as an unconditional guarantee for that path.
+We instead report independent calibration--held-out gaps together with the
+moment and subspace perturbations above.  The bounded-loss result is also
+intentionally conservative; its role is to expose the correct sources of
+selection error.
+
+\paragraph{Theorem (stability of the estimated QK-sensitive subspace).}
+The preceding bound treats the QK-balanced transform as fixed.  We now
+separate the additional error caused by estimating the construction moments.
+Let $C_q,C_k,\widehat C_q,\widehat C_k\succ0$ be floored population and
+empirical construction moments, and define
+\begin{equation}
+ M=C_q^{1/2}C_k^{1/2},\qquad
+ \widehat M=\widehat C_q^{1/2}\widehat C_k^{1/2}.
+\end{equation}
+Write $\varepsilon_q=\|\widehat C_q-C_q\|_{\op}$ and
+$\varepsilon_k=\|\widehat C_k-C_k\|_{\op}$, and set
+\begin{align}
+ a_q&=
+ \frac{\varepsilon_q}
+ {\sqrt{\lambda_{\min}(C_q)}
+  +\sqrt{\lambda_{\min}(\widehat C_q)}},\\
+ a_k&=
+ \frac{\varepsilon_k}
+ {\sqrt{\lambda_{\min}(C_k)}
+  +\sqrt{\lambda_{\min}(\widehat C_k)}},\\
+ \varepsilon_M&=
+ a_q\sqrt{\|\widehat C_k\|_{\op}}
+ +\sqrt{\|C_q\|_{\op}}\,a_k .
+ \label{eq:qk-moment-product-perturbation}
+\end{align}
+Then
+\begin{equation}
+ \|\widehat M-M\|_{\op}\le\varepsilon_M.
+ \label{eq:qk-product-stability}
+\end{equation}
+Let $U_r,V_r$ and $\widehat U_r,\widehat V_r$ be the leading left and
+right rank-$r$ singular subspaces of $M$ and $\widehat M$, respectively.
+If the population boundary gap
+$\gamma_r=\sigma_r(M)-\sigma_{r+1}(M)$ satisfies
+$\varepsilon_M<\gamma_r/2$, then
+\begin{equation}
+ \max\!\left\{
+ \|\sin\Theta(\widehat U_r,U_r)\|_{\op},
+ \|\sin\Theta(\widehat V_r,V_r)\|_{\op}
+ \right\}
+ \le \frac{2\sqrt{2}\,\varepsilon_M}{\gamma_r}.
+ \label{eq:qk-subspace-stability}
+\end{equation}
+The floor and Query shrinkage keep the denominators in
+\cref{eq:qk-moment-product-perturbation} nonzero; the singular gap determines
+whether a 16-dimensional band boundary is statistically identifiable.
+This result does not assert that eight prompt-tail positions always suffice.
+It yields auditable conditions: report covariance estimation error,
+the gaps at $r\in\{16,32,\ldots,112\}$, and the corresponding subspace
+angles as the Query sample count changes.  Importantly, an inaccurate
+estimate changes compression coordinates but still cannot change the
+unquantized dot product, because Proposition~1 holds for any positive
+definite pair of estimated moments.
+
+\paragraph{Key reconstruction can choose the wrong bits.}
+Key-only quantization minimizes
+$J_K=\mathbb E\|e\|_2^2=\tr(C_e)$, whereas attention-logit distortion is
+$J_{QK}=\tr(C'_qC_e)$.
+These objectives are proportional for all possible error covariances only
+when $C'_q$ is proportional to the identity.
+When $C'_q$ is anisotropic, there exist two quantization errors for which
+$J_K$ prefers the first and $J_{QK}$ prefers the second
+(\cref{app:proofs}).
+This is the precise reason that low Key reconstruction error is neither
+necessary nor sufficient for low attention-score error.
+
+\paragraph{Proposition 5 (cost of omitting Query covariance).}
+Fix a coordinate system and feasible family of Key-error moments
+$C_e(b)\succeq0$.  Suppose
+$\mu I\preceq C'_q\preceq LI$ with $\mu>0$.
+Let $b_K$ minimize $\tr(C_e(b))$ and let $b_{QK}$ minimize
+$\tr(C'_qC_e(b))$ over the same physical rate constraint.  Then
+\begin{equation}
+ \tr(C'_qC_e(b_K))
+ \le \kappa(C'_q)\,
+      \tr(C'_qC_e(b_{QK})),
+ \qquad \kappa(C'_q)=L/\mu.
+ \label{eq:key-only-condition-bound}
+\end{equation}
+The factor becomes one for isotropic Queries and can be arbitrarily large
+for anisotropic or nearly rank-deficient Queries.  This is an approximation
+guarantee, not a claim that the worst case is typical; our
+without-Query-covariance ablation measures the realized gap under identical
+basis, quantizers, rate, and active KV.
+
+\paragraph{Lemma (random rotation has no preferred band in expectation).}
+Let $R$ be Haar-distributed on the orthogonal group and let $E_g$ select a
+fixed $d_g$-dimensional coordinate band.  For any positive-semidefinite
+second moment $C$,
+\begin{equation}
+ \mathbb E_R\tr(CRE_gR^\top)=\frac{d_g}{d}\tr(C).
+ \label{eq:random-band-exchangeability}
+\end{equation}
+Thus a data-independent random rotation preserves exact full-precision dot
+products when applied to Query and Key, but its band labels are exchangeable:
+in expectation it cannot place Query--Key-sensitive directions in earlier
+or higher-rate bands.  The random-rotation ablation separates the benefit of
+an orthogonal change of coordinates from the benefit of QK alignment.
+
+\paragraph{Query quantization.}
+The allocator above models Key error.
+At runtime the transformed Query is also quantized:
+$\widehat{q'}=q'+e_q$ and $\widehat{k'}=k'-e_k$ under our sign convention.
+The complete proxy error is
+\begin{equation}
+ {q'}^\top k'-{\widehat{q'}}^\top\widehat{k'}
+ ={q'}^\top e_k-e_q^\top k'+e_q^\top e_k.
+ \label{eq:query-key-quant-error}
+\end{equation}
+The additional term is bounded by
+$\|e_q\|_2\|k'-e_k\|_2$.
+INT8 Query error is reported independently; it is not silently attributed to
+the mixed-bit allocator.
+
+\subsection{From score error to attention-output error}
+
+Let exact and proxy scores be $s_i$ and $\widehat s_i$, and define
+$\delta_i=s_i-\widehat s_i$ and
+$R_\delta=\max_i\delta_i-\min_i\delta_i$.
+\paragraph{Lemma (softmax stability modulo a common shift).}
+For $p=\softmax(s)$ and $\widehat p=\softmax(\widehat s)$,
+\begin{equation}
+ \mathrm{KL}(p\|\widehat p)\le\frac{R_\delta^2}{8},
+ \qquad
+ \|p-\widehat p\|_1\le
+ \min\!\left\{2,\frac{R_\delta}{2}\right\}.
+ \label{eq:softmax-range-bound}
+\end{equation}
+The bound depends only on the range of the score error because softmax is
+invariant to a common shift.  QKSieve does not use $\widehat p$ for the final
+Value aggregation, so this lemma quantifies proxy-score fidelity but does
+not replace the selected-mass guarantee below.
+
+For an exact top-$B$ token $i$ and any token $j$ outside exact top-$B$,
+\begin{equation}
+ s_i-s_j>R_\delta\quad\Longrightarrow\quad
+ \widehat s_i>\widehat s_j.
+ \label{eq:ranking-margin}
+\end{equation}
+Hence all exact top-$B$ tokens separated from the outside boundary by more
+than $R_\delta$ are guaranteed to survive proxy top-$B$.
+Unlike a raw top-$B$ overlap, this condition distinguishes high-margin core
+tokens from near-tied boundary swaps.
+
+The range can be certified directly from centered score RMSE.
+Let $\bar\delta=N^{-1}\sum_i\delta_i$ and
+$\eta^2=N^{-1}\sum_i(\delta_i-\bar\delta)^2$.
+Then $R_\delta\le2\sqrt{N}\eta$.
+If $s_{(1)}\ge\cdots\ge s_{(N)}$ and, for some $r\le B$,
+\begin{equation}
+ s_{(r)}-s_{(B+1)}>2\sqrt{N}\eta,
+ \label{eq:rmse-core-margin}
+\end{equation}
+all exact top-$r$ tokens must occur in proxy top-$B$.
+Although this worst-case certificate is conservative, it connects the
+allocator's score-error quantity to a query-specific preserved core without
+assuming Gaussian errors.
+
+\paragraph{A less conservative count certificate.}
+Let $m_r=s_{(r)}-s_{(B+1)}>0$ and
+\begin{equation}
+ c_r=\left\lfloor\frac{4N\eta^2}{m_r^2}\right\rfloor,
+ \qquad b_r=\min\{r,c_r\}.
+ \label{eq:rmse-bad-count}
+\end{equation}
+Even when \cref{eq:rmse-core-margin} fails, proxy top-$B$ contains at least
+$r-b_r$ exact top-$r$ tokens.  Moreover, its exact attention mass is at
+least
+\begin{equation}
+ \sum_{i=b_r+1}^{r}p_{(i)}.
+ \label{eq:rmse-mass-count}
+\end{equation}
+The result is deterministic: at most $c_r$ tokens can have centered score
+error at least $m_r/2$ in magnitude, and all remaining core/outside pairs
+retain their order.  It converts average score error into a graded guarantee
+rather than requiring a zero-error worst case.
+
+\paragraph{Corollary (length amplification at fixed rate).}
+Write $\eta_N$ and $m_{r,N}$ for the centered proxy-score RMSE and exact
+top-$r$-to-outside margin at history length $N$.  The two certificates above
+obey
+\begin{equation}
+ R_{\delta,N}\le2\sqrt{N}\eta_N,\qquad
+ c_{r,N}\le
+ \left\lfloor
+ \frac{4N\eta_N^2}{m_{r,N}^2}
+ \right\rfloor .
+ \label{eq:length-amplification}
+\end{equation}
+Consequently, if $\eta_N$ and $m_{r,N}$ remain fixed while $N$ doubles, the
+uniform range bound grows by $\sqrt{2}$ and the bad-count bound doubles.
+Keeping either sufficient certificate constant requires, respectively,
+$\eta_N=O(N^{-1/2})$ or
+$\eta_N/m_{r,N}=O(N^{-1/2})$.  These are worst-case sufficient conditions,
+not a claim that typical errors are independent or that quality must decay
+at this rate.  They explain how an exact top-$B$ oracle can remain adequate
+while a fixed-bit selector crosses a length-dependent ranking boundary.
+
+\paragraph{Theorem (proxy top-$B$ mass inflation).}
+Let $T$ be exact top-$B$, let $S$ be proxy top-$B$, and let
+\begin{equation}
+ \epsilon_T=\sum_{i\notin T}p_i,\qquad
+ \epsilon_S=\sum_{i\notin S}p_i .
+\end{equation}
+For any deterministic tie breaking,
+\begin{equation}
+ \epsilon_S\le
+ \min\!\left\{1,\exp(R_\delta)\epsilon_T\right\}.
+ \label{eq:proxy-topb-mass-inflation}
+\end{equation}
+Thus proxy retrieval loses at most an $\exp(R_\delta)$ factor more exact
+attention mass than oracle exact top-$B$.  Combining this with exact
+restricted attention gives
+\begin{equation}
+ \|o-\widetilde o_S\|_2
+ \le
+ \min\!\left\{1,\exp(R_\delta)\epsilon_T\right\}
+ \diam\{v_1,\ldots,v_N\}.
+ \label{eq:proxy-topb-output-bound}
+\end{equation}
+Because $R_\delta\le2\sqrt N\,\eta$, the result also supplies a fully
+deterministic, although conservative, score-RMSE-to-output certificate.
+Unlike top-$B$ overlap, it discounts swaps among nearly tied low-mass tokens.
+
+For the selected set $S$, let
+$\epsilon=\sum_{i\notin S}p_i$ be omitted full-attention mass.
+Restricting and renormalizing exact attention gives
+\begin{equation}
+ \|p-\widetilde p\|_1=2\epsilon.
+ \label{eq:l1-mass}
+\end{equation}
+Writing $o_{\rm in}$ and $o_{\rm out}$ for conditional Value means inside and
+outside $S$ yields the exact identity and bound
+\begin{equation}
+ \|o-\widetilde o\|_2
+ =\epsilon\|o_{\rm out}-o_{\rm in}\|_2
+ \le\epsilon\,\diam\{v_1,\ldots,v_N\}.
+ \label{eq:output-mass}
+\end{equation}
+The theory therefore forms a conditional chain:
+mixed-bit score error plus score margins determines a preserved core;
+the actually omitted probability mass then controls the exact sparse
+attention output.
+It does not guarantee quality for adversarial near ties or unbounded Values.
+In particular, if \cref{eq:rmse-core-margin} holds, then
+\begin{equation}
+ \epsilon\le1-\sum_{i=1}^{r}p_{(i)},
+ \label{eq:certified-mass}
+\end{equation}
+which turns the score certificate into an explicit attention-output bound.
+
+\paragraph{Proposition (shrunken Value-tail error and optimum).}
+Let $Z_S,Z_T>0$ be exact selected and omitted partitions, let
+$p=Z_S/(Z_S+Z_T)$, and let $\mu_S,\mu_T$ be their exact conditional Value
+means.  For any tail partition estimate $\widehat Z_T\ge0$, conditional mean
+estimate $\widehat\mu_T$, and $\alpha\in[0,1]$, define
+\begin{equation}
+ \widehat p_\alpha=
+ \frac{Z_S}{Z_S+\alpha\widehat Z_T},\qquad
+ \widehat o_\alpha=
+ \widehat p_\alpha\mu_S+(1-\widehat p_\alpha)\widehat\mu_T.
+\end{equation}
+Then
+\begin{equation}
+ \widehat o_\alpha-o
+ = (\widehat p_\alpha-p)(\mu_S-\mu_T)
+ +(1-\widehat p_\alpha)(\widehat\mu_T-\mu_T),
+ \label{eq:robust-tail-exact-decomposition}
+\end{equation}
+which immediately implies \cref{eq:tail-error-bound}.  Moreover, suppose
+$\widehat Z_T=Z_T$ and
+$\widehat\mu_T=\mu_T+\xi$ with $\mathbb E[\xi]=0$ and
+$V=\mathbb E\|\xi\|_2^2<\infty$.  Set
+$D=\|\mu_S-\mu_T\|_2^2$ and
+$w_\alpha=\alpha(1-p)/(p+\alpha(1-p))$.  Then
+\begin{equation}
+ \mathbb E\|\widehat o_\alpha-o\|_2^2
+ =((1-p)-w_\alpha)^2D+w_\alpha^2V,
+\end{equation}
+and the minimizers are
+\begin{equation}
+ w^\star=\frac{(1-p)D}{D+V},\qquad
+ \alpha^\star=\frac{pD}{pD+V}.
+ \label{eq:robust-tail-optimal-alpha}
+\end{equation}
+For $w_\alpha>0$, this correction has lower expected error than Fast
+($w=0$) exactly when
+\begin{equation}
+ 0<w_\alpha<\frac{2(1-p)D}{D+V}.
+ \label{eq:robust-tail-better-than-fast}
+\end{equation}
+
+\emph{Proof.}
+The full output is $o=p\mu_S+(1-p)\mu_T$.  Add and subtract
+$(1-\widehat p_\alpha)\mu_T$ to obtain
+\cref{eq:robust-tail-exact-decomposition}.  Under an exact tail partition,
+$1-\widehat p_\alpha=w_\alpha$; expanding the squared norm and using
+$\mathbb E[\xi]=0$ removes the cross term.  Differentiation with respect to
+$w$ gives $w^\star$.  Solving
+$w=\alpha(1-p)/(p+\alpha(1-p))$ for $\alpha$ gives
+\cref{eq:robust-tail-optimal-alpha}.  Subtracting the $w=0$ error gives
+$w^2(D+V)-2w(1-p)D$; its negative interval is
+\cref{eq:robust-tail-better-than-fast}.  \hfill$\square$
+
+The proposition does not claim that the proxy partition is exact or that a
+single $\alpha$ is optimal for all heads.  It explains why unshrunk residual
+correction can be worse when the tail estimate is noisy and why held-out
+validation of the fixed $\alpha=.5$ is necessary.
+
+\paragraph{Proposition 6 (propagation to decoder logits).}
+Write the dense and sparse layer maps as $F_\ell$ and
+$\widetilde F_\ell$.  Suppose on the states reached by the two executions
+\begin{equation}
+ \|\widetilde F_\ell(x)-\widetilde F_\ell(y)\|_2
+ \le L_\ell\|x-y\|_2,\qquad
+ \|\widetilde F_\ell(x)-F_\ell(x)\|_2\le a_\ell.
+\end{equation}
+Starting from the same hidden state, the final hidden-state error obeys
+\begin{equation}
+ \|\widetilde h_L-h_L\|_2
+ \le\sum_{\ell=0}^{L-1}a_\ell
+       \prod_{u=\ell+1}^{L-1}L_u.
+ \label{eq:layer-propagation}
+\end{equation}
+If the local change enters only through attention, then
+$a_\ell\le M_\ell
+\big(\sum_h\epsilon_{\ell,h}^2\diam(V_{\ell,h})^2\big)^{1/2}$
+for the downstream gain $M_\ell$ from the concatenated head outputs.
+Let $\rho=\|W_U\|_{2\rightarrow\infty}$ times the right-hand side of
+\cref{eq:layer-propagation}.  Then the dense and sparse next-token
+distributions obey
+\begin{equation}
+ \mathrm{KL}(p_{\rm next}\|\widetilde p_{\rm next})\le\frac{\rho^2}{2},
+ \qquad
+ \|p_{\rm next}-\widetilde p_{\rm next}\|_1
+ \le\min\{2,\rho\}.
+ \label{eq:next-token-stability}
+\end{equation}
+The next-token argmax is unchanged whenever the dense logit margin exceeds
+$2\rho$.
+The Lipschitz product is intentionally a conditional certificate rather than
+a claim that deep worst-case constants are small.
+
+\paragraph{Lemma (tail-resolution sample complexity).}
+Let $T$ contain the top $B=rN$ proxy scores and draw $m$ token positions
+uniformly without replacement.  If $X$ is the number of sampled positions
+in $T$, then
+\begin{equation}
+ m(N)=\min\!\left\{N,m_{\max},
+ \max\!\left(m_0,\left\lceil\frac{c}{r(N)}\right\rceil\right)\right\},
+ \quad (m_0,c,m_{\max})=(256,16,512).
+ \label{eq:tail-resolution-samples}
+\end{equation}
+For any fixed $m$,
+\begin{equation}
+ \mathbb E[X]=mr,\qquad
+ \Pr(X=0)=\frac{\binom{N-B}{m}}{\binom{N}{m}}
+ \le (1-r)^m\le e^{-mr}.
+ \label{eq:tail-sample-no-hit}
+\end{equation}
+Consequently, while the cap is inactive, choosing $m\ge c/r$ keeps the
+expected number of target-tail anchors at least $c$ and makes the no-anchor
+probability at most $e^{-c}$.  Once $m_{\max}=512$ is active, this guarantee
+weakens to $mr$ anchors in expectation; the cap is a measured throughput--
+accuracy tradeoff, not a length-independent theorem.  The deployment kernel uses
+regular stratification with a head-dependent phase rather than an
+independent random sample, so \cref{eq:tail-sample-no-hit} is the motivation
+for \cref{eq:tail-resolution-samples}, not an adversarial guarantee for the
+deterministic phases or the capped long-context regime.  Candidate counts and
+downstream quality are therefore audited empirically.
+
+\paragraph{Proposition (finite-sample candidate-count variation).}
+The no-hit bound controls only the event that the target tail is completely
+missed; it does not imply an accurate candidate count.  To expose the second
+effect, assume continuous proxy scores and uniformly sampled score ranks, and
+let the threshold be the $j$-th largest of $m$ samples.  The population
+upper-tail mass $\widehat r$ above this order statistic obeys
+\begin{equation}
+ \widehat r\sim\operatorname{Beta}(j,m+1-j),\qquad
+ \mathbb E[\widehat r]=\frac{j}{m+1},
+ \label{eq:sample-quantile-beta}
+\end{equation}
+and
+\begin{equation}
+ \operatorname{Var}(\widehat r)
+ =\frac{j(m+1-j)}{(m+1)^2(m+2)}.
+ \label{eq:sample-quantile-variance}
+\end{equation}
+For $j\approx mr=c$ and small $r$, the relative standard deviation of the
+realized candidate count $N\widehat r$ is therefore
+\begin{equation}
+ \frac{\sqrt{\operatorname{Var}(N\widehat r)}}
+ {\mathbb E[N\widehat r]}
+ =
+ \sqrt{\frac{m+1-j}{j(m+2)}}
+ \approx \frac{1}{\sqrt{c}}.
+ \label{eq:candidate-count-relative-std}
+\end{equation}
+Thus $c=16$ gives approximately $25\%$ relative standard deviation even
+though its no-hit probability is tiny; $c=64$ and $c=256$ reduce the
+diagnostic value to approximately $12.5\%$ and $6.25\%$.  This calculation
+does not assume that the deterministic stratified phases are i.i.d.; it is a
+finite-sample reference model whose prediction is checked against per-head
+candidate-count dispersion.  It motivates reporting both the mean and
+headwise range and testing larger $c$ or a conservative overselect-and-trim
+selector at very long context.
+
+\paragraph{Headwise stragglers.}
+The mean candidate count is not the relevant system statistic when a ragged
+consumer sizes work from the largest layer-head.  The same order-statistic
+model gives a useful tail prediction.  In the rare-tail limit
+$m\rightarrow\infty$, $r\rightarrow0$, and $mr=c$, the normalized realized
+tail mass satisfies
+\begin{equation}
+ Z=\frac{\widehat r}{r}
+ \ \Longrightarrow\ \frac{Y}{c},
+ \qquad Y\sim\operatorname{Gamma}(c,1).
+ \label{eq:quantile-gamma-limit}
+\end{equation}
+Consequently, for $\epsilon>0$, a Chernoff bound and a union bound over $H$
+layer-heads give
+\begin{equation}
+ \Pr\!\left[
+   \max_{h\le H}\frac{\widehat C_h}{B}\ge 1+\epsilon
+ \right]
+ \ \lesssim\
+ H\exp\{-c[\epsilon-\log(1+\epsilon)]\},
+ \qquad \widehat C_h=N\widehat r_h .
+ \label{eq:quantile-headwise-straggler}
+\end{equation}
+For $H=288$ and failure probability $.05$, the corresponding upper factors
+$1+\epsilon$ are approximately $2.43$, $1.61$, and $1.28$ for
+$c=16,64,256$.  This is an asymptotic reference bound rather than a
+certificate for deterministic stratification, but it predicts the observed
+system effect: increasing $c$ can reduce maximum candidate capacity, split
+count, and tail latency enough to offset the extra sampled comparisons.
+
+\subsection{Complexity and request-level crossover}
+
+Ignoring constants, dense decode attention costs $4H_qNd$ floating-point
+operations per layer for QK and AV.
+\method costs
+\begin{equation}
+ 2H_qd^2+c_{\rm idx}H_qN R+
+ C_{\rm select}+4H_qB(N)d,
+ \label{eq:cost}
+\end{equation}
+where $R=240$ packed bits per token/KV head and $c_{\rm idx}$ reflects
+low-bit scan throughput.  The reference profile has
+$C_{\rm select}=c_{\rm topk}H_qN$; the deployment profile replaces this by
+the stratified sample and in-block order statistic,
+$C_{\rm select}=O(H_qm(N)R+H_qm(N)\log^2m(N))$, followed by candidate writes
+during the mandatory packed scan.
+The scan is still $\Theta(N)$; the gain comes from reading and processing a
+small packed Key index and capping exact attention, not from sublinear search.
+
+Let $I$ be visible one-time index construction cost and let
+$t_{\rm full}$ and $t_{\method}$ be synchronized steady decode times.
+For $G$ generated tokens,
+\begin{equation}
+ T_{\rm full}=P_{\rm full}+Gt_{\rm full},\qquad
+ T_{\method}=P_{\rm full}+I+Gt_{\method}.
+ \label{eq:request-cost}
+\end{equation}
+When $t_{\method}<t_{\rm full}$, the break-even output length is
+\begin{equation}
+ G^\star=\frac{I}{t_{\rm full}-t_{\method}}.
+ \label{eq:break-even}
+\end{equation}
+This accounting explains why a strong 128K decode speedup can coexist with a
+smaller short-output request speedup, and why 2K--8K contexts can remain
+slower until index scan and top-$k$ are sufficiently amortized.
+
+\paragraph{Proposition 7 (exact crossover and Amdahl ceiling).}
+Because history grows during generation, let $f_t$ and $s_t$ be measured
+Full and \method decode costs at output step $t$, and let $I_{\rm net}$ be
+index construction cost not hidden under prefill.  After $G$ tokens,
+\method is faster at request level if and only if
+\begin{equation}
+ \sum_{t=1}^{G}(f_t-s_t)>I_{\rm net}.
+ \label{eq:exact-break-even}
+\end{equation}
+Thus if $s_t\ge f_t$ at every step, no output length can amortize the method;
+using a Full fallback would hide rather than solve this regime.
+For one decode step, write
+$f=t_{\rm base}+t_{\rm attn}$ and
+$s=t_{\rm base}+\widetilde t_{\rm attn}$, with all retrieval overhead
+included in $\widetilde t_{\rm attn}$.  Then
+\begin{equation}
+ \mathrm{speedup}=
+ \frac{t_{\rm base}+t_{\rm attn}}
+      {t_{\rm base}+\widetilde t_{\rm attn}}
+ \le
+ \frac{t_{\rm base}+t_{\rm attn}}{t_{\rm base}}
+ =\frac{1}{1-\phi_{\rm attn}},
+ \label{eq:amdahl-ceiling}
+\end{equation}
+where $\phi_{\rm attn}=t_{\rm attn}/f$.
+The last expression is the zero-attention ceiling.  The measured decomposition
+in \cref{fig:speed,tab:deployment-breakdown} shows why it is not an attainable
+kernel claim.
+
+\paragraph{Proposition 8 (fused Query-preparation certificate).}
+Let $\widehat z$ and $\widetilde z$ be the dequantized transformed Queries
+produced by the reference projection--quantization sequence and by a fused
+kernel, respectively.  For fixed decoded proxy Keys $\widehat k_i$, define
+\begin{equation}
+ \epsilon_{\rm fuse}
+ =
+ \|\widetilde z-\widehat z\|_2
+ \max_i\|\widehat k_i\|_2 .
+ \label{eq:fused-query-epsilon}
+\end{equation}
+Then every proxy score changes by at most $\epsilon_{\rm fuse}$.
+Consequently, the top-$B$ set is invariant whenever the reference boundary
+gap satisfies
+\begin{equation}
+ \widehat s_{(B)}-\widehat s_{(B+1)}
+ >2\epsilon_{\rm fuse}.
+ \label{eq:fused-query-margin}
+\end{equation}
+If the fused kernel produces exactly the same INT8 codes and scales as the
+reference sequence, proxy scores and the top-$B$ set are identical, modulo
+ordering among exact ties.  Given the same selected set and original exact
+K/V, the two sparse-attention outputs are identical in real arithmetic.
+Finite-precision GPU reductions can still differ slightly, so kernel
+promotion additionally requires measured code/scale, score, selected-set,
+and final-output agreement rather than projection latency alone.

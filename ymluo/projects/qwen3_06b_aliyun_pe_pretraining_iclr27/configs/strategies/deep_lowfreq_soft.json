@@ -1,0 +1,10 @@
+{
+  "name": "deep_lowfreq_soft",
+  "kind": "band_layer_scale",
+  "layer_mode": "hard_deep",
+  "deep_layer_fraction": 0.3333333333,
+  "pair_start": 40,
+  "pair_end_exclusive": 56,
+  "modified_scale": 0.25,
+  "description": "Slow low-frequency pairs F40-F55 to 25% in the deepest third."
+}

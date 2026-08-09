@@ -37,9 +37,9 @@ finally {
     Pop-Location
 }
 
-$AnonymousPdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_anonymous.pdf"
-$AuthorPdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_author.pdf"
-$ChinesePdf = Join-Path $OutputDir "SAGE_RoPE_ICLR2027_draft_zh.pdf"
+$AnonymousPdf = Join-Path $OutputDir "RoPE_Mechanism_ICLR2027_draft_anonymous.pdf"
+$AuthorPdf = Join-Path $OutputDir "RoPE_Mechanism_ICLR2027_draft_author.pdf"
+$ChinesePdf = Join-Path $OutputDir "RoPE_Mechanism_ICLR2027_draft_zh.pdf"
 Copy-Item -Force (Join-Path $BuildDir "main.pdf") $AnonymousPdf
 Copy-Item -Force (Join-Path $BuildDir "main_author.pdf") $AuthorPdf
 Copy-Item -Force (Join-Path $BuildDir "main_zh.pdf") $ChinesePdf

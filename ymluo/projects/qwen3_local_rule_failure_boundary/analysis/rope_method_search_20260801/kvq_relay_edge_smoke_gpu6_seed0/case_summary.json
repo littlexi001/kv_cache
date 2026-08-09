@@ -1,0 +1,30 @@
+[
+  {
+    "target_context_tokens": 8192,
+    "condition": "mixed",
+    "case_count": 1,
+    "gold_both_candidate_coverage": 1.0,
+    "gold_both_candidate_missing_rate": 0.0,
+    "gold_edge_resolution_rate": 1.0,
+    "gold_edge_missing_rate": 0.0,
+    "case_auroc_valid_rate": 1.0,
+    "finite_difference_audit_pass_rate": 0.0,
+    "candidate_block_count_mean": 64.0,
+    "prefill_seconds_mean": 13.525187735445797,
+    "edge_score_seconds_mean": 2.0475855115801096
+  },
+  {
+    "target_context_tokens": -1,
+    "condition": "all",
+    "case_count": 1,
+    "gold_both_candidate_coverage": 1.0,
+    "gold_both_candidate_missing_rate": 0.0,
+    "gold_edge_resolution_rate": 1.0,
+    "gold_edge_missing_rate": 0.0,
+    "case_auroc_valid_rate": 1.0,
+    "finite_difference_audit_pass_rate": 0.0,
+    "candidate_block_count_mean": 64.0,
+    "prefill_seconds_mean": 13.525187735445797,
+    "edge_score_seconds_mean": 2.0475855115801096
+  }
+]

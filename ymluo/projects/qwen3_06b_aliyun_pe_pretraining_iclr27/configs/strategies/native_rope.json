@@ -1,0 +1,5 @@
+{
+  "name": "native_rope",
+  "kind": "native",
+  "description": "Matched-token native RoPE control under the selected initialization mode."
+}

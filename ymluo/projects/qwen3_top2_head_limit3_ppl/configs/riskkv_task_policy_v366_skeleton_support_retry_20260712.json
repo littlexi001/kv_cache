@@ -1,0 +1,50 @@
+{
+  "__extends": "riskkv_task_policy_v365_ultra_skeleton_all_20260712.json",
+  "__overlay_all_tasks": {
+    "output_verifier": true,
+    "grounding_verifier": true,
+    "support_window_verifier": true,
+    "support_window_radius_words": 36,
+    "support_window_min_query_terms": 1,
+    "retry_budget_tokens": 512,
+    "full_fallback": false
+  },
+  "tasks": {
+    "qasper": {
+      "retry_budget_tokens": 768,
+      "grounding_verifier": false,
+      "support_window_verifier": false
+    },
+    "hotpotqa": {
+      "budget_tokens": 192,
+      "retry_budget_tokens": 768
+    },
+    "2wikimqa": {
+      "budget_tokens": 192,
+      "retry_budget_tokens": 768,
+      "consistency_verifier": true,
+      "consistency_budget_tokens": 768,
+      "consistency_requires_score_risk": 0
+    },
+    "musique": {
+      "budget_tokens": 256,
+      "retry_budget_tokens": 1024
+    },
+    "multifieldqa_en": {
+      "budget_tokens": 128,
+      "retry_budget_tokens": 512
+    },
+    "narrativeqa": {
+      "budget_tokens": 128,
+      "retry_budget_tokens": 512
+    },
+    "repobench-p": {
+      "budget_tokens": 128,
+      "sink_tokens": 16,
+      "recent_tokens": 96,
+      "grounding_verifier": false,
+      "support_window_verifier": false,
+      "retry_budget_tokens": 512
+    }
+  }
+}

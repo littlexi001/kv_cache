@@ -1,0 +1,24 @@
+{
+  "protocol_version": "kvq-relay-edge-v2",
+  "method_config_hash": "e3131f8c17b6556bef2b40940fd29e192996bf7734e88a50ffe12c7f406eec6a",
+  "case_count": 2,
+  "unique_case_key_count": 2,
+  "shards": [
+    {
+      "path": "C:\\Users\\27814\\Desktop\\work\\codex_workspace\\kvcache\\kv_cache-main\\kv_cache-main\\ymluo\\projects\\qwen3_local_rule_failure_boundary\\analysis\\rope_method_search_20260801\\kvq_relay_edge_smoke_gpu6_seed0",
+      "full_config_hash": "797e6df37c2307abe7708429b872c45fb2bcbe3746ed414809e4796b076077db",
+      "case_count": 1,
+      "raw_case_directories": [
+        "C:\\Users\\27814\\Desktop\\work\\codex_workspace\\kvcache\\kv_cache-main\\kv_cache-main\\ymluo\\projects\\qwen3_local_rule_failure_boundary\\analysis\\rope_method_search_20260801\\kvq_relay_edge_smoke_gpu6_seed0\\cases\\length_8192_condition_mixed_seed_0"
+      ]
+    },
+    {
+      "path": "C:\\Users\\27814\\Desktop\\work\\codex_workspace\\kvcache\\kv_cache-main\\kv_cache-main\\ymluo\\projects\\qwen3_local_rule_failure_boundary\\analysis\\rope_method_search_20260801\\kvq_relay_edge_smoke_gpu7_seed1",
+      "full_config_hash": "5f23afa9a719320b8cac67c6836449732e5b2511ab1fe2ee54e292697a3242e1",
+      "case_count": 1,
+      "raw_case_directories": [
+        "C:\\Users\\27814\\Desktop\\work\\codex_workspace\\kvcache\\kv_cache-main\\kv_cache-main\\ymluo\\projects\\qwen3_local_rule_failure_boundary\\analysis\\rope_method_search_20260801\\kvq_relay_edge_smoke_gpu7_seed1\\cases\\length_8192_condition_mixed_seed_1"
+      ]
+    }
+  ]
+}

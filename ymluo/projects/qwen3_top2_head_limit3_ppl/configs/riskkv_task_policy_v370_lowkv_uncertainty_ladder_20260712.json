@@ -1,0 +1,203 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "__overlay_all_tasks": {
+    "action_router": false,
+    "action_router_mode": "off",
+    "score_risk": false,
+    "full_fallback": false,
+    "retry_full_fallback": false,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false,
+    "budget_tokens": 128,
+    "sink_tokens": 16,
+    "recent_tokens": 16,
+    "page_tokens": 16,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.72,
+    "ours_multiscale_group_pages": 8,
+    "ours_multiscale_weight": 0.30,
+    "coverage_mmr_weight": 0.40,
+    "coverage_mmr_max_terms": 20,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.40,
+    "coverage_certificate_min_terms": 1,
+    "anchor_window": true,
+    "anchor_window_tokens": 32,
+    "budget_ladder": true,
+    "budget_ladder_tokens": "128,256,384,512",
+    "budget_ladder_gap2_thresholds": "0.018,0.045,0.090",
+    "budget_ladder_entropy_thresholds": "0.982,0.988,0.993",
+    "budget_ladder_top_score_thresholds": "0.760,0.940,1.060",
+    "short_decode": true,
+    "short_decode_max_tokens": 32
+  },
+  "tasks": {
+    "narrativeqa": {
+      "budget_ladder_tokens": "128,192,256,384",
+      "short_decode_max_tokens": 48
+    },
+    "qasper": {
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.26,
+      "budget_ladder_tokens": "128,256,384,512",
+      "short_decode_max_tokens": 64
+    },
+    "multifieldqa_en": {
+      "budget_ladder_tokens": "128,256,384,512",
+      "short_decode_max_tokens": 32
+    },
+    "hotpotqa": {
+      "budget_tokens": 192,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.46,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 28,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0,
+      "coverage_risk": true,
+      "coverage_risk_min_recall": 0.84,
+      "coverage_risk_min_terms": 1,
+      "coverage_risk_budget_tokens": 768,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "2wikimqa": {
+      "budget_tokens": 192,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.46,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 28,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0,
+      "coverage_risk": true,
+      "coverage_risk_min_recall": 0.84,
+      "coverage_risk_min_terms": 1,
+      "coverage_risk_budget_tokens": 768,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "musique": {
+      "budget_tokens": 192,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.52,
+      "graph_bridge_seed_pages": 10,
+      "graph_bridge_max_terms": 32,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 4.0,
+      "coverage_risk": true,
+      "coverage_risk_min_recall": 0.80,
+      "coverage_risk_min_terms": 1,
+      "coverage_risk_budget_tokens": 768,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "repobench-p": {
+      "budget_tokens": 128,
+      "sink_tokens": 16,
+      "recent_tokens": 96,
+      "page_tokens": 64,
+      "scorer": "hybrid_late_mmr_multiscale_flow",
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder_tokens": "128,256,512",
+      "short_decode_max_tokens": 16
+    },
+    "lcc": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 64,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "short_decode_max_tokens": 48
+    },
+    "qmsum": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 160,
+      "short_decode_max_tokens": 0
+    },
+    "triviaqa": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "short_decode_max_tokens": 4
+    },
+    "samsum": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 128,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 96,
+      "short_decode_max_tokens": 0
+    },
+    "gov_report": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 512,
+      "short_decode_max_tokens": 0
+    },
+    "multi_news": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 256,
+      "short_decode_max_tokens": 0
+    },
+    "trec": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0
+    },
+    "passage_count": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0
+    },
+    "passage_retrieval_en": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "coverage_certificate": false,
+      "anchor_window": false,
+      "budget_ladder": false,
+      "direct_structured_answer": true,
+      "short_decode_max_tokens": 0
+    }
+  }
+}

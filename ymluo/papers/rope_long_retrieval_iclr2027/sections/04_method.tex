@@ -1,81 +1,154 @@
-\section{SAGE-RoPE: local position, global semantics}
+\section{Causal interventions and identifiability boundaries}
 \label{sec:method}
 
-The mechanism suggests three design constraints.  First, recent tokens must
-retain the original positional computation because local order and syntax are
-useful.  Second, a remote semantic match should have a path into the candidate
-set even when its current RoPE phase is unfavorable.  Third, the repair should
-not silently replace the pretrained model's scoring rule.  \method satisfies
-these constraints by separating \emph{proposal} from \emph{consumption}.
+The mechanism suggests interventions, but an intervention that changes an
+attention result is not automatically a new positional encoding.  This section
+separates three levels: a causal score intervention, a functionally equivalent
+phase edit for one query, and a rotary geometry that can be reused by future
+queries through one physical GQA cache.
 
-\subsection{A position-free remote proposal}
+\subsection{Same-path singleton intervention}
 
-Alongside the standard post-RoPE logit $s^R$ in \cref{eq:standard-attn}, define
-the content-only proposal score
+For a selected layer--head--token coordinate, we first execute the custom
+attention graph with $\epsilon=0$, then repeat it with
+$s_{l,h,j}\leftarrow s_{l,h,j}+\epsilon$.  Define the global pair margin under
+that intervention as
 \begin{equation}
-  s^C(t,j)=\frac{\preq_t^\top\prek_j}{\sqrt d}.
-  \label{eq:content-score}
+  m^{(l,h,j)}(\epsilon)
+  =m\!\left(\operatorname{do}
+  [s_{l,h,j}\leftarrow s_{l,h,j}+\epsilon]\right),
+  \qquad
+  \Delta m^{\mathrm{FD}}_{l,h,j}(\epsilon)
+  =m^{(l,h,j)}(\epsilon)-m^{(l,h,j)}(0),
+  \label{eq:finite-intervention}
 \end{equation}
-This score is not used as an attention logit in the main method.  It only
-ranks remote keys before RoPE can suppress them.  For a total candidate budget
-$B=\lceil\beta N\rceil$ at sequence length $N$, local window $\mathcal L_W$,
-and sink set $\mathcal S$, the per-head candidate set is
+and the first-order prediction is $\epsilon U_{l,h,j}$ from
+\cref{eq:directed-utility}.  Comparing with the same-path no-op is essential:
+native and instrumented BF16 kernels can differ slightly even when they retain
+the same decision.  Target coordinates are ranked by the absolute product of
+positive grid-envelope RoPE suppression and the exact answer-margin derivative
+$\partial m/\partial s$.  This oracle deliberately favors decisive coordinates,
+so the experiment tests causal closure rather than deployable token selection.
+Matched-random coordinates preserve layer, head, and class but not decisive-token
+identity; they are numerical controls, not a fully matched magnitude or
+signal-to-noise baseline.
+
+\subsection{A phase edit for one query is a logit edit}
+
+Fix one query at position $t$, candidate support $\mathcal C$, and Values
+$\{v_j\}$.  Write $\tau_{tj}=j-t$.  For frequency plane $r$, let
+$\delta_{j,r}$ be a phase correction in radians, not a token displacement.
+The native and phase-edited scores are
 \begin{equation}
-  \mathcal C_{l,h}
-  =\mathcal S\cup\mathcal L_W\cup
-  \TopK_{B-|\mathcal S|-|\mathcal L_W|}
-  \left\{s^C_{l,h}(t,j):j<t-W,\ j\notin\mathcal S\right\}.
-  \label{eq:candidate-set}
+  s_j=\frac{\kappa^2}{\sqrt d}\sum_r
+  q_r^\top R(\tau_{tj}\omega_r)k_{j,r},
+  \qquad
+  s'_j=\frac{\kappa^2}{\sqrt d}\sum_r
+  q_r^\top R(\tau_{tj}\omega_r+\delta_{j,r})k_{j,r},
+  \qquad
+  b_j=s'_j-s_j.
+  \label{eq:phase-bias}
 \end{equation}
-Our registered pilot uses $\beta=0.02$, $W=128$, and 16 sink tokens.  The
-current query is always included.
 
-\subsection{Exact post-RoPE consumption}
-
-After proposal, \methodpost gathers the original K/V for $j\in\mathcal C$,
-computes their exact standard logits, and normalizes only over the candidate
-set:
+\begin{proposition}[Single-query functional non-identifiability]
+\label{prop:phase-bias}
+Under fixed $\mathcal C$ and $\{v_j\}$, the phase-edited attention output is
+exactly the output obtained by adding logit bias $b$:
 \begin{equation}
-  o^{\textsc{Sage}}_{l,h}(t)
-  =\sum_{j\in\mathcal C_{l,h}}
-  \frac{\exp s^R_{l,h}(t,j)}
-  {\sum_{r\in\mathcal C_{l,h}}\exp s^R_{l,h}(t,r)}v_{l,h,j}.
-  \label{eq:sage-attention}
+  \sum_{j\in\mathcal C}\softmax(s')_jv_j
+  =\sum_{j\in\mathcal C}\softmax(s+b)_jv_j.
+  \label{eq:phase-bias-equivalence}
 \end{equation}
-The original post-RoPE geometry determines every selected token's weight.
-Relative to exact post-RoPE Top-2\%, the sole change is the remote proposal
-rule.  This makes \methodpost both conservative and diagnostically clean: any
-quality difference can be attributed to which candidates survive the
-phase-sensitive ranking, followed by the denominator induced by that set.
+At the level of attention probabilities, the effect of $b$ is observable only
+modulo $b\mapsto b+c\mathbf 1$.  From the aggregated Value output alone, it may
+be even less identifiable when the Values are not affinely independent.
+\end{proposition}
 
-Full attention is not a task-quality upper bound.  If the candidate selector
-retains evidence $E$ while removing distractors $D\setminus\mathcal C$, then
-renormalization can increase
+The proposition is algebraic: $s'=s+b$ by definition.  It does not say that
+all positional geometries are equivalent.  It says that a gain demonstrated
+only by a query-specific, pairwise phase edit with unchanged support and Values
+cannot by itself identify a reusable new positional encoding.
+
+\subsection{When can one GQA cache realize a rotary repair?}
+
+Fix layer $l$, KV group $g$, a prefix epoch with positions $j\le T$, and a set
+of future query events $u=(h,t)$ with $h\in\mathcal H_g$ and $t>T$.  Let
+$\delta_{u,j,r}$ be the desired correction, in radians, to the native relative
+phase on frequency plane $r$.  We call it \emph{single-cache rotary-operator
+realizable} if there exist candidate-independent Query rotations
+$\mathsf Q_{u,r}\in\mathrm{SO}(2)$ and prefix-frozen, group-shared Key rotations
+$\mathsf K_{g,j,r}\in\mathrm{SO}(2)$ such that
 \begin{equation}
-  m_E^{\mathcal C}
-  =\frac{\sum_{i\in E\cap\mathcal C}\exp s_i}
-  {\sum_{i\in E\cap\mathcal C}\exp s_i+
-   \sum_{j\in D\cap\mathcal C}\exp s_j}.
-  \label{eq:sparse-mass}
+  \begin{aligned}
+  q^\star_{u,r}&=\mathsf Q_{u,r}R(t\omega_r)q_{u,r},&
+  k^\star_{g,j,r}&=\mathsf K_{g,j,r}R(j\omega_r)k_{g,j,r},\\
+  \mathsf Q_{u,r}^{\top}\mathsf K_{g,j,r}
+  &=R(\delta_{u,j,r})&&\quad\forall(u,j,r).
+  \end{aligned}
+  \label{eq:cache-operator}
 \end{equation}
-The method can therefore help through two linked effects: rescue a relevant
-remote key from an unfavorable phase ranking, and exclude weak distractors
-from the softmax denominator.
+followed by a standard dot product with no pairwise phase operator.  The last
+equality is the target constraint: it requires the two reusable operators to
+realize the specified correction, rather than merely to exist.
 
-\subsection{Variants and implementation boundary}
+\begin{theorem}[Single-cache rotary realizability]
+\label{thm:cache-realizability}
+The corrections are single-cache rotary-operator realizable if and only if
+there exist $\beta_{g,j,r}$ and $\alpha_{u,r}$ such that
+\begin{equation}
+  \delta_{u,j,r}\equiv\beta_{g,j,r}-\alpha_{u,r}\pmod{2\pi}.
+  \label{eq:separable-phase}
+\end{equation}
+Equivalently, for any two query events $u,v$ in the same KV group and any two
+prefix positions $i,j$,
+\begin{equation}
+  \delta_{u,i,r}+\delta_{v,j,r}
+  -\delta_{u,j,r}-\delta_{v,i,r}\equiv0\pmod{2\pi}.
+  \label{eq:four-cycle}
+\end{equation}
+\end{theorem}
 
-The main paper treats \methodpost as the primary method.  We also evaluate two
-diagnostic extensions in the appendix: calibrated mixtures of pre/post-RoPE
-scores, and a mass-preserving remote reranking.  These extensions can improve
-some pilot metrics but change the pretrained score values, so they require
-broader validation before becoming defaults.
+Every element of $\mathrm{SO}(2)$ is a rotation $R(\cdot)$, so
+\cref{eq:cache-operator} and the group law yield $\delta=\beta-\alpha$.
+Conversely, any such factorization constructs
+$\mathsf Q_{u,r}=R(\alpha_{u,r})$ and
+$\mathsf K_{g,j,r}=R(\beta_{g,j,r})$; separability is then equivalent to
+vanishing four-cycles.
+The full construction is in \cref{app:realizability}.  The factorization has a
+common-phase gauge: adding the same phase to $\alpha$ and $\beta$ changes no
+$\delta$.  The rectangular support is also important; for a sparse bipartite
+support, the alternating signed phase sum must vanish on every graph cycle, and
+each disconnected component has an independent common-phase gauge.
+This theorem characterizes the phase operator, not accidental score equality on
+a finite set of Q/K vectors, where zero amplitudes or cosine symmetries can add
+degeneracies.  Because four Query heads share each Qwen3-8B KV head,
+$\beta_{g,j,r}$ must be shared by those heads.  A violation requires per-query
+Key work, multiple cached bases, or an explicit pairwise score/router operation.
 
-The current implementation computes the entire pre-RoPE score vector to
-isolate proposal quality.  It therefore demonstrates an attention rule, not a
-speedup.  A deployable implementation would store pre-RoPE keys in an
-approximate index, query that index per head, and gather only selected exact
-post-RoPE K/V.  \todoexp{Implement the approximate index and report matched
-end-to-end latency, throughput, update cost, and memory.}  The target attention
-cost after proposal is $O(Bd)$ rather than $O(Nd)$, while proposal cost depends
-on the chosen index.
+\subsection{Diagnostic retrieval and a feasible design space}
 
+We retain an exact pre-RoPE proposal followed by native post-RoPE sparse
+attention as a diagnostic intervention in \cref{app:diagnostic-retrieval}.  It
+tests whether semantically relevant keys suppressed at admission can still be
+recovered, but it is neither the main contribution nor an end-to-end speedup:
+the current implementation scans the full pre-RoPE history.  Closely related
+proposal/consumption and local-memory structures already appear in SALS,
+LongHeads, and InfLLM~\citep{mu2025sals,lu2024longheads,xiao2024infllm}.
+
+Theorem~\ref{thm:cache-realizability} does expose a possible future design
+space.  A cache-compatible semantic phase may take the factorized form
+\begin{equation}
+  \beta_{l,g,j,r}=f^K_{l,g,r}(x_{l,j}),
+  \qquad
+  \alpha_{l,h,t,r}=f^Q_{l,h,r}(x_{l,t}).
+  \label{eq:semantic-phase-space}
+\end{equation}
+This is a theorem-permitted family, not a method trained or validated here.
+It is also adjacent to content-dependent repositioning and head-adaptive RoPE
+~\citep{li2026repo,wang2026adarope}.  A pair-dependent local/remote gate
+generally breaks separability.  A static layer or KV-group partition can keep
+exact local RoPE only in designated native layers or groups; it cannot make the
+same affected head simultaneously pairwise-local-exact and remote-semantic.
+That within-head requirement needs two cached bases or an explicit pairwise
+router, with extra compute and possibly extra cache when multiple Key bases are
+selected.

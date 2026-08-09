@@ -1,0 +1,34 @@
+{
+  "model_name_or_path": "/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "output_dir": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_strict_mpr_token_sparse_smoke_gpu7",
+  "lengths": "8192",
+  "seed_start": 0,
+  "num_seeds": 1,
+  "ratio": 0.02,
+  "minimum_keep_tokens": 0,
+  "maximum_keep_tokens": 0,
+  "variants": [
+    "exact_pre_top2_postscore",
+    "strict_mpr_pre_w128_lift25_gap1_t1_f8_cap0p25",
+    "strict_mpr_pre_w128_lift25_gap1_t1_f8_cap0p25_random",
+    "strict_mpr_pre_w128_lift25_gap1_t1_f8_cap0p25_masspreserve",
+    "strict_mpr_pre_w128_lift25_gap1_t1_f8_cap0p25_random_masspreserve",
+    "strict_mpr_pre_w128_lift25_gap1_t4_f8_cap0p25",
+    "strict_mpr_pre_w128_lift25_gap1_t4_f8_cap0p25_random",
+    "strict_mpr_pre_w128_lift25_gap1_t4_f8_cap0p25_masspreserve",
+    "strict_mpr_pre_w128_lift25_gap1_t4_f8_cap0p25_random_masspreserve"
+  ],
+  "local_window": 128,
+  "sink_tokens": 16,
+  "prefill_chunk_size": 128,
+  "dtype": "bfloat16",
+  "load_in_4bit": true,
+  "attn_implementation": "sdpa",
+  "original_max_position_embeddings": 40960,
+  "global_max_position": 70000,
+  "dry_run": false,
+  "resolved_lengths": [
+    8192
+  ],
+  "cuda_visible_devices": "7"
+}

@@ -1,0 +1,73 @@
+{
+  "__extends": "riskkv_task_policy_v370_lowkv_uncertainty_ladder_20260712.json",
+  "tasks": {
+    "narrativeqa": {
+      "span_repack": true,
+      "span_repack_window_tokens": 64,
+      "span_repack_budget_fraction": 0.62,
+      "span_repack_top_pages": 8,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "budget_ladder_tokens": "128,192,256,384"
+    },
+    "qasper": {
+      "span_repack": true,
+      "span_repack_window_tokens": 80,
+      "span_repack_budget_fraction": 0.66,
+      "span_repack_top_pages": 10,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.20,
+      "budget_ladder_tokens": "128,256,384,512"
+    },
+    "multifieldqa_en": {
+      "span_repack": true,
+      "span_repack_window_tokens": 64,
+      "span_repack_budget_fraction": 0.66,
+      "span_repack_top_pages": 10,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "budget_ladder_tokens": "128,256,384,512"
+    },
+    "hotpotqa": {
+      "span_repack": true,
+      "span_repack_window_tokens": 64,
+      "span_repack_budget_fraction": 0.58,
+      "span_repack_top_pages": 10,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "graph_bridge_budget_fraction": 0.36,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "2wikimqa": {
+      "span_repack": true,
+      "span_repack_window_tokens": 64,
+      "span_repack_budget_fraction": 0.58,
+      "span_repack_top_pages": 10,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "graph_bridge_budget_fraction": 0.36,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "musique": {
+      "span_repack": true,
+      "span_repack_window_tokens": 64,
+      "span_repack_budget_fraction": 0.58,
+      "span_repack_top_pages": 12,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "graph_bridge_budget_fraction": 0.40,
+      "budget_ladder_tokens": "192,384,512,768"
+    },
+    "repobench-p": {
+      "span_repack": true,
+      "span_repack_window_tokens": 96,
+      "span_repack_budget_fraction": 0.50,
+      "span_repack_top_pages": 8,
+      "span_repack_min_score": 0.0,
+      "span_repack_score_mode": "window_topk",
+      "budget_ladder_tokens": "128,256,512"
+    }
+  }
+}

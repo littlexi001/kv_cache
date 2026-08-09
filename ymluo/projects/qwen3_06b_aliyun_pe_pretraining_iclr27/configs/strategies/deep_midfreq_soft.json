@@ -1,0 +1,10 @@
+{
+  "name": "deep_midfreq_soft",
+  "kind": "band_layer_scale",
+  "layer_mode": "hard_deep",
+  "deep_layer_fraction": 0.3333333333,
+  "pair_start": 16,
+  "pair_end_exclusive": 32,
+  "modified_scale": 0.25,
+  "description": "Slow middle frequency pairs F16-F31 to 25% in the deepest third."
+}

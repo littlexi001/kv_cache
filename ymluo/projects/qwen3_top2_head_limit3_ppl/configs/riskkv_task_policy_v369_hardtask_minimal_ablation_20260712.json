@@ -1,0 +1,61 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "__overlay_all_tasks": {
+    "budget_tokens": 64,
+    "sink_tokens": 16,
+    "recent_tokens": 16,
+    "page_tokens": 16,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.90,
+    "ours_multiscale_group_pages": 8,
+    "coverage_mmr_weight": 0.70,
+    "coverage_mmr_max_terms": 24,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.75,
+    "anchor_window": true,
+    "anchor_window_tokens": 32,
+    "short_decode": true,
+    "short_decode_max_tokens": 16,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "support_window_verifier": false,
+    "score_risk": false,
+    "full_fallback": false
+  },
+  "tasks": {
+    "qasper": {
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.28,
+      "short_decode_max_tokens": 48
+    },
+    "hotpotqa": {
+      "budget_tokens": 96,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.58,
+      "graph_bridge_seed_pages": 6,
+      "graph_bridge_max_terms": 24
+    },
+    "2wikimqa": {
+      "budget_tokens": 96,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.58,
+      "graph_bridge_seed_pages": 6,
+      "graph_bridge_max_terms": 24
+    },
+    "musique": {
+      "budget_tokens": 128,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.60,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 28
+    },
+    "repobench-p": {
+      "budget_tokens": 64,
+      "sink_tokens": 16,
+      "recent_tokens": 48,
+      "page_tokens": 64,
+      "coverage_certificate": false,
+      "short_decode_max_tokens": 16
+    }
+  }
+}

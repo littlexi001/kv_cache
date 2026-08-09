@@ -1,0 +1,7 @@
+{
+  "__extends": "riskkv_operator_contract_v467_lpcm_free_20260714.json",
+  "__comment": "v468 structured-decision variant: v467 LPCM plus a controlled A-D decoder applied equally to Full and sparse KV methods.",
+  "*": {
+    "constrained_choice_decode": true
+  }
+}

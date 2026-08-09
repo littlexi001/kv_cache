@@ -1,0 +1,7 @@
+{
+  "__extends": "riskkv_task_policy_v437_source_router_v428_20260712.json",
+  "__comment": "v439 RiskKV-Pure: preserve v437 source routing and sparse KV selection, but force every sample through standard LLM prefill/decode by disabling direct structured answers after all source-policy overlays.",
+  "__runtime_constraints": {
+    "direct_structured_answer": false
+  }
+}

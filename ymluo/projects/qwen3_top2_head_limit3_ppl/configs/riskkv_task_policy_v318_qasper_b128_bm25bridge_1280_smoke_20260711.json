@@ -1,0 +1,36 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_bm25_bridge_flow",
+    "ours_bm25_mix": 0.9,
+    "semantic_weight": 0.35,
+    "lexical_weight": 0.45,
+    "entity_weight": 0.15,
+    "structural_weight": 0.05,
+    "coverage_weight": 0.0,
+    "mmr_lambda": 0.78,
+    "ours_multiscale_group_pages": 3,
+    "ours_multiscale_weight": 0.18,
+    "ours_flow_neighbor_radius": 1,
+    "ours_flow_neighbor_budget_fraction": 0.16,
+    "ours_flow_neighbor_min_score": 0.10,
+    "ours_flow_score_smooth_weight": 0.14,
+    "ours_flow_anchor_boost": 0.20,
+    "ours_bridge_budget_fraction": 0.18,
+    "ours_bridge_min_score": 0.0,
+    "ours_bridge_max_terms": 28,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.14,
+    "coverage_certificate_min_terms": 1,
+    "coverage_mmr_weight": 0.20,
+    "coverage_mmr_max_terms": 12
+  },
+  "qasper": {
+    "budget_tokens": 1280,
+    "page_tokens": 128,
+    "score_risk": false
+  }
+}

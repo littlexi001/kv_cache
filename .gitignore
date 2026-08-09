@@ -31,6 +31,36 @@ skills/writing-explanatory-reports
 .DS_Store
 logs/
 *.html
+*.log
+
+# Repository-wide generated workspaces and third-party checkouts
+/tmp/
+/output/
+/outputs/
+/artifacts/
+/external/
+/.tmp_*/
+/tmp_*
+bbb.txt
+
+# Per-project generated experiment state
+ymluo/projects/*/.venv*/
+ymluo/projects/*/artifacts/
+ymluo/projects/*/results/
+ymluo/projects/*/tmp/
+ymluo/projects/*/checkpoints/
+ymluo/projects/*/data/
+ymluo/projects/*/analysis/**/raw/
+ymluo/projects/*/analysis/**/*.csv
+ymluo/projects/*/analysis/**/*.jsonl
+ymluo/projects/*/analysis/**/pid
+ymluo/projects/*/analysis/**/COMPLETE
+ymluo/projects/*/analysis/**/FAILED
+ymluo/projects/*/analysis/**/done.txt
+ymluo/papers/*/tmp/
+ymluo/papers/*/build/
+ymluo/papers/*/build_zh/
+ymluo/doc/1b_context_search_research_exploration/evidence/
 
 # Temporary analysis / visualization outputs
 tmp_*/

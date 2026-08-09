@@ -1,0 +1,10 @@
+{
+  "name": "deep_highfreq_soft025",
+  "kind": "band_layer_scale",
+  "layer_mode": "hard_deep",
+  "deep_layer_fraction": 0.3333333333,
+  "pair_start": 0,
+  "pair_end_exclusive": 12,
+  "modified_scale": 0.25,
+  "description": "Slow F0-F11 to 25% in the deepest third without deleting them."
+}

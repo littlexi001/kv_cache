@@ -1,0 +1,12 @@
+{
+  "__extends": "riskkv_operator_contract_v468_lpcm_choice_20260714.json",
+  "__comment": "Frozen budget-change router runtime: predict whether the base action changes at 2K, then execute exactly one selected action.",
+  "*": {
+    "ours_action_router_tasks": "lbv2_code_repository_understanding,lbv2_long_in_context_learning,lbv2_long_structured_data_understanding,lbv2_long_dialogue_history_understanding,lbv2_multi_document_qa,lbv2_single_document_qa",
+    "ours_action_router_mode": "budget_change_v1",
+    "ours_learned_router_model_path": "outputs/20260714_lbv2_budget_change_router_frozen/router.pkl",
+    "ours_learned_router_action_policy_json": "configs/riskkv_budget_change_actions_v474_20260714.json",
+    "ours_learned_router_default_action": "base",
+    "ours_learned_router_confidence_threshold": -1.0
+  }
+}

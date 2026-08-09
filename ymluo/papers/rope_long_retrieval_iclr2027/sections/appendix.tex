@@ -11,12 +11,14 @@ For pair $i$, define
     \sin\alpha&\cos\alpha
   \end{bmatrix}.
 \end{equation}
-RoPE applies $R(t\omega_i)$ to the query pair and $R(j\omega_i)$ to the key
-pair.  Orthogonality and closure imply
+Here $\omega_i$ is the active module's effective inverse frequency
+($\theta^{-2i/d}$ only when frequency scaling is disabled), and the
+implementation applies $\kappa R(t\omega_i)$ to the query pair and
+$\kappa R(j\omega_i)$ to the key pair.  Orthogonality and closure imply
 \begin{align}
-  [R(t\omega_i)q_i]^\top[R(j\omega_i)k_i]
-  &=q_i^\top R(-t\omega_i)R(j\omega_i)k_i\\
-  &=q_i^\top R((j-t)\omega_i)k_i.
+  [\kappa R(t\omega_i)q_i]^\top[\kappa R(j\omega_i)k_i]
+  &=\kappa^2q_i^\top R(-t\omega_i)R(j\omega_i)k_i\\
+  &=\kappa^2q_i^\top R((j-t)\omega_i)k_i.
 \end{align}
 Let $\Delta=t-j$.  Then $j-t=-\Delta$, so
 \begin{equation}
@@ -27,68 +29,68 @@ Let $\Delta=t-j$.  Then $j-t=-\Delta$, so
   \end{bmatrix}.
 \end{equation}
 Multiplying by $q_i=[q_{i,x},q_{i,y}]^\top$ and
-$k_i=[k_{i,x},k_{i,y}]^\top$ yields
+$k_i=[k_{i,x},k_{i,y}]^\top$ yields the pair contribution
 \begin{align}
-  q_i^\top R(-\Delta\omega_i)k_i
-  &=(q_{i,x}k_{i,x}+q_{i,y}k_{i,y})\cos(\Delta\omega_i)\\
-  &\quad +(q_{i,x}k_{i,y}-q_{i,y}k_{i,x})\sin(\Delta\omega_i),
+  s_i(\Delta)=\kappa^2q_i^\top R(-\Delta\omega_i)k_i
+  &=\kappa^2\big[(q_{i,x}k_{i,x}+q_{i,y}k_{i,y})\cos(\Delta\omega_i)\\
+  &\quad +(q_{i,x}k_{i,y}-q_{i,y}k_{i,x})\sin(\Delta\omega_i)\big],
 \end{align}
 which is \cref{eq:pair-score}.
 
-\subsection{Amplitude--phase form}
+\subsection{Amplitude--phase form and filler shift}
 
 Let $A_i=\rho_i\cos\psi_i$ and $B_i=\rho_i\sin\psi_i$.  Then
 \begin{align}
-  A_i\cos x+B_i\sin x
-  &=\rho_i(\cos\psi_i\cos x+\sin\psi_i\sin x)\\
-  &=\rho_i\cos(x-\psi_i).
+  \kappa^2(A_i\cos x+B_i\sin x)
+  &=\kappa^2\rho_i(\cos\psi_i\cos x+\sin\psi_i\sin x)\\
+  &=\kappa^2\rho_i\cos(x-\psi_i).
 \end{align}
-This identity clarifies the scope of our claim.  Each nonzero pair spans
-positive and negative contributions over a complete phase cycle.  It does not
-follow that the aggregate score must become negative at any particular
-distance, because different frequencies and offsets can cancel.
+Each nonzero pair spans positive and negative contributions over a complete
+phase cycle.  The aggregate need not become negative at any particular
+distance because frequencies and offsets can cancel.
 
-\subsection{Filler-induced score change}
-
-After inserting $m$ tokens, $\Delta' = \Delta+m$.  Applying
-$\cos x-\cos y=-2\sin((x+y)/2)\sin((x-y)/2)$ and
-$\sin x-\sin y=2\cos((x+y)/2)\sin((x-y)/2)$ gives
+After inserting $m_f$ tokens, $\Delta'=\Delta+m_f$.  Applying the sum-to-product
+identities gives
 \begin{align}
-  s_i(\Delta+m)-s_i(\Delta)
-  &=2\sin\left(\frac{m\omega_i}{2}\right)
+  s_i(\Delta+m_f)-s_i(\Delta)
+  &=2\kappa^2\sin\left(\frac{m_f\omega_i}{2}\right)
   \bigg[
-  -A_i\sin\left(\frac{(2\Delta+m)\omega_i}{2}\right)\\
-  &\hspace{38mm}+B_i\cos\left(\frac{(2\Delta+m)\omega_i}{2}\right)
+  -A_i\sin\left(\frac{(2\Delta+m_f)\omega_i}{2}\right)\\
+  &\hspace{38mm}+B_i\cos\left(\frac{(2\Delta+m_f)\omega_i}{2}\right)
   \bigg].
 \end{align}
 Cauchy--Schwarz bounds the bracket by $\sqrt{A_i^2+B_i^2}=\rho_i$, producing
 \cref{eq:pair-bound}.  The local derivative is
 \begin{equation}
   \frac{\partial s_i}{\partial\Delta}
-  =\omega_i[-A_i\sin(\Delta\omega_i)+B_i\cos(\Delta\omega_i)].
+  =\kappa^2\omega_i[-A_i\sin(\Delta\omega_i)+B_i\cos(\Delta\omega_i)].
 \end{equation}
 
 \section{Exact cross-layer finite differences}
 \label{app:layerwise}
 
-Fixed model parameters define an exact function from the complete prompt to
-the output, but the final query-row input difference alone is insufficient.
-Let $X_0=(H_0,P,M)$ include all token states, positions, and the mask.  With
-layer maps $\Phi_l$ and query-row extractor $\pi_q$,
+Fixed parameters define an exact function from the complete prompt to output,
+but the final query-row input difference alone is insufficient.  Let
+$X_0=(H_0,P,M)$ include all token states, positions, and the mask.  With layer
+maps $\Phi_l$ and query-row extractor $\pi_q$,
 \begin{equation}
-  z(X_0)=W_U\mathcal N_f\left(\pi_q[Phi_{L-1}\circ\cdots\circ\Phi_0(X_0)]\right).
+  z(X_0)=W_U\mathcal N_f\left(
+  \pi_q[\Phi_{L-1}\circ\cdots\circ\Phi_0(X_0)]\right).
 \end{equation}
 Evaluating this expression is the forward pass; there is no scalar shortcut
 from $\|\delta h_0\|$ to the output.
 
-For BF16 residual addition, let $Q_b$ denote rounding.  The hardware-level
-recurrence is
+For each case $c$, evaluation yields complete state $H_{l,c}$.  Define
+$h_{l,c}=\pi_qH_{l,c}$ and
+$\mathcal A_{l,c}=\pi_q\mathcal A_l(H_{l,c};P_c,M_c)$.  For BF16 residual
+addition, let $Q_b$ denote rounding.  The hardware-level Query-row recurrence is
 \begin{align}
   u_{l,c}&=Q_b(h_{l,c}+\mathcal A_{l,c}),\\
+  \mathcal M_{l,c}&=\mathcal M_l(u_{l,c}),\\
   h_{l+1,c}&=Q_b(u_{l,c}+\mathcal M_{l,c}),\qquad c\in\{S,T\}.
 \end{align}
-Subtracting the two separately rounded trajectories exactly reconstructs the
-recorded output in every layer.  Ignoring rounding, the real-vector identity
+Subtracting the separately rounded trajectories exactly reconstructs every
+recorded layer.  Ignoring rounding, the real-vector identity
 \cref{eq:layer-difference} has up to 5.95\% relative error in this BF16 run.
 
 \begin{table}[h]
@@ -115,15 +117,12 @@ recorded output in every layer.  Ignoring rounding, the real-vector identity
   \end{tabular}
 \end{table}
 
-The real-vector sum differs slightly from the recorded BF16 output because it
-omits two rounding operations.  Reintroducing those operations gives zero
-maximum error for every listed layer.  The three component norms cannot be
-added: for vectors $x,y,z$,
+Reintroducing the two rounding operations gives zero maximum error for every
+listed layer.  Component norms cannot be added: for vectors $x,y,z$,
 \begin{equation}
   \|x+y+z\|_2^2=\|x\|_2^2+\|y\|_2^2+\|z\|_2^2
   +2\langle x,y\rangle+2\langle x,z\rangle+2\langle y,z\rangle.
 \end{equation}
-
 After the last layer, the exact margin change is
 \begin{equation}
   \delta\gamma=
@@ -133,15 +132,142 @@ After the last layer, the exact margin change is
 The FP32 readout reconstructs the failed-run margin with
 $3.81\times10^{-6}$ absolute error and the gold probability with
 $3.73\times10^{-8}$ error.  A first-order JVP of only the final RMSNorm has
-9.86\% relative vector error, illustrating why we label Jacobian products as
-local approximations rather than exact equalities.
+9.86\% relative vector error, which is why Jacobian products are local
+approximations rather than exact finite changes.
 
-\section{Full method results}
-\label{app:full-results}
+\section{Answer-directed score-utility derivation and causal audit}
+\label{app:closure}
+
+Starting from $\bar v=\sum_p a_pv_p$ and the softmax Jacobian,
+\begin{align}
+  \frac{\partial\bar v}{\partial s_j}
+  &=\sum_p v_p a_p(\mathbf 1[p=j]-a_j)\\
+  &=a_jv_j-a_j\sum_p a_pv_p
+  =a_j(v_j-\bar v).
+  \label{eq:appendix-centered-value}
+\end{align}
+Multiplying by $W_O$ and applying the chain rule to the final margin yields
+\cref{eq:centered-value-derivative,eq:directed-utility}.  Taylor expansion then
+gives \cref{eq:first-order-margin}.  The derivative is exact at
+$\epsilon=0$; prediction of a finite $\epsilon$ has the stated
+$O(\epsilon^2)$ remainder.
 
 \begin{table}[h]
-  \caption{Paired NLL comparison of \methodpost against Full RoPE and exact
-  post-RoPE Top-2\%.  A negative interval favors \methodpost.}
+  \centering
+  \small
+  \caption{Additional closure and execution-path audits for the evidence
+  subset.  Intercepts have seed-cluster 95\% CIs.}
+  \label{tab:closure-audit}
+  \begin{tabular}{@{}rccccc@{}}
+    \toprule
+    Length & Events & Intercept [95\% CI] & $R^2$ & MAE & Native drift \\
+    \midrule
+    8K  & 16 & 0.0032 [$-0.0142$, 0.0316] & 0.9221 & 0.0361 & 0.2838 \\
+    16K & 16 & 0.0083 [$-0.0119$, 0.0285] & 0.9461 & 0.0333 & 0.2388 \\
+    24K & 16 & $-0.0084$ [$-0.0280$, 0.0158] & 0.8763 & 0.0434 & 0.4638 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The instrumented baseline and same-path no-op have exactly zero margin/NLL
+drift in every case.  ``Native drift'' is the maximum absolute pair-margin
+difference between the custom no-op and native kernel; top-one agreement is
+8/8 at every length.  The target selector ranks
+$|\max(\Gamma_j,0)\,\partial m/\partial s_j|$ and is therefore oracle.  Heads
+and coordinates are never bootstrapped as
+independent samples.  The 32K attempt has no result because both 24GB devices
+OOM at native eager GQA \texttt{repeat\_kv} while requesting 256 MiB.
+
+\section{Proof of single-cache rotary realizability}
+\label{app:realizability}
+
+We prove Theorem~\ref{thm:cache-realizability} plane by plane in the circle group
+$\mathbb R/(2\pi\mathbb Z)$.  Any operator-realizable correction has the
+separate operators in \cref{eq:cache-operator}.  Every element of
+$\mathrm{SO}(2)$ has an angle modulo $2\pi$, so write
+$\mathsf Q_{u,r}=R(\alpha_{u,r})$ and
+$\mathsf K_{g,j,r}=R(\beta_{g,j,r})$.  Orthogonality, commutativity in
+$\mathrm{SO}(2)$, and the rotation group law give
+\begin{align}
+  (q^\star_{u,r})^\top k^\star_{g,j,r}
+  &=q_{u,r}^\top R(-t\omega_r)\mathsf Q_{u,r}^\top
+    \mathsf K_{g,j,r}R(j\omega_r)k_{g,j,r}\\
+  &=q_{u,r}^\top R((j-t)\omega_r+\beta_{g,j,r}-\alpha_{u,r})k_{g,j,r}.
+  \label{eq:operator-to-separable}
+\end{align}
+Thus operator realizability implies
+$\delta_{u,j,r}\equiv\beta_{g,j,r}-\alpha_{u,r}$.  Conversely, given such a
+factorization, set $\mathsf Q_{u,r}=R(\alpha_{u,r})$ and
+$\mathsf K_{g,j,r}=R(\beta_{g,j,r})$ in \cref{eq:cache-operator};
+\cref{eq:operator-to-separable} realizes the target phase, while each
+$k^\star_{g,j,r}$ is independent of future queries and shared within group
+$g$.  This proves operator realizability if and only if separability.
+
+It remains to prove that separability is equivalent to the four-cycle
+condition.  Substitution gives
+\begin{align}
+  &\delta_{u,i,r}+\delta_{v,j,r}
+  -\delta_{u,j,r}-\delta_{v,i,r}\\
+  &=(\beta_{g,i,r}-\alpha_{u,r})
+   +(\beta_{g,j,r}-\alpha_{v,r})
+   -(\beta_{g,j,r}-\alpha_{u,r})
+   -(\beta_{g,i,r}-\alpha_{v,r})=0.
+\end{align}
+Thus separability implies every four-cycle vanishes.
+
+Conversely, suppose every four-cycle vanishes.  Fix $u_0,j_0$ and define
+\begin{equation}
+  \beta_{g,j,r}=\delta_{u_0,j,r},
+  \qquad
+  \alpha_{u,r}=\delta_{u_0,j_0,r}-\delta_{u,j_0,r}.
+\end{equation}
+The cycle equation for $(u,u_0,j,j_0)$ rearranges to
+\begin{equation}
+  \delta_{u,j,r}=\delta_{u_0,j,r}
+  -\delta_{u_0,j_0,r}+\delta_{u,j_0,r}
+  =\beta_{g,j,r}-\alpha_{u,r}.
+\end{equation}
+Hence the cycle condition is sufficient for separability and therefore for the
+operator construction.  The factorization is invariant to the common gauge
+$\alpha_{u,r}\mapsto\alpha_{u,r}+c_r$ and
+$\beta_{g,j,r}\mapsto\beta_{g,j,r}+c_r$.  The conclusion is scoped to a
+complete Query--fixed-prefix rectangle, a prefix-frozen single-basis cache,
+candidate-independent Query rotation, and phase-only $\mathrm{SO}(2)$
+operations.  On a sparse support, the alternating signed phase sum must vanish
+on every cycle of the corresponding bipartite graph; each disconnected
+component has its own common-phase gauge.  The theorem does not rule out nonlinear kernels, Key
+recomputation, or multiple cached representations; it makes their extra
+computation or storage explicit.
+
+\section{Diagnostic pre-RoPE proposal baseline}
+\label{app:diagnostic-retrieval}
+
+For diagnosis, define a content-only proposal score
+\begin{equation}
+  s^C(t,j)=\frac{\preq_t^\top\prek_j}{\sqrt d}.
+  \label{eq:content-score}
+\end{equation}
+At total budget $B=\lceil\beta N\rceil$, local window $\mathcal L_W$, and sink
+set $\mathcal S$, the candidate set is
+\begin{equation}
+  \mathcal C_{l,h}=\mathcal S\cup\mathcal L_W\cup
+  \TopK_{B-|\mathcal S|-|\mathcal L_W|}
+  \{s^C_{l,h}(t,j):j<t-W,\ j\notin\mathcal S\}.
+  \label{eq:candidate-set}
+\end{equation}
+Selected original K/V are then consumed with native post-RoPE scores:
+\begin{equation}
+  o^{\mathrm{diag}}_{l,h}(t)=
+  \sum_{j\in\mathcal C_{l,h}}
+  \frac{\exp s^R_{l,h}(t,j)}
+  {\sum_{p\in\mathcal C_{l,h}}\exp s^R_{l,h}(t,p)}v_{l,h,j}.
+  \label{eq:diagnostic-attention}
+\end{equation}
+The frozen pilot uses $\beta=0.02$, $W=128$, and 16 sink tokens.
+
+\begin{table}[h]
+  \caption{Paired NLL comparison of the diagnostic proposal against Full RoPE
+  and exact post-RoPE Top-2\%.  A negative interval favors the diagnostic.}
   \centering
   \small
   \begin{tabular}{r rr rr}
@@ -160,79 +286,103 @@ local approximations rather than exact equalities.
   \end{tabular}
 \end{table}
 
-The quality ratio is $\exp(\mathrm{NLL}_{\rm baseline}-
-\mathrm{NLL}_{\rm method})$.  It should not be described as generic language
-model quality; it refers only to the gold first answer token in this controlled
-retrieval task.
+These NF4 results use 24 held-out seeds per length and a separate protocol from
+the BF16 causal audit.  The quality ratio is
+$\exp(\mathrm{NLL}_{\rm baseline}-\mathrm{NLL}_{\rm diagnostic})$ for the gold
+first answer token only.  The current proposal scans all pre-RoPE Keys, so it
+does not demonstrate acceleration.  SALS directly precedes this
+proposal/consumption structure~\citep{mu2025sals}; the table is evidence of
+recoverability, not method novelty.
 
 \section{Data and intervention protocol}
 \label{app:protocol}
 
-\paragraph{Single-token entities.}
-Candidate English words are filtered to satisfy three constraints: the bare
-word is exactly one token; occurrences in the rule and query templates map to
-one stable contextual token; and the word does not occur in any filler
-paragraph.  A seeded shuffle selects three words for each example.
+\paragraph{Analytic phase case.}
+The first-layer identity uses seed 0, NF4-loaded Qwen3-8B with BF16 compute, and
+YaRN factor 2.  Three stable one-token English entities form two verified rules
+$c_0\rightarrow c_1\rightarrow c_2$ near the prefix; random English text fills
+the body.  The same layer-0 query/evidence token projections are frozen at
+relative distances 7,996, 16,188, 32,572, and 65,340.  This protocol supplies
+the frequency-pair reconstruction only.
 
-\paragraph{Prompt construction.}
-The two evidence lines have the form ``VERIFIED RULE: IF $c_i$ IS ACTIVE THEN
-$c_{i+1}$'' and are inserted as one block near body token 256.  The end query
-states the start code, asks for two verified transitions, instructs the model
-to ignore notes and decoy rules, and requires one final code.  The present main
-suite contains no conflicting chain; conflict robustness is a planned
-extension.
+\paragraph{Extended-position trajectory.}
+The $143{,}424$-to-$143{,}488$ replay uses unquantized Qwen3-8B, BF16, SDPA, and
+YaRN factor 4.  Its gold line is ``Xiaoming's age is nine years.''; the body
+comes from a fixed 144K stream whose full version interleaves $4{,}607$ records
+of the form ``Alice's age is four years.'' (with names and wrong ages rotated)
+and single-token period filler; the terminal Query requests one English number
+word.  The short run uses the first $143{,}401$ body tokens.  Before appending
+the identical Query text, the long run adds the next 64: 47 periods and 17
+distractor-record tokens, including 2 age tokens.  Thus the
+case changes both gold--Query distance and the available K/V set, and its gold
+output token is \texttt{nine}.
 
-\paragraph{Selection metrics.}
-Evidence-token recall counts every tokenizer token in both rule-line spans.
-This deliberately strict metric includes structural words and punctuation,
-not only entity tokens.  Chain completion is often more task-aligned: it asks
-whether a layer--head candidate row contains at least one token from each
-evidence line.  Neither metric alone proves causal use; \GoldPPL and patching
-provide complementary evidence.
+\paragraph{Population causal audit.}
+The native-window BF16 audit uses a different, source-conditioned single-hop
+age task.  Its gold sentence is ``The school register lists Xiaoming's age as
+nine years.''; a plausible conflict says that a family note lists a different
+age; lexical distractors are school-register entries about other people;
+period tokens fill the body; and the terminal Query is ``According to the school
+register, what is Xiaoming's age? Reply with exactly one digit and nothing else.
+Answer:''.  The conflict value and sampled coordinates vary by seed, while the
+source constraint keeps gold and plausible conflict answer-level roles
+distinct; the gold output token is digit \texttt{9}.
+
+\paragraph{Held-out retrieval diagnostic.}
+The NF4 suite in \cref{app:diagnostic-retrieval} is a fourth, separate run.
+Candidate English entity words must be one stable tokenizer token in bare,
+rule, and Query contexts and must not occur in random English filler.  A seeded
+shuffle selects entities, verified two-hop rules are placed near the beginning,
+and a concise terminal Query requests the answer token.  It contains no conflict
+chain and is not pooled with the three mechanism protocols above.
+
+\paragraph{Singleton audit.}
+Each case records native and instrumented baselines, an identical $\epsilon=0$
+no-op, target and matched-random finite interventions, the analytic derivative,
+prefix-cache hashes, and replay metadata.  Target selection uses
+$|\max(\Gamma_j,0)\,\partial m/\partial s_j|$ only as an oracle diagnostic.  In
+the present evidence audit, selected targets are decisive answer-bearing tokens,
+whereas their matched-random evidence coordinates are not; the latter therefore
+check execution numerics but do not match magnitude or signal-to-noise.  All
+reported uncertainty resamples seeds, not layer--head--token rows.
+
+\paragraph{Class-contrast audit.}
+The gold--conflict comparison in \cref{tab:gold-conflict} uses baseline sampled
+coordinates rather than the singleton oracle targets.  Each seed/class contains
+$2\times36\times32=2304$ rows from two sampled positions, 36 layers, and 32
+Query heads.  We average these rows within seed and class before bootstrapping seeds.
+Grid-envelope suppression is $\Gamma_j$ from
+\cref{eq:grid-envelope-suppression}.  Direct centered-OV omits every later-layer
+Jacobian and is only a local proxy for $U_{l,h,j}$.
 
 \paragraph{Activation patching.}
-The short and long diagnostic prompts are run independently and all query-row
-residual inputs are stored.  For patch layer $l$, the failed run is repeated
-with its query residual input at $l$ replaced by the successful run's state;
-all remaining computation and the long prompt's K/V history are unchanged.
-We report the resulting gold probability and logit margin.  The current patch
-sweep is a detailed single-transition case study; a registered multi-example
-replication is required for a population-level causal claim.
-
-\section{Pseudocode}
-\label{app:pseudocode}
-
-\begin{verbatim}
-Inputs: pre-RoPE query q, pre-RoPE keys Kpre,
-        original post-RoPE keys Kpost, values V,
-        budget B, local window W, sink count S
-
-C_sink   <- positions [0, S)
-C_local  <- most recent W history positions
-C_remote <- TopK(q @ Kpre.T, B - |C_sink| - |C_local|,
-                 excluding sinks and local positions)
-C        <- unique(C_sink union C_local union C_remote union current)
-
-scores   <- exact_post_rope_qk(q, Kpost[C]) / sqrt(d)
-weights  <- softmax(scores)
-output   <- weights @ V[C]
-\end{verbatim}
+The $143{,}424$- and $143{,}488$-token age prompts are run independently and all
+query-row residual inputs are stored.  At patch layer $l$, the failed run is
+repeated with its query residual input replaced by the successful state; all
+later computation and the long prompt's K/V history remain unchanged.  The
+current sweep is one detailed transition, so population patching and a
+same-protocol full-chain mediation estimate remain open.
 
 \section{Submission-critical open experiments}
 \label{app:todos}
 
 \begin{enumerate}
-  \item Public long-context retrieval and multi-hop benchmarks with matched
-  Full and post-RoPE sparse baselines.
-  \item At least one additional architecture and a clean separation between
-  native-window and position-extended tests.
-  \item Short-context language modeling, local order, and broad-generation
-  controls.
-  \item Approximate pre-RoPE indexing with recall, latency, throughput, memory,
-  and update-cost measurements.
-  \item A larger preregistered 64K sample, because current primary intervals
-  narrowly cross zero.
-  \item Multi-example phase intervention, denominator-only controls, and
-  activation patching to quantify causal effect sizes beyond case studies.
+  \scriptsize
+  \setlength{\itemsep}{0pt}
+  \setlength{\parskip}{0pt}
+  \setlength{\parsep}{0pt}
+  \setlength{\topsep}{0pt}
+  \setlength{\partopsep}{0pt}
+  \item Repeat the no-op-matched causal audit on another RoPE family and a
+  native long-context checkpoint.
+  \item Counterbalance evidence position, conflict value, record order, filler,
+  block boundary, and query template; then evaluate public and natural tasks.
+  \item Estimate phase-only, denominator-only, Value, residual, and later-Query
+  mediated effects under a frozen intervention plan.
+  \item Implement an exactly validated grouped-GQA control that avoids
+  materializing repeated KV heads before retrying the 32K BF16 audit.
+  \item Replicate activation patching over many successful and failed
+  transitions with negative controls.
+  \item If diagnostic sparse retrieval remains in the paper, match direct
+  baselines and report actual index, latency, memory, and gather cost.
 \end{enumerate}
-

@@ -1,0 +1,181 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "__overlay_all_tasks": {
+    "sink_tokens": 32,
+    "recent_tokens": 32,
+    "page_tokens": 16,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "ours_idf_mix": 0.55,
+    "ours_multiscale_group_pages": 8,
+    "ours_multiscale_weight": 0.24,
+    "coverage_mmr_weight": 0.28,
+    "coverage_mmr_max_terms": 16,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.34,
+    "coverage_certificate_min_terms": 1,
+    "full_fallback": false,
+    "score_risk": false
+  },
+  "tasks": {
+    "narrativeqa": {
+      "budget_tokens": 256,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 48
+    },
+    "qasper": {
+      "budget_tokens": 256,
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.22,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 64
+    },
+    "multifieldqa_en": {
+      "budget_tokens": 256,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 32
+    },
+    "hotpotqa": {
+      "budget_tokens": 384,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.36,
+      "graph_bridge_seed_pages": 6,
+      "graph_bridge_max_terms": 20,
+      "graph_bridge_min_score": 0.0,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0,
+      "short_decode": true,
+      "short_decode_max_tokens": 32
+    },
+    "2wikimqa": {
+      "budget_tokens": 384,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.36,
+      "graph_bridge_seed_pages": 6,
+      "graph_bridge_max_terms": 20,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0,
+      "short_decode": true,
+      "short_decode_max_tokens": 32
+    },
+    "musique": {
+      "budget_tokens": 512,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.42,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 24,
+      "anchor_window": true,
+      "anchor_window_tokens": 64,
+      "coarse_to_fine": true,
+      "coarse_to_fine_group_pages": 8,
+      "coarse_to_fine_candidate_multiplier": 3.0,
+      "short_decode": true,
+      "short_decode_max_tokens": 32
+    },
+    "qmsum": {
+      "budget_tokens": 512,
+      "page_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "scorer": "hybrid_late_mmr_multiscale_flow",
+      "short_decode": true,
+      "short_decode_max_tokens": 96,
+      "coverage_certificate": false
+    },
+    "lcc": {
+      "budget_tokens": 256,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "page_tokens": 128,
+      "short_decode": true,
+      "short_decode_max_tokens": 64,
+      "coverage_certificate": false
+    },
+    "repobench-p": {
+      "budget_tokens": 256,
+      "sink_tokens": 32,
+      "recent_tokens": 192,
+      "page_tokens": 64,
+      "scorer": "hybrid_late_mmr_multiscale_flow",
+      "short_decode": true,
+      "short_decode_max_tokens": 16,
+      "output_verifier": true,
+      "retry_budget_tokens": 1024,
+      "coverage_certificate": false
+    },
+    "triviaqa": {
+      "budget_tokens": 256,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "page_tokens": 128,
+      "short_decode": true,
+      "short_decode_max_tokens": 4,
+      "coverage_certificate": false
+    },
+    "samsum": {
+      "budget_tokens": 384,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "page_tokens": 128,
+      "short_decode": true,
+      "short_decode_max_tokens": 32,
+      "coverage_certificate": false
+    },
+    "gov_report": {
+      "budget_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "multi_news": {
+      "budget_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "trec": {
+      "budget_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "passage_count": {
+      "budget_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "passage_retrieval_en": {
+      "budget_tokens": 128,
+      "sink_tokens": 64,
+      "recent_tokens": 64,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    }
+  }
+}

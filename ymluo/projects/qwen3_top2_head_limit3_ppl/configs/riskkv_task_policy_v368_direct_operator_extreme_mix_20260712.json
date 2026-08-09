@@ -1,0 +1,86 @@
+{
+  "__extends": "riskkv_task_policy_v365_ultra_skeleton_all_20260712.json",
+  "tasks": {
+    "gov_report": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 512,
+      "short_decode": true,
+      "short_decode_max_tokens": 0
+    },
+    "multi_news": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 256,
+      "short_decode": true,
+      "short_decode_max_tokens": 0
+    },
+    "qmsum": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 96,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "samsum": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "direct_summary_max_words": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 0,
+      "coverage_certificate": false
+    },
+    "trec": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0
+    },
+    "passage_count": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0
+    },
+    "passage_retrieval_en": {
+      "budget_tokens": 64,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "direct_structured_answer": true,
+      "short_decode": true,
+      "short_decode_max_tokens": 0
+    },
+    "triviaqa": {
+      "budget_tokens": 96,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 4,
+      "coverage_certificate": true,
+      "coverage_certificate_budget_fraction": 0.50
+    },
+    "lcc": {
+      "budget_tokens": 128,
+      "sink_tokens": 32,
+      "recent_tokens": 32,
+      "page_tokens": 64,
+      "short_decode": true,
+      "short_decode_max_tokens": 48,
+      "coverage_certificate": false
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "__extends": "riskkv_task_policy_v396_m100_task_knapsack05_exact_20260712.json",
+  "__comment": "v424: latency-aware frontier router. It uses the same frontier action space as v421, but labels actions with both KV and online-latency penalties.",
+  "__overlay_all_tasks": {
+    "action_router": true,
+    "ours_action_router_mode": "learned_budget_overlay_v1",
+    "ours_learned_router_model_path": "outputs/riskkv_v19_v424_latency_frontier_router060_20260712/model.pkl",
+    "ours_learned_router_action_policy_json": "outputs/riskkv_v19_v424_latency_frontier_router060_20260712/action_policy.json",
+    "ours_learned_router_confidence_threshold": 0.42,
+    "ours_learned_router_default_action": "reference",
+    "ours_learned_router_base_action_router_mode": "off"
+  }
+}

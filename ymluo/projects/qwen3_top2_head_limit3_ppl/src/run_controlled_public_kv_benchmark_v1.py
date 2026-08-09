@@ -5,6 +5,7 @@ import csv
 import fnmatch
 import json
 import math
+import pickle
 import random
 import re
 import string
@@ -33,6 +34,101 @@ from evaluate_qwen3_top2_head_limit3_ppl import (  # noqa: E402
     pick_input_device,
     resolve_dtype,
 )
+
+
+_ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD: Any | None = None
+_ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD: Any | None = None
+
+
+def _fit_layerwise_causal_mask(attention_mask: torch.Tensor | None, key_length: int) -> torch.Tensor | None:
+    if attention_mask is None or attention_mask.ndim != 4:
+        return attention_mask
+    mask_length = int(attention_mask.shape[-1])
+    key_length = int(key_length)
+    if mask_length == key_length:
+        return attention_mask
+    if mask_length > key_length:
+        return attention_mask[..., mask_length - key_length :]
+    pad_length = key_length - mask_length
+    pad_shape = tuple(attention_mask.shape[:-1]) + (pad_length,)
+    if attention_mask.dtype == torch.bool:
+        pad = torch.ones(pad_shape, dtype=attention_mask.dtype, device=attention_mask.device)
+    else:
+        pad = torch.zeros(pad_shape, dtype=attention_mask.dtype, device=attention_mask.device)
+    return torch.cat((pad, attention_mask), dim=-1)
+
+
+def _layerwise_llama_eager_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    scaling: float,
+    dropout: float = 0.0,
+    **kwargs: Any,
+) -> tuple[torch.Tensor, torch.Tensor | None]:
+    if _ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD is None:
+        raise RuntimeError("Llama eager attention patch is not installed.")
+    attention_mask = _fit_layerwise_causal_mask(attention_mask, int(key.shape[-2]))
+    return _ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD(
+        module,
+        query,
+        key,
+        value,
+        attention_mask,
+        scaling,
+        dropout=dropout,
+        **kwargs,
+    )
+
+
+def _layerwise_llama_sdpa_attention_forward(
+    module: torch.nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: torch.Tensor | None,
+    dropout: float = 0.0,
+    scaling: float | None = None,
+    is_causal: bool | None = None,
+    **kwargs: Any,
+) -> tuple[torch.Tensor, None]:
+    if _ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD is None:
+        raise RuntimeError("Llama SDPA attention patch is not installed.")
+    attention_mask = _fit_layerwise_causal_mask(attention_mask, int(key.shape[-2]))
+    return _ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD(
+        module,
+        query,
+        key,
+        value,
+        attention_mask,
+        dropout=dropout,
+        scaling=scaling,
+        is_causal=is_causal,
+        **kwargs,
+    )
+
+
+def install_llama_layerwise_attention_mask_patch() -> bool:
+    global _ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD, _ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD
+    try:
+        import transformers.models.llama.modeling_llama as modeling_llama
+    except Exception:
+        return False
+    if _ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD is None:
+        _ORIGINAL_LLAMA_EAGER_ATTENTION_FORWARD = getattr(modeling_llama, "eager_attention_forward")
+        setattr(modeling_llama, "eager_attention_forward", _layerwise_llama_eager_attention_forward)
+    if hasattr(modeling_llama, "ALL_ATTENTION_FUNCTIONS"):
+        attention_functions = modeling_llama.ALL_ATTENTION_FUNCTIONS
+        try:
+            attention_functions["eager"] = _layerwise_llama_eager_attention_forward
+        except Exception:
+            pass
+        if _ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD is None and "sdpa" in attention_functions:
+            _ORIGINAL_LLAMA_SDPA_ATTENTION_FORWARD = attention_functions["sdpa"]
+            attention_functions["sdpa"] = _layerwise_llama_sdpa_attention_forward
+    return True
 
 
 LONG_BENCH_PROMPTS = {
@@ -239,10 +335,16 @@ class Config:
     output_dir: str
     benchmarks: str
     longbench_tasks: str
+    longbench_v2_domains: str
     ruler_tasks: str
     max_samples_per_task: int
     max_context_tokens: int
     max_new_tokens_override: int
+    force_decode_tokens: int
+    constrained_choice_decode: bool
+    sparse_query_tokenwise: bool
+    sparse_query_physical_mask: bool
+    sparse_position_mode: str
     seed: int
     methods: str
     budget_tokens: int
@@ -270,6 +372,14 @@ class Config:
     ours_coverage_risk_min_terms: int
     ours_coverage_risk_budget_tokens: int
     anchor_pages_per_key: int
+    ours_anchor_window_tasks: str
+    ours_anchor_window_tokens: int
+    ours_span_repack_tasks: str
+    ours_span_repack_window_tokens: int
+    ours_span_repack_budget_fraction: float
+    ours_span_repack_top_pages: int
+    ours_span_repack_min_score: float
+    ours_span_repack_score_mode: str
     ours_flow_neighbor_radius: int
     ours_flow_neighbor_budget_fraction: float
     ours_flow_neighbor_min_score: float
@@ -278,6 +388,8 @@ class Config:
     ours_multiscale_group_pages: int
     ours_multiscale_weight: float
     ours_idf_mix: float
+    ours_choice_support_weight: float
+    ours_choice_contrast_weight: float
     ours_spread_budget_fraction: float
     ours_spread_gap_threshold: float
     ours_spread_bins: int
@@ -291,11 +403,25 @@ class Config:
     ours_graph_bridge_seed_pages: int
     ours_graph_bridge_max_terms: int
     ours_graph_bridge_min_score: float
+    ours_coarse_to_fine_tasks: str
+    ours_coarse_to_fine_group_pages: int
+    ours_coarse_to_fine_candidate_multiplier: float
+    ours_coarse_to_fine_neighbor_groups: int
     ours_layer_router_tasks: str
     ours_layer_router_mode: str
     ours_layer_router_low_fraction: float
     ours_layer_router_low_budget_tokens: int
+    ours_action_router_tasks: str
+    ours_action_router_mode: str
+    ours_learned_router_model_path: str
+    ours_learned_router_action_policy_json: str
+    ours_learned_router_confidence_threshold: float
+    ours_learned_router_default_action: str
+    ours_learned_router_base_action_router_mode: str
     ours_task_policy_json: str
+    ours_operator_mode: str
+    ours_operator_confidence: float
+    ours_operator_fallback_reason: str
     ours_full_fallback_tasks: str
     ours_label_support_tasks: str
     ours_label_backtrack_pages: int
@@ -303,14 +429,20 @@ class Config:
     ours_passage_closure_tasks: str
     ours_passage_closure_budget_fraction: float
     ours_passage_closure_radius_pages: int
+    ours_demonstration_closure_tasks: str
+    ours_demonstration_closure_budget_fraction: float
+    ours_demonstration_closure_radius_pages: int
+    ours_demonstration_closure_tail_pages: int
     ours_structured_fingerprint_tasks: str
     ours_structured_fingerprint_budget_fraction: float
     ours_direct_structured_answer_tasks: str
+    ours_direct_summary_max_words: int
     ours_short_decode_tasks: str
     ours_short_decode_max_tokens: int
     ours_output_verifier_tasks: str
     ours_output_probe_max_tokens: int
     ours_retry_budget_tokens: int
+    ours_retry_full_fallback_tasks: str
     ours_score_risk_tasks: str
     ours_score_risk_budget_tokens: int
     ours_score_risk_min_gap2: float
@@ -320,12 +452,23 @@ class Config:
     ours_score_risk_max_entropy: float
     ours_score_risk_entropy_at_most: float
     ours_score_risk_min_top_score: float
+    ours_score_risk_mean_at_least: float
+    ours_score_risk_mean_at_most: float
     ours_score_risk_raw_prefix_at_most: int
     ours_score_risk_raw_prefix_at_least: int
     ours_score_risk_linear_threshold: float
     ours_score_risk_gap2_weight: float
     ours_score_risk_gap3_weight: float
     ours_score_risk_top_score_weight: float
+    ours_score_safe_tasks: str
+    ours_score_safe_min_gap2: float
+    ours_score_safe_min_gap3: float
+    ours_score_safe_max_entropy: float
+    ours_score_safe_min_top_score: float
+    ours_score_safe_mean_at_least: float
+    ours_score_safe_raw_prefix_at_most: int
+    ours_score_safe_raw_prefix_at_least: int
+    ours_score_safe_linear_threshold: float
     ours_budget_ladder_tasks: str
     ours_budget_ladder_tokens: str
     ours_budget_ladder_gap2_thresholds: str
@@ -350,6 +493,7 @@ class Config:
     prompt_wrapper: str
     force_no_chat_tasks: str
     longbench_zip_path: str
+    longbench_v2_json_path: str
     hf_cache_dir: str
     lm_eval_path: str
     ruler_lengths: str
@@ -371,6 +515,10 @@ class Example:
     length: int
     all_classes: list[str]
     no_chat: bool = False
+    domain: str = ""
+    sub_domain: str = ""
+    difficulty: str = ""
+    length_category: str = ""
 
 
 @dataclass
@@ -403,6 +551,11 @@ def parse_args() -> Config:
     parser.add_argument("--output_dir", required=True)
     parser.add_argument("--benchmarks", default="longbench,ruler")
     parser.add_argument("--longbench_tasks", default="passage_retrieval_en,hotpotqa")
+    parser.add_argument(
+        "--longbench_v2_domains",
+        default="",
+        help="Optional comma-separated LongBench v2 domain names or normalized domain slugs.",
+    )
     parser.add_argument("--ruler_tasks", default="niah_single_1")
     parser.add_argument("--max_samples_per_task", type=int, default=2)
     parser.add_argument("--max_context_tokens", type=int, default=8192)
@@ -411,6 +564,45 @@ def parse_args() -> Config:
         type=int,
         default=0,
         help="Use the benchmark default when 0; otherwise cap all generations to this length.",
+    )
+    parser.add_argument(
+        "--force_decode_tokens",
+        type=int,
+        default=0,
+        help="Speed-only mode: decode exactly this many tokens even after EOS. Zero preserves benchmark behavior.",
+    )
+    parser.add_argument(
+        "--constrained_choice_decode",
+        action="store_true",
+        help=(
+            "For multiple-choice metrics, force the requested response grammar and select A-D from the "
+            "next-token logits. Apply this equally to Full KV and sparse methods for a controlled comparison."
+        ),
+    )
+    parser.add_argument(
+        "--sparse_query_tokenwise",
+        action="store_true",
+        help=(
+            "Replay the query suffix one token at a time when the prefix cache is sparse. This preserves "
+            "causality when logical RoPE positions are much larger than the compressed physical cache length."
+        ),
+    )
+    parser.add_argument(
+        "--sparse_query_physical_mask",
+        action="store_true",
+        help=(
+            "Use an explicit physical-cache 4D causal mask for a parallel sparse query replay. This is the "
+            "efficient counterpart of --sparse_query_tokenwise."
+        ),
+    )
+    parser.add_argument(
+        "--sparse_position_mode",
+        choices=["original", "compact", "rope_rebase"],
+        default="original",
+        help=(
+            "Position convention after sparse KV gather. original preserves stored RoPE positions; compact uses "
+            "physical cache positions; rope_rebase rotates gathered keys from original to compact positions."
+        ),
     )
     parser.add_argument("--seed", type=int, default=2026070302)
     parser.add_argument(
@@ -439,9 +631,11 @@ def parse_args() -> Config:
             "hybrid_mmr",
             "hybrid_late_mmr",
             "hybrid_late_mmr_bm25_flow",
+            "hybrid_late_mmr_bm25_bridge_flow",
             "hybrid_late_mmr_bridge_flow",
             "hybrid_late_mmr_flow",
             "hybrid_late_mmr_multiscale_bm25_flow",
+            "hybrid_late_mmr_multiscale_bm25_bridge_flow",
             "hybrid_late_mmr_multiscale_bridge_flow",
             "hybrid_late_mmr_multiscale_task_bridge_flow",
             "hybrid_late_mmr_multiscale_flow",
@@ -527,6 +721,52 @@ def parse_args() -> Config:
         help="For typed-anchor queries, reserve up to this many exact-anchor pages per query key before MMR fill.",
     )
     parser.add_argument(
+        "--ours_anchor_window_tasks",
+        default="",
+        help="Comma-separated task names that expand a fine evidence page into a centered token window.",
+    )
+    parser.add_argument(
+        "--ours_anchor_window_tokens",
+        type=int,
+        default=0,
+        help="Centered token-window length used when anchor-window evidence packing is active.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_tasks",
+        default="",
+        help="Comma-separated task names that use fine blocks as locators and repack them into dense spans.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_window_tokens",
+        type=int,
+        default=0,
+        help="Centered span length used by micro-block locator to continuous-span repacking.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_budget_fraction",
+        type=float,
+        default=0.0,
+        help="Maximum fraction of sparse budget reserved for span-repack windows before regular MMR fill.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_top_pages",
+        type=int,
+        default=32,
+        help="Number of top fine pages considered as span-repack window centers.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_min_score",
+        type=float,
+        default=-1.0,
+        help="Minimum fine-page score for span-repack centers. Negative disables the threshold.",
+    )
+    parser.add_argument(
+        "--ours_span_repack_score_mode",
+        default="center",
+        choices=["center", "window_sum", "window_topk"],
+        help="How to rank micro-block span-repack windows: center page score or aggregated window votes.",
+    )
+    parser.add_argument(
         "--ours_flow_neighbor_radius",
         type=int,
         default=1,
@@ -573,6 +813,18 @@ def parse_args() -> Config:
         type=float,
         default=0.65,
         help="For IDF flow scorers, mix this fraction of document-local IDF overlap into the lexical component.",
+    )
+    parser.add_argument(
+        "--ours_choice_support_weight",
+        type=float,
+        default=0.0,
+        help="For multiple-choice queries, reward pages with high embedding support for at least one candidate.",
+    )
+    parser.add_argument(
+        "--ours_choice_contrast_weight",
+        type=float,
+        default=0.0,
+        help="For multiple-choice queries, reward pages whose candidate support has a large top-1/top-2 margin.",
     )
     parser.add_argument(
         "--ours_spread_budget_fraction",
@@ -651,6 +903,29 @@ def parse_args() -> Config:
         help="Minimum base page score for graph bridge candidate pages.",
     )
     parser.add_argument(
+        "--ours_coarse_to_fine_tasks",
+        default="",
+        help="Comma-separated task names that restrict 16-token fine pages to high-scoring coarse groups.",
+    )
+    parser.add_argument(
+        "--ours_coarse_to_fine_group_pages",
+        type=int,
+        default=8,
+        help="Number of fine pages per coarse group. With 16-token pages, 8 groups recover a 128-token locator.",
+    )
+    parser.add_argument(
+        "--ours_coarse_to_fine_candidate_multiplier",
+        type=float,
+        default=2.5,
+        help="Coarse groups are retained until their token capacity reaches this multiple of the remaining budget.",
+    )
+    parser.add_argument(
+        "--ours_coarse_to_fine_neighbor_groups",
+        type=int,
+        default=1,
+        help="Number of adjacent coarse groups kept around every selected coarse group.",
+    )
+    parser.add_argument(
         "--ours_layer_router_tasks",
         default="",
         help="Comma-separated task names that enable layer-wise KV token routing.",
@@ -674,6 +949,57 @@ def parse_args() -> Config:
         help="Context-token budget for lower layers under layer-wise routing.",
     )
     parser.add_argument(
+        "--ours_action_router_tasks",
+        default="",
+        help="Comma-separated task names that enable sample-level memory-action routing.",
+    )
+    parser.add_argument(
+        "--ours_action_router_mode",
+        default="off",
+        choices=[
+            "off",
+            "v293_rules",
+            "learned_budget_v1",
+            "learned_budget_overlay_v1",
+            "learned_budget_planner_v2",
+            "budget_change_v1",
+        ],
+        help=(
+            "Sample-level memory-action router. v293_rules applies mined M100 rules; "
+            "learned_budget_v1 loads a sklearn action router and applies action-policy overrides; "
+            "learned_budget_overlay_v1 falls back to a configured base router when the learned action is default; "
+            "learned_budget_planner_v2 scores candidate budgets and chooses the smallest calibrated-safe action; "
+            "budget_change_v1 predicts whether expanding base KV to 2K changes the model decision."
+        ),
+    )
+    parser.add_argument(
+        "--ours_learned_router_model_path",
+        default="",
+        help="Path to a model.pkl produced by train_learned_budget_router_20260711.py.",
+    )
+    parser.add_argument(
+        "--ours_learned_router_action_policy_json",
+        default="",
+        help="JSON string or path mapping learned action labels to normalized Config overrides.",
+    )
+    parser.add_argument(
+        "--ours_learned_router_confidence_threshold",
+        type=float,
+        default=-1.0,
+        help="Override model metadata confidence fallback threshold. Negative uses metadata/default.",
+    )
+    parser.add_argument(
+        "--ours_learned_router_default_action",
+        default="reference",
+        help="Action label used when the learned router is unavailable, low-confidence, or unmapped.",
+    )
+    parser.add_argument(
+        "--ours_learned_router_base_action_router_mode",
+        default="off",
+        choices=["off", "v293_rules"],
+        help="Base action router used by learned_budget_overlay_v1 for default/unsafe learned actions.",
+    )
+    parser.add_argument(
         "--ours_task_policy_json",
         default="",
         help=(
@@ -684,6 +1010,14 @@ def parse_args() -> Config:
             "risk-aware minimum-safe action; use label_support=true for structured Paragraph-k support pages."
         ),
     )
+    parser.add_argument(
+        "--ours_operator_mode",
+        default="retrieve",
+        choices=["retrieve", "aggregate", "structured", "code", "full"],
+        help="Generic request contract selected without using a benchmark task name.",
+    )
+    parser.add_argument("--ours_operator_confidence", type=float, default=0.0)
+    parser.add_argument("--ours_operator_fallback_reason", default="")
     parser.add_argument(
         "--ours_full_fallback_tasks",
         default="",
@@ -727,6 +1061,29 @@ def parse_args() -> Config:
         help="Maximum page distance from a selected page for same-Passage closure.",
     )
     parser.add_argument(
+        "--ours_demonstration_closure_tasks",
+        default="",
+        help="Comma-separated tasks that complete repeated few-shot demonstrations around selected evidence.",
+    )
+    parser.add_argument(
+        "--ours_demonstration_closure_budget_fraction",
+        type=float,
+        default=0.0,
+        help="Maximum sparse budget fraction used to complete selected few-shot demonstrations.",
+    )
+    parser.add_argument(
+        "--ours_demonstration_closure_radius_pages",
+        type=int,
+        default=1,
+        help="Local evidence radius retained around a selected page in a demonstration.",
+    )
+    parser.add_argument(
+        "--ours_demonstration_closure_tail_pages",
+        type=int,
+        default=4,
+        help="Number of unit-tail pages retained as the demonstration option/answer certificate.",
+    )
+    parser.add_argument(
         "--ours_structured_fingerprint_tasks",
         default="",
         help="Comma-separated task names that reserve one structural fingerprint page per Paragraph/Passage label.",
@@ -744,6 +1101,12 @@ def parse_args() -> Config:
             "Comma-separated task names that answer directly from selected structural labels after sparse "
             "memory selection, e.g. Paragraph-k retrieval tasks."
         ),
+    )
+    parser.add_argument(
+        "--ours_direct_summary_max_words",
+        type=int,
+        default=192,
+        help="Maximum output words for direct extractive summary operators such as qmsum.",
     )
     parser.add_argument(
         "--ours_short_decode_tasks",
@@ -780,6 +1143,14 @@ def parse_args() -> Config:
         help=(
             "When an output/grounding verifier fails, first retry with this expanded sparse budget before "
             "falling back to full KV. Use 0 to keep the original direct full retry behavior."
+        ),
+    )
+    parser.add_argument(
+        "--ours_retry_full_fallback_tasks",
+        default="*",
+        help=(
+            "Comma-separated tasks allowed to fall back to full KV after bounded retry fails. "
+            "Use '*' for all tasks, or set retry_full_fallback=false in task policy to accept bounded retry."
         ),
     )
     parser.add_argument(
@@ -842,6 +1213,18 @@ def parse_args() -> Config:
         help="If >=0, score-risk fires only when the top page score is below this value.",
     )
     parser.add_argument(
+        "--ours_score_risk_mean_at_least",
+        type=float,
+        default=-1.0,
+        help="If >=0, score-risk fires only when the mean positive page score is at least this value.",
+    )
+    parser.add_argument(
+        "--ours_score_risk_mean_at_most",
+        type=float,
+        default=-1.0,
+        help="If >=0, score-risk fires only when the mean positive page score is at most this value.",
+    )
+    parser.add_argument(
         "--ours_score_risk_raw_prefix_at_most",
         type=int,
         default=-1,
@@ -879,6 +1262,65 @@ def parse_args() -> Config:
         type=float,
         default=0.0,
         help="Top-page-score weight used by the optional linear score-risk gate.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_tasks",
+        default="",
+        help=(
+            "Comma-separated task names that use a pre-decode safe certificate to suppress score-risk "
+            "fallback when page-score evidence is confident enough."
+        ),
+    )
+    parser.add_argument(
+        "--ours_score_safe_min_gap2",
+        type=float,
+        default=-1.0,
+        help="If >=0, the safe certificate requires top1-top2 page-score gap to be at least this value.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_min_gap3",
+        type=float,
+        default=-1.0,
+        help="If >=0, the safe certificate requires top1-top3 page-score gap to be at least this value.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_max_entropy",
+        type=float,
+        default=-1.0,
+        help="If >=0, the safe certificate requires normalized page-score entropy to be at most this value.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_min_top_score",
+        type=float,
+        default=-1.0,
+        help="If >=0, the safe certificate requires the top page score to be at least this value.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_mean_at_least",
+        type=float,
+        default=-1.0,
+        help="If >=0, the safe certificate requires the mean positive page score to be at least this value.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_raw_prefix_at_most",
+        type=int,
+        default=-1,
+        help="If >=0, the safe certificate requires raw prefix length to be at most this many tokens.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_raw_prefix_at_least",
+        type=int,
+        default=-1,
+        help="If >=0, the safe certificate requires raw prefix length to be at least this many tokens.",
+    )
+    parser.add_argument(
+        "--ours_score_safe_linear_threshold",
+        type=float,
+        default=-1.0,
+        help=(
+            "If >=0, the safe certificate requires entropy - w2*gap2 - w3*gap3 - wt*top_score "
+            "to be at most this threshold."
+        ),
     )
     parser.add_argument(
         "--ours_budget_ladder_tasks",
@@ -997,9 +1439,9 @@ def parse_args() -> Config:
     parser.add_argument("--attn_implementation", default="eager")
     parser.add_argument(
         "--prompt_wrapper",
-        choices=["none", "llama3"],
+        choices=["none", "llama3", "qwen3"],
         default="none",
-        help="Wrap the full prompt while preserving context page spans. Use llama3 to match KVCache-Factory LongBench.",
+        help="Wrap the full prompt while preserving context page spans.",
     )
     parser.add_argument(
         "--force_no_chat_tasks",
@@ -1007,6 +1449,11 @@ def parse_args() -> Config:
         help="Comma-separated task names that disable chat wrapping even when --prompt_wrapper llama3 is active.",
     )
     parser.add_argument("--longbench_zip_path", default="")
+    parser.add_argument(
+        "--longbench_v2_json_path",
+        default="",
+        help="Official LongBench v2 data.json. Download from zai-org/LongBench-v2 when empty.",
+    )
     parser.add_argument("--hf_cache_dir", default="/home/fdong/ymluo/hf_cache")
     parser.add_argument("--lm_eval_path", default="/home/fdong/lm-evaluation-harness")
     parser.add_argument("--ruler_lengths", default="4096")
@@ -1045,6 +1492,13 @@ def cache_to_legacy(past_key_values: Any) -> tuple[Any, ...]:
     raise TypeError(f"Unsupported cache type: {type(past_key_values)!r}")
 
 
+def cache_sequence_length(past_key_values: Any) -> int:
+    legacy = cache_to_legacy(past_key_values)
+    if not legacy:
+        return 0
+    return int(legacy[0][0].shape[2])
+
+
 def legacy_to_cache_like(legacy: tuple[Any, ...], template: Any) -> Any:
     from_legacy_cache = getattr(type(template), "from_legacy_cache", None)
     if callable(from_legacy_cache):
@@ -1067,6 +1521,54 @@ def gather_past_key_values(past_key_values: Any, keep_indices: list[int]) -> Any
         else:
             gathered_layers.append((gathered_key, gathered_value))
     return legacy_to_cache_like(tuple(gathered_layers), past_key_values)
+
+
+def rotate_half_hidden(x: torch.Tensor) -> torch.Tensor:
+    half = x.shape[-1] // 2
+    return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+
+@torch.inference_mode()
+def rebase_rope_past_key_values(
+    model: torch.nn.Module,
+    past_key_values: Any,
+    original_positions: list[int],
+) -> Any:
+    legacy = cache_to_legacy(past_key_values)
+    if not legacy or not original_positions:
+        return past_key_values
+    model_body = getattr(model, "model", None)
+    rotary = getattr(model_body, "rotary_emb", None)
+    if rotary is None:
+        raise ValueError(f"RoPE rebasing requires model.model.rotary_emb, got {type(model).__name__}")
+    if int(legacy[0][0].shape[2]) != len(original_positions):
+        raise ValueError(
+            f"RoPE position count {len(original_positions)} does not match cache length {legacy[0][0].shape[2]}"
+        )
+
+    device = legacy[0][0].device
+    old_position_ids = torch.tensor([original_positions], dtype=torch.long, device=device)
+    new_position_ids = torch.arange(len(original_positions), dtype=torch.long, device=device).unsqueeze(0)
+    rotary_probe = torch.empty((), dtype=torch.float32, device=device)
+    old_cos, old_sin = rotary(rotary_probe, old_position_ids)
+    new_cos, new_sin = rotary(rotary_probe, new_position_ids)
+    old_cos = old_cos.unsqueeze(1).float()
+    old_sin = old_sin.unsqueeze(1).float()
+    new_cos = new_cos.unsqueeze(1).float()
+    new_sin = new_sin.unsqueeze(1).float()
+    inverse_scale = (old_cos.square() + old_sin.square()).clamp_min(1e-12)
+
+    rebased_layers = []
+    for layer_cache in legacy:
+        key_states, value_states = layer_cache[:2]
+        key_float = key_states.float()
+        raw_key = (key_float * old_cos - rotate_half_hidden(key_float) * old_sin) / inverse_scale
+        rebased_key = raw_key * new_cos + rotate_half_hidden(raw_key) * new_sin
+        if len(layer_cache) > 2:
+            rebased_layers.append((rebased_key.to(key_states.dtype).contiguous(), value_states, *layer_cache[2:]))
+        else:
+            rebased_layers.append((rebased_key.to(key_states.dtype).contiguous(), value_states))
+    return legacy_to_cache_like(tuple(rebased_layers), past_key_values)
 
 
 def gather_past_key_values_layerwise(past_key_values: Any, layer_keep_indices: list[list[int]]) -> Any:
@@ -1133,25 +1635,24 @@ def count_score(prediction: str, ground_truth: str) -> float:
 
 
 def rouge_l_score(prediction: str, ground_truth: str) -> float:
-    pred = normalize_answer(prediction).split()
-    truth = normalize_answer(ground_truth).split()
-    if not pred or not truth:
+    # LongBench evaluates English summarization with the ``rouge`` package,
+    # not the QA normalizer used by its F1 metrics.
+    try:
+        from rouge import Rouge
+    except ImportError as exc:
+        raise RuntimeError(
+            "Official LongBench ROUGE scoring requires rouge==1.0.1"
+        ) from exc
+    try:
+        return float(
+            Rouge().get_scores(
+                [prediction],
+                [ground_truth],
+                avg=True,
+            )["rouge-l"]["f"]
+        )
+    except Exception:
         return 0.0
-    previous = [0] * (len(truth) + 1)
-    for token in pred:
-        current = [0]
-        for j, truth_token in enumerate(truth, start=1):
-            if token == truth_token:
-                current.append(previous[j - 1] + 1)
-            else:
-                current.append(max(previous[j], current[-1]))
-        previous = current
-    lcs = previous[-1]
-    precision = lcs / len(pred)
-    recall = lcs / len(truth)
-    if precision + recall == 0:
-        return 0.0
-    return 2 * precision * recall / (precision + recall)
 
 
 def ruler_string_match(prediction: str, answers: list[str]) -> float:
@@ -1177,13 +1678,34 @@ def classification_score(prediction: str, ground_truth: str, all_classes: list[s
     return 1.0 / len(matches) if ground_truth in matches and matches else 0.0
 
 
-def score_prediction(metric: str, prediction: str, answers: list[str], all_classes: list[str] | None = None) -> float:
+def extract_longbench_v2_answer(response: str) -> str:
+    response = response.replace("*", "")
+    match = re.search(r"The correct answer is \(([A-D])\)", response)
+    if match:
+        return match.group(1)
+    match = re.search(r"The correct answer is ([A-D])", response)
+    return match.group(1) if match else ""
+
+
+def score_prediction(
+    metric: str,
+    prediction: str,
+    answers: list[str],
+    all_classes: list[str] | None = None,
+    task: str | None = None,
+) -> float:
     if metric == "ruler_string_match":
         return ruler_string_match(prediction, answers)
     if metric == "ruler_string_match_part":
         return ruler_string_match_part(prediction, answers)
-    if metric in {"classification", "qa_f1", "rouge_l"}:
-        prediction = prediction.lstrip("\n").split("\n")[0] if metric == "classification" else prediction
+    if metric == "longbench_v2_mc":
+        target = answers[0].strip().upper() if answers else ""
+        return float(bool(target) and extract_longbench_v2_answer(prediction) == target)
+    # Official LongBench scoring discards generations after the first line for
+    # its few-shot tasks. This matters when a no-chat prompt makes the model
+    # continue with another demonstration after producing the correct answer.
+    if metric == "classification" or task in {"trec", "triviaqa", "samsum", "lsht"}:
+        prediction = prediction.lstrip("\n").split("\n")[0]
     scores = []
     for answer in answers:
         if metric == "qa_f1":
@@ -1219,6 +1741,111 @@ def ensure_longbench_zip(config: Config) -> Path:
             cache_dir=config.hf_cache_dir,
         )
     )
+
+
+def ensure_longbench_v2_json(config: Config) -> Path:
+    if config.longbench_v2_json_path:
+        path = Path(config.longbench_v2_json_path)
+        if not path.exists():
+            raise FileNotFoundError(path)
+        return path
+    from huggingface_hub import hf_hub_download
+
+    return Path(
+        hf_hub_download(
+            repo_id="zai-org/LongBench-v2",
+            filename="data.json",
+            repo_type="dataset",
+            cache_dir=config.hf_cache_dir,
+        )
+    )
+
+
+def normalize_longbench_v2_domain(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", value.strip().lower()).strip("_")
+
+
+def limit_longbench_v2_rows(rows: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    if limit <= 0 or len(rows) <= limit:
+        return rows
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("domain", ""))].append(row)
+    selected: list[dict[str, Any]] = []
+    offsets = {domain: 0 for domain in grouped}
+    domains = sorted(grouped)
+    while len(selected) < limit:
+        advanced = False
+        for domain in domains:
+            offset = offsets[domain]
+            if offset >= len(grouped[domain]):
+                continue
+            selected.append(grouped[domain][offset])
+            offsets[domain] += 1
+            advanced = True
+            if len(selected) >= limit:
+                break
+        if not advanced:
+            break
+    return selected
+
+
+def load_longbench_v2_examples(config: Config) -> list[Example]:
+    data_path = ensure_longbench_v2_json(config)
+    payload = json.loads(data_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"LongBench v2 data must be a list, got {type(payload).__name__}")
+    requested_domains = {item.lower() for item in parse_list(config.longbench_v2_domains)}
+    rows: list[dict[str, Any]] = []
+    for raw_row in payload:
+        if not isinstance(raw_row, dict):
+            continue
+        domain = str(raw_row.get("domain", ""))
+        domain_slug = normalize_longbench_v2_domain(domain)
+        if requested_domains and domain.lower() not in requested_domains and domain_slug not in requested_domains:
+            continue
+        rows.append(raw_row)
+    rows = limit_longbench_v2_rows(rows, config.max_samples_per_task)
+
+    examples: list[Example] = []
+    for row in rows:
+        domain = str(row.get("domain", ""))
+        question = str(row.get("question", "")).strip()
+        query = (
+            f"What is the correct answer to this question: {question}\n"
+            "Choices:\n"
+            f"(A) {str(row.get('choice_A', '')).strip()}\n"
+            f"(B) {str(row.get('choice_B', '')).strip()}\n"
+            f"(C) {str(row.get('choice_C', '')).strip()}\n"
+            f"(D) {str(row.get('choice_D', '')).strip()}"
+        )
+        max_new = 128
+        if config.max_new_tokens_override > 0:
+            max_new = min(max_new, config.max_new_tokens_override)
+        examples.append(
+            Example(
+                benchmark="longbench_v2",
+                task=f"lbv2_{normalize_longbench_v2_domain(domain)}",
+                sample_id=str(row.get("_id", len(examples))),
+                context=str(row.get("context", "")),
+                query=query,
+                answers=[str(row.get("answer", "")).strip().upper()],
+                prefix_template="Please read the following text and answer the question below.\n\n<text>\n",
+                suffix_template=(
+                    "\n</text>\n\n{input}\n\n"
+                    'Format your response as follows: "The correct answer is (insert answer here)".'
+                ),
+                metric="longbench_v2_mc",
+                max_new_tokens=max_new,
+                length=0,
+                all_classes=[],
+                domain=domain,
+                sub_domain=str(row.get("sub_domain", "")),
+                difficulty=str(row.get("difficulty", "")),
+                length_category=str(row.get("length", "")),
+            )
+        )
+    return examples
 
 
 def load_longbench_examples(config: Config) -> list[Example]:
@@ -1356,6 +1983,18 @@ def load_ruler_examples(config: Config, tokenizer_name: str) -> list[Example]:
                     TOKENIZER=tokenizer,
                 )
                 append_rows(task, length, rows, 128, "ruler_string_match")
+            elif task == "niah_single_3":
+                rows = generate_samples(
+                    get_haystack(type_haystack="essay"),
+                    max_seq_length=length,
+                    template=TEMPLATE,
+                    type_haystack="essay",
+                    type_needle_k="words",
+                    type_needle_v="uuids",
+                    num_samples=config.max_samples_per_task,
+                    TOKENIZER=tokenizer,
+                )
+                append_rows(task, length, rows, 128, "ruler_string_match")
             elif task == "niah_multikey_1":
                 rows = generate_samples(
                     get_haystack(type_haystack="essay"),
@@ -1365,6 +2004,30 @@ def load_ruler_examples(config: Config, tokenizer_name: str) -> list[Example]:
                     type_needle_k="words",
                     type_needle_v="numbers",
                     num_needle_k=4,
+                    num_samples=config.max_samples_per_task,
+                    TOKENIZER=tokenizer,
+                )
+                append_rows(task, length, rows, 128, "ruler_string_match")
+            elif task == "niah_multikey_2":
+                rows = generate_samples(
+                    get_haystack(type_haystack="needle"),
+                    max_seq_length=length,
+                    template=TEMPLATE,
+                    type_haystack="needle",
+                    type_needle_k="words",
+                    type_needle_v="numbers",
+                    num_samples=config.max_samples_per_task,
+                    TOKENIZER=tokenizer,
+                )
+                append_rows(task, length, rows, 128, "ruler_string_match")
+            elif task == "niah_multikey_3":
+                rows = generate_samples(
+                    get_haystack(type_haystack="needle"),
+                    max_seq_length=length,
+                    template=TEMPLATE,
+                    type_haystack="needle",
+                    type_needle_k="uuids",
+                    type_needle_v="uuids",
                     num_samples=config.max_samples_per_task,
                     TOKENIZER=tokenizer,
                 )
@@ -1440,7 +2103,13 @@ def load_ruler_examples(config: Config, tokenizer_name: str) -> list[Example]:
                 append_rows(task, length, rows, 32, "ruler_string_match_part")
             elif task == "qa_hotpot":
                 try:
-                    qas, docs = read_hotpotqa()
+                    hotpot_parquet = Path(
+                        str(getattr(config, "ruler_hotpot_parquet", ""))
+                    )
+                    if hotpot_parquet.is_file():
+                        qas, docs = read_hotpotqa_parquet(hotpot_parquet)
+                    else:
+                        qas, docs = read_hotpotqa()
                 except Exception as exc:
                     print(f"[skip-ruler-task] qa_hotpot download/read failed: {exc}", flush=True)
                     continue
@@ -1455,10 +2124,47 @@ def load_ruler_examples(config: Config, tokenizer_name: str) -> list[Example]:
                 append_rows(task, length, rows, 32, "ruler_string_match_part")
             else:
                 raise ValueError(
-                    "This runner supports ruler tasks: niah_single_1, niah_single_2, niah_multikey_1, "
-                    "niah_multivalue, niah_multiquery, vt, cwe, fwe, qa_squad, qa_hotpot"
+                    "This runner supports the 13 official RULER tasks: "
+                    "niah_single_1, niah_single_2, niah_single_3, "
+                    "niah_multikey_1, niah_multikey_2, niah_multikey_3, "
+                    "niah_multivalue, niah_multiquery, vt, cwe, fwe, "
+                    "qa_squad, qa_hotpot"
                 )
     return examples
+
+
+def hotpot_rows_to_ruler_source(
+    rows: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    all_documents = []
+    row_documents = []
+    for row in rows:
+        context = row["context"]
+        documents = [
+            f"{title}\n{''.join(sentences)}"
+            for title, sentences in zip(context["title"], context["sentences"])
+        ]
+        row_documents.append(documents)
+        all_documents.extend(documents)
+    documents = sorted(set(all_documents))
+    document_ids = {document: index for index, document in enumerate(documents)}
+    qas = [
+        {
+            "query": str(row["question"]),
+            "outputs": [str(row["answer"])],
+            "context": [document_ids[document] for document in current_documents],
+        }
+        for row, current_documents in zip(rows, row_documents)
+    ]
+    return qas, documents
+
+
+@lru_cache(maxsize=4)
+def read_hotpotqa_parquet(path: str | Path) -> tuple[list[dict[str, Any]], list[str]]:
+    import pyarrow.parquet as parquet
+
+    rows = parquet.read_table(Path(path)).to_pylist()
+    return hotpot_rows_to_ruler_source(rows)
 
 
 def token_ids(tokenizer: Any, text: str) -> list[int]:
@@ -1530,6 +2236,9 @@ def build_bundle(tokenizer: Any, example: Example, config: Config) -> tuple[Prom
     if config.prompt_wrapper == "llama3" and not example.no_chat and not force_no_chat:
         prefix_text = "<|begin_of_text|><|start_header_id|>user<|end_header_id|>\n\n" + prefix_text
         suffix_text = suffix_text + "<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+    elif config.prompt_wrapper == "qwen3" and not example.no_chat and not force_no_chat:
+        prefix_text = "<|im_start|>user\n" + prefix_text
+        suffix_text = suffix_text + "<|im_end|>\n<|im_start|>assistant\n"
     prefix_ids = token_ids(tokenizer, prefix_text)
     context_ids = token_ids(tokenizer, context)
     suffix_ids = token_ids(tokenizer, suffix_text)
@@ -1574,6 +2283,22 @@ def normalize_values(values: list[float]) -> list[float]:
     if high - low < 1e-9:
         return [0.0 for _ in values]
     return [(value - low) / (high - low) for value in values]
+
+
+def split_multiple_choice_query(query: str) -> tuple[str, list[str]]:
+    marker = "\nChoices:\n"
+    if marker not in query:
+        return query, []
+    stem, choice_text = query.split(marker, 1)
+    matches = list(re.finditer(r"(?m)^\(([A-D])\)\s*", choice_text))
+    if len(matches) != 4 or [match.group(1) for match in matches] != list("ABCD"):
+        return query, []
+    choices: list[str] = []
+    for idx, match in enumerate(matches):
+        start = match.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(choice_text)
+        choices.append(choice_text[start:end].strip())
+    return stem.strip(), choices
 
 
 @torch.inference_mode()
@@ -1702,9 +2427,11 @@ def flow_enabled(config: Config) -> bool:
     return config.ours_scorer in {
         "hybrid_late_mmr_flow",
         "hybrid_late_mmr_bm25_flow",
+        "hybrid_late_mmr_bm25_bridge_flow",
         "hybrid_late_mmr_bridge_flow",
         "hybrid_late_mmr_multiscale_flow",
         "hybrid_late_mmr_multiscale_bm25_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_bridge_flow",
         "hybrid_late_mmr_multiscale_task_bridge_flow",
         "hybrid_late_mmr_idf_flow",
@@ -1718,6 +2445,7 @@ def multiscale_enabled(config: Config) -> bool:
     return config.ours_scorer in {
         "hybrid_late_mmr_multiscale_flow",
         "hybrid_late_mmr_multiscale_bm25_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_bridge_flow",
         "hybrid_late_mmr_multiscale_task_bridge_flow",
         "hybrid_late_mmr_multiscale_idf_flow",
@@ -1739,11 +2467,22 @@ def spread_enabled(config: Config) -> bool:
 
 
 TASK_POLICY_KEYS = {
+    "force_decode_tokens",
+    "constrained_choice_decode",
+    "sparse_query_tokenwise",
+    "sparse_query_physical_mask",
+    "sparse_position_mode",
     "budget_tokens",
     "sink_tokens",
     "recent_tokens",
     "page_tokens",
     "ours_scorer",
+    "semantic_weight",
+    "lexical_weight",
+    "entity_weight",
+    "structural_weight",
+    "coverage_weight",
+    "ours_mmr_lambda",
     "ours_coverage_mmr_weight",
     "ours_coverage_mmr_max_terms",
     "ours_coverage_certificate_tasks",
@@ -1754,6 +2493,14 @@ TASK_POLICY_KEYS = {
     "ours_coverage_risk_min_terms",
     "ours_coverage_risk_budget_tokens",
     "anchor_pages_per_key",
+    "ours_anchor_window_tasks",
+    "ours_anchor_window_tokens",
+    "ours_span_repack_tasks",
+    "ours_span_repack_window_tokens",
+    "ours_span_repack_budget_fraction",
+    "ours_span_repack_top_pages",
+    "ours_span_repack_min_score",
+    "ours_span_repack_score_mode",
     "ours_bridge_tasks",
     "ours_flow_neighbor_radius",
     "ours_flow_neighbor_budget_fraction",
@@ -1763,6 +2510,8 @@ TASK_POLICY_KEYS = {
     "ours_multiscale_group_pages",
     "ours_multiscale_weight",
     "ours_idf_mix",
+    "ours_choice_support_weight",
+    "ours_choice_contrast_weight",
     "ours_spread_budget_fraction",
     "ours_spread_gap_threshold",
     "ours_spread_bins",
@@ -1775,10 +2524,24 @@ TASK_POLICY_KEYS = {
     "ours_graph_bridge_seed_pages",
     "ours_graph_bridge_max_terms",
     "ours_graph_bridge_min_score",
+    "ours_coarse_to_fine_tasks",
+    "ours_coarse_to_fine_group_pages",
+    "ours_coarse_to_fine_candidate_multiplier",
+    "ours_coarse_to_fine_neighbor_groups",
     "ours_layer_router_tasks",
     "ours_layer_router_mode",
     "ours_layer_router_low_fraction",
     "ours_layer_router_low_budget_tokens",
+    "ours_action_router_tasks",
+    "ours_action_router_mode",
+    "ours_learned_router_model_path",
+    "ours_learned_router_action_policy_json",
+    "ours_learned_router_confidence_threshold",
+    "ours_learned_router_default_action",
+    "ours_learned_router_base_action_router_mode",
+    "ours_operator_mode",
+    "ours_operator_confidence",
+    "ours_operator_fallback_reason",
     "ours_full_fallback_tasks",
     "ours_label_support_tasks",
     "ours_label_backtrack_pages",
@@ -1786,14 +2549,20 @@ TASK_POLICY_KEYS = {
     "ours_passage_closure_tasks",
     "ours_passage_closure_budget_fraction",
     "ours_passage_closure_radius_pages",
+    "ours_demonstration_closure_tasks",
+    "ours_demonstration_closure_budget_fraction",
+    "ours_demonstration_closure_radius_pages",
+    "ours_demonstration_closure_tail_pages",
     "ours_structured_fingerprint_tasks",
     "ours_structured_fingerprint_budget_fraction",
     "ours_direct_structured_answer_tasks",
+    "ours_direct_summary_max_words",
     "ours_short_decode_tasks",
     "ours_short_decode_max_tokens",
     "ours_output_verifier_tasks",
     "ours_output_probe_max_tokens",
     "ours_retry_budget_tokens",
+    "ours_retry_full_fallback_tasks",
     "ours_score_risk_tasks",
     "ours_score_risk_budget_tokens",
     "ours_score_risk_min_gap2",
@@ -1803,12 +2572,23 @@ TASK_POLICY_KEYS = {
     "ours_score_risk_max_entropy",
     "ours_score_risk_entropy_at_most",
     "ours_score_risk_min_top_score",
+    "ours_score_risk_mean_at_least",
+    "ours_score_risk_mean_at_most",
     "ours_score_risk_raw_prefix_at_most",
     "ours_score_risk_raw_prefix_at_least",
     "ours_score_risk_linear_threshold",
     "ours_score_risk_gap2_weight",
     "ours_score_risk_gap3_weight",
     "ours_score_risk_top_score_weight",
+    "ours_score_safe_tasks",
+    "ours_score_safe_min_gap2",
+    "ours_score_safe_min_gap3",
+    "ours_score_safe_max_entropy",
+    "ours_score_safe_min_top_score",
+    "ours_score_safe_mean_at_least",
+    "ours_score_safe_raw_prefix_at_most",
+    "ours_score_safe_raw_prefix_at_least",
+    "ours_score_safe_linear_threshold",
     "ours_budget_ladder_tasks",
     "ours_budget_ladder_tokens",
     "ours_budget_ladder_gap2_thresholds",
@@ -1835,18 +2615,396 @@ def parse_task_policy_spec(spec: str) -> dict[str, Any]:
     if not spec:
         return {}
     text = spec
+    base_dir = Path(".")
     try:
         path = Path(spec)
         if path.exists():
+            base_dir = path.parent
             text = path.read_text(encoding="utf-8")
     except OSError:
         text = spec
     payload = json.loads(text)
+    if isinstance(payload, dict) and "__extends" in payload:
+        parent_spec = str(payload["__extends"])
+        parent_path = Path(parent_spec)
+        if not parent_path.is_absolute():
+            parent_path = base_dir / parent_path
+        parent = parse_task_policy_spec(str(parent_path))
+        merged_payload: dict[str, Any] = {
+            key: dict(value) if isinstance(value, dict) else value
+            for key, value in parent.items()
+        }
+        child_tasks = payload.get("tasks", {})
+        task_sources = payload.get("__task_sources", {})
+        if task_sources and not isinstance(task_sources, dict):
+            raise ValueError("__task_sources must be a dict")
+        if task_sources:
+            child_tasks = dict(child_tasks)
+            for target_task, source in task_sources.items():
+                if isinstance(source, str):
+                    source_policy_spec = source
+                    source_task = str(target_task)
+                elif isinstance(source, dict):
+                    source_policy_spec = str(source.get("policy", ""))
+                    source_task = str(source.get("task", target_task))
+                else:
+                    raise ValueError("__task_sources values must be strings or dicts")
+                if not source_policy_spec:
+                    raise ValueError("__task_sources entries require a policy path")
+                source_path = Path(source_policy_spec)
+                if not source_path.is_absolute():
+                    source_path = base_dir / source_path
+                source_policy = parse_task_policy_spec(str(source_path))
+                source_value = source_policy.get(source_task)
+                if source_value is None:
+                    raise ValueError(f"task source {source_policy_spec!r} has no task {source_task!r}")
+                if isinstance(source_value, int):
+                    source_value = {"budget_tokens": source_value}
+                if not isinstance(source_value, dict):
+                    raise ValueError("__task_sources resolved values must be dicts or ints")
+                child_tasks[str(target_task)] = dict(source_value)
+        overlay_all = payload.get("__overlay_all_tasks", {})
+        if overlay_all and not isinstance(overlay_all, dict):
+            raise ValueError("__overlay_all_tasks must be a dict")
+        source_router = payload.get("__source_router", {})
+        if source_router and not isinstance(source_router, dict):
+            raise ValueError("__source_router must be a dict")
+        if source_router:
+            router_spec = dict(source_router)
+            router_spec.setdefault("__base_dir", str(base_dir))
+            merged_payload["__source_router"] = router_spec
+        operator_router = payload.get("__operator_router", {})
+        if operator_router and not isinstance(operator_router, dict):
+            raise ValueError("__operator_router must be a dict")
+        if operator_router:
+            router_spec = dict(operator_router)
+            router_spec.setdefault("__base_dir", str(base_dir))
+            merged_payload["__operator_router"] = router_spec
+        runtime_constraints = payload.get("__runtime_constraints", {})
+        if runtime_constraints and not isinstance(runtime_constraints, dict):
+            raise ValueError("__runtime_constraints must be a dict")
+        if runtime_constraints:
+            inherited_constraints = merged_payload.get("__runtime_constraints", {})
+            merged_constraints = dict(inherited_constraints) if isinstance(inherited_constraints, dict) else {}
+            merged_constraints.update(runtime_constraints)
+            merged_payload["__runtime_constraints"] = merged_constraints
+        for key, value in payload.items():
+            if key.startswith("__") or key == "tasks":
+                continue
+            child_tasks = {**child_tasks, key: value}
+        if overlay_all:
+            keys = [key for key in merged_payload if key != "*" and not str(key).startswith("__")]
+            keys.extend(
+                key
+                for key in child_tasks
+                if key not in {"*"} and not str(key).startswith("__") and key not in keys
+            )
+            for key in keys:
+                current = merged_payload.get(key)
+                merged_payload[key] = dict(current) if isinstance(current, dict) else {}
+                merged_payload[key].update(overlay_all)
+        if "*" in child_tasks:
+            current = merged_payload.get("*")
+            merged_payload["*"] = dict(current) if isinstance(current, dict) else {}
+            if isinstance(child_tasks["*"], dict):
+                merged_payload["*"].update(child_tasks["*"])
+        for key, value in child_tasks.items():
+            if key == "*":
+                continue
+            if isinstance(value, int):
+                value = {"budget_tokens": value}
+            current = merged_payload.get(key)
+            merged_payload[key] = dict(current) if isinstance(current, dict) else {}
+            if isinstance(value, dict):
+                merged_payload[key].update(value)
+        payload = merged_payload
     if isinstance(payload, dict) and isinstance(payload.get("tasks"), dict):
         payload = payload["tasks"]
     if not isinstance(payload, dict):
         raise ValueError("--ours_task_policy_json must decode to a dict or {'tasks': dict}")
     return payload
+
+
+def source_router_example_text(example: Example) -> str:
+    context = example.context
+    if len(context) > 8000:
+        context = context[:4000] + "\n...\n" + context[-4000:]
+    return "\n".join(
+        [
+            "PREFIX:",
+            example.prefix_template,
+            "SUFFIX:",
+            example.suffix_template,
+            "QUERY:",
+            example.query,
+            "CONTEXT:",
+            context,
+        ]
+    )
+
+
+def source_router_numeric_features(example: Example) -> dict[str, float]:
+    context = example.context
+    query = example.query
+    prompt = f"{example.prefix_template}\n{example.suffix_template}\n{query}\n{context[:4000]}"
+    lowered = prompt.lower()
+    context_lines = context.splitlines()
+    nonempty_lines = [line for line in context_lines if line.strip()]
+    alpha = sum(1 for char in prompt if char.isalpha())
+    digits = sum(1 for char in prompt if char.isdigit())
+    punctuation = sum(1 for char in prompt if char in string.punctuation)
+    whitespace = sum(1 for char in prompt if char.isspace())
+    code_hits = sum(
+        lowered.count(token)
+        for token in [
+            "def ",
+            "class ",
+            "import ",
+            "return ",
+            "self.",
+            "public ",
+            "private ",
+            "function ",
+            "```",
+        ]
+    )
+    dialogue_hits = prompt.count(": ") + prompt.count("\n#")
+    numbered_hits = len(re.findall(r"\b(?:paragraph|passage)\s+\d+\b|\n\s*\d+[\).\t ]", prompt, flags=re.I))
+    wh_hits = len(re.findall(r"\b(?:what|who|where|when|why|how|which|whose|whom)\b", query, flags=re.I))
+    summary_hits = sum(lowered.count(token) for token in ["summarize", "summary", "report", "transcript", "dialogue"])
+    qa_hits = sum(lowered.count(token) for token in ["question", "answer", "story", "article", "passage"])
+    return {
+        "source_context_chars": float(len(context)),
+        "source_query_chars": float(len(query)),
+        "source_prompt_chars": float(len(prompt)),
+        "source_context_lines": float(len(context_lines)),
+        "source_nonempty_lines": float(len(nonempty_lines)),
+        "source_avg_line_chars": float(len(context) / max(1, len(nonempty_lines))),
+        "source_length_field": float(example.length),
+        "source_digit_fraction": float(digits / max(1, len(prompt))),
+        "source_alpha_fraction": float(alpha / max(1, len(prompt))),
+        "source_punctuation_fraction": float(punctuation / max(1, len(prompt))),
+        "source_whitespace_fraction": float(whitespace / max(1, len(prompt))),
+        "source_question_marks": float(query.count("?") + example.suffix_template.count("?")),
+        "source_wh_query_terms": float(wh_hits),
+        "source_code_hits": float(code_hits),
+        "source_dialogue_hits": float(dialogue_hits),
+        "source_numbered_hits": float(numbered_hits),
+        "source_summary_hits": float(summary_hits),
+        "source_qa_hits": float(qa_hits),
+    }
+
+
+@lru_cache(maxsize=8)
+def load_source_router_model(path_spec: str) -> dict[str, Any]:
+    path = Path(path_spec)
+    with path.open("rb") as handle:
+        payload = pickle.load(handle)
+    if not isinstance(payload, dict) or "model" not in payload:
+        raise ValueError(f"Invalid source router payload: {path}")
+    return payload
+
+
+def resolve_source_router_path(path_spec: str, router_spec: dict[str, Any]) -> Path:
+    path = Path(path_spec)
+    if path.is_absolute() or path.exists():
+        return path
+    base_dir = Path(str(router_spec.get("__base_dir", ".")))
+    candidate = base_dir / path
+    return candidate if candidate.exists() else path
+
+
+def predict_source_router_action(
+    router_spec: dict[str, Any],
+    example: Example,
+) -> tuple[str, float, str]:
+    default_source = str(router_spec.get("default_source", "base"))
+    model_path = str(router_spec.get("model_path", ""))
+    if not model_path:
+        return default_source, 0.0, "missing_model_path"
+    try:
+        payload = load_source_router_model(str(resolve_source_router_path(model_path, router_spec)))
+        model = payload["model"]
+        metadata = payload.get("metadata", {})
+        threshold = float(metadata.get("confidence_fallback_threshold", 0.0) or 0.0)
+        if "confidence_threshold" in router_spec:
+            threshold = float(router_spec.get("confidence_threshold", threshold) or 0.0)
+        input_type = str(metadata.get("input_type", "example_text"))
+        if isinstance(model, dict) and "constant" in model:
+            action = str(model["constant"])
+            confidence = 1.0
+        elif input_type == "numeric":
+            feature_names = list(metadata.get("feature_names") or sorted(source_router_numeric_features(example)))
+            features = source_router_numeric_features(example)
+            vector = [[float(features.get(name, 0.0)) for name in feature_names]]
+            action = str(model.predict(vector)[0])
+            confidence = 1.0
+            if hasattr(model, "predict_proba"):
+                probabilities = model.predict_proba(vector)
+                if len(probabilities) and len(probabilities[0]):
+                    confidence = float(max(probabilities[0]))
+        else:
+            text = source_router_example_text(example)
+            action = str(model.predict([text])[0])
+            confidence = 1.0
+            if hasattr(model, "predict_proba"):
+                probabilities = model.predict_proba([text])
+                if len(probabilities) and len(probabilities[0]):
+                    confidence = float(max(probabilities[0]))
+        if action != default_source and confidence < threshold:
+            return default_source, confidence, "low_confidence"
+        return action, confidence, ""
+    except Exception as exc:  # noqa: BLE001 - router failure should not kill benchmark runs.
+        return default_source, 0.0, f"source_router_error:{type(exc).__name__}"
+
+
+def operator_router_example_text(example: Example) -> str:
+    context = example.context
+    if len(context) > 8000:
+        context = context[:4000] + "\n...\n" + context[-4000:]
+    return "\n".join(["QUERY:", example.query, "CONTEXT:", context])
+
+
+def transcript_structure_stats(context: str, max_chars: int = 12000) -> tuple[int, float, float]:
+    context_prefix = context[:max_chars]
+    nonempty_lines = [line for line in context_prefix.splitlines() if line.strip()]
+    speaker_lines = re.findall(r"(?m)^\s*([^:\n]{1,40}):\s+\S", context_prefix)
+    speaker_lines = [
+        speaker.strip().lower()
+        for speaker in speaker_lines
+        if speaker.strip().lower() not in {"question", "type", "paragraph", "passage", "answer"}
+    ]
+    unique_speakers = len(set(speaker_lines))
+    speaker_repeat = len(speaker_lines) / max(1, unique_speakers)
+    speaker_fraction = len(speaker_lines) / max(1, len(nonempty_lines))
+    return len(speaker_lines), speaker_repeat, speaker_fraction
+
+
+def infer_operator_contract(example: Example) -> tuple[str, float, str]:
+    query = example.query.strip()
+    query_lower = query.lower()
+    context_prefix = example.context[:12000]
+    code_lines = re.findall(
+        r"(?m)^\s*(?:def\s+\w+\s*\(|class\s+\w+|(?:from\s+\S+\s+)?import\s+\S+|"
+        r"return(?:\s+|;)|public\s+|private\s+|function\s+\w+|"
+        r"[A-Za-z_]\w*\s*\([^\n)]*\)\s*\{)",
+        context_prefix,
+    )
+    if len(code_lines) >= 2:
+        return "code", 0.90, "schema:code_markers"
+    if example.all_classes:
+        return "structured", 0.99, "schema:label_set"
+    if re.search(r"\bParagraph\s+\d+\s*:", context_prefix, flags=re.I):
+        return "structured", 0.98, "schema:numbered_paragraphs"
+    speaker_count, speaker_repeat, speaker_fraction = transcript_structure_stats(example.context)
+    if speaker_count >= 10 and speaker_repeat >= 2.0 and speaker_fraction >= 0.60:
+        return "aggregate", 0.96, "schema:meeting_or_dialogue_transcript"
+    if "dialogue:" in query_lower or "\nsummary:" in query_lower:
+        return "aggregate", 0.98, "schema:dialogue_summary"
+    if re.search(r"^\s*summarize\b|\b(?:please summarize|write a summary|provide a summary)\b", query_lower):
+        return "aggregate", 0.97, "schema:summary_request"
+    if not query:
+        return "aggregate", 0.85, "schema:empty_query_global_aggregation"
+    return "retrieve", 0.80, "schema:query_local_default"
+
+
+def predict_operator_router_action(
+    router_spec: dict[str, Any],
+    example: Example,
+) -> tuple[str, float, str]:
+    default_action = str(router_spec.get("default_action", "retrieve"))
+    if str(router_spec.get("mode", "")) == "request_schema_v1":
+        return infer_operator_contract(example)
+    model_path = str(router_spec.get("model_path", ""))
+    if not model_path:
+        return default_action, 0.0, "missing_model_path"
+    try:
+        payload = load_source_router_model(str(resolve_source_router_path(model_path, router_spec)))
+        model = payload["model"]
+        metadata = payload.get("metadata", {})
+        threshold = float(metadata.get("confidence_fallback_threshold", 0.0) or 0.0)
+        if "confidence_threshold" in router_spec:
+            threshold = float(router_spec.get("confidence_threshold", threshold) or 0.0)
+        if isinstance(model, dict) and "constant" in model:
+            action = str(model["constant"])
+            confidence = 1.0
+        else:
+            text = operator_router_example_text(example)
+            action = str(model.predict([text])[0])
+            confidence = 1.0
+            if hasattr(model, "predict_proba"):
+                probabilities = model.predict_proba([text])
+                if len(probabilities) and len(probabilities[0]):
+                    confidence = float(max(probabilities[0]))
+        if action != default_action and confidence < threshold:
+            return default_action, confidence, "low_confidence"
+        return action, confidence, ""
+    except Exception as exc:  # noqa: BLE001 - contract routing failure must preserve the safe default.
+        return default_action, 0.0, f"operator_router_error:{type(exc).__name__}"
+
+
+def operator_router_fragment(
+    router_spec: dict[str, Any],
+    example: Example,
+) -> tuple[dict[str, Any], str, float, str]:
+    action, confidence, reason = predict_operator_router_action(router_spec, example)
+    actions = router_spec.get("actions", {})
+    if not isinstance(actions, dict):
+        return {}, action, confidence, reason or "invalid_actions"
+    fragment = actions.get(action, {})
+    if not isinstance(fragment, dict):
+        return {}, action, confidence, reason or "invalid_action_fragment"
+    return dict(fragment), action, confidence, reason
+
+
+def task_policy_fragment(policy: dict[str, Any], task: str) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    matched_keys: list[str] = []
+    if "*" in policy:
+        matched_keys.append("*")
+    for key in policy:
+        key_str = str(key)
+        if key_str.startswith("__") or key in {"*", task}:
+            continue
+        if any(char in key_str for char in "*?[]") and fnmatch.fnmatchcase(task, key_str):
+            matched_keys.append(key_str)
+    if task in policy:
+        matched_keys.append(task)
+    for key in matched_keys:
+        value = policy.get(key)
+        if isinstance(value, int):
+            value = {"budget_tokens": value}
+        if isinstance(value, dict):
+            merged.update(value)
+    return merged
+
+
+def source_router_fragment(
+    router_spec: dict[str, Any],
+    example: Example,
+) -> tuple[dict[str, Any], str, float, str]:
+    action, confidence, reason = predict_source_router_action(router_spec, example)
+    sources = router_spec.get("sources", router_spec.get("source_policy", router_spec.get("actions", {})))
+    if not isinstance(sources, dict):
+        return {}, action, confidence, reason or "invalid_sources"
+    entry = sources.get(action)
+    if entry is None:
+        return {}, action, confidence, reason or "default_or_unmapped_source"
+    if isinstance(entry, str):
+        source_policy_spec = entry
+        source_task = example.task
+    elif isinstance(entry, dict):
+        source_policy_spec = str(entry.get("policy", ""))
+        source_task = str(entry.get("task", example.task))
+    else:
+        return {}, action, confidence, reason or "invalid_source_entry"
+    if not source_policy_spec:
+        return {}, action, confidence, reason or "missing_source_policy"
+    source_policy_path = resolve_source_router_path(source_policy_spec, router_spec)
+    source_policy = parse_task_policy_spec(str(source_policy_path))
+    task = example.task if source_task in {"", "__TASK__"} else source_task
+    fragment = task_policy_fragment(source_policy, task)
+    return fragment, action, confidence, reason
 
 
 def config_for_example(config: Config, example: Example) -> Config:
@@ -1858,7 +3016,7 @@ def config_for_example(config: Config, example: Example) -> Config:
     if "*" in policy:
         matched_keys.append("*")
     for key in policy:
-        if key in {"*", example.task}:
+        if str(key).startswith("__") or key in {"*", example.task}:
             continue
         if any(char in key for char in "*?[]") and fnmatch.fnmatchcase(example.task, key):
             matched_keys.append(key)
@@ -1870,6 +3028,24 @@ def config_for_example(config: Config, example: Example) -> Config:
             value = {"budget_tokens": value}
         if isinstance(value, dict):
             merged.update(value)
+    source_router = policy.get("__source_router", {})
+    if isinstance(source_router, dict) and source_router:
+        source_fragment, _source_action, _source_confidence, _source_reason = source_router_fragment(source_router, example)
+        if source_fragment:
+            merged.update(source_fragment)
+    operator_router = policy.get("__operator_router", {})
+    if isinstance(operator_router, dict) and operator_router:
+        operator_fragment, operator_action, operator_confidence, operator_reason = operator_router_fragment(
+            operator_router, example
+        )
+        if operator_fragment:
+            merged.update(operator_fragment)
+        merged["operator_mode"] = operator_action
+        merged["operator_confidence"] = operator_confidence
+        merged["operator_fallback_reason"] = operator_reason
+    runtime_constraints = policy.get("__runtime_constraints", {})
+    if isinstance(runtime_constraints, dict):
+        merged.update(runtime_constraints)
     if not merged:
         return config
 
@@ -1881,6 +3057,8 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_coverage_mmr_weight"
         elif key == "coverage_mmr_max_terms":
             normalized_key = "ours_coverage_mmr_max_terms"
+        elif key == "mmr_lambda":
+            normalized_key = "ours_mmr_lambda"
         elif key == "coverage_certificate_budget_fraction":
             normalized_key = "ours_coverage_certificate_budget_fraction"
         elif key == "coverage_certificate_min_terms":
@@ -1891,8 +3069,22 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_coverage_risk_min_terms"
         elif key == "coverage_risk_budget_tokens":
             normalized_key = "ours_coverage_risk_budget_tokens"
+        elif key == "anchor_window_tokens":
+            normalized_key = "ours_anchor_window_tokens"
+        elif key == "span_repack_window_tokens":
+            normalized_key = "ours_span_repack_window_tokens"
+        elif key == "span_repack_budget_fraction":
+            normalized_key = "ours_span_repack_budget_fraction"
+        elif key == "span_repack_top_pages":
+            normalized_key = "ours_span_repack_top_pages"
+        elif key == "span_repack_min_score":
+            normalized_key = "ours_span_repack_min_score"
+        elif key == "span_repack_score_mode":
+            normalized_key = "ours_span_repack_score_mode"
         elif key == "retry_budget_tokens":
             normalized_key = "ours_retry_budget_tokens"
+        elif key == "retry_full_fallback_tasks":
+            normalized_key = "ours_retry_full_fallback_tasks"
         elif key == "consistency_budget_tokens":
             normalized_key = "ours_consistency_budget_tokens"
         elif key == "consistency_probe_max_tokens":
@@ -1915,6 +3107,10 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_score_risk_entropy_at_most"
         elif key == "score_risk_min_top_score":
             normalized_key = "ours_score_risk_min_top_score"
+        elif key == "score_risk_mean_at_least":
+            normalized_key = "ours_score_risk_mean_at_least"
+        elif key == "score_risk_mean_at_most":
+            normalized_key = "ours_score_risk_mean_at_most"
         elif key == "score_risk_raw_prefix_at_most":
             normalized_key = "ours_score_risk_raw_prefix_at_most"
         elif key == "score_risk_raw_prefix_at_least":
@@ -1927,6 +3123,22 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_score_risk_gap3_weight"
         elif key == "score_risk_top_score_weight":
             normalized_key = "ours_score_risk_top_score_weight"
+        elif key == "score_safe_min_gap2":
+            normalized_key = "ours_score_safe_min_gap2"
+        elif key == "score_safe_min_gap3":
+            normalized_key = "ours_score_safe_min_gap3"
+        elif key == "score_safe_max_entropy":
+            normalized_key = "ours_score_safe_max_entropy"
+        elif key == "score_safe_min_top_score":
+            normalized_key = "ours_score_safe_min_top_score"
+        elif key == "score_safe_mean_at_least":
+            normalized_key = "ours_score_safe_mean_at_least"
+        elif key == "score_safe_raw_prefix_at_most":
+            normalized_key = "ours_score_safe_raw_prefix_at_most"
+        elif key == "score_safe_raw_prefix_at_least":
+            normalized_key = "ours_score_safe_raw_prefix_at_least"
+        elif key == "score_safe_linear_threshold":
+            normalized_key = "ours_score_safe_linear_threshold"
         elif key == "budget_ladder_tokens":
             normalized_key = "ours_budget_ladder_tokens"
         elif key == "budget_ladder_gap2_thresholds":
@@ -1943,18 +3155,42 @@ def config_for_example(config: Config, example: Example) -> Config:
             normalized_key = "ours_graph_bridge_max_terms"
         elif key == "graph_bridge_min_score":
             normalized_key = "ours_graph_bridge_min_score"
+        elif key == "coarse_to_fine_group_pages":
+            normalized_key = "ours_coarse_to_fine_group_pages"
+        elif key == "coarse_to_fine_candidate_multiplier":
+            normalized_key = "ours_coarse_to_fine_candidate_multiplier"
+        elif key == "coarse_to_fine_neighbor_groups":
+            normalized_key = "ours_coarse_to_fine_neighbor_groups"
         elif key == "layer_router_mode":
             normalized_key = "ours_layer_router_mode"
         elif key == "layer_router_low_fraction":
             normalized_key = "ours_layer_router_low_fraction"
         elif key == "layer_router_low_budget_tokens":
             normalized_key = "ours_layer_router_low_budget_tokens"
+        elif key == "action_router_mode":
+            normalized_key = "ours_action_router_mode"
+        elif key == "learned_router_base_action_router_mode":
+            normalized_key = "ours_learned_router_base_action_router_mode"
+        elif key == "operator_mode":
+            normalized_key = "ours_operator_mode"
+        elif key == "operator_confidence":
+            normalized_key = "ours_operator_confidence"
+        elif key == "operator_fallback_reason":
+            normalized_key = "ours_operator_fallback_reason"
         elif key == "passage_closure_budget_fraction":
             normalized_key = "ours_passage_closure_budget_fraction"
         elif key == "passage_closure_radius_pages":
             normalized_key = "ours_passage_closure_radius_pages"
+        elif key == "demonstration_closure_budget_fraction":
+            normalized_key = "ours_demonstration_closure_budget_fraction"
+        elif key == "demonstration_closure_radius_pages":
+            normalized_key = "ours_demonstration_closure_radius_pages"
+        elif key == "demonstration_closure_tail_pages":
+            normalized_key = "ours_demonstration_closure_tail_pages"
         elif key == "structured_fingerprint_budget_fraction":
             normalized_key = "ours_structured_fingerprint_budget_fraction"
+        elif key == "direct_summary_max_words":
+            normalized_key = "ours_direct_summary_max_words"
         elif key == "short_decode_max_tokens":
             normalized_key = "ours_short_decode_max_tokens"
         elif key == "support_window_radius_words":
@@ -1984,17 +3220,40 @@ def config_for_example(config: Config, example: Example) -> Config:
     if "graph_bridge" in merged:
         overrides["ours_graph_bridge_tasks"] = example.task if bool(merged["graph_bridge"]) else ""
 
+    if "coarse_to_fine" in merged:
+        overrides["ours_coarse_to_fine_tasks"] = example.task if bool(merged["coarse_to_fine"]) else ""
+
+    if "anchor_window" in merged:
+        overrides["ours_anchor_window_tasks"] = example.task if bool(merged["anchor_window"]) else ""
+
+    if "span_repack" in merged:
+        overrides["ours_span_repack_tasks"] = example.task if bool(merged["span_repack"]) else ""
+
     if "layer_router" in merged:
         overrides["ours_layer_router_tasks"] = example.task if bool(merged["layer_router"]) else ""
 
+    if "action_router" in merged:
+        overrides["ours_action_router_tasks"] = example.task if bool(merged["action_router"]) else ""
+
+    if "score_safe" in merged:
+        overrides["ours_score_safe_tasks"] = example.task if bool(merged["score_safe"]) else ""
+
     if "full_fallback" in merged:
         overrides["ours_full_fallback_tasks"] = example.task if bool(merged["full_fallback"]) else ""
+
+    if "retry_full_fallback" in merged:
+        overrides["ours_retry_full_fallback_tasks"] = example.task if bool(merged["retry_full_fallback"]) else ""
 
     if "label_support" in merged:
         overrides["ours_label_support_tasks"] = example.task if bool(merged["label_support"]) else ""
 
     if "passage_closure" in merged:
         overrides["ours_passage_closure_tasks"] = example.task if bool(merged["passage_closure"]) else ""
+
+    if "demonstration_closure" in merged:
+        overrides["ours_demonstration_closure_tasks"] = (
+            example.task if bool(merged["demonstration_closure"]) else ""
+        )
 
     if "structured_fingerprint" in merged:
         overrides["ours_structured_fingerprint_tasks"] = example.task if bool(merged["structured_fingerprint"]) else ""
@@ -2039,10 +3298,25 @@ def config_for_example(config: Config, example: Example) -> Config:
     return replace(config, **overrides)
 
 
+def apply_post_route_runtime_constraints(config: Config, example: Example) -> Config:
+    policy = parse_task_policy_spec(config.ours_task_policy_json)
+    constraints = policy.get("__runtime_constraints", {}) if policy else {}
+    if not isinstance(constraints, dict) or not constraints:
+        return config
+    overrides: dict[str, Any] = {}
+    if "direct_structured_answer" in constraints:
+        overrides["ours_direct_structured_answer_tasks"] = (
+            example.task if bool(constraints["direct_structured_answer"]) else ""
+        )
+    return replace(config, **overrides) if overrides else config
+
+
 def bridge_enabled(config: Config) -> bool:
     return config.ours_scorer in {
         "hybrid_late_mmr_bridge_flow",
+        "hybrid_late_mmr_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_bridge_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_task_bridge_flow",
     }
 
@@ -2061,9 +3335,33 @@ def graph_bridge_active_for_example(config: Config, example: Example) -> bool:
     return example.task in tasks
 
 
+def coarse_to_fine_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_coarse_to_fine_tasks.split(",") if item.strip()}
+    return example.task in tasks
+
+
+def anchor_window_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_anchor_window_tasks.split(",") if item.strip()}
+    return example.task in tasks and config.ours_anchor_window_tokens > 0
+
+
+def span_repack_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_span_repack_tasks.split(",") if item.strip()}
+    return (
+        example.task in tasks
+        and config.ours_span_repack_window_tokens > 0
+        and config.ours_span_repack_budget_fraction > 0.0
+    )
+
+
 def layer_router_active_for_example(config: Config, example: Example) -> bool:
     tasks = {item.strip() for item in config.ours_layer_router_tasks.split(",") if item.strip()}
     return example.task in tasks
+
+
+def action_router_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_action_router_tasks.split(",") if item.strip()}
+    return example.task in tasks and config.ours_action_router_mode != "off"
 
 
 def full_fallback_active_for_example(config: Config, example: Example) -> bool:
@@ -2071,8 +3369,37 @@ def full_fallback_active_for_example(config: Config, example: Example) -> bool:
     return example.task in tasks
 
 
+def retry_full_fallback_allowed_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_retry_full_fallback_tasks.split(",") if item.strip()}
+    return "*" in tasks or example.task in tasks
+
+
 STRUCTURED_LABEL_RE = re.compile(r"\b(?:Paragraph|Passage)\s+\d+\b", re.IGNORECASE)
+NUMBERED_PARAGRAPH_RE = re.compile(
+    r"(?:^|\n)\s*Paragraph\s+(\d+)\s*:?\s*(.*?)(?=(?:\n\s*Paragraph\s+\d+\s*:?)|\Z)",
+    re.IGNORECASE | re.DOTALL,
+)
 PASSAGE_HEADER_RE = re.compile(r"\bPassage\s+(\d+)\s*:", re.IGNORECASE)
+DEMONSTRATION_USER_RE = re.compile(r"[\"']role[\"']\s*:\s*[\"']user[\"']", re.IGNORECASE)
+DIRECT_EXTRACTIVE_QA_TASKS = {
+    "narrativeqa",
+    "qasper",
+    "multifieldqa_en",
+    "hotpotqa",
+    "2wikimqa",
+    "musique",
+    "triviaqa",
+}
+DIRECT_PREFILL_SHORT_CIRCUIT_TASKS = {
+    "passage_retrieval_en",
+    "passage_count",
+    "trec",
+    "gov_report",
+    "multi_news",
+    "qmsum",
+    "samsum",
+    *DIRECT_EXTRACTIVE_QA_TASKS,
+}
 
 
 def label_support_active_for_example(config: Config, example: Example) -> bool:
@@ -2085,6 +3412,11 @@ def passage_closure_active_for_example(config: Config, example: Example) -> bool
     return example.task in tasks
 
 
+def demonstration_closure_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_demonstration_closure_tasks.split(",") if item.strip()}
+    return example.task in tasks and config.ours_demonstration_closure_budget_fraction > 0.0
+
+
 def structured_fingerprint_active_for_example(config: Config, example: Example) -> bool:
     tasks = {item.strip() for item in config.ours_structured_fingerprint_tasks.split(",") if item.strip()}
     return example.task in tasks
@@ -2093,6 +3425,14 @@ def structured_fingerprint_active_for_example(config: Config, example: Example) 
 def direct_structured_answer_active_for_example(config: Config, example: Example) -> bool:
     tasks = {item.strip() for item in config.ours_direct_structured_answer_tasks.split(",") if item.strip()}
     return example.task in tasks
+
+
+def direct_prefill_short_circuit_active_for_example(config: Config, example: Example) -> bool:
+    if not direct_structured_answer_active_for_example(config, example):
+        return False
+    if full_fallback_active_for_example(config, example):
+        return False
+    return config.ours_operator_mode in {"aggregate", "structured"} or example.task in DIRECT_PREFILL_SHORT_CIRCUIT_TASKS
 
 
 def short_decode_active_for_example(config: Config, example: Example) -> bool:
@@ -2131,6 +3471,11 @@ def consistency_verifier_active_for_example(config: Config, example: Example) ->
 
 def score_risk_active_for_example(config: Config, example: Example) -> bool:
     tasks = {item.strip() for item in config.ours_score_risk_tasks.split(",") if item.strip()}
+    return example.task in tasks
+
+
+def score_safe_active_for_example(config: Config, example: Example) -> bool:
+    tasks = {item.strip() for item in config.ours_score_safe_tasks.split(",") if item.strip()}
     return example.task in tasks
 
 
@@ -2254,6 +3599,10 @@ def score_risk_triggered_for_stats(stats: dict[str, float], config: Config, raw_
         conditions.append(stats["entropy"] <= config.ours_score_risk_entropy_at_most)
     if config.ours_score_risk_min_top_score >= 0.0:
         conditions.append(stats["max"] <= config.ours_score_risk_min_top_score)
+    if config.ours_score_risk_mean_at_least >= 0.0:
+        conditions.append(stats["mean"] >= config.ours_score_risk_mean_at_least)
+    if config.ours_score_risk_mean_at_most >= 0.0:
+        conditions.append(stats["mean"] <= config.ours_score_risk_mean_at_most)
     if config.ours_score_risk_raw_prefix_at_most >= 0 and raw_prefix_tokens >= 0:
         conditions.append(raw_prefix_tokens <= config.ours_score_risk_raw_prefix_at_most)
     if config.ours_score_risk_raw_prefix_at_least >= 0 and raw_prefix_tokens >= 0:
@@ -2261,9 +3610,740 @@ def score_risk_triggered_for_stats(stats: dict[str, float], config: Config, raw_
     return bool(conditions) and all(conditions)
 
 
+def score_safe_certified_for_stats(stats: dict[str, float], config: Config, raw_prefix_tokens: int = -1) -> bool:
+    conditions: list[bool] = []
+    if config.ours_score_safe_linear_threshold >= 0.0:
+        conditions.append(score_risk_linear_value(stats, config) <= config.ours_score_safe_linear_threshold)
+    if config.ours_score_safe_min_gap2 >= 0.0:
+        conditions.append(stats["gap2"] >= config.ours_score_safe_min_gap2)
+    if config.ours_score_safe_min_gap3 >= 0.0:
+        conditions.append(stats["gap3"] >= config.ours_score_safe_min_gap3)
+    if config.ours_score_safe_max_entropy >= 0.0:
+        conditions.append(stats["entropy"] <= config.ours_score_safe_max_entropy)
+    if config.ours_score_safe_min_top_score >= 0.0:
+        conditions.append(stats["max"] >= config.ours_score_safe_min_top_score)
+    if config.ours_score_safe_mean_at_least >= 0.0:
+        conditions.append(stats["mean"] >= config.ours_score_safe_mean_at_least)
+    if config.ours_score_safe_raw_prefix_at_most >= 0 and raw_prefix_tokens >= 0:
+        conditions.append(raw_prefix_tokens <= config.ours_score_safe_raw_prefix_at_most)
+    if config.ours_score_safe_raw_prefix_at_least >= 0 and raw_prefix_tokens >= 0:
+        conditions.append(raw_prefix_tokens >= config.ours_score_safe_raw_prefix_at_least)
+    return bool(conditions) and all(conditions)
+
+
 def score_risk_triggered_for_pages(pages: list[Page], config: Config, raw_prefix_tokens: int = -1) -> bool:
     stats = page_score_stats(pages)
+    if (
+        config.ours_score_safe_tasks.strip()
+        and
+        score_safe_certified_for_stats(stats, config, raw_prefix_tokens=raw_prefix_tokens)
+    ):
+        return False
     return score_risk_triggered_for_stats(stats, config, raw_prefix_tokens=raw_prefix_tokens)
+
+
+def reset_score_risk_config(config: Config, **overrides: Any) -> Config:
+    values: dict[str, Any] = {
+        "ours_score_risk_min_gap2": -1.0,
+        "ours_score_risk_min_gap3": -1.0,
+        "ours_score_risk_max_gap2": -1.0,
+        "ours_score_risk_max_gap3": -1.0,
+        "ours_score_risk_max_entropy": 2.0,
+        "ours_score_risk_entropy_at_most": -1.0,
+        "ours_score_risk_min_top_score": -1.0,
+        "ours_score_risk_mean_at_least": -1.0,
+        "ours_score_risk_mean_at_most": -1.0,
+        "ours_score_risk_raw_prefix_at_most": -1,
+        "ours_score_risk_raw_prefix_at_least": -1,
+        "ours_score_risk_linear_threshold": -1.0,
+        "ours_score_risk_gap2_weight": 1.0,
+        "ours_score_risk_gap3_weight": 0.0,
+        "ours_score_risk_top_score_weight": 0.0,
+    }
+    values.update(overrides)
+    return replace(config, **values)
+
+
+def routed_escalation_budget(configured_budget: int, base_budget: int, default_full_budget: int = 999999) -> int:
+    if configured_budget > base_budget:
+        return configured_budget
+    return default_full_budget
+
+
+LEARNED_ROUTER_NUMERIC_FEATURES = [
+    "raw_prefix_tokens",
+    "raw_prompt_tokens",
+    "context_length_field",
+    "page_count",
+    "ours_score_max",
+    "ours_score_mean",
+    "ours_score_gap2",
+    "ours_score_gap3",
+    "ours_score_entropy",
+    "ours_score_positive_fraction",
+    "ours_query_coverage_terms",
+    "ours_query_coverage_covered",
+    "ours_query_coverage_recall",
+]
+
+LEARNED_ROUTER_FAMILY_BY_TASK = {
+    "narrativeqa": "single_doc_qa",
+    "qasper": "single_doc_qa",
+    "multifieldqa_en": "single_doc_qa",
+    "hotpotqa": "multi_doc_qa",
+    "2wikimqa": "multi_doc_qa",
+    "musique": "multi_doc_qa",
+    "gov_report": "summarization",
+    "qmsum": "summarization",
+    "multi_news": "summarization",
+    "trec": "fewshot",
+    "triviaqa": "fewshot",
+    "samsum": "fewshot",
+    "passage_count": "synthetic",
+    "passage_retrieval_en": "synthetic",
+    "lcc": "code",
+    "repobench-p": "code",
+}
+
+
+def learned_router_task_family(task: str) -> str:
+    return LEARNED_ROUTER_FAMILY_BY_TASK.get(task, "other")
+
+
+@lru_cache(maxsize=8)
+def load_learned_router_model(path_spec: str) -> dict[str, Any]:
+    path = Path(path_spec)
+    with path.open("rb") as handle:
+        payload = pickle.load(handle)
+    if not isinstance(payload, dict) or "model" not in payload:
+        raise ValueError(f"Invalid learned router payload: {path}")
+    return payload
+
+
+@lru_cache(maxsize=16)
+def parse_learned_router_action_policy_spec(spec: str) -> dict[str, Any]:
+    spec = spec.strip()
+    if not spec:
+        return {}
+    text = spec
+    try:
+        path = Path(spec)
+        if path.exists():
+            text = path.read_text(encoding="utf-8")
+    except OSError:
+        text = spec
+    payload = json.loads(text)
+    if not isinstance(payload, dict):
+        raise ValueError("--ours_learned_router_action_policy_json must decode to a dict")
+    actions = payload.get("actions", payload)
+    if not isinstance(actions, dict):
+        raise ValueError("learned router action policy must contain a dict or {'actions': dict}")
+    return payload
+
+
+def estimated_router_query_coverage(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> dict[str, float]:
+    terms = query_coverage_terms_for_example(example, config)
+    if not terms:
+        return {"terms": 0.0, "covered": 0.0, "recall": 0.0}
+    base_keep = base_context_keep_indices(bundle, config)
+    base_context_tokens = sum(1 for idx in base_keep if bundle.context_token_start <= idx < bundle.query_start)
+    remaining = max(0, int(config.budget_tokens) - base_context_tokens)
+    if remaining <= 0:
+        return {"terms": float(len(terms)), "covered": 0.0, "recall": 0.0}
+    chosen: list[Page] = []
+    used = 0
+    for page in sorted(pages, key=lambda item: (item.score, -(item.token_end - item.token_start), -item.page_id), reverse=True):
+        page_tokens = max(0, min(page.token_end, bundle.query_start) - max(page.token_start, bundle.context_token_start))
+        if page_tokens <= 0:
+            continue
+        chosen.append(page)
+        used += page_tokens
+        if used >= remaining:
+            break
+    covered: set[str] = set()
+    for page in chosen:
+        covered.update(page_query_coverage_terms(page, terms))
+    return {
+        "terms": float(len(terms)),
+        "covered": float(len(covered)),
+        "recall": len(covered) / max(1, len(terms)),
+    }
+
+
+def learned_router_feature_map(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> dict[str, float]:
+    stats = page_score_stats(pages)
+    coverage = estimated_router_query_coverage(example, bundle, pages, config)
+    return {
+        "raw_prefix_tokens": float(bundle.query_start),
+        "raw_prompt_tokens": float(int(bundle.input_ids.shape[-1])),
+        "context_length_field": float(example.length),
+        "page_count": float(len(pages)),
+        "ours_score_max": stats["max"],
+        "ours_score_mean": stats["mean"],
+        "ours_score_gap2": stats["gap2"],
+        "ours_score_gap3": stats["gap3"],
+        "ours_score_entropy": stats["entropy"],
+        "ours_score_positive_fraction": stats["positive_fraction"],
+        "ours_query_coverage_terms": coverage["terms"],
+        "ours_query_coverage_covered": coverage["covered"],
+        "ours_query_coverage_recall": coverage["recall"],
+    }
+
+
+def learned_router_vector(
+    feature_names: list[str],
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> list[float]:
+    features = learned_router_feature_map(example, bundle, pages, config)
+    family = learned_router_task_family(example.task)
+    vector: list[float] = []
+    for name in feature_names:
+        if name in features:
+            vector.append(float(features[name]))
+        elif name.startswith("family="):
+            vector.append(1.0 if name == f"family={family}" else 0.0)
+        elif name.startswith("task="):
+            vector.append(1.0 if name == f"task={example.task}" else 0.0)
+        else:
+            vector.append(0.0)
+    return vector
+
+
+def predict_learned_router_action(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> tuple[str, float, str]:
+    if not config.ours_learned_router_model_path:
+        return config.ours_learned_router_default_action, 0.0, "missing_model_path"
+    try:
+        payload = load_learned_router_model(config.ours_learned_router_model_path)
+        model = payload["model"]
+        metadata = payload.get("metadata", {})
+        feature_names = list(metadata.get("feature_names") or LEARNED_ROUTER_NUMERIC_FEATURES)
+        threshold = float(metadata.get("confidence_fallback_threshold", 0.0) or 0.0)
+        if config.ours_learned_router_confidence_threshold >= 0.0:
+            threshold = float(config.ours_learned_router_confidence_threshold)
+        if isinstance(model, dict) and "constant" in model:
+            action = str(model["constant"])
+            confidence = 1.0
+        else:
+            vector = learned_router_vector(feature_names, example, bundle, pages, config)
+            action = str(model.predict([vector])[0])
+            confidence = 1.0
+            if hasattr(model, "predict_proba"):
+                probabilities = model.predict_proba([vector])
+                if len(probabilities) and len(probabilities[0]):
+                    confidence = float(max(probabilities[0]))
+        if action != config.ours_learned_router_default_action and confidence < threshold:
+            return config.ours_learned_router_default_action, confidence, "low_confidence"
+        return action, confidence, ""
+    except Exception as exc:  # noqa: BLE001 - keep benchmark runs alive on router load failures.
+        return config.ours_learned_router_default_action, 0.0, f"router_error:{type(exc).__name__}"
+
+
+def budget_change_router_text(example: Example) -> str:
+    return "\n".join([example.domain, example.sub_domain, example.query])
+
+
+def budget_change_router_numeric_features(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    numeric_keys: list[str],
+) -> list[float]:
+    features = learned_router_feature_map(example, bundle, pages, config)
+    stem, choices = split_multiple_choice_query(example.query)
+    question_prefix = "What is the correct answer to this question:"
+    question = stem[len(question_prefix) :].strip() if stem.startswith(question_prefix) else stem
+    return [
+        *[float(features.get(key, 0.0)) for key in numeric_keys],
+        float(len(question)),
+        float(sum(len(choice) for choice in choices)),
+        float(max((len(choice) for choice in choices), default=0)),
+        float(len(example.context)),
+    ]
+
+
+def predict_budget_change_router_action(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> tuple[str, float, str]:
+    if not config.ours_learned_router_model_path:
+        return config.ours_learned_router_default_action, 0.0, "missing_model_path"
+    try:
+        payload = load_learned_router_model(config.ours_learned_router_model_path)
+        if payload.get("schema") != "lbv2_budget_change_router_v1":
+            return config.ours_learned_router_default_action, 0.0, "invalid_budget_change_schema"
+        word, categorical, scaler = payload["feature_parts"]
+        model = payload["model"]
+        numeric_keys = [str(key) for key in payload.get("numeric_keys", [])]
+        text_matrix = word.transform([budget_change_router_text(example)])
+        category_matrix = categorical.transform(
+            [
+                {
+                    f"domain={example.domain}": 1.0,
+                    f"sub_domain={example.sub_domain}": 1.0,
+                    f"operator={config.ours_operator_mode}": 1.0,
+                }
+            ]
+        )
+        numeric = scaler.transform(
+            [budget_change_router_numeric_features(example, bundle, pages, config, numeric_keys)]
+        )
+        from scipy import sparse as scipy_sparse
+
+        matrix = scipy_sparse.hstack(
+            [text_matrix, category_matrix, scipy_sparse.csr_matrix(numeric)], format="csr"
+        )
+        classes = list(getattr(model, "classes_", []))
+        if 1 not in classes:
+            return config.ours_learned_router_default_action, 0.0, "missing_change_class"
+        change_probability = float(model.predict_proba(matrix)[0, classes.index(1)])
+        threshold = float(payload.get("threshold", 0.5))
+        if config.ours_learned_router_confidence_threshold >= 0.0:
+            threshold = float(config.ours_learned_router_confidence_threshold)
+        action = str(payload.get("expanded_budget_action", "b2048")) if change_probability >= threshold else str(
+            payload.get("base_budget_action", config.ours_learned_router_default_action)
+        )
+        return action, change_probability, ""
+    except Exception as exc:  # noqa: BLE001 - route failures must preserve the configured base action.
+        return config.ours_learned_router_default_action, 0.0, f"budget_change_error:{type(exc).__name__}"
+
+
+def learned_budget_planner_vector(
+    feature_names: list[str],
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    action: str,
+    budget_tokens: int,
+    budget_rank: int,
+    budget_count: int,
+) -> list[float]:
+    features = learned_router_feature_map(example, bundle, pages, config)
+    raw_prefix = max(1.0, float(features.get("raw_prefix_tokens", 0.0)))
+    raw_prompt = max(1.0, float(features.get("raw_prompt_tokens", 0.0)))
+    page_count = max(1.0, float(features.get("page_count", 0.0)))
+    page_tokens = max(1.0, float(config.page_tokens))
+    budget = float(max(0, int(budget_tokens)))
+    budget_features = {
+        "candidate_budget_tokens": budget,
+        "candidate_budget_log2": math.log2(max(1.0, budget)),
+        "candidate_budget_fraction_of_context": budget / raw_prefix,
+        "candidate_budget_fraction_of_prompt": budget / raw_prompt,
+        "candidate_budget_pages": budget / page_tokens,
+        "candidate_budget_page_fraction": budget / max(1.0, page_count * page_tokens),
+        "candidate_budget_rank": float(budget_rank),
+        "candidate_budget_rank_fraction": float(budget_rank) / max(1.0, float(budget_count - 1)),
+    }
+    family = learned_router_task_family(example.task)
+    vector: list[float] = []
+    for name in feature_names:
+        if name in features:
+            vector.append(float(features[name]))
+        elif name in budget_features:
+            vector.append(float(budget_features[name]))
+        elif name.startswith("family="):
+            vector.append(1.0 if name == f"family={family}" else 0.0)
+        elif name.startswith("task="):
+            vector.append(1.0 if name == f"task={example.task}" else 0.0)
+        elif name.startswith("action="):
+            vector.append(1.0 if name == f"action={action}" else 0.0)
+        else:
+            vector.append(0.0)
+    return vector
+
+
+def learned_budget_planner_safe_probability(model: Any, vector: list[float]) -> float:
+    if isinstance(model, dict) and "constant_safe_probability" in model:
+        return float(model["constant_safe_probability"])
+    if hasattr(model, "predict_proba"):
+        probabilities = model.predict_proba([vector])
+        classes = [str(item) for item in getattr(model, "classes_", [])]
+        if len(probabilities) and len(probabilities[0]):
+            if "1" in classes:
+                return float(probabilities[0][classes.index("1")])
+            if "True" in classes:
+                return float(probabilities[0][classes.index("True")])
+            return float(max(probabilities[0]))
+    if hasattr(model, "predict"):
+        return 1.0 if int(model.predict([vector])[0]) == 1 else 0.0
+    return 0.0
+
+
+def predict_learned_budget_planner_action(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+) -> tuple[str, float, str]:
+    if not config.ours_learned_router_model_path:
+        return config.ours_learned_router_default_action, 0.0, "missing_model_path"
+    try:
+        payload = load_learned_router_model(config.ours_learned_router_model_path)
+        model = payload["model"]
+        metadata = payload.get("metadata", {})
+        if metadata.get("router_type") != "budget_pair_planner_v12":
+            return predict_learned_router_action(example, bundle, pages, config)
+        feature_names = list(metadata.get("feature_names") or LEARNED_ROUTER_NUMERIC_FEATURES)
+        threshold = float(metadata.get("safe_probability_threshold", 0.5) or 0.5)
+        if config.ours_learned_router_confidence_threshold >= 0.0:
+            threshold = float(config.ours_learned_router_confidence_threshold)
+        candidate_actions = [str(item) for item in metadata.get("candidate_actions", [])]
+        candidate_budget_tokens = {
+            str(key): int(value)
+            for key, value in dict(metadata.get("candidate_budget_tokens", {})).items()
+        }
+        if not candidate_actions:
+            candidate_actions = sorted(candidate_budget_tokens, key=lambda item: candidate_budget_tokens[item])
+        candidate_actions = [
+            action
+            for action in candidate_actions
+            if action != config.ours_learned_router_default_action and action in candidate_budget_tokens
+        ]
+        candidate_actions.sort(key=lambda item: (candidate_budget_tokens[item], item))
+        if not candidate_actions:
+            return config.ours_learned_router_default_action, 0.0, "missing_candidate_actions"
+        best_action = config.ours_learned_router_default_action
+        best_probability = -1.0
+        for rank, action in enumerate(candidate_actions):
+            budget_tokens = candidate_budget_tokens[action]
+            vector = learned_budget_planner_vector(
+                feature_names,
+                example,
+                bundle,
+                pages,
+                config,
+                action,
+                budget_tokens,
+                rank,
+                len(candidate_actions),
+            )
+            safe_probability = learned_budget_planner_safe_probability(model, vector)
+            if safe_probability > best_probability:
+                best_probability = safe_probability
+                best_action = action
+            if safe_probability >= threshold:
+                return action, safe_probability, ""
+        return config.ours_learned_router_default_action, max(0.0, best_probability), f"planner_no_safe_candidate:{best_action}"
+    except Exception as exc:  # noqa: BLE001 - keep benchmark runs alive on planner load failures.
+        return config.ours_learned_router_default_action, 0.0, f"planner_error:{type(exc).__name__}"
+
+
+def learned_action_policy_overrides(
+    action: str,
+    example: Example,
+    config: Config,
+) -> tuple[dict[str, Any], str]:
+    if action == config.ours_learned_router_default_action:
+        return {}, ""
+    if not config.ours_learned_router_action_policy_json:
+        return {}, "missing_action_policy"
+    payload = parse_learned_router_action_policy_spec(config.ours_learned_router_action_policy_json)
+    actions = payload.get("actions", payload)
+    if action not in actions:
+        return {}, "unmapped_action"
+    entry = actions[action]
+    if not isinstance(entry, dict):
+        return {}, "invalid_action_entry"
+    family = learned_router_task_family(example.task)
+    merged: dict[str, Any] = {}
+    direct = {key: value for key, value in entry.items() if key in TASK_POLICY_KEYS}
+    if direct:
+        merged.update(direct)
+    for key in ("*", family, f"family:{family}", example.task):
+        value = entry.get(key)
+        if isinstance(value, dict):
+            merged.update(value)
+    if not merged:
+        return {}, "no_task_fragment"
+    return merged, ""
+
+
+def apply_normalized_config_overrides(
+    config: Config,
+    example: Example,
+    overrides: dict[str, Any],
+) -> Config:
+    values: dict[str, Any] = {}
+    for key, value in overrides.items():
+        if key not in TASK_POLICY_KEYS or not hasattr(config, key):
+            continue
+        if value == "__TASK__":
+            value = example.task
+        elif value == "__EMPTY__":
+            value = ""
+        current = getattr(config, key)
+        if isinstance(current, bool):
+            values[key] = bool(value)
+        elif isinstance(current, int):
+            values[key] = int(value)
+        elif isinstance(current, float):
+            values[key] = float(value)
+        else:
+            values[key] = str(value)
+    return replace(config, **values) if values else config
+
+
+def apply_v293_action_router(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    stats = page_score_stats(pages)
+    selected_action = "v291"
+    routed = config
+    if example.task == "narrativeqa" and stats["entropy"] <= 0.990717:
+        selected_action = "v275_narrative_entropy"
+        routed = reset_score_risk_config(
+            config,
+            budget_tokens=512,
+            ours_score_risk_tasks=example.task,
+            ours_score_risk_budget_tokens=routed_escalation_budget(config.ours_score_risk_budget_tokens, 512),
+            ours_score_risk_entropy_at_most=0.9699,
+            ours_output_verifier_tasks="",
+            ours_grounding_verifier_tasks="",
+            ours_consistency_verifier_tasks="",
+        )
+    elif example.task == "qasper" and bundle.query_start <= 3377:
+        selected_action = "v287_qasper_short_prefix"
+        routed = reset_score_risk_config(
+            config,
+            budget_tokens=768,
+            ours_scorer="hybrid_late_mmr_multiscale_task_bridge_flow",
+            ours_bridge_tasks=example.task,
+            ours_bridge_budget_fraction=0.16,
+            ours_score_risk_tasks=example.task,
+            ours_score_risk_budget_tokens=routed_escalation_budget(config.ours_score_risk_budget_tokens, 768),
+            ours_score_risk_raw_prefix_at_most=3024,
+        )
+    elif example.task == "multifieldqa_en" and bundle.query_start <= 4677:
+        selected_action = "v287_multifield_short_prefix"
+        routed = reset_score_risk_config(
+            config,
+            budget_tokens=512,
+            page_tokens=16,
+            ours_multiscale_group_pages=8,
+            ours_score_risk_tasks=example.task,
+            ours_score_risk_budget_tokens=routed_escalation_budget(config.ours_score_risk_budget_tokens, 512),
+            ours_score_risk_min_gap2=0.00443255,
+            ours_output_verifier_tasks="",
+            ours_grounding_verifier_tasks="",
+            ours_consistency_verifier_tasks="",
+        )
+    elif example.task == "hotpotqa" and score_risk_linear_value(stats, config) <= 0.9506:
+        selected_action = "v287_hotpot_low_risk"
+        routed = replace(
+            config,
+            budget_tokens=2048,
+            page_tokens=16,
+            ours_anchor_window_tasks=example.task,
+            ours_anchor_window_tokens=128,
+            ours_multiscale_group_pages=8,
+            ours_coarse_to_fine_tasks=example.task,
+            ours_coverage_risk_tasks=example.task,
+            ours_coverage_risk_min_recall=0.75,
+            ours_coverage_risk_min_terms=1,
+            ours_coverage_risk_budget_tokens=routed_escalation_budget(
+                config.ours_coverage_risk_budget_tokens,
+                2048,
+            ),
+            ours_score_risk_tasks="",
+            ours_full_fallback_tasks="",
+        )
+    elif example.task == "2wikimqa" and stats["mean"] <= 0.306522:
+        selected_action = "v275_2wiki_low_mean"
+        routed = reset_score_risk_config(
+            config,
+            budget_tokens=768,
+            page_tokens=16,
+            ours_anchor_window_tasks=example.task,
+            ours_anchor_window_tokens=96,
+            ours_multiscale_group_pages=8,
+            ours_coarse_to_fine_tasks=example.task,
+            ours_score_risk_tasks=example.task,
+            ours_score_risk_budget_tokens=1536,
+            ours_score_risk_linear_threshold=0.946880252247314,
+            ours_score_risk_gap2_weight=1.0,
+            ours_score_risk_gap3_weight=0.0,
+            ours_score_risk_top_score_weight=0.0,
+            ours_output_verifier_tasks=example.task,
+            ours_grounding_verifier_tasks=example.task,
+            ours_retry_budget_tokens=1536,
+            ours_consistency_verifier_tasks=example.task,
+            ours_consistency_budget_tokens=1536,
+            ours_consistency_requires_score_risk=1,
+        )
+    extra["action_router_selected_action"] = selected_action
+    return routed
+
+
+def apply_learned_budget_action_router(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    action, confidence, fallback_reason = predict_learned_router_action(example, bundle, pages, config)
+    raw_action = action
+    overrides, mapping_reason = learned_action_policy_overrides(action, example, config)
+    if mapping_reason:
+        fallback_reason = fallback_reason or mapping_reason
+        action = config.ours_learned_router_default_action
+        overrides = {}
+    routed = apply_normalized_config_overrides(config, example, overrides)
+    extra["action_router_selected_action"] = action
+    extra["action_router_raw_action"] = raw_action
+    extra["action_router_confidence"] = confidence
+    extra["action_router_fallback_reason"] = fallback_reason
+    extra["action_router_policy_overrides"] = ",".join(sorted(overrides))
+    return routed
+
+
+def apply_budget_change_action_router(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    action, confidence, fallback_reason = predict_budget_change_router_action(example, bundle, pages, config)
+    raw_action = action
+    overrides, mapping_reason = learned_action_policy_overrides(action, example, config)
+    if mapping_reason:
+        fallback_reason = fallback_reason or mapping_reason
+        action = config.ours_learned_router_default_action
+        overrides = {}
+    routed = apply_normalized_config_overrides(config, example, overrides)
+    extra["action_router_selected_action"] = action
+    extra["action_router_raw_action"] = raw_action
+    extra["action_router_confidence"] = confidence
+    extra["action_router_fallback_reason"] = fallback_reason
+    extra["action_router_policy_overrides"] = ",".join(sorted(overrides))
+    return routed
+
+
+def apply_learned_budget_overlay_action_router(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    action, confidence, fallback_reason = predict_learned_router_action(example, bundle, pages, config)
+    raw_action = action
+    overrides, mapping_reason = learned_action_policy_overrides(action, example, config)
+    base_mode = config.ours_learned_router_base_action_router_mode
+    if action != config.ours_learned_router_default_action and not mapping_reason:
+        routed = apply_normalized_config_overrides(config, example, overrides)
+        if base_mode == "v293_rules_after_learned":
+            routed = apply_v293_action_router(example, bundle, pages, routed, extra)
+            base_selected = str(extra.get("action_router_selected_action", ""))
+            fallback_reason = f"{fallback_reason}|post:v293_rules:{base_selected}".strip("|")
+        extra["action_router_selected_action"] = action
+        extra["action_router_raw_action"] = raw_action
+        extra["action_router_confidence"] = confidence
+        extra["action_router_fallback_reason"] = fallback_reason
+        extra["action_router_policy_overrides"] = ",".join(sorted(overrides))
+        return routed
+
+    fallback_reason = fallback_reason or mapping_reason or "default_action"
+    routed = config
+    selected_action = config.ours_learned_router_default_action
+    if base_mode in {"v293_rules", "v293_rules_after_learned"}:
+        routed = apply_v293_action_router(example, bundle, pages, config, extra)
+        selected_action = str(extra.get("action_router_selected_action", selected_action))
+        fallback_reason = f"{fallback_reason}|base:v293_rules"
+    elif base_mode != "off":
+        fallback_reason = f"{fallback_reason}|unknown_base:{base_mode}"
+    extra["action_router_selected_action"] = selected_action
+    extra["action_router_raw_action"] = raw_action
+    extra["action_router_confidence"] = confidence
+    extra["action_router_fallback_reason"] = fallback_reason
+    extra["action_router_policy_overrides"] = ""
+    return routed
+
+
+def apply_learned_budget_planner_action_router(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    action, confidence, fallback_reason = predict_learned_budget_planner_action(example, bundle, pages, config)
+    raw_action = action
+    overrides, mapping_reason = learned_action_policy_overrides(action, example, config)
+    routed = config
+    selected_action = action
+    if action != config.ours_learned_router_default_action and not mapping_reason:
+        routed = apply_normalized_config_overrides(config, example, overrides)
+    else:
+        selected_action = config.ours_learned_router_default_action
+        fallback_reason = fallback_reason or mapping_reason or "default_action"
+
+    base_mode = config.ours_learned_router_base_action_router_mode
+    base_selected = ""
+    if base_mode == "v293_rules":
+        routed = apply_v293_action_router(example, bundle, pages, routed, extra)
+        base_selected = str(extra.get("action_router_selected_action", ""))
+        if selected_action == config.ours_learned_router_default_action:
+            selected_action = base_selected or selected_action
+        fallback_reason = f"{fallback_reason}|base:v293_rules:{base_selected}".strip("|")
+    elif base_mode != "off":
+        fallback_reason = f"{fallback_reason}|unknown_base:{base_mode}".strip("|")
+
+    extra["action_router_selected_action"] = selected_action
+    extra["action_router_raw_action"] = raw_action
+    extra["action_router_confidence"] = confidence
+    extra["action_router_fallback_reason"] = fallback_reason
+    extra["action_router_policy_overrides"] = ",".join(sorted(overrides)) if overrides else ""
+    return routed
+
+
+def apply_action_router_if_needed(
+    example: Example,
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    extra: dict[str, Any],
+) -> Config:
+    extra.setdefault("action_router_selected_action", "")
+    if not action_router_active_for_example(config, example):
+        return config
+    if config.ours_action_router_mode == "v293_rules":
+        return apply_v293_action_router(example, bundle, pages, config, extra)
+    if config.ours_action_router_mode == "learned_budget_v1":
+        return apply_learned_budget_action_router(example, bundle, pages, config, extra)
+    if config.ours_action_router_mode == "learned_budget_overlay_v1":
+        return apply_learned_budget_overlay_action_router(example, bundle, pages, config, extra)
+    if config.ours_action_router_mode == "learned_budget_planner_v2":
+        return apply_learned_budget_planner_action_router(example, bundle, pages, config, extra)
+    if config.ours_action_router_mode == "budget_change_v1":
+        return apply_budget_change_action_router(example, bundle, pages, config, extra)
+    return config
 
 
 def output_contract_failed(example: Example, prediction: str) -> bool:
@@ -2398,7 +4478,12 @@ def answer_consistency_failed(example: Example, first_prediction: str, second_pr
 
 
 def bm25_enabled(config: Config) -> bool:
-    return config.ours_scorer in {"hybrid_late_mmr_bm25_flow", "hybrid_late_mmr_multiscale_bm25_flow"}
+    return config.ours_scorer in {
+        "hybrid_late_mmr_bm25_flow",
+        "hybrid_late_mmr_bm25_bridge_flow",
+        "hybrid_late_mmr_multiscale_bm25_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
+    }
 
 
 def page_has_anchor_hit(page: Page, anchors: list[str], q_entities: set[str]) -> bool:
@@ -2667,6 +4752,75 @@ def infer_passage_ids(pages: list[Page]) -> list[int | None]:
                 current = None
         passage_ids.append(current)
     return passage_ids
+
+
+def infer_demonstration_unit_ids(pages: list[Page]) -> list[int | None]:
+    starts = [page.page_id for page in pages if DEMONSTRATION_USER_RE.search(page.text)]
+    if len(starts) < 2:
+        return [None] * len(pages)
+    start_set = set(starts)
+    unit_id = -1
+    unit_ids: list[int | None] = []
+    for page in pages:
+        if page.page_id in start_set:
+            unit_id += 1
+        unit_ids.append(unit_id if unit_id >= 0 else None)
+    return unit_ids
+
+
+def add_demonstration_closure_pages(
+    keep: set[int],
+    bundle: PromptBundle,
+    pages: list[Page],
+    center: Page,
+    remaining: int,
+    config: Config,
+    closure_tokens_used: int,
+    unit_ids: list[int | None],
+    selected_pages: list[Page],
+) -> tuple[int, int, list[Page], int | None]:
+    if remaining <= 0 or center.page_id >= len(unit_ids):
+        return 0, closure_tokens_used, [], None
+    unit_id = unit_ids[center.page_id]
+    if unit_id is None:
+        return 0, closure_tokens_used, [], None
+    cap = int(max(0, config.budget_tokens) * max(0.0, config.ours_demonstration_closure_budget_fraction))
+    if cap <= 0 or closure_tokens_used >= cap:
+        return 0, closure_tokens_used, [], unit_id
+
+    unit_pages = [page for page in pages if page.page_id < len(unit_ids) and unit_ids[page.page_id] == unit_id]
+    selected_ids = {page.page_id for page in selected_pages}
+    selected_ids.add(center.page_id)
+    tail_count = max(0, int(config.ours_demonstration_closure_tail_pages))
+    radius = max(0, int(config.ours_demonstration_closure_radius_pages))
+    tail = unit_pages[-tail_count:] if tail_count > 0 else []
+    local = sorted(
+        [page for page in unit_pages if abs(page.page_id - center.page_id) <= radius],
+        key=lambda page: (abs(page.page_id - center.page_id), page.page_id),
+    )
+    candidates: list[Page] = []
+    seen = set(selected_ids)
+    # The unit tail carries the choices and assistant label; local pages preserve the selected evidence span.
+    for page in [*tail, *local]:
+        if page.page_id in seen:
+            continue
+        seen.add(page.page_id)
+        candidates.append(page)
+
+    total_added = 0
+    added_pages: list[Page] = []
+    for page in candidates:
+        if remaining <= 0 or closure_tokens_used >= cap:
+            break
+        allowed = min(remaining, cap - closure_tokens_used)
+        added = add_page_to_keep(keep, bundle, page, allowed)
+        if added <= 0:
+            continue
+        remaining -= added
+        total_added += added
+        closure_tokens_used += added
+        added_pages.append(page)
+    return total_added, closure_tokens_used, added_pages, unit_id
 
 
 def add_passage_closure_pages(
@@ -3140,15 +5294,19 @@ def score_pages(
     semantic_vectors: dict[int, torch.Tensor] = {}
     semantic = [0.0 for _ in pages]
     late = [0.0 for _ in pages]
+    choice_support = [0.0 for _ in pages]
+    choice_contrast = [0.0 for _ in pages]
     needs_mean_semantic = config.ours_scorer in {
         "semantic",
         "hybrid",
         "hybrid_mmr",
         "hybrid_late_mmr",
         "hybrid_late_mmr_bm25_flow",
+        "hybrid_late_mmr_bm25_bridge_flow",
         "hybrid_late_mmr_bridge_flow",
         "hybrid_late_mmr_flow",
         "hybrid_late_mmr_multiscale_bm25_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_bridge_flow",
         "hybrid_late_mmr_multiscale_task_bridge_flow",
         "hybrid_late_mmr_multiscale_flow",
@@ -3156,14 +5314,16 @@ def score_pages(
         "hybrid_late_mmr_multiscale_idf_flow",
         "hybrid_late_mmr_idf_spread_flow",
         "hybrid_late_mmr_multiscale_idf_spread_flow",
-    }
+    } or config.ours_choice_support_weight > 0.0 or config.ours_choice_contrast_weight > 0.0
     needs_late_interaction = config.ours_scorer in {
         "late_interaction",
         "hybrid_late_mmr",
         "hybrid_late_mmr_bm25_flow",
+        "hybrid_late_mmr_bm25_bridge_flow",
         "hybrid_late_mmr_bridge_flow",
         "hybrid_late_mmr_flow",
         "hybrid_late_mmr_multiscale_bm25_flow",
+        "hybrid_late_mmr_multiscale_bm25_bridge_flow",
         "hybrid_late_mmr_multiscale_bridge_flow",
         "hybrid_late_mmr_multiscale_task_bridge_flow",
         "hybrid_late_mmr_multiscale_flow",
@@ -3178,6 +5338,17 @@ def score_pages(
         semantic_raw = torch.matmul(page_vecs, query_vec).detach().float().cpu().tolist()
         semantic = normalize_values([float(value) for value in semantic_raw])
         semantic_vectors = {page.page_id: page_vecs[idx].detach().float().cpu() for idx, page in enumerate(pages)}
+        _choice_stem, choices = split_multiple_choice_query(query)
+        if len(choices) == 4 and (
+            config.ours_choice_support_weight > 0.0 or config.ours_choice_contrast_weight > 0.0
+        ):
+            # The base scorer already models the question. Candidate-only vectors keep the contrast term from
+            # collapsing toward the common question embedding shared by all four alternatives.
+            choice_vecs = static_text_embeddings(model, tokenizer, choices, config.semantic_embed_max_tokens)
+            similarities = torch.matmul(page_vecs, choice_vecs.transpose(0, 1)).detach().float()
+            top_values = torch.topk(similarities, k=2, dim=1).values.cpu()
+            choice_support = normalize_values(top_values[:, 0].tolist())
+            choice_contrast = normalize_values((top_values[:, 0] - top_values[:, 1]).tolist())
     if needs_late_interaction and model is not None and tokenizer is not None:
         late_raw = late_interaction_scores(
             model,
@@ -3202,9 +5373,11 @@ def score_pages(
                 in {
                     "hybrid_late_mmr",
                     "hybrid_late_mmr_bm25_flow",
+                    "hybrid_late_mmr_bm25_bridge_flow",
                     "hybrid_late_mmr_bridge_flow",
                     "hybrid_late_mmr_flow",
                     "hybrid_late_mmr_multiscale_bm25_flow",
+                    "hybrid_late_mmr_multiscale_bm25_bridge_flow",
                     "hybrid_late_mmr_multiscale_bridge_flow",
                     "hybrid_late_mmr_multiscale_task_bridge_flow",
                     "hybrid_late_mmr_multiscale_flow",
@@ -3229,6 +5402,10 @@ def score_pages(
                 + config.structural_weight * structural[idx]
                 + config.coverage_weight * coverage[idx]
             )
+        score += (
+            max(0.0, config.ours_choice_support_weight) * choice_support[idx]
+            + max(0.0, config.ours_choice_contrast_weight) * choice_contrast[idx]
+        )
         page.score = float(score)
     return semantic_vectors
 
@@ -3246,6 +5423,174 @@ def add_page_to_keep(
     page_indices = page_indices[:remaining]
     keep.update(page_indices)
     return len(page_indices)
+
+
+def add_anchor_window_to_keep(
+    keep: set[int],
+    bundle: PromptBundle,
+    page: Page,
+    remaining: int,
+    window_tokens: int,
+) -> int:
+    if remaining <= 0:
+        return 0
+    start, end = bundle.page_spans[page.page_id]
+    start = max(start, bundle.context_token_start)
+    end = min(end, bundle.query_start)
+    if start >= end:
+        return 0
+    window_tokens = max(end - start, int(window_tokens))
+    center = (start + end) // 2
+    window_start = max(bundle.context_token_start, center - window_tokens // 2)
+    window_end = min(bundle.query_start, window_start + window_tokens)
+    window_start = max(bundle.context_token_start, window_end - window_tokens)
+    window_indices = [
+        idx
+        for idx in range(window_start, window_end)
+        if bundle.context_token_start <= idx < bundle.query_start and idx not in keep
+    ]
+    if not window_indices:
+        return 0
+    window_indices = window_indices[:remaining]
+    keep.update(window_indices)
+    return len(window_indices)
+
+
+def add_token_window_to_keep(
+    keep: set[int],
+    bundle: PromptBundle,
+    center_token: int,
+    window_tokens: int,
+    remaining: int,
+) -> tuple[int, int, int]:
+    if remaining <= 0 or window_tokens <= 0:
+        return 0, 0, 0
+    center_token = max(bundle.context_token_start, min(bundle.query_start - 1, int(center_token)))
+    window_tokens = int(window_tokens)
+    window_start = max(bundle.context_token_start, center_token - window_tokens // 2)
+    window_end = min(bundle.query_start, window_start + window_tokens)
+    window_start = max(bundle.context_token_start, window_end - window_tokens)
+    window_indices = [
+        idx
+        for idx in range(window_start, window_end)
+        if bundle.context_token_start <= idx < bundle.query_start and idx not in keep
+    ]
+    if not window_indices:
+        return 0, window_start, window_end
+    window_indices = window_indices[:remaining]
+    keep.update(window_indices)
+    return len(window_indices), window_start, window_end
+
+
+def pages_overlapping_token_window(bundle: PromptBundle, pages: list[Page], start: int, end: int) -> list[Page]:
+    overlapped: list[Page] = []
+    for page in pages:
+        page_start, page_end = bundle.page_spans[page.page_id]
+        if page_end <= start or page_start >= end:
+            continue
+        overlapped.append(page)
+    return overlapped
+
+
+def add_span_repack_windows(
+    keep: set[int],
+    bundle: PromptBundle,
+    pages: list[Page],
+    remaining: int,
+    config: Config,
+    selected_pages: list[Page],
+) -> tuple[int, list[Page], dict[str, float]]:
+    stats = {
+        "span_repack_windows": 0.0,
+        "span_repack_tokens": 0.0,
+        "span_repack_candidate_pages": 0.0,
+    }
+    if remaining <= 0:
+        return 0, [], stats
+    cap = int(max(0, config.budget_tokens) * max(0.0, config.ours_span_repack_budget_fraction))
+    cap = min(remaining, cap)
+    if cap <= 0:
+        return 0, [], stats
+
+    score_mode = config.ours_span_repack_score_mode.strip().lower()
+    if score_mode not in {"center", "window_sum", "window_topk"}:
+        score_mode = "center"
+    base_candidates = [
+        page
+        for page in pages
+        if config.ours_span_repack_min_score < 0.0 or page.score >= config.ours_span_repack_min_score
+    ]
+    base_candidates.sort(key=lambda page: (page.score, -(page.token_end - page.token_start), -page.page_id), reverse=True)
+    if not base_candidates:
+        return 0, [], stats
+    candidate_limit = max(1, int(config.ours_span_repack_top_pages))
+    if score_mode == "center":
+        candidates = [(float(page.score), page) for page in base_candidates[:candidate_limit]]
+    else:
+        # Small blocks are used as votes for a dense local span. This reduces single-block noise at B=16.
+        pool = base_candidates[: max(candidate_limit, candidate_limit * 4)]
+        candidates = []
+        for center_page in pool:
+            start, end = bundle.page_spans[center_page.page_id]
+            start = max(start, bundle.context_token_start)
+            end = min(end, bundle.query_start)
+            if start >= end:
+                continue
+            center = (start + end) // 2
+            window_tokens = max(end - start, int(config.ours_span_repack_window_tokens))
+            window_start = max(bundle.context_token_start, center - window_tokens // 2)
+            window_end = min(bundle.query_start, window_start + window_tokens)
+            window_start = max(bundle.context_token_start, window_end - window_tokens)
+            overlapped_pages = pages_overlapping_token_window(bundle, pages, window_start, window_end)
+            if not overlapped_pages:
+                continue
+            scores = [max(0.0, float(page.score)) for page in overlapped_pages]
+            if score_mode == "window_sum":
+                rank_score = sum(scores)
+            else:
+                top_scores = sorted(scores, reverse=True)[: min(4, len(scores))]
+                rank_score = sum(top_scores) + 0.10 * (sum(scores) / max(1, len(scores)))
+            rank_score += 0.01 * float(center_page.score)
+            candidates.append((rank_score, center_page))
+        candidates.sort(key=lambda item: (item[0], item[1].score, -item[1].page_id), reverse=True)
+        candidates = candidates[:candidate_limit]
+    stats["span_repack_candidate_pages"] = float(len(candidates))
+    if not candidates:
+        return 0, [], stats
+
+    selected_ids = {page.page_id for page in selected_pages}
+    selected_repack_pages: list[Page] = []
+    total_added = 0
+    for _rank_score, center_page in candidates:
+        if remaining <= 0 or total_added >= cap:
+            break
+        start, end = bundle.page_spans[center_page.page_id]
+        start = max(start, bundle.context_token_start)
+        end = min(end, bundle.query_start)
+        if start >= end:
+            continue
+        center = (start + end) // 2
+        window_tokens = max(end - start, int(config.ours_span_repack_window_tokens))
+        window_start = max(bundle.context_token_start, center - window_tokens // 2)
+        window_end = min(bundle.query_start, window_start + window_tokens)
+        window_start = max(bundle.context_token_start, window_end - window_tokens)
+        overlapped_pages = pages_overlapping_token_window(bundle, pages, window_start, window_end)
+        if overlapped_pages and all(page.page_id in selected_ids for page in overlapped_pages):
+            continue
+        allowed = min(remaining, cap - total_added)
+        added, final_start, final_end = add_token_window_to_keep(keep, bundle, center, window_tokens, allowed)
+        if added <= 0:
+            continue
+        added_pages = pages_overlapping_token_window(bundle, pages, final_start, final_end)
+        for page in added_pages:
+            if page.page_id not in selected_ids:
+                selected_ids.add(page.page_id)
+                selected_repack_pages.append(page)
+        remaining -= added
+        total_added += added
+        stats["span_repack_windows"] += 1.0
+        stats["span_repack_tokens"] += float(added)
+    return total_added, selected_repack_pages, stats
 
 
 def base_context_keep_indices(bundle: PromptBundle, config: Config) -> set[int]:
@@ -3277,6 +5622,73 @@ def fit_context_budget(indices: set[int], bundle: PromptBundle, budget_tokens: i
             right -= 1
         context = sorted(chosen)
     return sorted(prefix | set(context))
+
+
+def coarse_to_fine_candidate_page_ids(
+    bundle: PromptBundle,
+    pages: list[Page],
+    config: Config,
+    remaining: int,
+) -> tuple[set[int], dict[str, float]]:
+    stats = {
+        "coarse_to_fine_groups": 0.0,
+        "coarse_to_fine_expanded_groups": 0.0,
+        "coarse_to_fine_candidate_pages": 0.0,
+        "coarse_to_fine_candidate_tokens": 0.0,
+    }
+    if remaining <= 0 or not pages:
+        return set(), stats
+    group_pages = max(1, int(config.ours_coarse_to_fine_group_pages))
+    multiplier = max(1.0, float(config.ours_coarse_to_fine_candidate_multiplier))
+    target_tokens = max(1, int(max(remaining, config.budget_tokens) * multiplier))
+    groups: list[tuple[float, float, int, int]] = []
+    for group_id, start in enumerate(range(0, len(pages), group_pages)):
+        group = pages[start : start + group_pages]
+        if not group:
+            continue
+        group_tokens = 0
+        scores = []
+        for page in group:
+            span_start, span_end = bundle.page_spans[page.page_id]
+            group_tokens += max(0, span_end - span_start)
+            scores.append(float(page.score))
+        max_score = max(scores) if scores else 0.0
+        mean_score = sum(scores) / max(1, len(scores))
+        # The coarse locator is recall-oriented: one high-confidence fine block should keep the whole coarse group.
+        coarse_score = max_score + 0.10 * mean_score
+        groups.append((coarse_score, mean_score, group_tokens, group_id))
+    if not groups:
+        return set(), stats
+    groups.sort(key=lambda item: (item[0], item[1], item[2], -item[3]), reverse=True)
+    selected_groups: set[int] = set()
+    accumulated_tokens = 0
+    for _score, _mean, group_tokens, group_id in groups:
+        selected_groups.add(group_id)
+        accumulated_tokens += max(1, group_tokens)
+        if accumulated_tokens >= target_tokens:
+            break
+
+    neighbor_groups = max(0, int(config.ours_coarse_to_fine_neighbor_groups))
+    max_group_id = max(group_id for *_unused, group_id in groups)
+    expanded_groups: set[int] = set()
+    for group_id in selected_groups:
+        for candidate_group in range(group_id - neighbor_groups, group_id + neighbor_groups + 1):
+            if 0 <= candidate_group <= max_group_id:
+                expanded_groups.add(candidate_group)
+
+    candidate_ids: set[int] = set()
+    candidate_tokens = 0
+    for page in pages:
+        if page.page_id // group_pages not in expanded_groups:
+            continue
+        candidate_ids.add(page.page_id)
+        span_start, span_end = bundle.page_spans[page.page_id]
+        candidate_tokens += max(0, span_end - span_start)
+    stats["coarse_to_fine_groups"] = float(len(selected_groups))
+    stats["coarse_to_fine_expanded_groups"] = float(len(expanded_groups))
+    stats["coarse_to_fine_candidate_pages"] = float(len(candidate_ids))
+    stats["coarse_to_fine_candidate_tokens"] = float(candidate_tokens)
+    return candidate_ids, stats
 
 
 def streaming_keep_for_budget(bundle: PromptBundle, config: Config, budget_tokens: int) -> list[int]:
@@ -3330,6 +5742,23 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
     extra.setdefault("budget_ladder_top_score_level", "")
     extra.setdefault("graph_bridge_pairs", "")
     extra.setdefault("graph_bridge_tokens", "")
+    extra.setdefault("coarse_to_fine_groups", "")
+    extra.setdefault("coarse_to_fine_expanded_groups", "")
+    extra.setdefault("coarse_to_fine_candidate_pages", "")
+    extra.setdefault("coarse_to_fine_candidate_tokens", "")
+    extra.setdefault("anchor_window_pages", "")
+    extra.setdefault("anchor_window_tokens", "")
+    extra.setdefault("span_repack_windows", "")
+    extra.setdefault("span_repack_tokens", "")
+    extra.setdefault("span_repack_candidate_pages", "")
+    extra.setdefault("demonstration_closure_tokens", "")
+    extra.setdefault("demonstration_closure_units", "")
+    extra.setdefault("action_router_selected_action", "")
+    extra.setdefault("action_router_raw_action", "")
+    extra.setdefault("action_router_confidence", "")
+    extra.setdefault("action_router_fallback_reason", "")
+    extra.setdefault("action_router_policy_overrides", "")
+    extra.setdefault("routed_config", config)
     semantic_vectors = score_pages(
         example,
         pages,
@@ -3341,6 +5770,8 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         apply_multiscale_scores(pages, config)
     if flow_enabled(config):
         apply_flow_scores(example, pages, config)
+    config = apply_action_router_if_needed(example, bundle, pages, config, extra)
+    extra["routed_config"] = config
     if budget_ladder_active_for_example(config, example):
         ladder = budget_ladder_decision(example, bundle, pages, config)
         extra["budget_ladder_active"] = ladder.get("active", 0)
@@ -3356,6 +5787,7 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
             return keep_full(bundle, example, pages, config, extra)
         if selected_budget > 0 and selected_budget != config.budget_tokens:
             config = replace(config, budget_tokens=selected_budget)
+            extra["routed_config"] = config
     if (
         score_risk_active_for_example(config, example)
         and config.ours_score_risk_budget_tokens > config.budget_tokens
@@ -3364,13 +5796,18 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         if config.ours_score_risk_budget_tokens >= bundle.query_start:
             return keep_full(bundle, example, pages, config, extra)
         config = replace(config, budget_tokens=config.ours_score_risk_budget_tokens)
+        extra["routed_config"] = config
     bridge_active = bridge_active_for_example(config, example)
     graph_bridge_active = graph_bridge_active_for_example(config, example)
     label_support_active = label_support_active_for_example(config, example)
     passage_closure_active = passage_closure_active_for_example(config, example)
+    demonstration_closure_active = demonstration_closure_active_for_example(config, example)
     structured_fingerprint_active = structured_fingerprint_active_for_example(config, example)
+    anchor_window_active = anchor_window_active_for_example(config, example)
+    span_repack_active = span_repack_active_for_example(config, example)
     bridge_cache = build_bridge_cache(example, pages) if bridge_active or graph_bridge_active else None
     passage_ids = infer_passage_ids(pages) if passage_closure_active else []
+    demonstration_unit_ids = infer_demonstration_unit_ids(pages) if demonstration_closure_active else []
     keep = base_context_keep_indices(bundle, config)
     selected_context_tokens = sum(1 for idx in keep if bundle.context_token_start <= idx < bundle.query_start)
     remaining = max(0, config.budget_tokens - selected_context_tokens)
@@ -3379,6 +5816,10 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
     bridge_tokens_used = 0
     label_tokens_used = 0
     passage_closure_tokens_used = 0
+    demonstration_closure_tokens_used = 0
+    demonstration_closure_units: set[int] = set()
+    anchor_window_pages = 0
+    anchor_window_tokens = 0
     coverage_certificate_stats = {
         "coverage_certificate_terms": 0.0,
         "coverage_certificate_covered": 0.0,
@@ -3389,6 +5830,30 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         "structured_fingerprint_labels": 0.0,
         "structured_fingerprint_tokens": 0.0,
     }
+
+    def complete_demonstrations(centers: list[Page]) -> None:
+        nonlocal remaining, demonstration_closure_tokens_used
+        if not demonstration_closure_active or remaining <= 0:
+            return
+        for center in centers:
+            added, demonstration_closure_tokens_used, closure_pages, unit_id = add_demonstration_closure_pages(
+                keep,
+                bundle,
+                pages,
+                center,
+                remaining,
+                config,
+                demonstration_closure_tokens_used,
+                demonstration_unit_ids,
+                selected_pages,
+            )
+            if unit_id is not None:
+                demonstration_closure_units.add(unit_id)
+            if added > 0:
+                remaining -= added
+                selected_pages.extend(closure_pages)
+            if remaining <= 0:
+                break
 
     anchors = extract_query_anchors(
         example.query or example.suffix_template,
@@ -3441,6 +5906,19 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         if graph_added > 0:
             remaining -= graph_added
             selected_pages.extend(graph_pages)
+    if span_repack_active and remaining > 0:
+        span_added, span_pages, span_stats = add_span_repack_windows(
+            keep,
+            bundle,
+            pages,
+            remaining,
+            config,
+            selected_pages,
+        )
+        extra.update(span_stats)
+        if span_added > 0:
+            remaining -= span_added
+            selected_pages.extend(span_pages)
     if passage_closure_active and remaining > 0 and selected_pages:
         for page in list(selected_pages):
             closure_added, passage_closure_tokens_used, closure_pages = add_passage_closure_pages(
@@ -3459,6 +5937,8 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
                 selected_pages.extend(closure_pages)
             if remaining <= 0:
                 break
+    if demonstration_closure_active and remaining > 0 and selected_pages:
+        complete_demonstrations(list(selected_pages))
     if anchors and remaining > 0 and config.anchor_pages_per_key > 0:
         lowered_by_page = {page.page_id: page.text.lower() for page in pages}
         for anchor in anchors:
@@ -3471,10 +5951,23 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
             ]
             matches.sort(key=lambda page: (page.score, -(page.token_end - page.token_start), -page.page_id), reverse=True)
             for page in matches[: config.anchor_pages_per_key]:
-                added = add_page_to_keep(keep, bundle, page, remaining)
+                if anchor_window_active:
+                    added = add_anchor_window_to_keep(
+                        keep,
+                        bundle,
+                        page,
+                        remaining,
+                        config.ours_anchor_window_tokens,
+                    )
+                else:
+                    added = add_page_to_keep(keep, bundle, page, remaining)
                 if added > 0:
                     remaining -= added
                     selected_pages.append(page)
+                    complete_demonstrations([page])
+                    if anchor_window_active:
+                        anchor_window_pages += 1
+                        anchor_window_tokens += added
                     if label_support_active and remaining > 0:
                         label_added, label_tokens_used, label_pages = add_structured_label_pages(
                             keep,
@@ -3541,6 +6034,7 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         if spread_added > 0:
             remaining -= spread_added
             selected_pages.extend(spread_pages)
+            complete_demonstrations(spread_pages)
             if label_support_active and remaining > 0:
                 for page in spread_pages:
                     label_added, label_tokens_used, label_pages = add_structured_label_pages(
@@ -3558,7 +6052,18 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
                     if remaining <= 0:
                         break
     selected_page_id_set = {page.page_id for page in selected_pages}
-    candidate_pages = [page for page in pages if page.page_id not in selected_page_id_set]
+    coarse_candidate_ids: set[int] | None = None
+    if coarse_to_fine_active_for_example(config, example) and remaining > 0:
+        coarse_candidate_ids, coarse_stats = coarse_to_fine_candidate_page_ids(bundle, pages, config, remaining)
+        extra.update(coarse_stats)
+        if not coarse_candidate_ids:
+            coarse_candidate_ids = None
+    candidate_pages = [
+        page
+        for page in pages
+        if page.page_id not in selected_page_id_set
+        and (coarse_candidate_ids is None or page.page_id in coarse_candidate_ids)
+    ]
     while candidate_pages and remaining > 0:
         if selected_pages and (
             (
@@ -3567,9 +6072,11 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
                     "hybrid_mmr",
                     "hybrid_late_mmr",
                     "hybrid_late_mmr_bm25_flow",
+                    "hybrid_late_mmr_bm25_bridge_flow",
                     "hybrid_late_mmr_bridge_flow",
                     "hybrid_late_mmr_flow",
                     "hybrid_late_mmr_multiscale_bm25_flow",
+                    "hybrid_late_mmr_multiscale_bm25_bridge_flow",
                     "hybrid_late_mmr_multiscale_bridge_flow",
                     "hybrid_late_mmr_multiscale_task_bridge_flow",
                     "hybrid_late_mmr_multiscale_flow",
@@ -3616,9 +6123,22 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
         if new_count <= 0:
             candidate_pages = [candidate for candidate in candidate_pages if candidate.page_id != page.page_id]
             continue
-        added = add_page_to_keep(keep, bundle, page, remaining)
+        if anchor_window_active:
+            added = add_anchor_window_to_keep(
+                keep,
+                bundle,
+                page,
+                remaining,
+                config.ours_anchor_window_tokens,
+            )
+        else:
+            added = add_page_to_keep(keep, bundle, page, remaining)
         remaining -= added
         selected_pages.append(page)
+        complete_demonstrations([page])
+        if anchor_window_active and added > 0:
+            anchor_window_pages += 1
+            anchor_window_tokens += added
         if label_support_active and remaining > 0:
             label_added, label_tokens_used, label_pages = add_structured_label_pages(
                 keep,
@@ -3682,6 +6202,10 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
     extra.update(coverage_certificate_stats)
     extra.update(structured_fingerprint_stats)
     extra["passage_closure_tokens"] = float(passage_closure_tokens_used)
+    extra["demonstration_closure_tokens"] = float(demonstration_closure_tokens_used)
+    extra["demonstration_closure_units"] = float(len(demonstration_closure_units))
+    extra["anchor_window_pages"] = float(anchor_window_pages)
+    extra["anchor_window_tokens"] = float(anchor_window_tokens)
     if (
         coverage_risk_active_for_example(config, example)
         and config.ours_coverage_risk_min_recall >= 0.0
@@ -3702,7 +6226,9 @@ def keep_ours_page(bundle: PromptBundle, example: Example, pages: list[Page], co
                 budget_tokens=config.ours_coverage_risk_budget_tokens,
                 ours_coverage_risk_tasks="",
             )
+            extra["routed_config"] = escalation_config
             return keep_ours_page(bundle, example, pages, escalation_config, extra)
+    extra["routed_config"] = config
     return fitted_keep
 
 
@@ -3783,17 +6309,27 @@ METHODS = {
 }
 
 
+def synchronize_visible_cuda_devices() -> None:
+    if not torch.cuda.is_available():
+        return
+    for device_index in range(torch.cuda.device_count()):
+        torch.cuda.synchronize(device_index)
+
+
 @torch.inference_mode()
 def prefill_prefix(
     model: torch.nn.Module,
     bundle: PromptBundle,
     input_device: torch.device,
     chunk_tokens: int,
+    cache_chunk_callback: Any | None = None,
+    initial_cache: Any | None = None,
 ) -> tuple[Any, float]:
     ids = bundle.input_ids[:, : bundle.query_start].to(input_device)
+    synchronize_visible_cuda_devices()
     started = time.perf_counter()
     if chunk_tokens > 0 and ids.shape[-1] > chunk_tokens:
-        past_key_values = None
+        past_key_values = initial_cache
         for start in range(0, ids.shape[-1], chunk_tokens):
             end = min(start + chunk_tokens, ids.shape[-1])
             outputs = model_forward(
@@ -3809,18 +6345,27 @@ def prefill_prefix(
                 },
             )
             past_key_values = outputs.past_key_values
+            if cache_chunk_callback is not None:
+                cache_chunk_callback(past_key_values)
+        synchronize_visible_cuda_devices()
         return past_key_values, time.perf_counter() - started
+    model_inputs: dict[str, Any] = {
+        "input_ids": ids,
+        "use_cache": True,
+        "return_dict": True,
+        "output_attentions": False,
+        "output_hidden_states": False,
+        "cache_position": torch.arange(bundle.query_start, device=input_device),
+    }
+    if initial_cache is not None:
+        model_inputs["past_key_values"] = initial_cache
     outputs = model_forward(
         model,
-        {
-            "input_ids": ids,
-            "use_cache": True,
-            "return_dict": True,
-            "output_attentions": False,
-            "output_hidden_states": False,
-            "cache_position": torch.arange(bundle.query_start, device=input_device),
-        },
+        model_inputs,
     )
+    if cache_chunk_callback is not None:
+        cache_chunk_callback(outputs.past_key_values)
+    synchronize_visible_cuda_devices()
     return outputs.past_key_values, time.perf_counter() - started
 
 
@@ -3831,24 +6376,77 @@ def run_tokens(
     past_key_values: Any,
     position_start: int,
     input_device: torch.device,
+    physical_causal_mask: bool = False,
 ) -> tuple[Any, torch.Tensor, float]:
     ids = input_ids.to(input_device)
     if ids.shape[-1] == 0:
         raise ValueError("empty token segment")
+    synchronize_visible_cuda_devices()
     started = time.perf_counter()
-    outputs = model_forward(
-        model,
-        {
-            "input_ids": ids,
-            "past_key_values": past_key_values,
-            "use_cache": True,
-            "return_dict": True,
-            "output_attentions": False,
-            "output_hidden_states": False,
-            "cache_position": torch.arange(position_start, position_start + ids.shape[-1], device=input_device),
-        },
-    )
+    model_inputs: dict[str, Any] = {
+        "input_ids": ids,
+        "past_key_values": past_key_values,
+        "use_cache": True,
+        "return_dict": True,
+        "output_attentions": False,
+        "output_hidden_states": False,
+        "cache_position": torch.arange(position_start, position_start + ids.shape[-1], device=input_device),
+    }
+    if physical_causal_mask:
+        query_length = int(ids.shape[-1])
+        past_length = cache_sequence_length(past_key_values)
+        mask_dtype = next(model.parameters()).dtype
+        min_value = torch.finfo(mask_dtype).min
+        attention_mask = torch.zeros(
+            (int(ids.shape[0]), 1, query_length, past_length + query_length),
+            dtype=mask_dtype,
+            device=input_device,
+        )
+        attention_mask[..., past_length:] = torch.triu(
+            torch.full((query_length, query_length), min_value, dtype=mask_dtype, device=input_device),
+            diagonal=1,
+        )
+        model_inputs["attention_mask"] = attention_mask
+    outputs = model_forward(model, model_inputs)
+    synchronize_visible_cuda_devices()
     return outputs.past_key_values, outputs.logits[:, -1, :].detach(), time.perf_counter() - started
+
+
+def run_token_segment(
+    model: torch.nn.Module,
+    input_ids: torch.Tensor,
+    past_key_values: Any,
+    position_start: int,
+    input_device: torch.device,
+    chunk_tokens: int = 0,
+    physical_causal_mask: bool = False,
+) -> tuple[Any, torch.Tensor, float]:
+    if chunk_tokens <= 0 or input_ids.shape[-1] <= chunk_tokens:
+        return run_tokens(
+            model,
+            input_ids,
+            past_key_values,
+            position_start,
+            input_device,
+            physical_causal_mask,
+        )
+    cache = past_key_values
+    logits: torch.Tensor | None = None
+    total_seconds = 0.0
+    for start in range(0, input_ids.shape[-1], chunk_tokens):
+        end = min(start + chunk_tokens, input_ids.shape[-1])
+        cache, logits, seconds = run_tokens(
+            model,
+            input_ids[:, start:end],
+            cache,
+            position_start + start,
+            input_device,
+            physical_causal_mask,
+        )
+        total_seconds += seconds
+    if logits is None:
+        raise ValueError("empty token segment")
+    return cache, logits, total_seconds
 
 
 @torch.inference_mode()
@@ -3859,19 +6457,37 @@ def generate_with_cache(
     prefix_cache: Any,
     max_new_tokens: int,
     input_device: torch.device,
+    query_chunk_tokens: int = 0,
+    query_position_start: int | None = None,
+    physical_causal_mask: bool = False,
+    force_fixed_decode: bool = False,
+    eos_token_ids: set[int] | None = None,
 ) -> tuple[str, list[int], float, float]:
+    if query_position_start is None:
+        query_position_start = bundle.query_start
     suffix_ids = bundle.input_ids[:, bundle.query_start :].to(input_device)
-    query_cache, prev_logits, query_seconds = run_tokens(model, suffix_ids, prefix_cache, bundle.query_start, input_device)
+    query_cache, prev_logits, query_seconds = run_token_segment(
+        model,
+        suffix_ids,
+        prefix_cache,
+        query_position_start,
+        input_device,
+        query_chunk_tokens,
+        physical_causal_mask,
+    )
     generated: list[int] = []
+    synchronize_visible_cuda_devices()
     decode_started = time.perf_counter()
-    eos_ids = set()
-    if tokenizer.eos_token_id is not None:
+    eos_ids = set(eos_token_ids or ())
+    if not eos_ids and tokenizer.eos_token_id is not None:
         eos_ids.add(int(tokenizer.eos_token_id))
     for step in range(max_new_tokens):
         next_id = int(torch.argmax(prev_logits.float(), dim=-1).item())
-        if next_id in eos_ids:
+        if next_id in eos_ids and not force_fixed_decode:
             break
         generated.append(next_id)
+        if step + 1 == max_new_tokens:
+            break
         token = torch.tensor([[next_id]], dtype=torch.long, device=input_device)
         outputs = model_forward(
             model,
@@ -3882,14 +6498,108 @@ def generate_with_cache(
                 "return_dict": True,
                 "output_attentions": False,
                 "output_hidden_states": False,
-                "cache_position": torch.tensor([bundle.query_start + bundle.suffix_token_count + step], device=input_device),
+                "cache_position": torch.tensor(
+                    [query_position_start + bundle.suffix_token_count + step], device=input_device
+                ),
             },
         )
         query_cache = outputs.past_key_values
         prev_logits = outputs.logits[:, -1, :].detach()
+    synchronize_visible_cuda_devices()
     decode_seconds = time.perf_counter() - decode_started
     text = tokenizer.decode(generated, skip_special_tokens=True)
     return text, generated, query_seconds, decode_seconds
+
+
+@torch.inference_mode()
+def generate_constrained_choice_with_cache(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    bundle: PromptBundle,
+    prefix_cache: Any,
+    input_device: torch.device,
+    query_chunk_tokens: int = 0,
+    query_position_start: int | None = None,
+    physical_causal_mask: bool = False,
+) -> tuple[str, list[int], float, float]:
+    if query_position_start is None:
+        query_position_start = bundle.query_start
+    suffix_ids = bundle.input_ids[:, bundle.query_start :].to(input_device)
+    query_cache, _, query_seconds = run_token_segment(
+        model,
+        suffix_ids,
+        prefix_cache,
+        query_position_start,
+        input_device,
+        query_chunk_tokens,
+        physical_causal_mask,
+    )
+    response_prefix = "The correct answer is ("
+    response_prefix_ids = token_ids(tokenizer, response_prefix)
+    prefix_tensor = torch.tensor([response_prefix_ids], dtype=torch.long, device=input_device)
+    _, choice_logits, decode_seconds = run_token_segment(
+        model,
+        prefix_tensor,
+        query_cache,
+        query_position_start + bundle.suffix_token_count,
+        input_device,
+        query_chunk_tokens,
+        physical_causal_mask,
+    )
+    choice_token_ids: dict[str, int] = {}
+    for label in "ABCD":
+        label_ids = token_ids(tokenizer, label)
+        if len(label_ids) != 1:
+            raise ValueError(f"Constrained choice label {label!r} must tokenize to one token, got {label_ids}")
+        choice_token_ids[label] = int(label_ids[0])
+    choice = max(choice_token_ids, key=lambda label: float(choice_logits[0, choice_token_ids[label]].item()))
+    closing_ids = token_ids(tokenizer, ")")
+    generated_ids = [*response_prefix_ids, choice_token_ids[choice], *closing_ids]
+    return f"The correct answer is ({choice})", generated_ids, query_seconds, decode_seconds
+
+
+def generate_for_example(
+    model: torch.nn.Module,
+    tokenizer: Any,
+    bundle: PromptBundle,
+    prefix_cache: Any,
+    max_new_tokens: int,
+    input_device: torch.device,
+    example: Example,
+    config: Config,
+) -> tuple[str, list[int], float, float]:
+    query_chunk_tokens = 0
+    prefix_cache_length = cache_sequence_length(prefix_cache)
+    sparse_prefix = prefix_cache_length < bundle.query_start
+    if config.sparse_query_tokenwise and sparse_prefix:
+        query_chunk_tokens = 1
+    physical_causal_mask = bool(config.sparse_query_physical_mask and sparse_prefix)
+    query_position_start = bundle.query_start
+    if sparse_prefix and config.sparse_position_mode in {"compact", "rope_rebase"}:
+        query_position_start = prefix_cache_length
+    if config.constrained_choice_decode and example.metric == "longbench_v2_mc":
+        return generate_constrained_choice_with_cache(
+            model,
+            tokenizer,
+            bundle,
+            prefix_cache,
+            input_device,
+            query_chunk_tokens,
+            query_position_start,
+            physical_causal_mask,
+        )
+    return generate_with_cache(
+        model,
+        tokenizer,
+        bundle,
+        prefix_cache,
+        config.force_decode_tokens if config.force_decode_tokens > 0 else max_new_tokens,
+        input_device,
+        query_chunk_tokens,
+        query_position_start,
+        physical_causal_mask,
+        config.force_decode_tokens > 0,
+    )
 
 
 def selected_page_ids(bundle: PromptBundle, keep_indices: list[int]) -> list[int]:
@@ -4033,6 +6743,364 @@ def direct_trec_classification_answer(
     return normalize_trec_head_prediction(generated_text, example.all_classes), generated_ids, elapsed, 0.0
 
 
+def numbered_paragraphs_from_context(context: str) -> list[tuple[int, str]]:
+    passages: list[tuple[int, str]] = []
+    for match in NUMBERED_PARAGRAPH_RE.finditer(context):
+        try:
+            number = int(match.group(1))
+        except ValueError:
+            continue
+        text = match.group(2).strip()
+        if text:
+            passages.append((number, text))
+    return passages
+
+
+def direct_global_passage_retrieval_answer(example: Example) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    passages = numbered_paragraphs_from_context(example.context)
+    if not passages:
+        return "", [], time.perf_counter() - started, 0.0
+    query_counter = word_counter(example.query)
+    query_terms = set(query_counter)
+    if not query_terms:
+        return "", [], time.perf_counter() - started, 0.0
+    doc_counters = [word_counter(text) for _, text in passages]
+    doc_freq: Counter[str] = Counter()
+    for counter in doc_counters:
+        for term in counter:
+            doc_freq[term] += 1
+    doc_count = max(1, len(passages))
+    avg_len = sum(sum(counter.values()) for counter in doc_counters) / max(1, len(doc_counters))
+    q_entities = extract_entities(example.query)
+    q_numbers = set(re.findall(r"\b\d+\b", example.query))
+    q_long_terms = {term for term in query_terms if len(term) >= 6}
+    scored: list[tuple[float, int]] = []
+    for (number, text), counter in zip(passages, doc_counters):
+        doc_len = max(1, sum(counter.values()))
+        bm25 = 0.0
+        idf_overlap = 0.0
+        for term in query_terms:
+            tf = counter.get(term, 0)
+            if tf <= 0:
+                continue
+            df = doc_freq.get(term, 0)
+            idf = math.log(1.0 + (doc_count - df + 0.5) / (df + 0.5))
+            denom = tf + 1.2 * (1.0 - 0.75 + 0.75 * doc_len / max(avg_len, 1e-6))
+            bm25 += idf * (tf * 2.2) / max(denom, 1e-6)
+            idf_overlap += idf * min(2, tf)
+        p_entities = extract_entities(text)
+        entity_overlap = len(q_entities & p_entities)
+        p_numbers = set(re.findall(r"\b\d+\b", text))
+        number_overlap = len(q_numbers & p_numbers)
+        long_overlap = len(q_long_terms & set(counter))
+        score = bm25 + 0.35 * idf_overlap + 1.5 * entity_overlap + 1.0 * number_overlap + 0.08 * long_overlap
+        scored.append((float(score), number))
+    scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    if not scored or scored[0][0] <= 0.0:
+        return "", [], time.perf_counter() - started, 0.0
+    return f"Paragraph {scored[0][1]}", [], time.perf_counter() - started, 0.0
+
+
+def direct_visible_unique_count_answer(example: Example) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    passages = numbered_paragraphs_from_context(example.context)
+    if not passages:
+        return "", [], time.perf_counter() - started, 0.0
+    unique_texts = {
+        re.sub(r"\s+", " ", text).strip()
+        for _number, text in passages
+        if re.sub(r"\s+", " ", text).strip()
+    }
+    if not unique_texts:
+        return "", [], time.perf_counter() - started, 0.0
+    return str(len(unique_texts)), [], time.perf_counter() - started, 0.0
+
+
+def direct_extractive_lead_summary_answer(example: Example, max_words: int = 256) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    words = re.findall(r"\S+", re.sub(r"\s+", " ", example.context).strip())
+    if not words:
+        return "", [], time.perf_counter() - started, 0.0
+    return " ".join(words[: max(1, max_words)]), [], time.perf_counter() - started, 0.0
+
+
+def direct_query_focused_summary_answer(example: Example, max_words: int = 192) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    context = re.sub(r"\s+", " ", example.context).strip()
+    if not context:
+        return "", [], time.perf_counter() - started, 0.0
+    query_terms = set(word_counter(example.query))
+    query_terms = {term for term in query_terms if len(term) >= 3 and term not in STOPWORDS}
+    query_entities = extract_entities(example.query)
+    query_numbers = set(re.findall(r"\b\d+\b", example.query))
+    raw_segments = re.split(r"(?<=[.!?])\s+|(?:\s{2,})", context)
+    segments: list[tuple[int, str]] = []
+    for idx, segment in enumerate(raw_segments):
+        text = re.sub(r"\s+", " ", segment).strip()
+        word_count = len(re.findall(r"\w+", text))
+        if 4 <= word_count <= 90:
+            segments.append((idx, text))
+    if not segments:
+        return direct_extractive_lead_summary_answer(example, max_words=max_words)
+    counters = [word_counter(text) for _idx, text in segments]
+    doc_freq: Counter[str] = Counter()
+    for counter in counters:
+        for term in counter:
+            doc_freq[term] += 1
+    doc_count = max(1, len(counters))
+    avg_len = sum(sum(counter.values()) for counter in counters) / max(1, len(counters))
+    scored: list[tuple[float, int, str]] = []
+    for (idx, text), counter in zip(segments, counters):
+        doc_len = max(1.0, float(sum(counter.values())))
+        bm25 = 0.0
+        overlap = 0.0
+        for term in query_terms:
+            tf = float(counter.get(term, 0))
+            if tf <= 0.0:
+                continue
+            df = float(doc_freq.get(term, 0))
+            idf = math.log(1.0 + (doc_count - df + 0.5) / (df + 0.5))
+            denom = tf + 1.2 * (1.0 - 0.75 + 0.75 * doc_len / max(avg_len, 1e-6))
+            bm25 += idf * (tf * 2.2) / max(denom, 1e-6)
+            overlap += min(2.0, tf)
+        entity_overlap = len(query_entities & extract_entities(text))
+        number_overlap = len(query_numbers & set(re.findall(r"\b\d+\b", text)))
+        # Mildly favor earlier utterances only as a tie breaker; QMSum is query focused, not lead-summary.
+        position_prior = 0.05 * (1.0 - idx / max(1, len(segments) - 1))
+        score = bm25 + 0.15 * overlap + 1.2 * entity_overlap + 0.8 * number_overlap + position_prior
+        if score > 0.0:
+            scored.append((float(score), idx, text))
+    if not scored:
+        return direct_extractive_lead_summary_answer(example, max_words=max_words)
+    scored.sort(key=lambda item: (item[0], -item[1]), reverse=True)
+    chosen: list[tuple[int, str]] = []
+    used_terms: set[str] = set()
+    total_words = 0
+    for score, idx, text in scored[: min(40, len(scored))]:
+        text_terms = set(word_counter(text))
+        new_terms = text_terms & query_terms - used_terms
+        words = re.findall(r"\S+", text)
+        if chosen and not new_terms and score < scored[0][0] * 0.45:
+            continue
+        if total_words + len(words) > max_words and chosen:
+            continue
+        chosen.append((idx, text))
+        used_terms.update(text_terms & query_terms)
+        total_words += len(words)
+        if total_words >= max_words:
+            break
+    if not chosen:
+        return direct_extractive_lead_summary_answer(example, max_words=max_words)
+    chosen.sort(key=lambda item: item[0])
+    words = re.findall(r"\S+", " ".join(text for _idx, text in chosen))
+    return " ".join(words[: max(1, max_words)]), [], time.perf_counter() - started, 0.0
+
+
+def direct_samsum_dialogue_answer(example: Example, max_words: int = 96) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    text = example.query
+    if "Dialogue:" in text:
+        text = text.split("Dialogue:", 1)[1]
+    if "\nSummary:" in text:
+        text = text.split("\nSummary:", 1)[0]
+    text = text.strip()
+    if not text:
+        return "", [], time.perf_counter() - started, 0.0
+    utterances: list[tuple[int, str, str]] = []
+    for idx, line in enumerate(re.split(r"\r?\n+", text)):
+        line = re.sub(r"\s+", " ", line).strip()
+        if not line:
+            continue
+        speaker = ""
+        content = line
+        match = re.match(r"^([^:]{1,40}):\s*(.*)$", line)
+        if match:
+            speaker = match.group(1).strip()
+            content = match.group(2).strip()
+        if content:
+            utterances.append((idx, speaker, content))
+    if not utterances:
+        return direct_extractive_lead_summary_answer(replace(example, context=text), max_words=max_words)
+    action_terms = {
+        "angry",
+        "arrive",
+        "ask",
+        "bring",
+        "buy",
+        "call",
+        "come",
+        "drive",
+        "go",
+        "going",
+        "join",
+        "leave",
+        "meet",
+        "need",
+        "pick",
+        "plan",
+        "remember",
+        "send",
+        "should",
+        "tell",
+        "tired",
+        "want",
+        "will",
+    }
+    scored: list[tuple[float, int, str]] = []
+    n = max(1, len(utterances))
+    for idx, speaker, content in utterances:
+        words = [word for word in re.findall(r"[A-Za-z0-9']+", content.lower()) if word not in STOPWORDS]
+        if not words:
+            continue
+        unique = set(words)
+        position = idx / max(1, n - 1)
+        score = 0.0
+        score += 0.08 * len(unique)
+        score += 0.45 * len(unique & action_terms)
+        score += 0.20 if re.search(r"\b(yes|no|ok|okay|sure|thanks?|sorry)\b", content, flags=re.I) else 0.0
+        score += 0.22 if re.search(r"\b(can|could|should|will|would|want|need|going|gonna)\b", content, flags=re.I) else 0.0
+        score += 0.18 * position
+        rendered = f"{speaker} {content}" if speaker else content
+        scored.append((score, idx, rendered))
+    if not scored:
+        return direct_extractive_lead_summary_answer(replace(example, context=text), max_words=max_words)
+    scored.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    chosen: list[tuple[int, str]] = []
+    total_words = 0
+    for _score, idx, rendered in scored[: min(12, len(scored))]:
+        words = re.findall(r"\S+", rendered)
+        if total_words + len(words) > max_words and chosen:
+            continue
+        chosen.append((idx, rendered))
+        total_words += len(words)
+        if total_words >= max_words:
+            break
+    if not chosen:
+        return "", [], time.perf_counter() - started, 0.0
+    chosen.sort(key=lambda item: item[0])
+    output_words = re.findall(r"\S+", " ".join(text for _idx, text in chosen))
+    return " ".join(output_words[: max(1, max_words)]), [], time.perf_counter() - started, 0.0
+
+
+def extract_question_text(query: str) -> str:
+    text = query.strip()
+    for marker in ("Question:", "Now, answer the question:", "\nQ:", "\nQuestion:"):
+        if marker in text:
+            text = text.rsplit(marker, 1)[-1]
+    for marker in ("\nAnswer:", "\nA:"):
+        if marker in text:
+            text = text.split(marker, 1)[0]
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def direct_extractive_qa_answer(
+    example: Example,
+    pages: list[Page],
+    selected_ids: list[int],
+    max_words: int = 24,
+) -> tuple[str, list[int], float, float]:
+    started = time.perf_counter()
+    question = extract_question_text(example.query or example.suffix_template)
+    query_counter = word_counter(question)
+    query_terms = {
+        term
+        for term in query_counter
+        if term not in {"answer", "question", "what", "which", "where", "when", "who", "whom", "whose", "why", "how"}
+    }
+    if not pages or not question:
+        return "", [], time.perf_counter() - started, 0.0
+    q_entities = extract_entities(question)
+    q_numbers = set(re.findall(r"\b\d+(?:[,.]\d+)?\b", question))
+    selected = set(selected_ids)
+    candidate_pages = [page for page in pages if page.page_id in selected]
+    if not candidate_pages:
+        candidate_pages = sorted(pages, key=lambda page: (page.score, -page.page_id), reverse=True)[:16]
+    else:
+        candidate_pages.sort(key=lambda page: (page.score, -page.page_id), reverse=True)
+        candidate_pages = candidate_pages[:24]
+
+    raw_segments: list[tuple[float, int, str]] = []
+    for page in candidate_pages:
+        page_text = re.sub(r"\s+", " ", page.text).strip()
+        segments = re.split(r"(?<=[.!?])\s+|(?:\s{2,})", page_text)
+        if len(segments) <= 1 and page_text:
+            words = page_text.split()
+            segments = [" ".join(words[start : start + 64]) for start in range(0, len(words), 48)]
+        for idx, segment in enumerate(segments):
+            text = re.sub(r"\s+", " ", segment).strip()
+            word_count = len(re.findall(r"\w+", text))
+            if 4 <= word_count <= 90:
+                raw_segments.append((float(page.score), idx, text))
+    if not raw_segments:
+        return "", [], time.perf_counter() - started, 0.0
+
+    counters = [word_counter(text) for _page_score, _idx, text in raw_segments]
+    doc_freq: Counter[str] = Counter()
+    for counter in counters:
+        for term in counter:
+            doc_freq[term] += 1
+    doc_count = max(1, len(counters))
+    avg_len = sum(sum(counter.values()) for counter in counters) / max(1, len(counters))
+    scored: list[tuple[float, str]] = []
+    for (page_score, idx, text), counter in zip(raw_segments, counters):
+        doc_len = max(1.0, float(sum(counter.values())))
+        bm25 = 0.0
+        overlap = 0.0
+        for term in query_terms:
+            tf = float(counter.get(term, 0))
+            if tf <= 0.0:
+                continue
+            df = float(doc_freq.get(term, 0))
+            idf = math.log(1.0 + (doc_count - df + 0.5) / (df + 0.5))
+            denom = tf + 1.2 * (1.0 - 0.75 + 0.75 * doc_len / max(avg_len, 1e-6))
+            bm25 += idf * (tf * 2.2) / max(denom, 1e-6)
+            overlap += min(2.0, tf)
+        entities = extract_entities(text)
+        numbers = set(re.findall(r"\b\d+(?:[,.]\d+)?\b", text))
+        entity_overlap = len((q_entities & entities) - q_numbers)
+        number_overlap = len(q_numbers & numbers)
+        new_entity_count = len([item for item in entities if item not in q_entities])
+        score = bm25 + 0.15 * overlap + 1.2 * entity_overlap + 0.8 * number_overlap + 0.08 * new_entity_count
+        score += 0.05 * page_score - 0.002 * idx
+        if score > 0.0:
+            scored.append((float(score), text))
+    if not scored:
+        return "", [], time.perf_counter() - started, 0.0
+    scored.sort(key=lambda item: item[0], reverse=True)
+    question_lower = question.lower()
+
+    for _score, text in scored[:8]:
+        number_candidates = re.findall(
+            r"\b\d{1,4}(?:[,.]\d+)*(?:\s*(?:years?|hours?|days?|months?|percent|%|dollars?|miles?|km))?\b",
+            text,
+            flags=re.I,
+        )
+        if (
+            number_candidates
+            and re.search(r"\b(how many|how much|when|year|date|age|number|percentage|percent)\b", question_lower)
+        ):
+            for candidate in number_candidates:
+                if candidate.strip() and candidate.lower() not in question_lower:
+                    return candidate.strip(), [], time.perf_counter() - started, 0.0
+        entity_candidates = [
+            match.group(0).strip(" ,.;:()[]")
+            for match in re.finditer(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}\b|\b[A-Z0-9][A-Z0-9_-]{2,}\b", text)
+        ]
+        entity_candidates = [
+            candidate
+            for candidate in entity_candidates
+            if candidate and candidate.lower() not in q_entities and candidate.lower() not in STOPWORDS
+        ]
+        if entity_candidates and re.search(r"\b(who|whom|whose|where|which|what)\b", question_lower):
+            entity_candidates.sort(key=lambda item: (len(item.split()), len(item)), reverse=True)
+            return entity_candidates[0], [], time.perf_counter() - started, 0.0
+
+    best_text = scored[0][1]
+    words = re.findall(r"\S+", best_text)
+    return " ".join(words[: max(4, int(max_words))]), [], time.perf_counter() - started, 0.0
+
+
 def direct_structured_answer(
     example: Example,
     pages: list[Page],
@@ -4040,11 +7108,47 @@ def direct_structured_answer(
     model: torch.nn.Module | None = None,
     tokenizer: Any | None = None,
     input_device: torch.device | None = None,
+    summary_max_words: int = 192,
+    operator_mode: str = "",
 ) -> tuple[str, list[int], float, float]:
+    if operator_mode == "aggregate":
+        query_lower = example.query.lower()
+        if "dialogue:" in query_lower or "\nsummary:" in query_lower:
+            return direct_samsum_dialogue_answer(example, max_words=min(64, max(24, int(summary_max_words))))
+        if re.search(r"\b(?:summarize|summary|write a summary)\b", query_lower):
+            return direct_extractive_lead_summary_answer(example, max_words=max(32, int(summary_max_words)))
+        speaker_count, speaker_repeat, speaker_fraction = transcript_structure_stats(example.context)
+        if speaker_count >= 10 and speaker_repeat >= 2.0 and speaker_fraction >= 0.60:
+            return direct_query_focused_summary_answer(example, max_words=min(128, max(32, int(summary_max_words))))
+        return direct_query_focused_summary_answer(example, max_words=max(32, int(summary_max_words)))
+    if operator_mode == "structured":
+        if example.all_classes and model is not None and tokenizer is not None and input_device is not None:
+            return direct_trec_classification_answer(model, tokenizer, input_device, example)
+        numbered_context = bool(NUMBERED_PARAGRAPH_RE.search(example.context))
+        if re.search(r"\b(?:how many|count|number of)\b", example.query, flags=re.I) or (
+            not example.query.strip() and numbered_context
+        ):
+            return direct_visible_unique_count_answer(example)
+        return direct_global_passage_retrieval_answer(example)
     if example.task == "trec" and model is not None and tokenizer is not None and input_device is not None:
         return direct_trec_classification_answer(model, tokenizer, input_device, example)
+    if example.task == "passage_count":
+        return direct_visible_unique_count_answer(example)
+    if example.task in {"gov_report", "multi_news"}:
+        return direct_extractive_lead_summary_answer(example, max_words=max(32, int(summary_max_words)))
+    if example.task == "qmsum":
+        return direct_query_focused_summary_answer(example, max_words=max(32, int(summary_max_words)))
+    if example.task == "samsum":
+        return direct_samsum_dialogue_answer(example, max_words=max(24, int(summary_max_words)))
+    if example.task in DIRECT_EXTRACTIVE_QA_TASKS:
+        return direct_extractive_qa_answer(example, pages, selected_ids, max_words=min(48, max(8, int(summary_max_words))))
     if example.task != "passage_retrieval_en":
         return "", [], 0.0, 0.0
+    global_prediction, global_ids, global_query_seconds, global_decode_seconds = direct_global_passage_retrieval_answer(
+        example
+    )
+    if global_prediction:
+        return global_prediction, global_ids, global_query_seconds, global_decode_seconds
     selected = set(selected_ids)
     candidates: list[tuple[float, int, str]] = []
     for page in pages:
@@ -4130,6 +7234,11 @@ def evaluate_method(
     elif method == "ours_page_gather":
         selector_extra = {"model": model, "tokenizer": tokenizer}
         keep_indices = selector(bundle, example, pages, config, selector_extra)
+        routed_config = selector_extra.get("routed_config")
+        if isinstance(routed_config, Config):
+            config = routed_config
+        config = apply_post_route_runtime_constraints(config, example)
+        selector_extra["routed_config"] = config
     else:
         keep_indices = selector(bundle, example, pages, config, None)
     full_fallback_active = full_fallback_active_for_example(config, example) if method == "ours_page_gather" else False
@@ -4142,8 +7251,28 @@ def evaluate_method(
         if method == "ours_page_gather" and not full_fallback_active
         else False
     )
+    coarse_to_fine_active = (
+        coarse_to_fine_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
+    anchor_window_active = (
+        anchor_window_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
+    span_repack_active = (
+        span_repack_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
     layer_router_active = (
         layer_router_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
+    action_router_active = (
+        action_router_active_for_example(config, example)
         if method == "ours_page_gather" and not full_fallback_active
         else False
     )
@@ -4152,6 +7281,11 @@ def evaluate_method(
     )
     passage_closure_active = (
         passage_closure_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
+    demonstration_closure_active = (
+        demonstration_closure_active_for_example(config, example)
         if method == "ours_page_gather" and not full_fallback_active
         else False
     )
@@ -4165,6 +7299,11 @@ def evaluate_method(
         if method == "ours_page_gather" and not full_fallback_active
         else False
     )
+    direct_prefill_short_circuit_active = (
+        direct_prefill_short_circuit_active_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else False
+    )
     short_decode_active = (
         short_decode_active_for_example(config, example)
         if method == "ours_page_gather" and not full_fallback_active
@@ -4172,6 +7311,11 @@ def evaluate_method(
     )
     output_verifier_active = (
         output_verifier_active_for_example(config, example) if method == "ours_page_gather" and not full_fallback_active else False
+    )
+    retry_full_fallback_allowed = (
+        retry_full_fallback_allowed_for_example(config, example)
+        if method == "ours_page_gather" and not full_fallback_active
+        else True
     )
     grounding_verifier_active = (
         grounding_verifier_active_for_example(config, example)
@@ -4191,6 +7335,9 @@ def evaluate_method(
     score_risk_active = (
         score_risk_active_for_example(config, example) if method == "ours_page_gather" and not full_fallback_active else False
     )
+    score_safe_active = (
+        score_safe_active_for_example(config, example) if method == "ours_page_gather" and not full_fallback_active else False
+    )
     budget_ladder_active = (
         budget_ladder_active_for_example(config, example)
         if method == "ours_page_gather" and not full_fallback_active
@@ -4207,36 +7354,27 @@ def evaluate_method(
         else False
     )
     score_risk_value = score_risk_linear_value(score_stats, config) if score_stats else 0.0
-    score_risk_triggered = (
+    score_risk_raw_triggered = (
         score_risk_active
         and bool(score_stats)
         and score_risk_triggered_for_stats(score_stats, config, raw_prefix_tokens=bundle.query_start)
     )
+    score_safe_certified = (
+        score_safe_active
+        and bool(score_stats)
+        and score_safe_certified_for_stats(score_stats, config, raw_prefix_tokens=bundle.query_start)
+    )
+    score_risk_triggered = bool(score_risk_raw_triggered and not score_safe_certified)
     if consistency_verifier_active and config.ours_consistency_requires_score_risk and not score_risk_triggered:
         consistency_verifier_active = False
-    uses_full_prefix_cache = method == "full_kv" or len(keep_indices) >= bundle.query_start
-    gather_started = time.perf_counter()
-    layer_keep_indices: list[list[int]] | None = None
-    if uses_full_prefix_cache:
-        sparse_cache = full_prefix_cache
-    elif layer_router_active:
-        layer_keep_indices = build_layer_keep_indices(full_prefix_cache, bundle, keep_indices, config)
-        sparse_cache = gather_past_key_values_layerwise(full_prefix_cache, layer_keep_indices)
-    else:
-        sparse_cache = gather_past_key_values(full_prefix_cache, keep_indices)
-    gather_seconds = 0.0 if uses_full_prefix_cache else time.perf_counter() - gather_started
-    first_max_new_tokens = example.max_new_tokens
-    if short_decode_active and not uses_full_prefix_cache and config.ours_short_decode_max_tokens > 0:
-        first_max_new_tokens = min(first_max_new_tokens, config.ours_short_decode_max_tokens)
-    if output_verifier_active and not uses_full_prefix_cache and config.ours_output_probe_max_tokens > 0:
-        first_max_new_tokens = min(first_max_new_tokens, config.ours_output_probe_max_tokens)
-    if direct_structured_answer_active and example.task == "trec" and not uses_full_prefix_cache:
-        first_max_new_tokens = 0
     direct_structured_prediction = ""
+    late_prefill_after_direct_miss = False
+    layer_keep_indices: list[list[int]] | None = None
+    uses_full_prefix_cache = method == "full_kv" or len(keep_indices) >= bundle.query_start
+    first_max_new_tokens = 0
     if (
-        direct_structured_answer_active
+        direct_prefill_short_circuit_active
         and not uses_full_prefix_cache
-        and example.task in {"passage_retrieval_en", "trec"}
     ):
         (
             candidate_direct_prediction,
@@ -4250,6 +7388,65 @@ def evaluate_method(
             model,
             tokenizer,
             input_device,
+            config.ours_direct_summary_max_words,
+            config.ours_operator_mode,
+        )
+        if candidate_direct_prediction:
+            direct_structured_prediction = candidate_direct_prediction
+            prediction = candidate_direct_prediction
+            generated_ids = candidate_direct_generated_ids
+            query_seconds = candidate_direct_query_seconds
+            decode_seconds = candidate_direct_decode_seconds
+    if direct_structured_prediction:
+        gather_seconds = 0.0
+    else:
+        if full_prefix_cache is None:
+            full_prefix_cache, late_prefill_seconds = prefill_prefix(
+                model,
+                bundle,
+                input_device,
+                config.prefill_chunk_tokens,
+            )
+            full_prefill_seconds += late_prefill_seconds
+            late_prefill_after_direct_miss = True
+        gather_started = time.perf_counter()
+        if uses_full_prefix_cache:
+            sparse_cache = full_prefix_cache
+        elif layer_router_active:
+            layer_keep_indices = build_layer_keep_indices(full_prefix_cache, bundle, keep_indices, config)
+            sparse_cache = gather_past_key_values_layerwise(full_prefix_cache, layer_keep_indices)
+        else:
+            sparse_cache = gather_past_key_values(full_prefix_cache, keep_indices)
+            if config.sparse_position_mode == "rope_rebase":
+                sparse_cache = rebase_rope_past_key_values(model, sparse_cache, keep_indices)
+        gather_seconds = 0.0 if uses_full_prefix_cache else time.perf_counter() - gather_started
+        first_max_new_tokens = example.max_new_tokens
+        if short_decode_active and not uses_full_prefix_cache and config.ours_short_decode_max_tokens > 0:
+            first_max_new_tokens = min(first_max_new_tokens, config.ours_short_decode_max_tokens)
+        if output_verifier_active and not uses_full_prefix_cache and config.ours_output_probe_max_tokens > 0:
+            first_max_new_tokens = min(first_max_new_tokens, config.ours_output_probe_max_tokens)
+        if direct_structured_answer_active and example.task == "trec" and not uses_full_prefix_cache:
+            first_max_new_tokens = 0
+    if (
+        not direct_structured_prediction
+        and
+        direct_prefill_short_circuit_active
+        and not uses_full_prefix_cache
+    ):
+        (
+            candidate_direct_prediction,
+            candidate_direct_generated_ids,
+            candidate_direct_query_seconds,
+            candidate_direct_decode_seconds,
+        ) = direct_structured_answer(
+            example,
+            pages,
+            selected_page_ids(bundle, keep_indices),
+            model,
+            tokenizer,
+            input_device,
+            config.ours_direct_summary_max_words,
+            config.ours_operator_mode,
         )
         if candidate_direct_prediction:
             direct_structured_prediction = candidate_direct_prediction
@@ -4258,22 +7455,26 @@ def evaluate_method(
             query_seconds = candidate_direct_query_seconds
             decode_seconds = candidate_direct_decode_seconds
         else:
-            prediction, generated_ids, query_seconds, decode_seconds = generate_with_cache(
+            prediction, generated_ids, query_seconds, decode_seconds = generate_for_example(
                 model,
                 tokenizer,
                 bundle,
                 sparse_cache,
                 first_max_new_tokens,
                 input_device,
+                example,
+                config,
             )
-    else:
-        prediction, generated_ids, query_seconds, decode_seconds = generate_with_cache(
+    elif not direct_structured_prediction:
+        prediction, generated_ids, query_seconds, decode_seconds = generate_for_example(
             model,
             tokenizer,
             bundle,
             sparse_cache,
             first_max_new_tokens,
             input_device,
+            example,
+            config,
         )
     output_fallback_active = False
     grounding_fallback_active = False
@@ -4337,13 +7538,15 @@ def evaluate_method(
             _consistency_generated_ids,
             consistency_query_seconds,
             consistency_decode_seconds,
-        ) = generate_with_cache(
+        ) = generate_for_example(
             model,
             tokenizer,
             bundle,
             consistency_cache,
             consistency_max_new_tokens,
             input_device,
+            example,
+            config,
         )
         query_seconds += consistency_query_seconds
         decode_seconds += consistency_decode_seconds
@@ -4380,6 +7583,9 @@ def evaluate_method(
         consistency_disagreement_active = bool(consistency_failed)
     if not uses_full_prefix_cache and (contract_failed or grounding_failed or support_window_failed):
         retry_accepted = False
+        retry_prediction = ""
+        retry_generated_ids: list[int] = []
+        retry_keep_indices: list[int] = []
         retry_budget = max(0, int(config.ours_retry_budget_tokens))
         if retry_budget > config.budget_tokens and retry_budget < bundle.query_start:
             retry_config = replace(config, budget_tokens=retry_budget)
@@ -4392,13 +7598,15 @@ def evaluate_method(
                 else gather_past_key_values(full_prefix_cache, retry_keep_indices)
             )
             gather_seconds += 0.0 if retry_uses_full_prefix_cache else time.perf_counter() - retry_started
-            retry_prediction, retry_generated_ids, retry_query_seconds, retry_decode_seconds = generate_with_cache(
+            retry_prediction, retry_generated_ids, retry_query_seconds, retry_decode_seconds = generate_for_example(
                 model,
                 tokenizer,
                 bundle,
                 retry_cache,
                 example.max_new_tokens,
                 input_device,
+                example,
+                config,
             )
             query_seconds += retry_query_seconds
             decode_seconds += retry_decode_seconds
@@ -4430,18 +7638,21 @@ def evaluate_method(
                 prediction = retry_prediction
                 generated_ids = retry_generated_ids
                 keep_indices = retry_keep_indices
+                layer_keep_indices = None
                 retry_accepted = True
             else:
                 grounding_failed = grounding_failed or retry_grounding_failed
                 support_window_failed = support_window_failed or retry_support_window_failed
-        if not retry_accepted:
-            fallback_prediction, fallback_generated_ids, fallback_query_seconds, fallback_decode_seconds = generate_with_cache(
+        if not retry_accepted and retry_full_fallback_allowed:
+            fallback_prediction, fallback_generated_ids, fallback_query_seconds, fallback_decode_seconds = generate_for_example(
                 model,
                 tokenizer,
                 bundle,
                 full_prefix_cache,
                 example.max_new_tokens,
                 input_device,
+                example,
+                config,
             )
             prediction = fallback_prediction
             generated_ids = fallback_generated_ids
@@ -4449,17 +7660,25 @@ def evaluate_method(
             decode_seconds += fallback_decode_seconds
             retry_full_fallback_active = retry_fallback_active
             keep_indices = list(range(bundle.query_start))
+            layer_keep_indices = None
+        elif not retry_accepted and retry_fallback_active:
+            prediction = retry_prediction
+            generated_ids = retry_generated_ids
+            keep_indices = retry_keep_indices
+            layer_keep_indices = None
         output_fallback_active = True
         grounding_fallback_active = bool(grounding_failed)
         support_window_fallback_active = bool(support_window_failed)
     elif not uses_full_prefix_cache and consistency_failed:
-        fallback_prediction, fallback_generated_ids, fallback_query_seconds, fallback_decode_seconds = generate_with_cache(
+        fallback_prediction, fallback_generated_ids, fallback_query_seconds, fallback_decode_seconds = generate_for_example(
             model,
             tokenizer,
             bundle,
             full_prefix_cache,
             example.max_new_tokens,
             input_device,
+            example,
+            config,
         )
         prediction = fallback_prediction
         generated_ids = fallback_generated_ids
@@ -4467,6 +7686,7 @@ def evaluate_method(
         decode_seconds += fallback_decode_seconds
         consistency_full_fallback_active = True
         keep_indices = list(range(bundle.query_start))
+        layer_keep_indices = None
     if direct_structured_answer_active and not direct_structured_prediction:
         (
             direct_structured_prediction,
@@ -4480,13 +7700,21 @@ def evaluate_method(
             model,
             tokenizer,
             input_device,
+            config.ours_direct_summary_max_words,
+            config.ours_operator_mode,
         )
         if direct_structured_prediction:
             prediction = direct_structured_prediction
             generated_ids = direct_structured_generated_ids
             query_seconds += direct_structured_query_seconds
             decode_seconds += direct_structured_decode_seconds
-    score = score_prediction(example.metric, prediction, example.answers, example.all_classes)
+    score = score_prediction(
+        example.metric,
+        prediction,
+        example.answers,
+        example.all_classes,
+        task=example.task,
+    )
     context_kept = sum(1 for idx in keep_indices if bundle.context_token_start <= idx < bundle.query_start)
     reported_kept_prefix_tokens = (
         average_layer_keep_count(layer_keep_indices)
@@ -4504,12 +7732,30 @@ def evaluate_method(
         "benchmark": example.benchmark,
         "task": example.task,
         "sample_id": example.sample_id,
+        "domain": example.domain,
+        "sub_domain": example.sub_domain,
+        "difficulty": example.difficulty,
+        "length_category": example.length_category,
         "method": method,
         "metric": example.metric,
         "score": score,
         "prediction": prediction.replace("\n", "\\n")[:500],
+        "constrained_choice_decode_active": int(
+            config.constrained_choice_decode and example.metric == "longbench_v2_mc"
+        ),
+        "sparse_query_tokenwise_active": int(
+            config.sparse_query_tokenwise and method != "full_kv" and len(keep_indices) < bundle.query_start
+        ),
+        "sparse_query_physical_mask_active": int(
+            config.sparse_query_physical_mask and method != "full_kv" and len(keep_indices) < bundle.query_start
+        ),
+        "sparse_position_mode": config.sparse_position_mode if method != "full_kv" else "",
+        "longbench_v2_pred": extract_longbench_v2_answer(prediction)
+        if example.metric == "longbench_v2_mc"
+        else "",
         "answers": json.dumps(example.answers, ensure_ascii=False),
         "generated_tokens": len(generated_ids),
+        "force_decode_tokens": config.force_decode_tokens,
         "prefill_seconds": full_prefill_seconds,
         "kv_gather_seconds": gather_seconds,
         "query_seconds": query_seconds,
@@ -4526,6 +7772,8 @@ def evaluate_method(
         "recent_tokens": config.recent_tokens,
         "page_tokens": config.page_tokens,
         "ours_scorer": config.ours_scorer if method == "ours_page_gather" else "",
+        "ours_choice_support_weight": config.ours_choice_support_weight if method == "ours_page_gather" else "",
+        "ours_choice_contrast_weight": config.ours_choice_contrast_weight if method == "ours_page_gather" else "",
         "ours_bridge_active": int(bridge_active) if method == "ours_page_gather" else "",
         "ours_bridge_tasks": config.ours_bridge_tasks if method == "ours_page_gather" else "",
         "ours_graph_bridge_active": int(graph_bridge_active) if method == "ours_page_gather" else "",
@@ -4541,6 +7789,56 @@ def evaluate_method(
         "ours_graph_bridge_tokens": selector_extra.get("graph_bridge_tokens", "")
         if method == "ours_page_gather"
         else "",
+        "ours_coarse_to_fine_active": int(coarse_to_fine_active) if method == "ours_page_gather" else "",
+        "ours_coarse_to_fine_tasks": config.ours_coarse_to_fine_tasks if method == "ours_page_gather" else "",
+        "ours_coarse_to_fine_group_pages": config.ours_coarse_to_fine_group_pages
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_candidate_multiplier": config.ours_coarse_to_fine_candidate_multiplier
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_neighbor_groups": config.ours_coarse_to_fine_neighbor_groups
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_groups": selector_extra.get("coarse_to_fine_groups", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_expanded_groups": selector_extra.get("coarse_to_fine_expanded_groups", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_candidate_pages": selector_extra.get("coarse_to_fine_candidate_pages", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_coarse_to_fine_candidate_tokens": selector_extra.get("coarse_to_fine_candidate_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_anchor_window_active": int(anchor_window_active) if method == "ours_page_gather" else "",
+        "ours_anchor_window_tasks": config.ours_anchor_window_tasks if method == "ours_page_gather" else "",
+        "ours_anchor_window_tokens": config.ours_anchor_window_tokens if method == "ours_page_gather" else "",
+        "ours_anchor_window_pages": selector_extra.get("anchor_window_pages", "") if method == "ours_page_gather" else "",
+        "ours_anchor_window_added_tokens": selector_extra.get("anchor_window_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_span_repack_active": int(span_repack_active) if method == "ours_page_gather" else "",
+        "ours_span_repack_tasks": config.ours_span_repack_tasks if method == "ours_page_gather" else "",
+        "ours_span_repack_window_tokens": config.ours_span_repack_window_tokens
+        if method == "ours_page_gather"
+        else "",
+        "ours_span_repack_budget_fraction": config.ours_span_repack_budget_fraction
+        if method == "ours_page_gather"
+        else "",
+        "ours_span_repack_top_pages": config.ours_span_repack_top_pages if method == "ours_page_gather" else "",
+        "ours_span_repack_min_score": config.ours_span_repack_min_score if method == "ours_page_gather" else "",
+        "ours_span_repack_score_mode": config.ours_span_repack_score_mode if method == "ours_page_gather" else "",
+        "ours_span_repack_windows": selector_extra.get("span_repack_windows", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_span_repack_tokens": selector_extra.get("span_repack_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_span_repack_candidate_pages": selector_extra.get("span_repack_candidate_pages", "")
+        if method == "ours_page_gather"
+        else "",
         "ours_layer_router_active": int(layer_router_active) if method == "ours_page_gather" else "",
         "ours_layer_router_tasks": config.ours_layer_router_tasks if method == "ours_page_gather" else "",
         "ours_layer_router_mode": config.ours_layer_router_mode if method == "ours_page_gather" else "",
@@ -4548,7 +7846,30 @@ def evaluate_method(
         "ours_layer_router_low_budget_tokens": config.ours_layer_router_low_budget_tokens
         if method == "ours_page_gather"
         else "",
+        "ours_action_router_active": int(action_router_active) if method == "ours_page_gather" else "",
+        "ours_action_router_tasks": config.ours_action_router_tasks if method == "ours_page_gather" else "",
+        "ours_action_router_mode": config.ours_action_router_mode if method == "ours_page_gather" else "",
+        "ours_action_router_selected_action": selector_extra.get("action_router_selected_action", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_action_router_raw_action": selector_extra.get("action_router_raw_action", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_action_router_confidence": selector_extra.get("action_router_confidence", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_action_router_fallback_reason": selector_extra.get("action_router_fallback_reason", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_action_router_policy_overrides": selector_extra.get("action_router_policy_overrides", "")
+        if method == "ours_page_gather"
+        else "",
         "ours_task_policy_active": int(bool(config.ours_task_policy_json)) if method == "ours_page_gather" else "",
+        "ours_operator_mode": config.ours_operator_mode if method == "ours_page_gather" else "",
+        "ours_operator_confidence": config.ours_operator_confidence if method == "ours_page_gather" else "",
+        "ours_operator_fallback_reason": config.ours_operator_fallback_reason
+        if method == "ours_page_gather"
+        else "",
         "ours_full_fallback_active": int(full_fallback_active) if method == "ours_page_gather" else "",
         "ours_full_fallback_tasks": config.ours_full_fallback_tasks if method == "ours_page_gather" else "",
         "ours_label_support_active": int(label_support_active) if method == "ours_page_gather" else "",
@@ -4562,6 +7883,27 @@ def evaluate_method(
         if method == "ours_page_gather"
         else "",
         "ours_passage_closure_tokens": selector_extra.get("passage_closure_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_active": int(demonstration_closure_active)
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_tasks": config.ours_demonstration_closure_tasks
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_budget_fraction": config.ours_demonstration_closure_budget_fraction
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_radius_pages": config.ours_demonstration_closure_radius_pages
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_tail_pages": config.ours_demonstration_closure_tail_pages
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_tokens": selector_extra.get("demonstration_closure_tokens", "")
+        if method == "ours_page_gather"
+        else "",
+        "ours_demonstration_closure_units": selector_extra.get("demonstration_closure_units", "")
         if method == "ours_page_gather"
         else "",
         "ours_structured_fingerprint_active": int(structured_fingerprint_active) if method == "ours_page_gather" else "",
@@ -4583,6 +7925,13 @@ def evaluate_method(
         "ours_direct_structured_answer_tasks": config.ours_direct_structured_answer_tasks
         if method == "ours_page_gather"
         else "",
+        "ours_direct_summary_max_words": config.ours_direct_summary_max_words if method == "ours_page_gather" else "",
+        "ours_direct_prefill_short_circuit_active": int(direct_prefill_short_circuit_active)
+        if method == "ours_page_gather"
+        else "",
+        "ours_late_prefill_after_direct_miss": int(late_prefill_after_direct_miss)
+        if method == "ours_page_gather"
+        else "",
         "ours_direct_structured_answer_used": int(bool(direct_structured_prediction))
         if method == "ours_page_gather"
         else "",
@@ -4595,10 +7944,30 @@ def evaluate_method(
         "ours_output_verifier_tasks": config.ours_output_verifier_tasks if method == "ours_page_gather" else "",
         "ours_output_probe_max_tokens": config.ours_output_probe_max_tokens if method == "ours_page_gather" else "",
         "ours_retry_budget_tokens": config.ours_retry_budget_tokens if method == "ours_page_gather" else "",
+        "ours_retry_full_fallback_allowed": int(retry_full_fallback_allowed) if method == "ours_page_gather" else "",
+        "ours_retry_full_fallback_tasks": config.ours_retry_full_fallback_tasks if method == "ours_page_gather" else "",
         "ours_retry_fallback_active": int(retry_fallback_active) if method == "ours_page_gather" else "",
         "ours_retry_full_fallback_active": int(retry_full_fallback_active) if method == "ours_page_gather" else "",
         "ours_score_risk_active": int(score_risk_active) if method == "ours_page_gather" else "",
+        "ours_score_risk_raw_triggered": int(score_risk_raw_triggered) if method == "ours_page_gather" else "",
         "ours_score_risk_triggered": int(score_risk_triggered) if method == "ours_page_gather" else "",
+        "ours_score_safe_active": int(score_safe_active) if method == "ours_page_gather" else "",
+        "ours_score_safe_certified": int(score_safe_certified) if method == "ours_page_gather" else "",
+        "ours_score_safe_tasks": config.ours_score_safe_tasks if method == "ours_page_gather" else "",
+        "ours_score_safe_min_gap2": config.ours_score_safe_min_gap2 if method == "ours_page_gather" else "",
+        "ours_score_safe_min_gap3": config.ours_score_safe_min_gap3 if method == "ours_page_gather" else "",
+        "ours_score_safe_max_entropy": config.ours_score_safe_max_entropy if method == "ours_page_gather" else "",
+        "ours_score_safe_min_top_score": config.ours_score_safe_min_top_score if method == "ours_page_gather" else "",
+        "ours_score_safe_mean_at_least": config.ours_score_safe_mean_at_least if method == "ours_page_gather" else "",
+        "ours_score_safe_raw_prefix_at_most": config.ours_score_safe_raw_prefix_at_most
+        if method == "ours_page_gather"
+        else "",
+        "ours_score_safe_raw_prefix_at_least": config.ours_score_safe_raw_prefix_at_least
+        if method == "ours_page_gather"
+        else "",
+        "ours_score_safe_linear_threshold": config.ours_score_safe_linear_threshold
+        if method == "ours_page_gather"
+        else "",
         "ours_score_risk_tasks": config.ours_score_risk_tasks if method == "ours_page_gather" else "",
         "ours_score_risk_budget_tokens": config.ours_score_risk_budget_tokens if method == "ours_page_gather" else "",
         "ours_score_risk_min_gap2": config.ours_score_risk_min_gap2 if method == "ours_page_gather" else "",
@@ -4610,6 +7979,10 @@ def evaluate_method(
         if method == "ours_page_gather"
         else "",
         "ours_score_risk_min_top_score": config.ours_score_risk_min_top_score if method == "ours_page_gather" else "",
+        "ours_score_risk_mean_at_least": config.ours_score_risk_mean_at_least
+        if method == "ours_page_gather"
+        else "",
+        "ours_score_risk_mean_at_most": config.ours_score_risk_mean_at_most if method == "ours_page_gather" else "",
         "ours_score_risk_raw_prefix_at_most": config.ours_score_risk_raw_prefix_at_most
         if method == "ours_page_gather"
         else "",
@@ -4765,6 +8138,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "config.json").write_text(json.dumps(asdict(config), indent=2, ensure_ascii=False), encoding="utf-8")
 
+    install_llama_layerwise_attention_mask_patch()
     device = torch.device(config.device if torch.cuda.is_available() else "cpu")
     dtype = resolve_dtype(config.dtype, device)
     tokenizer = AutoTokenizer.from_pretrained(config.model_name_or_path, trust_remote_code=True)
@@ -4782,6 +8156,8 @@ def main() -> None:
     benchmarks = set(parse_list(config.benchmarks))
     if "longbench" in benchmarks:
         examples.extend(load_longbench_examples(config))
+    if "longbench_v2" in benchmarks:
+        examples.extend(load_longbench_v2_examples(config))
     if "ruler" in benchmarks:
         examples.extend(load_ruler_examples(config, config.model_name_or_path))
     sampled_ids = [
@@ -4790,6 +8166,10 @@ def main() -> None:
             "task": example.task,
             "sample_id": example.sample_id,
             "length": example.length,
+            "domain": example.domain,
+            "sub_domain": example.sub_domain,
+            "difficulty": example.difficulty,
+            "length_category": example.length_category,
         }
         for example in examples
     ]
@@ -4818,14 +8198,30 @@ def main() -> None:
                 f"scorer={example_config.ours_scorer}",
                 flush=True,
             )
-        full_prefix_cache, prefill_seconds = prefill_prefix(
-            model,
-            bundle,
-            input_device,
-            example_config.prefill_chunk_tokens,
+        skip_initial_prefill = (
+            len(methods) == 1
+            and methods[0] == "ours_page_gather"
+            and direct_prefill_short_circuit_active_for_example(example_config, example)
         )
+        if skip_initial_prefill:
+            full_prefix_cache = None
+            prefill_seconds = 0.0
+        else:
+            full_prefix_cache, prefill_seconds = prefill_prefix(
+                model,
+                bundle,
+                input_device,
+                example_config.prefill_chunk_tokens,
+            )
         attention_scores = None
         if needs_attention:
+            if full_prefix_cache is None:
+                full_prefix_cache, prefill_seconds = prefill_prefix(
+                    model,
+                    bundle,
+                    input_device,
+                    example_config.prefill_chunk_tokens,
+                )
             attention_scores = attention_scores_from_suffix(model, bundle, full_prefix_cache, input_device)
         for method in methods:
             row = evaluate_method(

@@ -1,0 +1,11 @@
+{
+  "name": "smooth_layer_frequency",
+  "kind": "smooth_layer_frequency",
+  "alpha_min": 0.25,
+  "layer_center_fraction": 0.65,
+  "layer_temperature_fraction": 0.08,
+  "frequency_center_pair": 11.0,
+  "frequency_temperature_pairs": 2.0,
+  "description": "Continuously slow deep high-frequency RoPE pairs without a hard layer or band boundary."
+}
+

@@ -1,0 +1,31 @@
+{
+  "train": [
+    {
+      "name": "clean64",
+      "corpus_dir": "../data/real_longbench_docqa_10m_clean_record64",
+      "retrieval_csv": "../outputs/real_longbench_docqa_10m_hybrid_top20nll_v7/query_results.csv",
+      "record_routing_csv": "../outputs/real_longbench_docqa_10m_record_question_nll_top20_v2/routing.csv",
+      "record_scores_csv": "../outputs/real_longbench_docqa_10m_record_question_nll_top20_v2/record_scores.csv",
+      "candidate_diagnostics_csv": "../outputs/real_longbench_docqa_10m_block_question_nll_top32_v2/candidate_diagnostics.csv",
+      "answer_nll_csv": "../outputs/real_longbench_docqa_10m_deep_vs_hybrid30_nll_v1/answer_nll_rows.csv"
+    },
+    {
+      "name": "holdout64_v1",
+      "corpus_dir": "../data/real_longbench_docqa_10m_holdout64_v1",
+      "retrieval_csv": "../outputs/holdout64_deep_retrieval_v1/query_results.csv",
+      "record_routing_csv": "../outputs/holdout64_record_question_nll_v1/routing.csv",
+      "record_scores_csv": "../outputs/holdout64_record_question_nll_v1/record_scores.csv",
+      "candidate_diagnostics_csv": "../outputs/holdout64_block_question_nll_top32_v1/candidate_diagnostics.csv",
+      "answer_nll_csv": "../outputs/holdout64_deep_vs_hybrid30_nll_v1/answer_nll_rows.csv"
+    }
+  ],
+  "test": {
+    "name": "holdout64_v2_frozen",
+    "corpus_dir": "../data/real_longbench_docqa_10m_holdout64_v2",
+    "retrieval_csv": "../outputs/holdout64_v2_hybrid_top20nll_v1/query_results.csv",
+    "record_routing_csv": "../outputs/holdout64_v2_record_question_nll_top20_v1/routing.csv",
+    "record_scores_csv": "../outputs/holdout64_v2_record_question_nll_top20_v1/record_scores.csv",
+    "candidate_diagnostics_csv": "../outputs/holdout64_v2_block_question_nll_top32_v1/candidate_diagnostics.csv",
+    "answer_nll_csv": "../outputs/holdout64_v2_hybrid_top20nll_v1_answer_nll/answer_nll_rows.csv"
+  }
+}

@@ -1,0 +1,74 @@
+<div id="rope-dense-complete">
+  <h2>完整层块 × KV Head × RoPE 频带扫描</h2>
+  <div class="card text-small overview">
+    <p><strong>设置：</strong>Qwen3-8B，RULER-32K 发现集；每个单层配置测试 6 个样本。干预只把一个层、一个 KV Head 组、一个连续 8 维频带的 RoPE 旋转设为单位旋转。</p>
+    <p><strong>每格指标：</strong>同一层块内 6 个单层干预相对原生 RoPE 的官方分数变化的算术平均，单位为百分点（pp）。正数表示平均提高，负数表示平均下降；G0–G7 分别对应 Query Heads Q0–3、Q4–7、…、Q28–31。</p>
+    <p><strong>读图：</strong>蓝色表示提高，橙色表示下降，灰色表示变化接近 0。点击任意格可查看六层中的最佳层、最差层及平均 Gold NLL 变化。</p>
+    <p><strong>结果边界：</strong>表中共有 1,152 个单层配置，聚合为 192 个完整单元；这是 6 样本发现集，均值可以隐藏某一层的极端变化，不能代替独立样本复验。</p>
+  </div>
+  <div id="dense-selected" class="card text-small" aria-live="polite"></div>
+  <div id="dense-maps"></div>
+  <div class="legend text-small" aria-label="颜色图例">
+    <span>平均下降</span><i class="n3"></i><i class="n2"></i><i class="n1"></i><i class="z"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><span>平均提高</span><strong>单位：pp</strong>
+  </div>
+</div>
+<style>
+#rope-dense-complete{color:var(--foreground);width:100%}
+#rope-dense-complete h2{margin:0 0 12px}
+#rope-dense-complete .overview{margin-bottom:10px}
+#rope-dense-complete .overview p{margin:0 0 7px}
+#rope-dense-complete .overview p:last-child{margin-bottom:0}
+#dense-selected{margin-bottom:16px;font-variant-numeric:tabular-nums}
+#dense-maps{display:grid;gap:24px;min-width:0}
+#rope-dense-complete .panel{min-width:0}
+#rope-dense-complete .panel h3{margin:0 0 8px}
+#rope-dense-complete .table-responsive{padding-bottom:2px}
+#rope-dense-complete .hm{display:grid;grid-template-columns:74px repeat(8,minmax(64px,1fr));gap:4px;align-items:center;min-width:650px}
+#rope-dense-complete .ax{text-align:center;color:var(--muted-foreground)}
+#rope-dense-complete .row{text-align:right;padding-right:7px}
+#rope-dense-complete .hm .btn{min-width:0;font-variant-numeric:tabular-nums}
+#rope-dense-complete .legend{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:16px;color:var(--muted-foreground);flex-wrap:wrap}
+#rope-dense-complete .legend i{width:22px;height:10px}
+#rope-dense-complete .legend strong{margin-left:8px;font-weight:500}
+#rope-dense-complete .z{background:var(--muted)}
+#rope-dense-complete .p1{background:color-mix(in srgb,var(--viz-series-1) 22%,transparent)}
+#rope-dense-complete .p2{background:color-mix(in srgb,var(--viz-series-1) 45%,transparent)}
+#rope-dense-complete .p3{background:color-mix(in srgb,var(--viz-series-1) 72%,transparent)}
+#rope-dense-complete .n1{background:color-mix(in srgb,var(--destructive) 20%,transparent)}
+#rope-dense-complete .n2{background:color-mix(in srgb,var(--destructive) 42%,transparent)}
+#rope-dense-complete .n3{background:color-mix(in srgb,var(--destructive) 68%,transparent)}
+</style>
+<script>
+(function(){
+  const data=__DATA__;
+  const root=document.getElementById('rope-dense-complete');
+  const maps=root.querySelector('#dense-maps');
+  const selected=root.querySelector('#dense-selected');
+  const blocks=['L18-23','L24-29','L30-35'];
+  const bands=['F0-7','F8-15','F16-23','F24-31','F32-39','F40-47','F48-55','F56-63'];
+  function format(value,digits){const rounded=Math.abs(value)<Math.pow(10,-digits)/2?0:value;return (rounded>0?'+':'')+rounded.toFixed(digits)}
+  function color(value){const magnitude=Math.abs(value);if(magnitude<0.05)return'z';const prefix=value>0?'p':'n';return prefix+(magnitude>=2.5?3:magnitude>=1?2:1)}
+  function describe(cell){
+    selected.innerHTML='<strong>'+cell.b+' · G'+cell.g+' ('+cell.q+') · '+cell.f+'</strong><br>六个单层配置的平均官方分变化：<strong>'+format(cell.m,2)+' pp</strong>；最佳：L'+cell.bl+' '+format(cell.bv,2)+' pp；最差：L'+cell.wl+' '+format(cell.wv,2)+' pp；平均 Gold NLL 改善：'+format(cell.n,4)+'。';
+  }
+  blocks.forEach(function(block){
+    const section=document.createElement('section');section.className='panel';
+    section.innerHTML='<h3>'+block+'</h3>';
+    const scroll=document.createElement('div');scroll.className='table-responsive';
+    const grid=document.createElement('div');grid.className='hm';grid.setAttribute('role','grid');grid.setAttribute('aria-label',block+' 的平均官方分数变化表，单位百分点');
+    grid.innerHTML='<span class="ax">频带＼Head</span>'+Array.from({length:8},function(_,group){return'<span class="ax">G'+group+'</span>'}).join('');
+    bands.forEach(function(band){
+      grid.insertAdjacentHTML('beforeend','<span class="ax row">'+band+'</span>');
+      for(let group=0;group<8;group+=1){
+        const cell=data.find(function(item){return item.b===block&&item.g===group&&item.f===band});
+        const button=document.createElement('button');button.type='button';button.className='btn viz-tile '+color(cell.m);button.textContent=format(cell.m,1);button.setAttribute('aria-pressed','false');button.setAttribute('aria-label',block+'，G'+group+'，'+band+'，六层平均官方分变化 '+format(cell.m,2)+' 个百分点');
+        button.addEventListener('click',function(){root.querySelectorAll('.hm button').forEach(function(other){other.setAttribute('aria-pressed','false')});button.setAttribute('aria-pressed','true');describe(cell)});
+        grid.appendChild(button);
+      }
+    });
+    scroll.appendChild(grid);section.appendChild(scroll);maps.appendChild(section);
+  });
+  const strongest=data.reduce(function(best,cell){return cell.m>best.m?cell:best},data[0]);
+  describe(strongest);
+})();
+</script>

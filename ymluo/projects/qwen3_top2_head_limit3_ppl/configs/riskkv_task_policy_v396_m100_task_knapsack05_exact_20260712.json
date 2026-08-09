@@ -1,0 +1,54 @@
+{
+  "__extends": "riskkv_task_policy_v365_ultra_skeleton_all_20260712.json",
+  "__comment": "v396: completed-M100 task-level knapsack under mean KV<=5%. Offline estimate: score ~=0.3752, mean KV ~=5.00%, full-speed ~=7.34x.",
+  "__task_sources": {
+    "2wikimqa": {
+      "policy": "riskkv_task_policy_v381_policy_multiclass_nopost_20260712.json"
+    },
+    "gov_report": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "hotpotqa": {
+      "policy": "riskkv_task_policy_v383_policy_multiclass_base_v377_conf040_20260712.json"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v380_policy_multiclass_router_20260712.json"
+    },
+    "multi_news": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v380_policy_multiclass_router_20260712.json"
+    },
+    "narrativeqa": {
+      "policy": "riskkv_task_policy_v381_policy_multiclass_nopost_20260712.json"
+    },
+    "passage_count": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "passage_retrieval_en": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v385_quality10_v384_plus_v363_qmsumlow_20260712.json"
+    },
+    "qmsum": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v382_policy_multiclass_base_v377_20260712.json"
+    },
+    "samsum": {
+      "policy": "riskkv_task_policy_v383_policy_multiclass_base_v377_conf040_20260712.json"
+    },
+    "trec": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "triviaqa": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    }
+  }
+}

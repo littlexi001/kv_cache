@@ -1,0 +1,27 @@
+{
+  "source_layers": [
+    9,
+    18,
+    27,
+    34
+  ],
+  "capture_layers": [
+    9,
+    10,
+    18,
+    19,
+    27,
+    28,
+    34,
+    35
+  ],
+  "pre_key_storage": "cpu",
+  "forbidden_scoring_inputs": [
+    "gold span",
+    "event kind/label/step",
+    "answer token",
+    "answer gradient",
+    "loss gradient"
+  ],
+  "label_entry_point": "_edge_rows_for_case after score_case_label_free returns"
+}

@@ -245,3 +245,142 @@ watcher 已扩展到 v189-v195。
 | v190_gov64_hotpot2048_direct_heads_m100_auto | v190 |
 | v193_gov128_summary64_hotpot2048_direct_heads_m100_auto | v193 |
 | v194_gov128_hotpot_safe_direct_heads_m100_auto | v194 |
+## 2026-07-10 追加：Layer-wise / Head-wise Router 探索
+
+动机：AdaKV 的优势来自 head/layer 级别的非均匀 KV budget。当前 RiskKV-Block 主线仍是所有 layer/head 共用同一组 block，粒度比 AdaKV 粗。
+
+技术判断：
+
+- layer-wise 不同 token 集合：当前 HuggingFace cache 路径可以支持，每一层的 K/V seq_len 可以不同。
+- head-wise 不同 token 集合：标准 dense K/V tensor 不支持同一层内不同 KV head 的不同 seq_len；需要自定义 attention/cache 或 padding+mask，工程成本更高。
+
+已实现第一版 layer-wise router：
+
+- 开关：`layer_router: true`
+- 模式：`early_stream_late_retrieval`
+- 低层：只保留 sink+recent 小 cache
+- 高层：保留当前 v193 retrieval-selected blocks
+- KV 指标：改为按 layer 平均 kept tokens 统计
+
+Smoke test：
+
+| 实验 | Tasks | Score | KV keep | Online |
+|---|---|---:|---:|---:|
+| v196_layer50_smoke | trec + passage_retrieval_en, m2 | 0.7500 | 4.37% | 0.150s |
+
+说明 layer-wise 变长 cache 在当前模型/SDPA 路径下可运行。
+
+已启动 m20 探针：
+
+| 实验 | 设置 |
+|---|---|
+| v196_layer50_v193_probe | 基于 v193，低 50% layers 使用 512 sink+recent，高 50% layers 使用 retrieval |
+| v197_layer33_v193_probe | 基于 v193，低 33.3% layers 使用 512 sink+recent，其余 layers 使用 retrieval |
+
+如果 v197 m20 分数接近 v193，同时 KV 明显下降，则扩展到 m50；如果 v196 也稳，则它可能把 KV 从 29% 进一步压到 20% 以下。
+
+后续验证发现，上面的 smoke test 是 direct-head 路径，没有真正进入常规生成 decode。对需要模型生成的任务，标准 HuggingFace Llama forward 不支持不同 layer 拥有不同 KV seq_len：
+
+- SDPA 报错：全局 causal mask 的最后一维与某些 layer 的 KV length 不一致。
+- eager attention 也报同类错误：`attn_weights + causal_mask` 维度不匹配。
+
+因此当前结论修正为：
+
+1. 标准 HF cache/attention 路径不能直接做真正的 layer-wise 变长 KV。
+2. 真正 head-wise 变长 KV 更难，因为同一层的 dense K/V tensor 还要求所有 KV heads 共享同一个 seq_len。
+3. 要做 AdaKV 风格的 layer/head 独立 router，需要自定义 attention/cache，或先做 padding+mask 的质量探针，再实现真正压缩 kernel。
+
+下一步可行路线：
+
+- 短期：做 layer/head-informed single-set routing，即用不同 layer/head 的信号训练 router，但最终仍输出一个统一 token set。这能改进质量，但不能获得 AdaKV 那种额外 KV 压缩。
+- 中期：实现 custom Llama attention wrapper，为每层构造独立 causal mask，支持 layer-wise 变长 KV；先不做 head-wise。
+- 长期：实现 head-wise paged KV 或 ragged KV layout，才能真正对齐 AdaKV 的 head-wise budget。
+
+## 2026-07-10 追加：layer-wise 真实生成路径已跑通
+
+针对上面发现的 HuggingFace Llama causal mask shape mismatch，已经在 `run_controlled_public_kv_benchmark_v1.py` 中加入 Llama attention mask adapter：
+
+- eager 和 SDPA 两条 attention 路径都被 patch。
+- 当某一层实际 KV length 大于全局 causal mask length 时，在 mask 左侧补 0，额外列视为更早的 prefix token，允许 suffix token attend。
+- 当某一层实际 KV length 小于全局 causal mask length 时，从左侧裁掉多余 prefix mask，保留右侧 suffix causal 结构。
+- 普通所有层 KV length 相同的路径不受影响，因为 mask length 与 key length 相同时直接原样返回。
+
+新的真实生成 smoke test：
+
+| 实验 | Attention | Tasks | Samples | Score | KV keep | Online |
+|---|---|---|---:|---:|---:|---:|
+| v198_layer50_patch_smoke | SDPA | narrativeqa + hotpotqa | 4 | 0.4341 | 33.68% | 0.254s |
+| v198_layer50_patch_eager_smoke | eager | narrativeqa + hotpotqa | 2 | 0.7143 | 57.42% | 0.353s |
+
+结论修正：
+
+1. layer-wise 不同 KV seq_len 已经可以在真实生成任务上跑通，不再只是 direct-head smoke。
+2. 当前 patch 解决的是每层不同 KV length；同一层内 head-wise 不同 KV length 仍然需要 ragged/paged KV 或 padding+mask 的更大改造。
+3. 已启动两个完整 LongBench m20 探针：
+
+| 实验 | 设置 | 状态 |
+|---|---|---|
+| v198_layer50_patch_m20 | 低 50% layers 使用 512 sink+recent，高 50% layers 使用 v193 retrieval | running |
+| v199_layer33_patch_m20 | 低 33.3% layers 使用 512 sink+recent，其余 layers 使用 v193 retrieval | running |
+
+v198/v199 完整 m20 结果：
+
+| 实验 | Score | KV keep | Online | 判断 |
+|---|---:|---:|---:|---|
+| v198_layer50_patch_m20 | 0.3139 | 23.14% | 1.160s | KV 明显降低，但质量掉得太多，不适合作主线 |
+| v199_layer33_patch_m20 | 0.3280 | 25.47% | 1.138s | 比 v198 好，但仍明显低于 v193/v194 |
+
+关键对比：
+
+- v193 m50：score 0.3561，KV keep 29.08%，online 1.139s。
+- v199 m20：score 0.3280，KV keep 25.47%，online 1.138s。
+- 质量掉分主要来自 Qasper/HotpotQA 等 QA 任务；这说明早层 sink+recent 对多跳/证据定位任务不够安全。
+- LCC/code、TREC、部分摘要任务对 layer-wise 更耐受，因此 layer-wise 不应全任务启用，而应 task-gated。
+
+已启动 v200_taskgated_layer33_m20：
+
+| 实验 | 设置 | 目的 |
+|---|---|---|
+| v200_taskgated_layer33_m20 | 只对 gov_report、qmsum、multi_news、samsum、lcc、trec、passage_retrieval_en 启用 layer33；QA/多跳/PassageCount/Repobench 保持 v193 | 尝试在不显著掉分的情况下把 v193 的 29.08% KV 再压低 |
+
+v200 m20 已完成：
+
+| 实验 | Score | KV keep | Online | 对比 |
+|---|---:|---:|---:|---|
+| full KV m20 | 0.3727 | 100.00% | 3.033s | 同样 m20 sample 的 full baseline |
+| v193 m50 | 0.3561 | 29.08% | 1.139s | 当前速度主线，m50 |
+| v200_taskgated_layer33_m20 | 0.3740 | 27.70% | 1.131s | m20 上分数不掉，KV 比 v193 更低 |
+
+解释：
+
+- 全任务 layer-wise 失败，说明早层只保留 sink+recent 会伤害 QA/多跳证据整合。
+- task-gated layer-wise 成功，说明 layer-wise 的正确用法不是全局压缩，而是只作用在低风险任务族。
+- v200 已启动 m50 复验；如果 m50 能维持 0.356 附近且 KV 低于 29%，它应替代 v193 成为新的主线。
+
+v195 m50 也已完成：
+
+| 实验 | Score | KV keep | Online | 判断 |
+|---|---:|---:|---:|---|
+| v195_gov96_hotpot_safe | 0.3581 | 31.70% | 1.240s | 比 v194 快一点、分数略低；仍是质量安全但 KV 略超 30% 的备选 |
+
+v200 m50 已完成：
+
+| 实验 | Score | Full m50 比例 | KV keep | Online | E2E speed | 判断 |
+|---|---:|---:|---:|---:|---:|---|
+| full KV m50 | 0.371970 | 100.00% | 100.00% | 3.283s | 1.00x | baseline |
+| v193_gov128_summary64_hotpot2048 | 0.356113 | 95.74% | 29.08% | 1.139s | 2.88x | 旧速度主线 |
+| v200_taskgated_layer33 | 0.355652 | 95.62% | 27.08% | 1.174s | 2.80x | 新候选主线，KV 更低且仍过 95% |
+| v194_gov128_hotpot_safe | 0.359100 | 96.54% | 31.70% | 1.290s | 2.54x | 质量安全备选 |
+
+v200 m50 结论：
+
+- 达成原目标：score 高于 full m50 的 95% 阈值 0.353371，KV < 30%，online speed > 2.5x。
+- 相比 v193，分数只低 0.00046，但 KV 从 29.08% 降到 27.08%。
+- 相比全任务 layer-wise，task-gated layer-wise 是正确方向：只在低风险任务上压早层，保留 QA/多跳任务的完整 v193 行为。
+
+已启动 m100：
+
+| 实验 | GPU | 目的 |
+|---|---:|---|
+| v200_taskgated_layer33_m100 | 0 | 验证新候选主线在更大样本上的稳定性 |
+| v193_summary64_hotpot2048_m100_rerun | 1 | 重跑 v193 m100，对照此前 OOM 失败的结果 |

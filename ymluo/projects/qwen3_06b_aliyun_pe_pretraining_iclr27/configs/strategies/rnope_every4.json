@@ -1,0 +1,8 @@
+{
+  "name": "rnope_every4",
+  "kind": "periodic_nope",
+  "layer_interval": 4,
+  "layer_offset": 3,
+  "modified_scale": 0.0,
+  "description": "Use NoPE in layers 3, 7, 11, ... and native RoPE elsewhere."
+}

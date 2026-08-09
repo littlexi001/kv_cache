@@ -1,0 +1,48 @@
+{
+  "model_name_or_path": "/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "output_dir": "outputs/20260801_safety_gqa_64k_smoke_gpu7",
+  "lengths": "65536",
+  "seed_start": 0,
+  "num_seeds": 1,
+  "class_sample_count": 2,
+  "matched_tokens": 1,
+  "packet_gap_tokens": 16,
+  "anchor_distances": "1,128",
+  "fixed_anchor_distance": 128,
+  "trigger_threshold": 0.0,
+  "prefill_chunk_size": 64,
+  "native_max_context_tokens": 32768,
+  "dtype": "bfloat16",
+  "load_in_4bit": true,
+  "attn_implementation": "eager",
+  "original_max_position_embeddings": 40960,
+  "bootstrap_replicates": 200,
+  "bootstrap_seed": 2026080119,
+  "minimum_bootstrap_seeds": 1,
+  "merge_shards": "",
+  "dry_run": false,
+  "resolved_lengths": [
+    65536
+  ],
+  "resolved_anchor_distances": [
+    1,
+    128
+  ],
+  "class_order": [
+    "gold_evidence",
+    "conflict_evidence",
+    "lexical_format_distractor",
+    "filler"
+  ],
+  "certificate_fields": [
+    "pre_suppression",
+    "anchor_suppression",
+    "grid_envelope_suppression",
+    "phase_upper_suppression"
+  ],
+  "cuda_visible_devices": "7",
+  "frozen_final_query": true,
+  "explicit_truth_status_markers_in_prompt": false,
+  "instrumented_attention_implementation": "grouped_gqa_einsum_v1",
+  "primary_baseline": "instrumented_none"
+}

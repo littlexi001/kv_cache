@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "description": "Four matched P0 pretraining conditions; one eight-GPU machine per condition.",
+  "machines": [
+    {
+      "machine_id": 0,
+      "strategy": "optimized_phase_complementary",
+      "role": "main_method_without_local_constraint"
+    },
+    {
+      "machine_id": 1,
+      "strategy": "optimized_phase_complementary_local",
+      "role": "main_method_with_local_constraint"
+    },
+    {
+      "machine_id": 2,
+      "strategy": "native_rope",
+      "role": "matched_native_control"
+    },
+    {
+      "machine_id": 3,
+      "strategy": "rnope_every4",
+      "role": "published_external_baseline"
+    }
+  ],
+  "held_fixed": {
+    "initialization": "from_scratch with Qwen3-0.6B config and tokenizer",
+    "target_tokens_per_task": 100000000000,
+    "global_batch_size_sequences": 256,
+    "sequence_length": 8192,
+    "learning_rate": 0.0001,
+    "gpus_per_machine": 8,
+    "training_seed": 20260808,
+    "data_seed": 1701
+  }
+}

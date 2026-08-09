@@ -1,0 +1,53 @@
+{
+  "schema": "qksieve_256k_oracle_gap_figure_v1",
+  "source_result": "results/20260730_qksieve_256k_exact_oracle_vs_proxy_k1280_k2560_4window_7gpu/multiwindow_summary.json",
+  "protocol": {
+    "model": "Qwen3-4B-Instruct",
+    "windows": 4,
+    "history_tokens_per_window": 262080,
+    "target_tokens_per_window": 64,
+    "paired_target_tokens": 256
+  },
+  "summaries": [
+    {
+      "variant": "exact_qk_oracle_k1280",
+      "quality_retention": 1.0023966836926648,
+      "quality_retention_95ci": [0.9948141376466245, 1.0088280031680135],
+      "top1_agreement": 0.90625,
+      "kl_full_to_sparse": 0.005155236490092634,
+      "active_tokens_mean": 1280.0,
+      "active_ratio_mean": 0.004884004884004884,
+      "oracle_retained_attention_mass": 0.9000186527532243
+    },
+    {
+      "variant": "exact_qk_oracle_k2560",
+      "quality_retention": 1.0014779849568507,
+      "quality_retention_95ci": [0.9954086366480464, 1.006820283890483],
+      "top1_agreement": 0.9296875,
+      "kl_full_to_sparse": 0.002969709071544216,
+      "active_tokens_mean": 2560.0,
+      "active_ratio_mean": 0.009768009768009768,
+      "oracle_retained_attention_mass": 0.9305696312397245
+    },
+    {
+      "variant": "qksieve_keymse_fulltopk_k1280",
+      "quality_retention": 0.8077120793482391,
+      "quality_retention_95ci": [0.7783768084554586, 0.8392301502818776],
+      "top1_agreement": 0.671875,
+      "kl_full_to_sparse": 0.242463718681023,
+      "active_tokens_mean": 1280.0,
+      "active_ratio_mean": 0.004884004884004884,
+      "oracle_retained_attention_mass": null
+    },
+    {
+      "variant": "qksieve_keymse_fulltopk_k2560",
+      "quality_retention": 0.8613198565005329,
+      "quality_retention_95ci": [0.8467669334119514, 0.8777183371418034],
+      "top1_agreement": 0.7109375,
+      "kl_full_to_sparse": 0.15092371167144591,
+      "active_tokens_mean": 2560.0,
+      "active_ratio_mean": 0.009768009768009768,
+      "oracle_retained_attention_mass": null
+    }
+  ]
+}

@@ -1,0 +1,170 @@
+{
+  "all_case_replay_audits_passed": true,
+  "all_prefix_caches_immutable": true,
+  "candidate_ranking_metrics": [
+    "abs_positive_suppression_x_dm_dscore"
+  ],
+  "case_row_count": 88,
+  "class_sample_count_per_layer_head_class_inferred": [
+    2
+  ],
+  "classes": [
+    "conflict_evidence",
+    "filler",
+    "gold_evidence",
+    "lexical_format_distractor"
+  ],
+  "context_lengths": [
+    24576
+  ],
+  "derived_from_actual_raw_and_csv_content": true,
+  "experiment": [
+    "value_mediated_rope_probe_qwen3_8b"
+  ],
+  "final_hidden_source_dtypes": [
+    "bfloat16"
+  ],
+  "heads": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+  ],
+  "launcher": {
+    "contains_dtype_bfloat16": true,
+    "contains_load_in_4bit_flag": false,
+    "contains_only_physical_gpu6_gpu7": true,
+    "path": "ymluo\\projects\\qwen3_local_rule_failure_boundary\\scripts\\run_value_mediated_probe_v2_bf16_24k_8seed_gpu67_20260801.sh",
+    "sha256": "ec913e57430814d4b5eb2de48e334161c3f8f2c4bb5692f6ab202d72ccc81357"
+  },
+  "layers": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "merge_config_discrepancies": {},
+  "merge_provenance": {
+    "comparisons": {
+      "class_sample_count": {
+        "actual_inferred": [
+          2
+        ],
+        "reported": 2
+      },
+      "context_lengths": {
+        "actual": [
+          24576
+        ],
+        "reported": [
+          24576
+        ]
+      },
+      "num_seeds": {
+        "actual": 8,
+        "reported": 8
+      },
+      "singleton_top_n": {
+        "actual": [
+          1
+        ],
+        "reported": 1
+      }
+    },
+    "current_config_is_shard_derived": true,
+    "discrepancies": {},
+    "legacy_incorrect_files_present": [],
+    "merge_schema_version": 2,
+    "status": "shard_derived_schema",
+    "warning": null,
+    "warning_required": false
+  },
+  "num_seeds": 8,
+  "original_merge_config_modified": false,
+  "raw_schema_versions": [
+    3
+  ],
+  "schema_version": 1,
+  "score_lifts": [
+    0.25
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "singleton_top_n_per_class": [
+    1
+  ],
+  "value_sample_row_count": 73728,
+  "weight_mode": {
+    "caveat": "BF16 hidden dtype is recorded in raw results; weight quantization is established by the launcher, not by the synced raw schema.",
+    "raw_artifact_directly_records_weight_quantization": false,
+    "requested": "unquantized_bfloat16"
+  }
+}

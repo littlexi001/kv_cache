@@ -1,0 +1,21 @@
+{
+  "__extends": "riskkv_task_policy_v417_expanded_knapsack030_20260712.json",
+  "__comment": "v427: fast v417 base, but source the full v421 task fragments for the tasks where v421 beat v417 on M20. This preserves v421's reference semantics instead of overlaying only router knobs.",
+  "__task_sources": {
+    "narrativeqa": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    }
+  }
+}

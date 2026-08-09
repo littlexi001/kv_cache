@@ -1,0 +1,54 @@
+{
+  "__extends": "riskkv_task_policy_v365_ultra_skeleton_all_20260712.json",
+  "__comment": "v386: M100 task-level Pareto/knapsack composition. Uses completed M100 evidence from v368/v375/v376/v377/v378 under a 10% global KV target.",
+  "__task_sources": {
+    "2wikimqa": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "gov_report": {
+      "policy": "riskkv_task_policy_v376_strict10_pareto_fused_20260712.json"
+    },
+    "hotpotqa": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "lcc": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "multi_news": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "multifieldqa_en": {
+      "policy": "riskkv_task_policy_v377_global_pareto_knapsack_20260712.json"
+    },
+    "musique": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "narrativeqa": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "passage_count": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "passage_retrieval_en": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    },
+    "qasper": {
+      "policy": "riskkv_task_policy_v377_global_pareto_knapsack_20260712.json"
+    },
+    "qmsum": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v378_policy_action_planner_20260712.json"
+    },
+    "samsum": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "trec": {
+      "policy": "riskkv_task_policy_v375_pareto_fused_lowkv_20260712.json"
+    },
+    "triviaqa": {
+      "policy": "riskkv_task_policy_v368_direct_operator_extreme_mix_20260712.json"
+    }
+  }
+}

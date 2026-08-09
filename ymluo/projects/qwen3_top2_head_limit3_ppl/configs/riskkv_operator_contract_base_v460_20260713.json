@@ -1,0 +1,13 @@
+{
+  "__comment": "Generic operator base with no benchmark task names or legacy task-policy sources.",
+  "*": {
+    "operator_mode": "retrieve",
+    "budget_tokens": 1024,
+    "page_tokens": 16,
+    "sink_tokens": 32,
+    "recent_tokens": 64,
+    "scorer": "hybrid_late_mmr_multiscale_idf_flow",
+    "direct_structured_answer": false,
+    "short_decode": false
+  }
+}

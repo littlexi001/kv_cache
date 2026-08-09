@@ -1,0 +1,28 @@
+{
+  "schema": "hierarchical_ruler_examples_v1",
+  "model_name_or_path": "/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "lm_eval_path": "/home/fdong/lm-evaluation-harness",
+  "ruler_tasks": [
+    "niah_single_1",
+    "niah_single_2",
+    "niah_single_3",
+    "niah_multikey_1",
+    "niah_multikey_2",
+    "niah_multikey_3",
+    "niah_multivalue",
+    "niah_multiquery",
+    "vt",
+    "cwe",
+    "fwe",
+    "qa_squad",
+    "qa_hotpot"
+  ],
+  "ruler_lengths": [
+    32768
+  ],
+  "max_samples_per_task": 2,
+  "max_new_tokens_override": 0,
+  "seed": 42,
+  "ruler_hotpot_parquet": "/home/fdong/ymluo/datasets/ruler_sources/hotpotqa/distractor/validation-00000-of-00001.parquet",
+  "expected_examples": 26
+}

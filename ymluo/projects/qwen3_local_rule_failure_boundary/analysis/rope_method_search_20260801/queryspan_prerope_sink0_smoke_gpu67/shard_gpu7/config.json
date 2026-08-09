@@ -1,0 +1,38 @@
+{
+  "model_name_or_path": "/home/fdong/.cache/huggingface/hub/models--Qwen--Qwen3-8B/snapshots/b968826d9c46dd6066d109eabc6255188de91218",
+  "output_dir": "/home/fdong/ymluo/projects/qwen3_local_rule_failure_boundary/outputs/20260801_queryspan_sink0_smoke_gpu67/shard_gpu7",
+  "merge_shards": "",
+  "lengths": "8192",
+  "seed_start": 2,
+  "num_seeds": 2,
+  "ratio": 0.02,
+  "minimum_keep_tokens": 0,
+  "maximum_keep_tokens": 0,
+  "variants": [
+    "native_noop",
+    "exact_final_pre_top2_postscore",
+    "queryspan_block_top2_postscore",
+    "queryspan_tokenmax_top2_postscore"
+  ],
+  "local_window": 128,
+  "sink_tokens": 0,
+  "block_size": 64,
+  "query_anchor_count": 16,
+  "score_chunk_blocks": 32,
+  "class_sample_count": 8,
+  "packet_gap_tokens": 16,
+  "prefill_chunk_size": 64,
+  "dtype": "bfloat16",
+  "load_in_4bit": true,
+  "attn_implementation": "sdpa",
+  "original_max_position_embeddings": 40960,
+  "global_max_position": 70000,
+  "dry_run": false,
+  "resolved_lengths": [
+    8192
+  ],
+  "cuda_visible_devices": "7",
+  "selector_uses_evidence_labels": false,
+  "consumer": "native post-RoPE QK + original V + sparse softmax",
+  "prefix_query_cache": "question anchors only; never full-sequence Q"
+}

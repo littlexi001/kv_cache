@@ -1,0 +1,8 @@
+{
+  "__extends": "riskkv_task_policy_v332_learned_budget_router_v1_20260711.json",
+  "tasks": {
+    "*": {
+      "ours_learned_router_confidence_threshold": 0.0
+    }
+  }
+}

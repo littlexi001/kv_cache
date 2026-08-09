@@ -1,0 +1,41 @@
+{
+  "__extends": "riskkv_task_policy_v408_task_knapsack045_exact_20260712.json",
+  "__comment": "v412: fairness ablation for v408. Disable direct structured operators and force normal model decoding with the same task-level KV policy.",
+  "tasks": {
+    "gov_report": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 192
+    },
+    "multi_news": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 192
+    },
+    "qmsum": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 96
+    },
+    "samsum": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 64
+    },
+    "trec": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 8
+    },
+    "passage_count": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 8
+    },
+    "passage_retrieval_en": {
+      "direct_structured_answer": false,
+      "short_decode": true,
+      "short_decode_max_tokens": 8
+    }
+  }
+}

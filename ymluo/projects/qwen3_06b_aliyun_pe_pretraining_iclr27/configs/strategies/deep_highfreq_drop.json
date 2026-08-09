@@ -1,0 +1,9 @@
+{
+  "name": "deep_highfreq_drop",
+  "kind": "deep_highfreq_drop",
+  "deep_layer_fraction": 0.3333333333,
+  "high_frequency_pairs": 12,
+  "modified_scale": 0.0,
+  "description": "Keep shallow RoPE unchanged and remove F0-F11 rotation only in the deepest third of layers."
+}
+

@@ -1,0 +1,51 @@
+{
+  "project": "qwen3_top2_token_mechanism",
+  "protocol_version": 1,
+  "target_ratio": 0.02,
+  "ratio_grid": [0.001, 0.005, 0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 1.0],
+  "budget": {
+    "scope": "historical_tokens",
+    "rounding": "ceil",
+    "always_keep_current_self_outside_budget": true
+  },
+  "controls": [
+    "sink_recent_s0",
+    "sink_recent_s1",
+    "sink_recent_s2",
+    "sink_recent_s4",
+    "sink_recent_s8",
+    "sink_recent_s16",
+    "recent",
+    "sink",
+    "random",
+    "bottom_attention",
+    "top_attention_drop_sink",
+    "top_attention_drop_recent",
+    "top_attention_drop_remote"
+  ],
+  "diagnostics": {
+    "sink_allocation_sweep": [0, 1, 2, 4, 8, 16, 32],
+    "role_sink_tokens": 4,
+    "role_recent_tokens": 256
+  },
+  "equivalence": {
+    "primary_metric": "paired_token_nll",
+    "bootstrap": "non_overlapping_block",
+    "block_size": 64,
+    "repetitions": 2000,
+    "nll_margin_nats_per_token": 0.01,
+    "relative_ppl_margin_descriptive": 0.01
+  },
+  "minimum_generalization_matrix": {
+    "context_tokens": [2048, 4096, 8192, 16384],
+    "eval_tokens": 512,
+    "minimum_text_domains": 3,
+    "minimum_model_sizes": 2
+  },
+  "hard_sanity_checks": [
+    "top_attention_100_percent_matches_full",
+    "sink_recent_s0_matches_recent",
+    "same_scored_token_indices_for_all_modes",
+    "actual_keep_ratio_matches_nominal_except_drop_ablations"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "*": {
+    "budget_tokens": 512,
+    "sink_tokens": 64,
+    "recent_tokens": 64,
+    "page_tokens": 128,
+    "scorer": "hybrid_late_mmr_multiscale_flow"
+  },
+  "qmsum": {
+    "budget_tokens": 1024,
+    "short_decode": true,
+    "short_decode_max_tokens": 64,
+    "score_risk": false,
+    "output_verifier": false,
+    "grounding_verifier": false,
+    "consistency_verifier": false
+  }
+}

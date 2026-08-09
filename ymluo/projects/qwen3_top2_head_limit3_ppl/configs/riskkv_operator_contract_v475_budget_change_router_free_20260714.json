@@ -1,0 +1,7 @@
+{
+  "__extends": "riskkv_operator_contract_v474_budget_change_router_choice_20260714.json",
+  "__comment": "Official free-generation counterpart of the frozen v474 budget-change router.",
+  "*": {
+    "constrained_choice_decode": false
+  }
+}

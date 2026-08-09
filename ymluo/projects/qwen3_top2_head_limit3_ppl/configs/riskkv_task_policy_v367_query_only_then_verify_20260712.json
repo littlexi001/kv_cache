@@ -1,0 +1,86 @@
+{
+  "__extends": "riskkv_task_policy_v300_action_router_extra50_robust_20260711.json",
+  "__overlay_all_tasks": {
+    "budget_tokens": 96,
+    "sink_tokens": 16,
+    "recent_tokens": 16,
+    "page_tokens": 16,
+    "scorer": "hybrid_late_mmr_idf_spread_flow",
+    "ours_idf_mix": 0.85,
+    "coverage_mmr_weight": 0.55,
+    "coverage_mmr_max_terms": 24,
+    "coverage_certificate": true,
+    "coverage_certificate_budget_fraction": 0.62,
+    "coverage_certificate_min_terms": 1,
+    "short_decode": true,
+    "short_decode_max_tokens": 16,
+    "output_verifier": true,
+    "grounding_verifier": true,
+    "support_window_verifier": true,
+    "support_window_radius_words": 32,
+    "support_window_min_query_terms": 1,
+    "retry_budget_tokens": 384,
+    "score_risk": false,
+    "full_fallback": false
+  },
+  "tasks": {
+    "qasper": {
+      "budget_tokens": 128,
+      "bridge": true,
+      "ours_bridge_budget_fraction": 0.30,
+      "retry_budget_tokens": 512,
+      "grounding_verifier": false,
+      "support_window_verifier": false,
+      "short_decode_max_tokens": 48
+    },
+    "hotpotqa": {
+      "budget_tokens": 160,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.52,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 30,
+      "retry_budget_tokens": 640,
+      "short_decode_max_tokens": 24
+    },
+    "2wikimqa": {
+      "budget_tokens": 160,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.52,
+      "graph_bridge_seed_pages": 8,
+      "graph_bridge_max_terms": 30,
+      "retry_budget_tokens": 640,
+      "short_decode_max_tokens": 24
+    },
+    "musique": {
+      "budget_tokens": 224,
+      "graph_bridge": true,
+      "graph_bridge_budget_fraction": 0.55,
+      "graph_bridge_seed_pages": 10,
+      "graph_bridge_max_terms": 34,
+      "retry_budget_tokens": 768,
+      "short_decode_max_tokens": 24
+    },
+    "multifieldqa_en": {
+      "budget_tokens": 128,
+      "retry_budget_tokens": 512,
+      "short_decode_max_tokens": 24
+    },
+    "narrativeqa": {
+      "budget_tokens": 96,
+      "retry_budget_tokens": 384,
+      "short_decode_max_tokens": 32
+    },
+    "repobench-p": {
+      "budget_tokens": 96,
+      "sink_tokens": 16,
+      "recent_tokens": 64,
+      "page_tokens": 64,
+      "scorer": "hybrid_late_mmr_multiscale_flow",
+      "coverage_certificate": false,
+      "grounding_verifier": false,
+      "support_window_verifier": false,
+      "retry_budget_tokens": 384,
+      "short_decode_max_tokens": 16
+    }
+  }
+}

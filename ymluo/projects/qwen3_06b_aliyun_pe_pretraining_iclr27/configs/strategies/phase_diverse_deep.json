@@ -1,0 +1,8 @@
+{
+  "name": "phase_diverse_deep",
+  "kind": "phase_diverse_deep",
+  "start_layer_fraction": 0.5,
+  "high_frequency_pairs": 16,
+  "phase_scales": [1.0, 0.75, 0.5, 0.25],
+  "description": "Cycle four phase rates across deep layers for F0-F15 so remote evidence is not exposed to one shared alias pattern."
+}

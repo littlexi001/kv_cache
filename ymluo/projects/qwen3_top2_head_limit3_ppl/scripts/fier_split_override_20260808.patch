@@ -1,0 +1,40 @@
+--- run_head_top2_targeted_ppl_20260714.py
++++ run_head_top2_targeted_ppl_20260714.py
+@@ -15707,7 +15707,36 @@
+         overflow = torch.zeros_like(candidate_counts, dtype=torch.bool)
+         _speed_stage_stop(retrieval_stage)
+     attention_stage = _speed_stage_start("fier_sparse_attention")
+-    if target_count >= 1280:
++    split_override = int(
++        os.environ.get("QKSIEVE_FIER_ATTENTION_SPLIT_OVERRIDE", "0")
++    )
++    if split_override not in {0, 1, 2, 4, 8, 16}:
++        raise ValueError(
++            "QKSIEVE_FIER_ATTENTION_SPLIT_OVERRIDE must be one of "
++            "{0, 1, 2, 4, 8, 16}"
++        )
++    if split_override > 1:
++        attention_split_count = split_override
++        output = cuda_kernels.final_attention_ragged_self_split(
++            query.contiguous(),
++            key,
++            value,
++            candidate_indices.contiguous(),
++            candidate_counts,
++            scaling,
++            attention_split_count,
++        )
++    elif split_override == 1:
++        attention_split_count = 1
++        output = cuda_kernels.final_attention_ragged_self(
++            query.contiguous(),
++            key,
++            value,
++            candidate_indices.contiguous(),
++            candidate_counts,
++            scaling,
++        )
++    elif target_count >= 1280:
+         attention_split_count = 8 if candidate_capacity <= 4096 else 4
+         output = cuda_kernels.final_attention_ragged_self_split(
+             query.contiguous(),

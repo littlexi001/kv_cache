@@ -1,0 +1,9 @@
+{
+  "__extends": "riskkv_task_policy_v427_v417_source_v421_winners_20260712.json",
+  "__comment": "v428: v427 plus repobench-p sourced from v421. Repobench improves on M20 but costs KV/latency, so this tests whether the extra score is worth it under the 1%-10% target.",
+  "__task_sources": {
+    "repobench-p": {
+      "policy": "riskkv_task_policy_v421_frontier_router035_20260712.json"
+    }
+  }
+}

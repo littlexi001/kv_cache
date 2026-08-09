@@ -1,102 +1,110 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Long-context language models promise a simple interface to document retrieval,
-multi-hop reasoning, and persistent agent memory: place the relevant material
-in the prompt and let attention recover it when needed.  Model context windows
-have accordingly grown from thousands to hundreds of thousands of tokens, and
-rotary position embeddings (RoPE) have become a standard way to encode order
-inside those windows~\citep{su2024roformer}.  Yet accepting a
-long sequence is not the same as using it reliably.  Long-context evaluations
-repeatedly find that accuracy depends on where evidence appears, how much
-irrelevant text surrounds it, and which retrieval pattern is required
-~\citep{liu2024lost,bai2024longbench,hsieh2024ruler}.
+Long-context language models promise document retrieval, multi-hop reasoning,
+and persistent agent memory through a simple interface: place the relevant
+material in the prompt and let attention recover it when needed.  Context
+windows have accordingly grown from thousands to hundreds of thousands of
+tokens, and rotary position embeddings (RoPE) have become a standard way to
+encode order inside those windows~\citep{su2024roformer}.  Yet accepting a long
+sequence is not the same as using it reliably.  Accuracy still depends on where
+evidence appears, how much irrelevant text surrounds it, and which retrieval
+pattern is required~\citep{liu2024lost,bai2024longbench,hsieh2024ruler}.
 
 We study a sharper contradiction: \emph{the semantic evidence--query relation
-can remain fixed while the answer changes abruptly as their separation
-changes}.  In one controlled Qwen3-8B diagnostic, two prompts contain the same
-gold rule and the same terminal question, but the second inserts 64 additional
-filler tokens.  The correct first-token probability falls from 42.62\% to
-1.75\%, and its margin against a formatting token changes from $+1.00$ to
-$-2.75$.  Across dense length sweeps, such transitions are neither smooth nor
-permanent: correct and incorrect regions can alternate.  This behavior is
-hard to explain as monotone ``context rot'' alone.  What internal computation
-makes a semantically correct remote key lose retrieval priority at particular
-distances?
+can remain fixed while the answer changes abruptly as their separation and
+surrounding context change}.  In one controlled, position-extended Qwen3-8B
+age-retrieval diagnostic using YaRN, two prompts share the same gold evidence
+sentence and terminal question, but the second extends the intervening body by
+64 tokens from the same fixed distractor/filler stream.  The correct first-token probability falls from
+42.62\% to 1.75\%, and its margin against a formatting token changes from
+$+1.00$ to $-2.75$.  Dense length sweeps show that correct and incorrect regions
+can alternate.  The failure is
+therefore not adequately described by a monotone ``context rot'' curve: we need
+to identify which computation first changes, how that change propagates, and
+which internal quantity actually determines whether evidence helps the answer.
 
 \begin{figure*}[t]
   \centering
   \includegraphics[width=0.98\textwidth]{figures/overview.pdf}
-  \caption{Our problem--analysis--repair loop.  Changing the separation
-  between fixed evidence and a query changes RoPE phase before softmax.  An
-  unfavorable phase suppresses the gold QK score, competing tokens take more
-  probability mass, and the altered Value write causes later representations
-  to diverge.  \method repairs the same bottleneck: local tokens retain
-  standard RoPE, while remote candidates receive a position-free semantic
-  proposal and are then consumed by the original post-RoPE attention.}
+  \caption{Mechanism overview.  \textbf{A:} fixed evidence and query can cross
+  a decision boundary after a small distance change.  \textbf{B:} RoPE phase
+  changes QK scores and the attention mixture; centered Value writes then alter
+  the residual trajectory and answer margin.  \textbf{C:} attention amount is
+  not directed utility: a token helps only when its centered Value points along
+  the downstream direction that increases the correct-answer margin.}
   \label{fig:overview}
 \end{figure*}
 
-\textbf{We locate a phase-sensitive bottleneck before the softmax.}
-RoPE rotates each two-dimensional query/key pair at a different frequency.
-For fixed pre-RoPE content vectors, the contribution of pair $i$ at relative
-distance $\Delta$ is
+\textbf{RoPE makes content matching phase-sensitive.}
+RoPE rotates each two-dimensional query/key pair at a different effective
+frequency.  Let $\kappa$ be the implementation's multiplicative rotary scale
+on each of Q and K ($\kappa=1$ for unscaled RoPE).  For fixed pre-RoPE content
+vectors, pair $i$ contributes at relative distance $\Delta$
 \begin{equation}
   s_i(\Delta)
-  = A_i\cos(\Delta\omega_i)+B_i\sin(\Delta\omega_i).
+  = \kappa^2\!\left[A_i\cos(\Delta\omega_i)+B_i\sin(\Delta\omega_i)\right].
   \label{eq:intro-phase}
 \end{equation}
-Thus RoPE couples semantic compatibility to a distance-dependent phase.  The
-aggregate score need not decrease monotonically, but a relevant key can be
-suppressed whenever high-energy frequency pairs interfere destructively.  On
-Qwen3-8B, summing the 64 analytically reconstructed pair contributions matches
-the measured first-layer score across four evidence--query distances with at
-most $1.98\times10^{-3}$ absolute error.  This isolates phase: the pre-RoPE
-queries and keys are exactly unchanged in that experiment.
+The score is thus a finite mixture of distance-dependent phases, not a monotone
+penalty.  Summing all 64 analytic pair contributions reconstructs measured
+first-layer QK scores with at most $1.98\times10^{-3}$ absolute error while the
+pre-RoPE query and key remain identical.  This establishes the first link:
+position alone can change the admission score of fixed semantic evidence.
 
-\textbf{The initial score change becomes a representation change.}
-Softmax turns a relative score change into an exponential attention-ratio
-change.  The changed attention weights alter the Value written into the query
-residual; subsequent layers therefore do not repeatedly rotate the same
-query.  They project new pre-RoPE queries and keys from already divergent
-hidden states.  We record the complete attention, MLP, and residual vectors in
-a 36-layer Qwen3-8B transition and exactly replay every BF16 residual update.
-Although the query embedding difference is zero, the first attention branch
-creates a nonzero residual difference; its norm reaches 312.68 by the final
-layer.  Causally patching the successful residual state into the failed run at
-layer 16 changes the output margin from $-2.75$ to $+0.625$, and patching at
-layer 20 restores it to $+1.00$.
+\textbf{Attention amount is not evidence utility.}
+A lower score usually reduces a token's softmax probability, but probability
+only says how much the token is read.  It does not say what the corresponding
+Value writes or whether that write supports the correct answer.  We derive an
+exact local decomposition in which the effect of score $s_j$ on the
+gold--conflict margin is the product of three terms: attention probability,
+the token's Value relative to the current attention-weighted Value mean, and
+the downstream margin gradient.  This distinction resolves an otherwise
+important counterexample: across seed-macro means, plausible conflict and gold
+evidence show no reliable difference in attention probability or grid-envelope
+RoPE suppression, yet their average answer-directed score utilities have different
+answer-level roles.  This is a failure to detect a mean gap, not an equivalence
+test or a claim that individual tokens are unclassifiable.
 
-\textbf{The diagnosis directly specifies the repair.}
-Local order remains important for syntax and within-evidence structure, so
-removing RoPE globally is unnecessarily disruptive.  Conversely, fine-grained
-distance should not by itself eliminate a remote token whose content is
-strongly compatible with the query.  We therefore introduce \method
-(Semantic-Augmented Global Evidence retrieval for RoPE models).  Its
-conservative \methodpost variant keeps sink and recent tokens, proposes remote
-tokens with pre-RoPE QK, and spends the remaining 2\% budget on those
-candidates.  It then retrieves the original K/V and applies the model's exact
-post-RoPE score, softmax, and Value aggregation.  The intervention changes
-which remote tokens may compete, but not how selected tokens are scored or
-consumed.
+\textbf{No-op-matched interventions close the local causal step.}
+We increase one pre-softmax score by $0.25$ and compare the resulting margin
+change with its first-order prediction on exactly the same instrumented BF16
+graph.  For oracle-selected evidence coordinates in Qwen3-8B, Pearson
+correlations are 0.960/0.973/0.936 and Spearman correlations are
+0.947/0.976/0.900 at 8K/16K/24K; the predicted sign is correct for
+15/16, 15/16, and 13/16 events.  Every length uses 8 independent seeds and a
+seed-cluster bootstrap.  Exact residual replay and a separate high-resolution
+activation-patching case then support the propagation step: a first-layer
+attention difference enters the residual stream, changes later pre-RoPE
+queries, and can reverse the final decision when patched.
 
-\textbf{Controlled held-out evaluation supports the mechanism-derived design.}
-On a frozen set of 24 unseen two-hop instances at each of 8K, 16K, 32K, and
-64K, \methodpost reduces aggregate geometric \GoldPPL from 10.851 under full
-attention to 4.859 and raises first-token accuracy from 33.3\% to 47.9\%.
-Against exact post-RoPE Top-2\% selection at the same budget, it lowers mean
-NLL by 0.643 at 16K and 0.691 at 32K, corresponding to $1.90\times$ and
-$2.00\times$ gold-token likelihood ratios; both 95\% confidence intervals
-exclude zero.  The 64K interval narrowly crosses zero, and current experiments
-are synthetic and use a full pre-RoPE scan.
-Accordingly, we claim a controlled mechanism and repair---not universal
-generalization or an end-to-end speedup.
+\textbf{The analysis also limits what a repair can claim.}
+For a fixed query, support, and Value set, any token-specific phase change is
+functionally identical to adding the induced attention-logit bias.  Under a
+single reusable GQA cache, rotary phase corrections are more constrained: they
+must separate into a cached Key-side phase and a Query-side phase, equivalently
+satisfying a vanishing query--key four-cycle condition.  A repair that violates
+this condition requires Key recomputation, multiple cached bases, or an
+explicit pairwise score edit.  We therefore treat pre-RoPE retrieval only as a
+diagnostic intervention already adjacent to prior sparse-retrieval systems,
+not as the paper's main novelty~\citep{mu2025sals,lu2024longheads,xiao2024infllm}.
 
-The paper makes three contributions.  First, it formalizes
-\emph{phase-sensitive retrieval failure}: a fixed semantic match can receive
-different attention priority solely through RoPE-relative phase.  Second, it
-connects this first-layer effect to attention mass, residual divergence, and
-the output decision using exact finite-difference replay and activation
-patching.  Third, it derives a local-position/global-semantics attention rule
-from the diagnosis and demonstrates its value under held-out, matched-budget
-evaluation.
+Our contributions are:
+\begin{enumerate}
+  \item We isolate non-monotone, distance-sensitive retrieval failures and
+  reconstruct the first RoPE layer at the frequency-pair level.
+  \item We distinguish attention amount from answer-directed score utility and
+  validate the local score-to-margin derivative with no-op-matched
+  interventions across three context lengths.
+  \item We connect the local effect to later computation through exact residual
+  replay and activation patching, while stating which mediation links remain
+  unmeasured.
+  \item We characterize the functional identifiability and GQA-cache
+  realizability boundaries of query-specific phase repair.
+\end{enumerate}
+
+The evidence is intentionally scoped.  It triangulates adjacent mechanism
+links across distinct controlled Qwen3-8B protocols rather than treating them
+as one same-example mediation experiment.  It does not yet establish
+universality, full-path mediation proportions, or a deployable new positional
+encoding.

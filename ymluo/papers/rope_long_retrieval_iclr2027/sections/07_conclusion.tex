@@ -1,17 +1,21 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-RoPE does not impose a simple monotone penalty on remote evidence.  It makes a
-fixed content match a mixture of distance-dependent phases; unfavorable
-interference can reduce its QK priority before softmax.  The changed attention
-write then alters later pre-RoPE representations and can cross the output
-decision boundary.  Exact first-layer reconstruction, layerwise finite-
-difference replay, and activation patching jointly support this mechanism in
-Qwen3-8B.  The same diagnosis yields a conservative repair: preserve local
-RoPE and exact post-RoPE consumption, but add a position-free semantic proposal
-for remote candidates.  \methodpost improves held-out controlled two-hop
-retrieval most clearly at 16K--32K.  Establishing generality now requires
-natural benchmarks, additional architectures, local-order controls, and an
-efficient retrieval index; these are explicit boundaries of the current
-claim.
+Long-context retrieval can fail even when the evidence semantics are fixed.
+RoPE modulates the evidence score non-monotonically through relative phase, and
+softmax converts score changes into attention-probability changes.  Local
+answer utility is not determined by phase suppression or attention amount
+alone: it jointly depends on attention probability, the centered Value write,
+and the downstream answer-margin gradient.  No-op-matched interventions
+reproduce this local score-to-margin relation at 8K, 16K, and 24K, while exact
+replay and activation patching support its propagation through the residual
+stream.
 
+The same analysis prevents an over-simple method claim.  Query-specific phase
+edits are functionally logit edits, and one reusable GQA cache can realize only
+separable Query/Key phase corrections satisfying the four-cycle condition.
+Thus the paper's contribution is a mechanism and its identifiability boundary,
+not a mature replacement for RoPE.  Full mediation estimates, a second model,
+native-window full-chain activation-patching analyses, and natural retrieval
+tasks remain necessary before the explanation can be called
+architecture-general.
