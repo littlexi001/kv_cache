@@ -326,6 +326,10 @@ Rate & 240 bit/token/KV-head，含 FP16 scale \\
 Allocation & Request-local Query-weighted logit-MSE \\
 Scale & 每 token、每 active band 的 plain scale \\
 Query index type & 对称 INT8 \\
+Token 预算 & $B(N)=\min\{N,1280,\max(256,\lceil.06N\rceil)\}$ \\
+Quantile 样本 & 64 个 tail anchor；有效样本最多 512 个 \\
+Value tail & Rank 16、block 256、INT4、固定 $\alpha=.5$ \\
+总辅助索引 & 306 bit/token/KV-head（FP16 K+V 的 7.47\%） \\
 选择 & Reference: full top-$B(N)$；deployment: tail-calibrated quantile \\
 最终 attention & 候选上的原始 FP16 Q/K/V \\
 特殊路径 & 无 rerank、router、task rule、recent/sink 或 fallback \\
@@ -335,9 +339,13 @@ Query index type & 对称 INT8 \\
 
 注册的方法标识为
 \texttt{qksieve\_fullprompt\_auto\_plain\_fulltopk}（reference）和
-\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64\_k1280}
-（优化 Robust）。实现位于
-\path{ymluo/projects/qwen3_top2_head_limit3_ppl}。正式提交前必须记录匿名
+\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64}
+（冻结 Robust 质量路径）。直接 kernel 诊断有时用 \texttt{\_k1280} 后缀表示同一个
+注册的 1,280-token 上限；它只是实现别名，不是另一种预算策略。实现位于
+\path{ymluo/projects/qwen3_top2_head_limit3_ppl}。机器可读合同及 numerical-freeze、
+audited-source commit SHA 保存在
+\path{configs/qksieve_robust_iclr2027_frozen_20260810.json}，证据校验器逐行检查
+实验结果是否符合该合同。正式提交前必须记录匿名
 artifact commit、模型与数据集 revision、PyTorch/Transformers/CUDA 版本、
 compiler flag、GPU clock、warm-up 次数、重复次数与随机种子。
 

@@ -964,6 +964,10 @@ Rate & 240 bits/token/KV-head, including FP16 scales \\
 Allocation & Request-local query-weighted logit-MSE \\
 Scale & Plain per-token, per-active-band scale \\
 Query index type & Symmetric INT8 \\
+Token budget & $B(N)=\min\{N,1280,\max(256,\lceil.06N\rceil)\}$ \\
+Quantile samples & 64 tail anchors; at most 512 effective samples \\
+Value tail & Rank 16, block 256, INT4, fixed $\alpha=.5$ \\
+Total auxiliary rate & 306 bits/token/KV-head (7.47\% of FP16 K+V) \\
 Selection & Reference: full top-$B(N)$; deployment: tail-calibrated quantile \\
 Final attention & Original FP16 Q/K/V on direct candidates \\
 Special paths & No rerank, router, task rule, recent/sink rule, or fallback \\
@@ -973,10 +977,16 @@ Special paths & No rerank, router, task rule, recent/sink rule, or fallback \\
 
 The registered method identifiers are
 \texttt{qksieve\_fullprompt\_auto\_plain\_fulltopk} (reference) and
-\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64\_k1280}
-(optimized Robust).
+\texttt{qksieve\_qmse\_oas\_requestlocal\_valuesketch16\_sorted\_c64}
+(frozen Robust quality path).  Direct kernel diagnostics may use the
+\texttt{\_k1280} suffix to name the same registered 1,280-token cap; it is
+an implementation alias, not a different budget policy.
 The implementation resides under
 \path{ymluo/projects/qwen3_top2_head_limit3_ppl}.
+The machine-readable contract and the numerical-freeze and audited-source
+commit SHAs are stored in
+\path{configs/qksieve_robust_iclr2027_frozen_20260810.json}; the evidence
+verifier compares every reported row against that contract.
 Before submission we will record the anonymous artifact commit, model and
 dataset revisions, PyTorch/Transformers/CUDA versions, compiler flags, GPU
 clocks, warm-up count, repetitions, and random seeds.
