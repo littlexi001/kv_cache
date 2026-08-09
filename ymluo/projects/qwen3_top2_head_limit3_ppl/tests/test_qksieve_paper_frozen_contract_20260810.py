@@ -45,3 +45,18 @@ def test_submission_sources_have_no_placeholder_tokens() -> None:
     for chinese in (False, True):
         text = paper_text(chinese=chinese)
         assert not re.search(r"\b(?:TBD|TODO|placeholder)\b", text, re.I)
+
+
+def test_quality_queue_finishes_all_preregistered_quality_runs() -> None:
+    queue = (
+        ROOT
+        / "projects"
+        / "qwen3_top2_head_limit3_ppl"
+        / "scripts"
+        / "launch_qksieve_quality_evidence_queue_20260810.sh"
+    ).read_text(encoding="utf-8")
+    ruler_call = queue.index('bash "${RULER}"')
+    multimodel_call = queue.index('bash "${MULTIMODEL}"')
+    full_longbench_call = queue.index('bash "${FULL_LONGBENCH}"')
+    assert ruler_call < multimodel_call < full_longbench_call
+    assert "minimum_quality_retention" not in queue

@@ -6,6 +6,7 @@ WAIT_FOR="${WAIT_FOR:-${ROOT}/results/20260810_qksieve_persistent_kv_v2}"
 QUEUE_ROOT="${QUEUE_ROOT:-${ROOT}/results/20260810_qksieve_quality_evidence_queue_v2}"
 RULER="${ROOT}/scripts/launch_qksieve_robust_ruler_20260810.sh"
 MULTIMODEL="${ROOT}/scripts/launch_qksieve_robust_multimodel_longbench_20260810.sh"
+FULL_LONGBENCH="${ROOT}/scripts/launch_qksieve_robust_llama_full_longbench_20260810.sh"
 
 mkdir -p "${QUEUE_ROOT}/logs"
 touch "${QUEUE_ROOT}/RUNNING"
@@ -28,6 +29,12 @@ ROOT="${ROOT}" bash "${RULER}" \
   }
 ROOT="${ROOT}" bash "${MULTIMODEL}" \
   >"${QUEUE_ROOT}/logs/multimodel.log" 2>&1 || {
+    touch "${QUEUE_ROOT}/FAILED"
+    rm -f "${QUEUE_ROOT}/RUNNING"
+    exit 1
+  }
+ROOT="${ROOT}" bash "${FULL_LONGBENCH}" \
+  >"${QUEUE_ROOT}/logs/full_longbench.log" 2>&1 || {
     touch "${QUEUE_ROOT}/FAILED"
     rm -f "${QUEUE_ROOT}/RUNNING"
     exit 1
