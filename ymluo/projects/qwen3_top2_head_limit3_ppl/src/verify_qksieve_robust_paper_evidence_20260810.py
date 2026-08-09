@@ -375,6 +375,12 @@ def validate_h100(payload: dict[str, Any]) -> dict[str, Any]:
         raise AssertionError("H100 hardware identity is missing")
     if any("H100" not in str(name) for name in names):
         raise AssertionError("H100 evidence contains a non-H100 device")
+    software = hardware.get("software")
+    required_software = ("python", "pytorch", "transformers", "cuda_runtime", "cudnn")
+    if not isinstance(software, dict) or any(
+        software.get(field) in (None, "") for field in required_software
+    ):
+        raise AssertionError("H100 software environment is incomplete")
     methods = payload.get("methods")
     if not isinstance(methods, dict) or methods.get("main") != contract.METHOD:
         raise AssertionError("H100 main method identity drifted")

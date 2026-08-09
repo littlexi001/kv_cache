@@ -56,7 +56,11 @@ fi
   echo "source_tree_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unavailable)"
   "${PYTHON}" - "${FROZEN_CONFIG}" <<'PY'
 import json
+import platform
 import sys
+
+import torch
+import transformers
 
 payload = json.load(open(sys.argv[1], encoding="utf-8"))
 print(f"numerical_freeze_commit_sha={payload['numerical_freeze_commit_sha']}")
@@ -64,6 +68,11 @@ print(
     "audited_implementation_commit_sha="
     f"{payload['audited_implementation_commit_sha']}"
 )
+print(f"python_version={platform.python_version()}")
+print(f"pytorch_version={torch.__version__}")
+print(f"transformers_version={transformers.__version__}")
+print(f"cuda_runtime_version={torch.version.cuda}")
+print(f"cudnn_version={torch.backends.cudnn.version()}")
 PY
   echo "model=${MODEL}"
   echo "seeds=${SEEDS}"
@@ -71,6 +80,7 @@ PY
   echo "gpu_128k=${GPU_128K}"
   nvidia-smi --query-gpu=index,name,uuid,memory.total,driver_version \
     --format=csv,noheader,nounits
+  nvcc --version
   sha256sum \
     "${FROZEN_CONFIG}" \
     "${MODEL}/config.json" \

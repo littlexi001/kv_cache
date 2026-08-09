@@ -222,7 +222,16 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         h100={
             "schema": "qksieve_h100_matched_system_summary_v1",
             "expected_seeds": 3,
-            "hardware": {"device_names": ["NVIDIA H100 80GB HBM3"]},
+            "hardware": {
+                "device_names": ["NVIDIA H100 80GB HBM3"],
+                "software": {
+                    "python": "3.11.0",
+                    "pytorch": "2.7.0",
+                    "transformers": "4.55.0",
+                    "cuda_runtime": "12.8",
+                    "cudnn": 90501,
+                },
+            },
             "frozen_contract": contract.contract_payload(),
             "methods": {"main": contract.METHOD},
             "attention": attention_rows,

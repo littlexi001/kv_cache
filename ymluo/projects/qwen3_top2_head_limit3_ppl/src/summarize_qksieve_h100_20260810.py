@@ -296,11 +296,34 @@ def collect_hardware(run_root: Path) -> list[str]:
     return sorted(names)
 
 
+def collect_software(run_root: Path) -> dict[str, Any]:
+    records: dict[str, dict[str, Any]] = {}
+    for group in ("decode", "persistent"):
+        for path in sorted((run_root / group).glob("n*/seed*/*.json")):
+            payload = load_json(path)
+            software = payload.get("software")
+            if not isinstance(software, dict):
+                raise AssertionError(f"missing software versions: {path}")
+            required = ("python", "pytorch", "transformers", "cuda_runtime", "cudnn")
+            if any(software.get(field) in (None, "") for field in required):
+                raise AssertionError(f"incomplete software versions: {path}")
+            key = json.dumps(software, sort_keys=True)
+            records[key] = software
+    if len(records) != 1:
+        raise AssertionError(
+            f"H100 runs used {len(records)} distinct software environments"
+        )
+    return next(iter(records.values()))
+
+
 def summarize(run_root: Path, expected_seeds: int) -> dict[str, Any]:
     return {
         "schema": "qksieve_h100_matched_system_summary_v1",
         "expected_seeds": expected_seeds,
-        "hardware": {"device_names": collect_hardware(run_root)},
+        "hardware": {
+            "device_names": collect_hardware(run_root),
+            "software": collect_software(run_root),
+        },
         "frozen_contract": contract.contract_payload(),
         "methods": {
             "full": "native full attention without KV-head replication",

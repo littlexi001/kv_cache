@@ -19,6 +19,13 @@ def write_json(path: Path, payload: dict) -> None:
 
 
 def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
+    software = {
+        "python": "3.11.0",
+        "pytorch": "2.7.0",
+        "transformers": "4.55.0",
+        "cuda_runtime": "12.8",
+        "cudnn": 90501,
+    }
     for seed_index in range(2):
         write_json(
             tmp_path / "attention" / f"seed{seed_index}.json",
@@ -53,6 +60,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "gpu_name": "NVIDIA H100 80GB HBM3",
                     "steady_mean_ms_per_token": 12.0,
                     "prebuild_wall_seconds": 0.0,
+                    "software": software,
                     "peak_memory": {
                         "allocated_bytes_total": 100,
                         "reserved_bytes_total": 200,
@@ -74,6 +82,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "score_mode": contract.SCORE_MODE,
                     "value_sketch_disabled": False,
                     "value_sketch_tail_alpha": 0.5,
+                    "software": software,
                     "peak_memory": {
                         "allocated_bytes_total": 120,
                         "reserved_bytes_total": 240,
@@ -89,6 +98,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                 "append_only_ms_per_token": 8.0,
                 "prebuild_wall_seconds": 0.0,
                 "gpu_name": "NVIDIA H100 80GB HBM3",
+                "software": software,
                 "cold_peak_memory": {
                     "allocated_bytes_total": 100,
                     "reserved_bytes_total": 200,
@@ -144,4 +154,5 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
     assert persistent["qksieve_to_full_cold_peak_reserved_ratio"] == 1.2
     assert persistent["qksieve_to_full_lifecycle_peak_allocated_ratio"] == 1.2
     assert payload["hardware"]["device_names"] == ["NVIDIA H100 80GB HBM3"]
+    assert payload["hardware"]["software"] == software
     assert payload["frozen_contract"] == contract.contract_payload()

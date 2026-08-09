@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import os
+import platform
 import statistics
 import time
 from pathlib import Path
@@ -171,6 +172,18 @@ def cuda_memory_snapshot(*, peak: bool) -> dict[str, Any]:
         "reserved_bytes_total": sum(reserved),
         "allocated_bytes_max_device": max(allocated, default=0),
         "reserved_bytes_max_device": max(reserved, default=0),
+    }
+
+
+def software_versions() -> dict[str, Any]:
+    import transformers
+
+    return {
+        "python": platform.python_version(),
+        "pytorch": torch.__version__,
+        "transformers": transformers.__version__,
+        "cuda_runtime": torch.version.cuda,
+        "cudnn": torch.backends.cudnn.version(),
     }
 
 
@@ -449,6 +462,7 @@ def main() -> None:
         "num_key_value_heads": getattr(model.config, "num_key_value_heads", None),
         "dtype": args.dtype,
         "visible_cuda_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "software": software_versions(),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

@@ -495,6 +495,7 @@ def main() -> None:
         ),
         "model_name_or_path": args.model_name_or_path,
         "visible_cuda_devices": os.environ.get("CUDA_VISIBLE_DEVICES"),
+        "software": speed.software_versions(),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
