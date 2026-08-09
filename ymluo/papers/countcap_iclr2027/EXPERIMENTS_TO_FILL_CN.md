@@ -75,14 +75,14 @@ RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
 | Persistent KV 生命周期 | 完成，32K/64K，cold/warm/四分支均摊/append-only | Warm 为 1.322x/2.221x；四分支均摊为 1.082x/1.785x；独立审计确认 32 层索引未重建且 replay 一致 |
 | FIER 同 consumer 速度 | 完成，原生 MHA、相同 active-token schedule 和精确 sparse-attention consumer | Fast 相对 FIER 为 1.37--3.58x，Robust 在额外支付 Value-tail 后仍为 1.16--2.31x（8K--128K） |
 | Llama official-middle LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行 | Full/QKSieve macro 为 0.459398/0.458852，保持率 99.881%，bootstrap 95% CI 为 [99.424%, 100.347%] |
-| 冻结 Robust 正式 RULER | 运行中，13 任务、4K--128K、计划 650 个严格配对 | 完成前不再使用旧 91-pair targeted audit 作为正式主结果 |
-| Llama/Qwen/Mistral 同协议 LongBench screen | 已注册并排队，16 任务、每模型 160 个独立 offset 样本 | 用于跨模型方向一致性与最差任务审计，不替代 Llama 的 3,750 样本主表 |
+| 冻结 Robust 正式 RULER | 修正后的审计运行进行中，13 任务、4K--128K、计划 650 个严格配对 | 缺少逐行 attention diagnostics 的旧运行已排除；完成前不写正式 RULER 主结果 |
+| Llama/Qwen/Mistral 同协议 LongBench screen | 完成，16 任务、每模型 160 个独立 offset 样本、共 480 个严格配对 | 保持率分别为 98.681%/100.211%/98.487%，三个 task-bootstrap 区间均跨 100%，fallback 为 0 |
 | 理论证明 | 完成并写入正文/附录 | 双正交精确性、最优 score 子空间、QK-MSE、bit 分配、排序和输出误差链 |
 | 正文页预算 | 完成当前版式审计 | 正文与结论在第 9 页结束，参考文献从第 10 页开始；完整命题、证明和系统图放入附录 |
 
-Llama reference LongBench 已可填写论文参考表，但最终主结论仍需冻结 Robust
-同路径 3,750 样本结果。完整 RULER、跨模型 screen 和 H100 结果尚未完成，不能
-用旧实验或不同执行路径替代。
+Llama reference LongBench 与三模型独立 screen 已完成，但最终主结论仍需冻结
+Robust 同路径 3,750 样本结果。完整 RULER 和 H100 结果尚未完成，不能用旧实验
+或不同执行路径替代。
 
 ## 2. P0：投稿前必须完成
 
@@ -140,9 +140,20 @@ bit 预算、ValueSketch 和 token 预算，不允许按模型搜索参数。当
 16 任务、每任务 10 条、offset 40 的 160-pair 独立 screen，用于检验方向一致性
 与最差任务；Llama 的 3,750-pair 主表承担总体质量主结论。
 
-通过标准：三个模型均完成 160 个严格配对，给出 task-bootstrap 95\% CI、最差
-任务与零 fallback。若任一模型出现明显系统性失真，再对该模型扩大样本，而不
-在 screen 上调参。
+结果已经完成并通过冻结合同校验：
+
+| 模型 | Full macro | Robust macro | 相对 Full | task-bootstrap 95\% CI | 平均 active attention |
+|---|---:|---:|---:|---:|---:|
+| Llama-3.1-8B-Instruct | 0.426435 | 0.420810 | 98.681\% | [96.393\%, 100.504\%] | 7.215\% |
+| Qwen3-4B-Instruct | 0.397178 | 0.398015 | 100.211\% | [98.907\%, 101.720\%] | 7.178\% |
+| Mistral-7B-Instruct-v0.3 | 0.421645 | 0.415267 | 98.487\% | [95.084\%, 100.893\%] | 6.835\% |
+
+三个模型均包含 160 个严格配对与 16 个任务，Full fallback 为 0；有效 quantile
+样本均值为 508.8/508.8/510.4。绝对下降最大的任务分别为 Llama LCC
+（-0.064286）、Qwen GovReport（-0.014001）和 Mistral HotpotQA（-0.100000）。
+每任务只有 10 条且三个区间均跨 100\%，因此这里只支持“没有观察到跨模型系统性
+崩溃”，不宣称逐模型与 Full 等价。原始汇总 SHA256 为
+`9ceadaace51808989a222df6669ca5261e233c8ebd21f67b3f2bcd9851b8bf30`。
 
 ### 2.3 RULER
 
@@ -161,6 +172,13 @@ bash scripts/launch_qksieve_robust_ruler_20260810.sh
 - Llama-3.1-Instruct 使用 `llama3` chat wrapper，问题/指令后缀 dense prefill，并只取最后 8 个 Query 位置构造 QK moment。
 
 必须按任务和长度报告 score、保持率、实际候选数和 paired bootstrap 95% CI。质量运行的 online/decode 速度只能按实际生成 token 归一化为 TPOT；固定 horizon 的正式速度结论来自 2.4 的 same-path benchmark。通过标准不是强行要求所有单元都 100%，而是不能出现随长度增长却无法由 Full 基线或任务难度解释的系统性崩溃。
+
+审计说明：第一轮正式运行没有打开 `--collect_attention_stats`，所以虽然预测可
+评分，却不能逐条证明 qMSE packed scan、有效 quantile 样本和 ValueSketch 实际
+执行。该轮结果已保留但从论文证据中排除。修正后的 v2 要求每条 Robust 行同时
+满足正确 `executed_path`、正的 `packed_qmse_sample_count`、
+`packed_qmse_value_sketch_executed=1`、`sampled_quantile_fallback=0`，再进入
+最终汇总。
 
 ### 2.4 同一路径整模型速度、请求速度与显存
 
@@ -431,9 +449,9 @@ teacher-forced continuation 只能作为长位置机制证据，不能冒充自�
 1. 保持数值方法完全冻结，不再做参数或长度规则搜索。
 2. 完成 13 任务、4K--128K、650-pair 正式 RULER，并独立核验 prompt 长度、
    零 fallback、分任务/分长度结果和 paired bootstrap 区间。
-3. 用同一冻结配置完成 Llama/Qwen/Mistral 各 160-pair 独立 LongBench screen；
-   只在出现系统性失败时扩大样本，不在 screen 上调参。
-4. 完成 Llama 冻结 Robust 的 3,750-pair 同路径 LongBench，将旧 reference
+3. 已完成 Llama/Qwen/Mistral 各 160-pair 独立 LongBench screen；保留原始
+   artifact、合同校验和 task-bootstrap 区间，不在 screen 上调参。
+4. 完成正在运行的 Llama 冻结 Robust 3,750-pair 同路径 LongBench，将旧 reference
    结果保留为表征上界，不再作为部署主结果。
 5. 在 H100 完成 64K/128K attention、steady decode、cold/warm/persistent
    request 与 peak-memory 网格，并保留 RTX 3090 结果作为可复现实验。
