@@ -12,6 +12,8 @@ import matplotlib.pyplot as plt
 
 
 ROOT = Path(__file__).resolve().parents[1]
+RULER_LENGTHS = {"4096", "8192", "16384", "32768", "65536", "131072"}
+MODEL_ORDER = ("llama31_8b", "qwen3_4b", "mistral_7b")
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,11 +53,46 @@ def validate(ruler: dict[str, Any], multimodel: dict[str, Any]) -> str:
         raise ValueError("RULER summary schema mismatch")
     if multimodel.get("schema") != "qksieve_robust_multimodel_summary_v1":
         raise ValueError("multi-model summary schema mismatch")
-    method = ruler.get("frozen_contract", {}).get("method")
+    contract = ruler.get("frozen_contract", {})
+    method = contract.get("method")
     if not method:
         raise ValueError("RULER summary lacks the frozen method identifier")
-    if multimodel.get("frozen_contract", {}).get("method") != method:
-        raise ValueError("RULER and multi-model method identifiers differ")
+    if multimodel.get("frozen_contract") != contract:
+        raise ValueError("RULER and multi-model frozen contracts differ")
+    if contract.get("full_attention_fallback") is not False:
+        raise ValueError("the frozen method must not use Full fallback")
+    if contract.get("length_switch") is not False:
+        raise ValueError("the frozen method must not use a length switch")
+    if contract.get("budget") != "min(N,1280,max(256,ceil(0.06*N)))":
+        raise ValueError("the frozen token budget drifted")
+    value_sketch = contract.get("value_sketch", {})
+    if (
+        value_sketch.get("rank"),
+        value_sketch.get("bits"),
+        value_sketch.get("block_tokens"),
+        value_sketch.get("tail_alpha"),
+    ) != (16, 4, 256, 0.5):
+        raise ValueError("the frozen ValueSketch contract drifted")
+
+    if ruler.get("strict_pairs") != 650 or ruler.get("rows") != 1300:
+        raise ValueError("RULER evidence is not the complete 650-pair run")
+    if len(ruler.get("tasks", [])) != 13:
+        raise ValueError("RULER evidence does not cover 13 tasks")
+    if set(ruler.get("per_length", {})) != RULER_LENGTHS:
+        raise ValueError("RULER evidence does not cover the frozen length grid")
+    if ruler.get("fallback_count") != 0:
+        raise ValueError("RULER evidence observed a Full fallback")
+    if ruler.get("bootstrap", {}).get("quality_retention_95ci") is None:
+        raise ValueError("RULER quality confidence interval is missing")
+
+    models = multimodel.get("models", {})
+    if set(models) != set(MODEL_ORDER):
+        raise ValueError("multi-model evidence lacks Llama/Qwen/Mistral")
+    for model, row in models.items():
+        if row.get("strict_pairs") != 160 or row.get("tasks") != 16:
+            raise ValueError(f"{model}: incomplete LongBench screen")
+        if row.get("quality_retention_95ci") is None:
+            raise ValueError(f"{model}: quality confidence interval is missing")
     return str(method)
 
 
@@ -75,9 +112,8 @@ def main() -> None:
         for length in lengths
     ]
 
-    model_order = ("llama31_8b", "qwen3_4b", "mistral_7b")
     labels = ("Llama-3.1-8B", "Qwen3-4B", "Mistral-7B")
-    rows = [multimodel["models"][name] for name in model_order]
+    rows = [multimodel["models"][name] for name in MODEL_ORDER]
     retentions = [100.0 * float(row["quality_retention"]) for row in rows]
     intervals = [row["quality_retention_95ci"] for row in rows]
     lower = [ret - 100.0 * float(ci[0]) for ret, ci in zip(retentions, intervals)]
