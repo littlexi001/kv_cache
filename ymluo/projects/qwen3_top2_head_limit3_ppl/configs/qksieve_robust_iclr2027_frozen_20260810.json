@@ -1,0 +1,49 @@
+{
+  "schema": "qksieve_frozen_method_v2",
+  "method_id": "qksieve_robust_iclr2027_frozen_20260810",
+  "frozen_at": "2026-08-10",
+  "role": "paper main method",
+  "score_mode": "pca_hierarchical_autoqmsetotal15z_qkmetric_qfused_gqa4_wmma_kappend_valuesketch16i4shared_wometric_sortcompact_unbiased_packed_direct_oas",
+  "numerical_contract": {
+    "coordinates": "request-local QK-balanced",
+    "allocation": "query-weighted MSE under a 240-bit Key-index cap",
+    "quantile_samples_max": 512,
+    "budget_tokens_per_head": "min(history_tokens, 1280, max(256, ceil(0.06 * history_tokens)))",
+    "candidate_selection": "sampled-quantile packed-proxy scan",
+    "exact_rerank": false,
+    "exact_attention": "original resident FP16/BF16 K/V at selected positions",
+    "value_tail": {
+      "rank": 16,
+      "bits": 4,
+      "block_tokens": 256,
+      "tail_alpha": 0.5,
+      "estimator": "selected exact numerator/denominator plus unselected low-rank Value numerator/denominator"
+    },
+    "router": false,
+    "task_rule": false,
+    "full_attention_fallback": false,
+    "sink_or_recent_reservation": false
+  },
+  "storage_contract": {
+    "key_index_hard_cap_ratio_of_full_fp16_kv": 0.05859,
+    "value_index_ratio_of_full_fp16_kv": 0.01612,
+    "total_auxiliary_ratio_of_full_fp16_kv": 0.07471,
+    "exact_kv_residency": "GPU-resident for the reported MHA speed path"
+  },
+  "deployment_contract": {
+    "profile": "always-on Robust; no 64K method switch",
+    "append_only_update": true,
+    "persistent_index_reuse": "required for warm/shared-prefix claims",
+    "environment": {
+      "QKSIEVE_MAX_QUANTILE_SAMPLE_COUNT": "512",
+      "QKSIEVE_VALUE_SKETCH_TAIL_ALPHA": "0.5",
+      "QKSIEVE_BUILD_RESIDENT_VALUE_SKETCH": "1",
+      "QKSIEVE_DEBUG_DISABLE_VALUE_SKETCH": "0"
+    }
+  },
+  "ablation_profiles": {
+    "qksieve_fast": "identical selector and budget with ValueSketch disabled",
+    "full": "native full attention without KV-head replication"
+  },
+  "claim_boundary": "The method is frozen. Future work may optimize kernels or collect evidence, but must not change this numerical contract for main-paper results."
+}

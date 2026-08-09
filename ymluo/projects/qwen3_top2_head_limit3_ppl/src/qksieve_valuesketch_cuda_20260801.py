@@ -2328,7 +2328,7 @@ void qksieve_valuesketch_attention_active_out(
 @lru_cache(maxsize=1)
 def load_extension() -> object:
     return load_inline(
-        name="qksieve_valuesketch_attention_20260801_v15_active_suffix",
+        name="qksieve_valuesketch_attention_20260809_v16_contiguous_contract",
         cpp_sources=CPP_SOURCE,
         cuda_sources=CUDA_SOURCE,
         extra_cflags=["-O3"],

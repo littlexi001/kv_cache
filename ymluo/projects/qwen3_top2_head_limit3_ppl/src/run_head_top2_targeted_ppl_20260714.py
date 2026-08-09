@@ -19438,12 +19438,9 @@ def _packed_qmse_spectral_attention(
     value_sketch_block_size = 256
     value_sketch_tensors: tuple[torch.Tensor, ...] | None = None
     if value_sketch_fast:
-        if not (
-            bool(state.get("packed_qmse_gqa4_scan", False))
-            and query_groups == 4
-        ):
+        if query_groups not in {1, 4}:
             raise RuntimeError(
-                "the fused Value sketch currently requires the GQA4 scan"
+                "the fused Value sketch requires one or four Query groups"
             )
         if isinstance(packed_index.get("score_bias"), torch.Tensor) and (
             packed_index["score_bias"].numel() > 0
@@ -19574,7 +19571,7 @@ def _packed_qmse_spectral_attention(
     retrieval_stage = _speed_stage_start("qksieve_retrieval")
     deterministic_compaction = bool(
         state.get("packed_qmse_deterministic_compaction", False)
-    )
+    ) and query_groups == 4
     if deterministic_compaction:
         if not value_sketch_fast or mass_ladder_active or value_sketch_progressive:
             raise RuntimeError(
@@ -19840,7 +19837,7 @@ def _packed_qmse_spectral_attention(
         )
     elif (
         bool(state.get("packed_qmse_gqa4_scan", False))
-        and query_groups == 4
+        and query_groups in {1, 4}
         and not (
             isinstance(packed_index.get("score_bias"), torch.Tensor)
             and packed_index["score_bias"].numel() > 0
@@ -19863,7 +19860,7 @@ def _packed_qmse_spectral_attention(
             )
         )
         state["packed_qmse_scan_kernel"] = (
-            "gqa4_index_only_plain_layout"
+            "plain_index_only_qgroup1_or_gqa4"
         )
     else:
         candidate_indices, _, candidate_counts, thresholds, overflow = (

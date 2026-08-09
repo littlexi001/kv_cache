@@ -22,6 +22,7 @@ import fier_rtn1_cuda_20260728 as fier_cuda
 import mixedblock_spectral_cuda_20260729 as mixed_cuda
 import qabs_cuda_kernels as sparse_cuda
 import qksieve_query_cuda_20260728 as query_cuda
+import qksieve_valuesketch_cuda_20260801 as valuesketch_cuda
 import variablebit_spectral_cuda_20260727 as varbit_cuda
 
 
@@ -40,6 +41,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max_sample_count", type=int, default=0)
     parser.add_argument("--qksieve_split_count", type=int, default=8)
     parser.add_argument("--fier_split_count", type=int, default=8)
+    parser.add_argument("--value_tail_alpha", type=float, default=0.5)
     parser.add_argument("--warmup", type=int, default=10)
     parser.add_argument("--iterations", type=int, default=40)
     parser.add_argument("--seed", type=int, default=20260808)
@@ -148,6 +150,42 @@ def mixed_metadata_mha(
     return metadata, code_cursor, scale_cursor
 
 
+def plain_metadata_mha(
+    history_count: int,
+) -> tuple[dict[str, torch.Tensor], int, int]:
+    """Build the per-head plain layout used by the real decode path."""
+    allocations = repeat_head_allocations(
+        mixed_bench.LOW_PROFILES["fixed84"]
+    )
+    profile = mixed_bench.profile_metadata(allocations.unsqueeze(0))
+    code_offsets = profile["code_offsets"][0].contiguous()
+    scale_offsets = profile["scale_offsets"][0].contiguous()
+    code_strides = profile["code_strides"][0].contiguous()
+    scale_strides = profile["scale_strides"][0].contiguous()
+    code_bases = torch.empty(KV_HEADS, dtype=torch.int64)
+    scale_bases = torch.empty(KV_HEADS, dtype=torch.int64)
+    code_cursor = 0
+    scale_cursor = 0
+    for head in range(KV_HEADS):
+        code_bases[head] = code_cursor
+        scale_bases[head] = scale_cursor
+        code_cursor += history_count * int(code_strides[head].item())
+        scale_cursor += history_count * int(scale_strides[head].item())
+    return (
+        {
+            "bit_allocations": allocations.unsqueeze(0).cuda(),
+            "code_offsets": code_offsets.unsqueeze(0).cuda(),
+            "scale_offsets": scale_offsets.unsqueeze(0).cuda(),
+            "code_strides": code_strides.unsqueeze(0).cuda(),
+            "scale_strides": scale_strides.unsqueeze(0).cuda(),
+            "code_bases": code_bases.unsqueeze(0).cuda(),
+            "scale_bases": scale_bases.unsqueeze(0).cuda(),
+        },
+        code_cursor,
+        scale_cursor,
+    )
+
+
 def allocate_qksieve_outputs(capacity: int) -> tuple[torch.Tensor, ...]:
     shape = (1, QUERY_HEADS, capacity)
     return (
@@ -242,8 +280,8 @@ def main() -> None:
         query_codes, query_scales = varbit_cuda.quantize_projected_query(
             projected_query
         )
-        q_metadata, q_code_count, q_scale_count = mixed_metadata_mha(
-            history_count, args.block_size, args.hot_fraction
+        q_metadata, q_code_count, q_scale_count = plain_metadata_mha(
+            history_count
         )
         q_packed_codes = torch.randint(
             0,
@@ -256,6 +294,56 @@ def main() -> None:
             q_scale_count, dtype=torch.float16, device="cuda"
         )
         q_outputs = allocate_qksieve_outputs(capacity)
+        q_value_outputs = allocate_qksieve_outputs(capacity)
+        value_rank = 16
+        value_block_size = 256
+        value_block_count = math.ceil(history_count / value_block_size)
+        packed_value_codes = torch.randint(
+            0,
+            256,
+            (1, KV_HEADS, history_count, value_rank // 2),
+            dtype=torch.uint8,
+            device="cuda",
+        )
+        value_minimum = torch.randn(
+            1,
+            KV_HEADS,
+            value_block_count,
+            value_rank,
+            dtype=torch.float16,
+            device="cuda",
+        )
+        value_scale = torch.rand_like(value_minimum).mul_(0.1).add_(1.0e-3)
+        value_mean = torch.randn(
+            1, KV_HEADS, HEAD_DIM, dtype=torch.float16, device="cuda"
+        )
+        value_basis = torch.randn(
+            1,
+            KV_HEADS,
+            HEAD_DIM,
+            value_rank,
+            dtype=torch.float16,
+            device="cuda",
+        ).contiguous()
+        selected_denominator = torch.empty(
+            1, QUERY_HEADS, dtype=torch.float32, device="cuda"
+        )
+        tail_denominator = torch.empty_like(selected_denominator)
+        tail_coefficients = torch.empty(
+            1,
+            QUERY_HEADS,
+            value_rank,
+            dtype=torch.float32,
+            device="cuda",
+        )
+        value_attention_workspace = valuesketch_cuda.allocate_attention_workspace(
+            query, capacity
+        )
+        q_packed_index = {
+            "packed_codes": q_packed_codes,
+            "key_scales": q_key_scales,
+            **q_metadata,
+        }
 
         fier_index = fier_cuda.allocate_packed_index(
             1, KV_HEADS, history_count, key.device
@@ -267,13 +355,14 @@ def main() -> None:
             return query_cuda.project_quantize(grouped_query, query_basis)
 
         def q_retrieve_prepared() -> tuple[torch.Tensor, ...]:
-            return mixed_cuda.sampled_threshold_compact_out(
+            return mixed_cuda.plain_sampled_threshold_compact_gqa4_indices_out(
                 query_codes,
                 query_scales,
-                q_packed_codes,
-                q_key_scales,
-                q_metadata,
-                *q_outputs,
+                q_packed_index,
+                q_outputs[0],
+                q_outputs[2],
+                q_outputs[3],
+                q_outputs[4],
                 history_count,
                 sample_count,
                 selected_threshold,
@@ -281,13 +370,14 @@ def main() -> None:
 
         def q_retrieve_complete() -> tuple[torch.Tensor, ...]:
             codes, scales = q_prepare()
-            return mixed_cuda.sampled_threshold_compact_out(
+            return mixed_cuda.plain_sampled_threshold_compact_gqa4_indices_out(
                 codes,
                 scales,
-                q_packed_codes,
-                q_key_scales,
-                q_metadata,
-                *q_outputs,
+                q_packed_index,
+                q_outputs[0],
+                q_outputs[2],
+                q_outputs[3],
+                q_outputs[4],
                 history_count,
                 sample_count,
                 selected_threshold,
@@ -302,6 +392,72 @@ def main() -> None:
                 q_outputs[2],
                 args.qksieve_split_count,
             )
+
+        def q_valuesketch_retrieve_prepared() -> tuple[torch.Tensor, ...]:
+            return mixed_cuda.plain_sampled_threshold_compact_gqa4_valuesketch_out(
+                query_codes,
+                query_scales,
+                q_packed_index,
+                packed_value_codes,
+                value_minimum,
+                value_scale,
+                q_value_outputs[0],
+                q_value_outputs[2],
+                q_value_outputs[3],
+                q_value_outputs[4],
+                selected_denominator,
+                tail_denominator,
+                tail_coefficients,
+                history_count,
+                sample_count,
+                selected_threshold,
+                value_block_size,
+                HEAD_DIM**-0.5,
+            )
+
+        def q_valuesketch_retrieve_complete() -> tuple[torch.Tensor, ...]:
+            codes, scales = q_prepare()
+            return mixed_cuda.plain_sampled_threshold_compact_gqa4_valuesketch_out(
+                codes,
+                scales,
+                q_packed_index,
+                packed_value_codes,
+                value_minimum,
+                value_scale,
+                q_value_outputs[0],
+                q_value_outputs[2],
+                q_value_outputs[3],
+                q_value_outputs[4],
+                selected_denominator,
+                tail_denominator,
+                tail_coefficients,
+                history_count,
+                sample_count,
+                selected_threshold,
+                value_block_size,
+                HEAD_DIM**-0.5,
+            )
+
+        def q_valuesketch_attention() -> torch.Tensor:
+            return valuesketch_cuda.exact_selected_plus_tail_out(
+                query,
+                key,
+                value,
+                q_value_outputs[0],
+                q_value_outputs[2],
+                q_value_outputs[3],
+                tail_denominator,
+                tail_coefficients,
+                value_mean,
+                value_basis,
+                value_attention_workspace,
+                HEAD_DIM**-0.5,
+                args.value_tail_alpha,
+            )
+
+        def q_valuesketch_complete() -> torch.Tensor:
+            q_valuesketch_retrieve_complete()
+            return q_valuesketch_attention()
 
         def q_complete() -> torch.Tensor:
             q_retrieve_complete()
@@ -336,10 +492,33 @@ def main() -> None:
                 query.unsqueeze(2), key, value
             )
 
-        q_retrieve_complete()
+        # Candidate equivalence is checked with one shared, immutable Query
+        # encoding so the A/B changes only the Value-tail computation.
+        q_retrieve_prepared()
+        q_valuesketch_retrieve_prepared()
         fier_retrieve()
-        if bool(q_outputs[4].any().item()) or bool(fier_outputs[3].any().item()):
+        if (
+            bool(q_outputs[4].any().item())
+            or bool(q_value_outputs[4].any().item())
+            or bool(fier_outputs[3].any().item())
+        ):
             raise RuntimeError("candidate buffer overflowed")
+        q_counts_equal = bool(torch.equal(q_outputs[2], q_value_outputs[2]))
+        q_count_max_abs_diff = int(
+            (q_outputs[2] - q_value_outputs[2]).abs().max().item()
+        )
+        q_threshold_max_abs_diff = float(
+            (q_outputs[3] - q_value_outputs[3]).abs().max().item()
+        )
+        q_candidate_sets_equal = q_counts_equal
+        if q_candidate_sets_equal:
+            for head in range(QUERY_HEADS):
+                count = int(q_outputs[2][0, head].item())
+                left = torch.sort(q_outputs[0][0, head, :count]).values
+                right = torch.sort(q_value_outputs[0][0, head, :count]).values
+                if not torch.equal(left, right):
+                    q_candidate_sets_equal = False
+                    break
 
         q_split8_reference = sparse_attention(
             query,
@@ -368,6 +547,15 @@ def main() -> None:
         q_scan_ms = measure_ms(q_retrieve_prepared, warmup, iterations)
         q_sparse_ms = measure_ms(q_sparse_attention, warmup, iterations)
         q_complete_ms = measure_ms(q_complete, warmup, iterations)
+        q_valuesketch_scan_ms = measure_ms(
+            q_valuesketch_retrieve_prepared, warmup, iterations
+        )
+        q_valuesketch_attention_ms = measure_ms(
+            q_valuesketch_attention, warmup, iterations
+        )
+        q_valuesketch_complete_ms = measure_ms(
+            q_valuesketch_complete, warmup, iterations
+        )
         fier_scan_ms = measure_ms(fier_retrieve, warmup, iterations)
         fier_sparse_ms = measure_ms(fier_sparse_attention, warmup, iterations)
         fier_complete_ms = measure_ms(fier_complete, warmup, iterations)
@@ -379,9 +567,14 @@ def main() -> None:
         q_index_bytes = (
             bytes_of(q_packed_codes)
             + bytes_of(q_key_scales)
-            + bytes_of(q_metadata["block_hot_prefix"])
-            + bytes_of(q_metadata["head_code_bases"])
-            + bytes_of(q_metadata["head_scale_bases"])
+            + sum(bytes_of(tensor) for tensor in q_metadata.values())
+        )
+        q_valuesketch_bytes = (
+            bytes_of(packed_value_codes)
+            + bytes_of(value_minimum)
+            + bytes_of(value_scale)
+            + bytes_of(value_mean)
+            + bytes_of(value_basis)
         )
         q_actual_fraction = float(
             (q_outputs[2].float() / history_count).mean().item()
@@ -405,17 +598,37 @@ def main() -> None:
             "qksieve_selector_scan_ms": q_scan_ms,
             "qksieve_sparse_attention_ms": q_sparse_ms,
             "qksieve_complete_ms": q_complete_ms,
+            "qksieve_valuesketch_candidate_counts_equal": q_counts_equal,
+            "qksieve_valuesketch_candidate_sets_equal": q_candidate_sets_equal,
+            "qksieve_valuesketch_tail_alpha": args.value_tail_alpha,
+            "qksieve_valuesketch_count_max_abs_diff": q_count_max_abs_diff,
+            "qksieve_valuesketch_threshold_max_abs_diff": (
+                q_threshold_max_abs_diff
+            ),
+            "qksieve_valuesketch_scan_ms": q_valuesketch_scan_ms,
+            "qksieve_valuesketch_attention_ms": q_valuesketch_attention_ms,
+            "qksieve_valuesketch_complete_ms": q_valuesketch_complete_ms,
             "fier_selector_scan_ms": fier_scan_ms,
             "fier_sparse_attention_ms": fier_sparse_ms,
             "fier_complete_ms": fier_complete_ms,
             "full_mha_sdpa_ms": full_ms,
             "qksieve_attention_speedup": full_ms / q_complete_ms,
+            "qksieve_valuesketch_attention_speedup": (
+                full_ms / q_valuesketch_complete_ms
+            ),
+            "qksieve_valuesketch_slowdown_vs_no_value": (
+                q_valuesketch_complete_ms / q_complete_ms
+            ),
             "fier_attention_speedup": full_ms / fier_complete_ms,
             "qksieve_vs_fier_speedup": fier_complete_ms / q_complete_ms,
             "qksieve_index_bytes": q_index_bytes,
+            "qksieve_valuesketch_bytes": q_valuesketch_bytes,
             "fier_index_bytes": fier_cuda.allocated_bytes(fier_index),
             "full_kv_bytes": full_kv_bytes,
             "qksieve_index_ratio_of_full_kv": q_index_bytes / full_kv_bytes,
+            "qksieve_total_auxiliary_ratio_with_valuesketch": (
+                (q_index_bytes + q_valuesketch_bytes) / full_kv_bytes
+            ),
             "fier_index_ratio_of_full_kv": (
                 fier_cuda.allocated_bytes(fier_index) / full_kv_bytes
             ),
@@ -432,6 +645,16 @@ def main() -> None:
             q_packed_codes,
             q_key_scales,
             q_outputs,
+            q_value_outputs,
+            packed_value_codes,
+            value_minimum,
+            value_scale,
+            value_mean,
+            value_basis,
+            selected_denominator,
+            tail_denominator,
+            tail_coefficients,
+            value_attention_workspace,
             fier_index,
             fier_outputs,
         )
@@ -444,6 +667,7 @@ def main() -> None:
         "seed": args.seed,
         "warmup": args.warmup,
         "iterations": args.iterations,
+        "qksieve_valuesketch_tail_alpha": args.value_tail_alpha,
         "rows": rows,
         "claim_boundary": (
             "Synthetic MHA-shaped layer benchmark with resident FP16 K/V; "

@@ -1549,7 +1549,7 @@ __global__ void plain_sample_threshold_kernel(
   }
 }
 
-template <typename scale_t>
+template <typename scale_t, int query_groups>
 __global__ void plain_threshold_compact_gqa4_indices_kernel(
     const int8_t* __restrict__ query_codes,
     const scale_t* __restrict__ query_scales,
@@ -1573,16 +1573,23 @@ __global__ void plain_threshold_compact_gqa4_indices_kernel(
   if (token >= history_count) {
     return;
   }
-  constexpr int query_groups = 4;
   int batch_kv = blockIdx.x;
   int batch = batch_kv / kv_head_count;
   int kv_head = batch_kv - batch * kv_head_count;
   float scores[query_groups];
-  plain_score_gqa4_one(
-      query_codes, query_scales, packed_codes, key_scales,
-      bit_allocations, code_offsets, scale_offsets,
-      code_bases, scale_bases, code_strides, scale_strides,
-      batch_kv, token, scores);
+  if constexpr (query_groups == 4) {
+    plain_score_gqa4_one(
+        query_codes, query_scales, packed_codes, key_scales,
+        bit_allocations, code_offsets, scale_offsets,
+        code_bases, scale_bases, code_strides, scale_strides,
+        batch_kv, token, scores);
+  } else {
+    scores[0] = plain_score_one(
+        query_codes, query_scales, packed_codes, key_scales,
+        bit_allocations, code_offsets, scale_offsets,
+        code_bases, scale_bases, code_strides, scale_strides,
+        batch_kv, 0, 1, token);
+  }
 #pragma unroll
   for (int query_group = 0; query_group < query_groups; ++query_group) {
     int query_head = kv_head * query_groups + query_group;
@@ -1981,7 +1988,7 @@ __global__ void plain_threshold_compact_gqa4_condtail_kernel(
   }
 }
 
-template <typename scale_t, int value_rank>
+template <typename scale_t, int value_rank, int query_groups>
 __global__ void plain_threshold_compact_gqa4_valuesketch_kernel(
     const int8_t* __restrict__ query_codes,
     const scale_t* __restrict__ query_scales,
@@ -2011,7 +2018,6 @@ __global__ void plain_threshold_compact_gqa4_valuesketch_kernel(
     int value_block_size,
     int value_block_count,
     float attention_scale) {
-  constexpr int query_groups = 4;
   constexpr int warp_count = 8;
   int token = blockIdx.y * blockDim.x + threadIdx.x;
   bool valid = token < history_count;
@@ -2020,14 +2026,25 @@ __global__ void plain_threshold_compact_gqa4_valuesketch_kernel(
   int kv_head = batch_kv - batch * kv_head_count;
   int lane = threadIdx.x & 31;
   int warp = threadIdx.x >> 5;
-  float scores[query_groups] = {
-      -INFINITY, -INFINITY, -INFINITY, -INFINITY};
+  float scores[query_groups];
+#pragma unroll
+  for (int group = 0; group < query_groups; ++group) {
+    scores[group] = -INFINITY;
+  }
   if (valid) {
-    plain_score_gqa4_one(
-        query_codes, query_scales, packed_codes, key_scales,
-        bit_allocations, code_offsets, scale_offsets,
-        code_bases, scale_bases, code_strides, scale_strides,
-        batch_kv, token, scores);
+    if constexpr (query_groups == 4) {
+      plain_score_gqa4_one(
+          query_codes, query_scales, packed_codes, key_scales,
+          bit_allocations, code_offsets, scale_offsets,
+          code_bases, scale_bases, code_strides, scale_strides,
+          batch_kv, token, scores);
+    } else {
+      scores[0] = plain_score_one(
+          query_codes, query_scales, packed_codes, key_scales,
+          bit_allocations, code_offsets, scale_offsets,
+          code_bases, scale_bases, code_strides, scale_strides,
+          batch_kv, 0, 1, token);
+    }
   }
 
   float coefficients[value_rank];
@@ -3843,8 +3860,8 @@ void plain_sampled_compact_gqa4_indices_out_cuda(
               "code bases must be int64");
   TORCH_CHECK(scale_bases.scalar_type() == at::kLong,
               "scale bases must be int64");
-  TORCH_CHECK(query_codes.size(2) == 4,
-              "GQA4 kernel requires exactly four Query groups");
+  TORCH_CHECK(query_codes.size(2) == 1 || query_codes.size(2) == 4,
+              "plain index scan requires one or four Query groups");
   TORCH_CHECK(
       sample_count > 0
           && sample_count <= MIXEDBLOCK_MAX_SAMPLE_COUNT,
@@ -3856,7 +3873,7 @@ void plain_sampled_compact_gqa4_indices_out_cuda(
       "plain-layout metadata must be contiguous");
   int batch_count = static_cast<int>(query_codes.size(0));
   int kv_head_count = static_cast<int>(query_codes.size(1));
-  constexpr int query_groups = 4;
+  int query_groups = static_cast<int>(query_codes.size(2));
   int query_head_count = kv_head_count * query_groups;
   int batch_kv_count = batch_count * kv_head_count;
   int row_count = batch_count * query_head_count;
@@ -3936,8 +3953,10 @@ void plain_sampled_compact_gqa4_indices_out_cuda(
         dim3 blocks(
             batch_kv_count,
             (history_count + 255) / 256);
-        plain_threshold_compact_gqa4_indices_kernel<scalar_t><<<
-            blocks, 256, 0, stream>>>(
+        auto launch_compaction = [&](auto group_constant) {
+          constexpr int group_value = decltype(group_constant)::value;
+          plain_threshold_compact_gqa4_indices_kernel<
+              scalar_t, group_value><<<blocks, 256, 0, stream>>>(
                 query_codes.data_ptr<int8_t>(),
                 query_scales.data_ptr<scalar_t>(),
                 packed_codes.data_ptr<uint8_t>(),
@@ -3956,6 +3975,12 @@ void plain_sampled_compact_gqa4_indices_out_cuda(
                 kv_head_count,
                 static_cast<int>(history_count),
                 candidate_capacity);
+        };
+        if (query_groups == 1) {
+          launch_compaction(std::integral_constant<int, 1>{});
+        } else {
+          launch_compaction(std::integral_constant<int, 4>{});
+        }
       });
   finalize_counts_kernel<<<
       (row_count + 255) / 256, 256, 0, stream>>>(
@@ -4501,8 +4526,8 @@ void plain_sampled_compact_gqa4_valuesketch_out_cuda(
               "Key and Value codes must be uint8");
   TORCH_CHECK(bit_allocations.scalar_type() == at::kChar,
               "allocations must be int8");
-  TORCH_CHECK(query_codes.size(2) == 4,
-              "GQA4 kernel requires exactly four Query groups");
+  TORCH_CHECK(query_codes.size(2) == 1 || query_codes.size(2) == 4,
+              "ValueSketch scan requires one or four Query groups");
   TORCH_CHECK(
       value_rank == 8 || value_rank == 12 || value_rank == 16
           || value_rank == 32,
@@ -4528,7 +4553,7 @@ void plain_sampled_compact_gqa4_valuesketch_out_cuda(
               "Value metadata must be [B,KVH,blocks,rank]");
   int batch_count = static_cast<int>(query_codes.size(0));
   int kv_head_count = static_cast<int>(query_codes.size(1));
-  constexpr int query_groups = 4;
+  int query_groups = static_cast<int>(query_codes.size(2));
   int query_head_count = kv_head_count * query_groups;
   int batch_kv_count = batch_count * kv_head_count;
   int row_count = batch_count * query_head_count;
@@ -4633,10 +4658,11 @@ void plain_sampled_compact_gqa4_valuesketch_out_cuda(
         dim3 blocks(
             batch_kv_count,
             (history_count + 255) / 256);
-        auto launch_value_sketch = [&](auto rank_constant) {
+        auto launch_value_sketch = [&](auto rank_constant, auto group_constant) {
           constexpr int rank_value = decltype(rank_constant)::value;
+          constexpr int group_value = decltype(group_constant)::value;
           plain_threshold_compact_gqa4_valuesketch_kernel<
-              scalar_t, rank_value><<<blocks, 256, 0, stream>>>(
+              scalar_t, rank_value, group_value><<<blocks, 256, 0, stream>>>(
                 query_codes.data_ptr<int8_t>(),
                 query_scales.data_ptr<scalar_t>(),
                 packed_codes.data_ptr<uint8_t>(),
@@ -4666,14 +4692,25 @@ void plain_sampled_compact_gqa4_valuesketch_out_cuda(
                 value_block_count,
                 static_cast<float>(attention_scale));
         };
-        if (value_rank == 8) {
-          launch_value_sketch(std::integral_constant<int, 8>{});
-        } else if (value_rank == 12) {
-          launch_value_sketch(std::integral_constant<int, 12>{});
-        } else if (value_rank == 16) {
-          launch_value_sketch(std::integral_constant<int, 16>{});
+        auto launch_for_group = [&](auto group_constant) {
+          if (value_rank == 8) {
+            launch_value_sketch(
+                std::integral_constant<int, 8>{}, group_constant);
+          } else if (value_rank == 12) {
+            launch_value_sketch(
+                std::integral_constant<int, 12>{}, group_constant);
+          } else if (value_rank == 16) {
+            launch_value_sketch(
+                std::integral_constant<int, 16>{}, group_constant);
+          } else {
+            launch_value_sketch(
+                std::integral_constant<int, 32>{}, group_constant);
+          }
+        };
+        if (query_groups == 1) {
+          launch_for_group(std::integral_constant<int, 1>{});
         } else {
-          launch_value_sketch(std::integral_constant<int, 32>{});
+          launch_for_group(std::integral_constant<int, 4>{});
         }
       });
   finalize_counts_kernel<<<
@@ -5654,7 +5691,7 @@ void sortedblock_sampled_compact_out_cuda(
 @lru_cache(maxsize=1)
 def load_extension() -> object:
     return load_inline(
-        name="qksieve_mixedblock_spectral_20260729_v43_wmma_tail",
+        name="qksieve_mixedblock_spectral_20260809_v46_mha_valuesketch_ab",
         cpp_sources=CPP_SOURCE,
         cuda_sources=CUDA_SOURCE,
         functions=None,

@@ -20,8 +20,10 @@ import run_direct_countcap_denseprompt_ppl_20260725 as direct
 from run_critical_position_budget_probe_20260715 import run_one_token
 from run_head_top2_targeted_ppl_20260714 import (
     consume_speed_stage_timings,
+    install_resident_value_sketch_cache,
     install_llama_head_top_fraction_patch,
     load_model,
+    prebuild_resident_value_sketch_cache,
     preload_qksieve_qmse_rate_tables,
     preload_qksieve_runtime_extensions,
     prefill_query_tail_mode,
@@ -33,6 +35,10 @@ METHODS = {
     "full": (None, 65536),
     "full_native_gqa": (None, 65536),
     "qksieve_no_value_top1280": (
+        direct.PACKED_QKSIEVE_QMSE_OAS_VALUESKETCH16_WOMETRIC_SORTED_SAMPLED_SCORE_MODE,
+        1280,
+    ),
+    "qksieve_valuesketch_top1280": (
         direct.PACKED_QKSIEVE_QMSE_OAS_VALUESKETCH16_WOMETRIC_SORTED_SAMPLED_SCORE_MODE,
         1280,
     ),
@@ -169,6 +175,13 @@ def main() -> None:
     if not 0 <= args.steady_start < args.generation_steps:
         raise ValueError("steady_start must be inside generation_steps")
 
+    value_sketch_enabled = args.method == "qksieve_valuesketch_top1280"
+    os.environ["QKSIEVE_DEBUG_DISABLE_VALUE_SKETCH"] = (
+        "0" if value_sketch_enabled else "1"
+    )
+    if value_sketch_enabled:
+        os.environ.setdefault("QKSIEVE_VALUE_SKETCH_TAIL_ALPHA", "0.5")
+
     torch.manual_seed(args.seed)
     install_llama_head_top_fraction_patch()
     tokenizer, model, input_device = load_model(args)
@@ -252,6 +265,8 @@ def main() -> None:
     step_seconds: list[float] = []
     cumulative_seconds: list[float] = []
     qk_prebuild: dict[str, Any] = {}
+    value_prebuild: dict[str, Any] = {}
+    value_install: dict[str, Any] = {}
 
     method_name = "direct_countcap" if is_sparse else "full_attention"
     with direct.sparse_context(args, method_name):
@@ -269,6 +284,16 @@ def main() -> None:
                         max_workers=workers,
                     )
                 )
+        if value_sketch_enabled:
+            value_workers = int(
+                os.environ.get("QKSIEVE_PARALLEL_VALUE_WORKERS", "12")
+            )
+            value_prebuild = prebuild_resident_value_sketch_cache(
+                cache,
+                model,
+                max_workers=max(1, value_workers),
+            )
+            value_install = install_resident_value_sketch_cache(cache)
         sync(input_device)
         prebuild_seconds = time.perf_counter() - online_start
 
@@ -323,6 +348,11 @@ def main() -> None:
         "value_sketch_disabled": os.environ.get(
             "QKSIEVE_DEBUG_DISABLE_VALUE_SKETCH", "0"
         ) == "1",
+        "value_sketch_tail_alpha": (
+            float(os.environ["QKSIEVE_VALUE_SKETCH_TAIL_ALPHA"])
+            if value_sketch_enabled
+            else None
+        ),
         "fier_attention_split_override": int(
             os.environ.get("QKSIEVE_FIER_ATTENTION_SPLIT_OVERRIDE", "0")
         ),
@@ -331,6 +361,8 @@ def main() -> None:
         "measured_prefill_seconds": measured_prefill_seconds,
         "prebuild_wall_seconds": prebuild_seconds,
         "qk_prebuild": qk_prebuild,
+        "value_prebuild": value_prebuild,
+        "value_install": value_install,
         "cuda_stage_total_ms": stage_totals_ms,
         "cuda_stage_mean_ms_per_token": stage_mean_ms_per_token,
         "first_step_ms": 1000.0 * step_seconds[0],
