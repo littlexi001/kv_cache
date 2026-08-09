@@ -184,6 +184,7 @@ PY
       --prefill_chunk_tokens 2048 \
       --prompt_wrapper "${wrapper}" \
       --minimum_sparse_prefix_tokens 0 \
+      --collect_attention_stats \
       --dtype float16 --device cuda --device_map auto \
       --max_memory_per_gpu_gib 22 \
       >"${output}/logs/smoke.log" 2>&1 || return 1
@@ -210,6 +211,7 @@ PY
       --prefill_chunk_tokens 2048 \
       --prompt_wrapper "${wrapper}" \
       --minimum_sparse_prefix_tokens 0 \
+      --collect_attention_stats \
       --dtype float16 --device cuda --device_map auto \
       --max_memory_per_gpu_gib 22 \
       >"${output}/logs/shard${shard}.log" 2>&1 && \

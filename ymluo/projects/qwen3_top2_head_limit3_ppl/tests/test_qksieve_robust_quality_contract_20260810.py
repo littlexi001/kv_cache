@@ -225,6 +225,7 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
         assert "QKSIEVE_VALUE_SKETCH_TAIL_ALPHA=0.5" in text
         assert "QKSIEVE_DEBUG_DISABLE_VALUE_SKETCH=0" in text
         assert "--minimum_sparse_prefix_tokens 0" in text
+        assert "--collect_attention_stats" in text
         assert "numerical_freeze_commit_sha=" in text
         assert "audited_implementation_commit_sha=" in text
 

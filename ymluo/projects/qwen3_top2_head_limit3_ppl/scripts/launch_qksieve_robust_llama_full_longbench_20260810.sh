@@ -126,6 +126,7 @@ run_shard() {
     --prefill_chunk_tokens 2048 \
     --prompt_wrapper llama3 \
     --minimum_sparse_prefix_tokens 0 \
+    --collect_attention_stats \
     --dtype float16 --device cuda --device_map auto \
     --max_memory_per_gpu_gib 22 \
     >"${RUN_ROOT}/logs/shard${shard}.log" 2>&1 || return 1
