@@ -22,6 +22,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--project_root", required=True, type=Path)
     parser.add_argument("--persistent_summary", type=Path)
+    parser.add_argument("--longbench_summary", type=Path)
     parser.add_argument("--ruler_summary", type=Path)
     parser.add_argument("--multimodel_summary", type=Path)
     parser.add_argument("--h100_summary", type=Path)
@@ -115,6 +116,45 @@ def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
     return {"rows": rows, "claim_boundary": payload.get("claim_boundary")}
 
 
+def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("schema") != "qksieve_robust_longbench_summary_v1":
+        raise AssertionError("LongBench summary schema mismatch")
+    if payload.get("frozen_contract") != contract.contract_payload():
+        raise AssertionError("LongBench frozen contract drifted")
+    if int(payload.get("strict_pairs", -1)) != 3750:
+        raise AssertionError("LongBench does not contain 3,750 strict pairs")
+    if int(payload.get("tasks", -1)) != 16:
+        raise AssertionError("LongBench does not contain 16 tasks")
+    if int(payload.get("full_fallback_count", -1)) != 0:
+        raise AssertionError("LongBench observed a Full fallback")
+    if float(payload.get("value_sketch_tail_alpha", -1.0)) != float(
+        contract.VALUE_SKETCH_TAIL_ALPHA
+    ):
+        raise AssertionError("LongBench ValueSketch shrinkage drifted")
+    methods = payload.get("methods")
+    if not isinstance(methods, dict) or set(methods) != {
+        "full_kv",
+        contract.METHOD,
+    }:
+        raise AssertionError("LongBench method set drifted")
+    per_task = payload.get("per_task")
+    if not isinstance(per_task, dict) or len(per_task) != 16:
+        raise AssertionError("LongBench per-task table is incomplete")
+    if sum(int(row.get("samples", 0)) for row in per_task.values()) != 3750:
+        raise AssertionError("LongBench per-task sample counts do not sum to 3,750")
+    bootstrap = payload.get("bootstrap", {})
+    if not all(
+        field in bootstrap
+        for field in ("macro_score_delta_95ci", "quality_retention_95ci")
+    ):
+        raise AssertionError("LongBench bootstrap intervals are missing")
+    return {
+        "methods": methods,
+        "per_task": per_task,
+        "bootstrap": bootstrap,
+    }
+
+
 def validate_ruler(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("schema") != "qksieve_robust_ruler_summary_v1":
         raise AssertionError("RULER summary schema mismatch")
@@ -188,6 +228,7 @@ def verify(
     project_root: Path,
     *,
     persistent: dict[str, Any] | None = None,
+    longbench: dict[str, Any] | None = None,
     ruler: dict[str, Any] | None = None,
     multimodel: dict[str, Any] | None = None,
     h100: dict[str, Any] | None = None,
@@ -198,6 +239,7 @@ def verify(
     }
     validators = {
         "persistent": (persistent, validate_persistent),
+        "longbench": (longbench, validate_longbench),
         "ruler": (ruler, validate_ruler),
         "multimodel": (multimodel, validate_multimodel),
         "h100": (h100, validate_h100),
@@ -217,6 +259,7 @@ def main() -> None:
     args = parse_args()
     optional_paths = {
         "persistent": args.persistent_summary,
+        "longbench": args.longbench_summary,
         "ruler": args.ruler_summary,
         "multimodel": args.multimodel_summary,
         "h100": args.h100_summary,

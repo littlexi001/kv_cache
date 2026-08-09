@@ -47,6 +47,14 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
     system_rows = [
         {"history_tokens": length} for length in (65536, 131072)
     ]
+    longbench_per_task = {
+        f"task{i}": {
+            "samples": 235 if i < 6 else 234,
+            "full_kv": {"score": 1.0},
+            contract.METHOD: {"score": 1.0},
+        }
+        for i in range(16)
+    }
 
     report = verify(
         PROJECT_ROOT,
@@ -54,6 +62,26 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "schema": "qksieve_persistent_kv_summary_v2",
             "all_correct": True,
             "rows": persistent_rows,
+        },
+        longbench={
+            "schema": "qksieve_robust_longbench_summary_v1",
+            "frozen_contract": contract.contract_payload(),
+            "strict_pairs": 3750,
+            "tasks": 16,
+            "full_fallback_count": 0,
+            "value_sketch_tail_alpha": contract.VALUE_SKETCH_TAIL_ALPHA,
+            "methods": {
+                "full_kv": {"macro_score": 1.0},
+                contract.METHOD: {
+                    "macro_score": 1.0,
+                    "quality_retention": 1.0,
+                },
+            },
+            "per_task": longbench_per_task,
+            "bootstrap": {
+                "macro_score_delta_95ci": [-0.01, 0.01],
+                "quality_retention_95ci": [0.99, 1.01],
+            },
         },
         ruler={
             "schema": "qksieve_robust_ruler_summary_v1",
@@ -94,6 +122,7 @@ def test_audit_reports_missing_sections() -> None:
     assert not report["complete"]
     assert set(report["missing"]) == {
         "persistent",
+        "longbench",
         "ruler",
         "multimodel",
         "h100",
