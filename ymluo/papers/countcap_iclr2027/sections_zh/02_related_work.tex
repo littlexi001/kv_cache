@@ -1,87 +1,40 @@
 \section{相关工作}
 \label{sec:related}
 
-\paragraph{KV 淘汰与压缩。}
-Heavy-hitter 与 observation-window 方法保留一个有界的历史 KV 子集
-\citep{zhang2023h2o,li2024snapkv}。PyramidKV 和 Ada-KV 在层或 head 之间
-分配淘汰预算 \citep{cai2024pyramidkv,feng2024adakv}，KIVI 则量化保留下来的
-KV \citep{liu2024kivi}。这些方法降低物理 KV 存储。\method 与之不同：它
-保留每一个精确 KV pair，只增加选择索引，因此主要收益是降低 decode-time
-attention，而不是减少 cache 容量。
+\paragraph{KV 缩减。}
+H$_2$O、SnapKV、PyramidKV 与 Ada-KV 通过驱逐 token 或在层/head 间分配保留
+预算来降低物理 cache 大小
+\citep{zhang2023h2o,li2024snapkv,cai2024pyramidkv,feng2024adakv}；KIVI
+量化保留的 KV \citep{liu2024kivi}。\method 保留全部精确 KV 并增加检索索引，
+目标是减少 decode attention，而不是缩小精确 cache。
 
-\paragraph{Query-aware 稀疏注意力。}
-Quest 使用 page 统计剪枝 KV page \citep{tang2024quest}；SparQ 利用 Query
-中的显著维度进行检索 \citep{ribar2023sparq}；Double Sparsity 同时使用通道
-与 token 稀疏性 \citep{yang2024doublesparsity}。SparCas 也先用仅依赖 Query
-的维度筛选，再做 token 选择
-\citep{sun2026sparcas}。它是任何“分阶段读取 band”扩展最接近的先例；本文主方法
-仍扫描完整 mixed-bit index，而 query-adaptive band cascade 在完成融合路径直接测速
-前只报告为机制前沿。RetrievalAttention 将卸载的 KV cache 视为向量数据库，把
-近似检索与 CPU--GPU 执行结合
-\citep{liu2024retrievalattention}。RetroInfer 通过 wave index 和 wave buffer
-继续发展这一异构向量存储路线 \citep{chen2025retroinfer}。ParisKV 使用与数据
-无关的球面中心做碰撞粗筛，再用 4-bit 内积估计重排，并可通过 UVA 读取卸载的
-精确 KV \citep{qi2026pariskv}。它是重要的同期 coarse-to-fine 对照：ParisKV
-保留独立重排阶段并面向超长上下文 KV 卸载，而 \method 面向 GPU-resident 精确
-KV 的单次混合位宽扫描。SparDA 训练轻量 Forecast 投影，把下一层选择移出当前
-attention 的关键路径 \citep{fu2026sparda}；EvoSparse 则跨 decode step 累积
-重要性并在层间传播 \citep{han2026evosparse}。两者依赖学习或时间预测，
-\method 每步只根据当前 Query 做无需训练的数值检索。Loki、ShadowKV、
-LRQK、SALS、RocketKV 和 Thin Keys 利用低维 Key 或 QK 结构
+\paragraph{Query-aware 稀疏 attention。}
+Quest 用 Key 统计量剪枝 page \citep{tang2024quest}；SparQ 用显著 Query 维度
+检索，并以 mean Value 修正遗漏概率质量 \citep{ribar2023sparq}；Loki、
+ShadowKV、LRQK、SALS、RocketKV 与 Thin Keys 利用低维 Key/QK 结构
 \citep{singhania2024loki,sun2024shadowkv,li2025lrqk,mu2025sals,
-behnam2025rocketkv,yao2026thinkeys}。PQCache 将 product quantization 用于
-检索 \citep{zhang2024pqcache}。\method 的区别是：它联合构造 full-rank Query
-与 Key 坐标，并在固定 packed-index 预算下，为每一层和每个 KV head 分配
-非均匀 bit rate。
+behnam2025rocketkv,yao2026thinkeys}。RetrievalAttention 与 RetroInfer 将近似
+检索和 offloaded exact KV 结合
+\citep{liu2024retrievalattention,chen2025retroinfer}。这类异构系统面向不同的
+KV 放置场景；本文主协议保持 exact KV 常驻，并测量 selector 加精确稀疏
+attention 的完整路径。
 
-\paragraph{细粒度低比特检索。}
-FIER 是最接近的系统：它扫描 token 级 1-bit Key，执行 top-$k$，并在被选
-KV 上计算全精度注意力 \citep{wang2025fier}。RaBitQCache 用随机旋转和二值
-编码估计分数 \citep{li2026rabitqcache}；Self-Indexing KVCache 同时用 sign
-code 做检索和存储 \citep{yang2026selfindexing}；SVDq 在 SVD 空间中用混合
-精度完成 Key 重建 \citep{hong2025svdq}。Block-GTQ 根据 QK-energy rate
-模型，为压缩 K/V cache 中固定的二维 RoPE block 分配混合精度
-\citep{liang2026blockgtq}。
-DGAP 研究持久化低比特 K/V，并选择性修复 top-$k$ 邻域的分布漂移
-\citep{dzikanyanga2026dgap}。它修正的是量化 K/V；\method 的低比特表示只作为
-Key index，最终 attention 读取原始 K/V。
-BinaryPC 无需梯度训练地构造 data-dependent binary principal component，
-使用 64-bit Key hash、7-bit Query probe、GQA 组内共享候选，并补救高重建误差
-Key \citep{yu2026binarypc}。
+\paragraph{低位 selector。}
+FIER 扫描 1-bit token-level Key，再对选中 KV 执行精确 attention
+\citep{wang2025fier}。RaBitQCache 与 Self-Indexing KVCache 使用 binary code
+\citep{li2026rabitqcache,yang2026selfindexing}；SVDq 在 SVD 空间分配混合精度
+\citep{hong2025svdq}；BinaryPC 学习 binary principal component，并在 GQA
+组内共享候选 \citep{yu2026binarypc}。Block-GTQ 在压缩 K/V cache 的固定 RoPE
+block 上分配精度 \citep{liang2026blockgtq}。\method 的区别是三个耦合设计：
+Query/Key 全秩变换联合构造且精确双正交；bit 根据 Query-weighted logit
+distortion 按层/head 分配；低位表征只索引独立的精确 K/V。因此，等索引率和
+等 active-token 对照能够单独比较 selector，而不混入 KV 量化或放置差异。
 
-\method 延续 FIER 的直接 token-level 工作流，但把统一 Key-only 量化替换为
-request-local QK-balanced 变换和 Query 加权混合位宽分配。与 Block-GTQ
-及其他 compressed-KV 方法不同，它的 band 是学习出的 full-rank QK 坐标，
-不是固定 RoPE pair；它允许 0-bit band，而且低比特结构只索引另一份独立的
-精确 KV cache。因此，\method 的最终注意力读取未量化 K/V，其索引 footprint
-应与精确 KV 相加报告，而不是替代精确 KV。由此，和 FIER、RaBitQCache 与
-BinaryPC 与 ParisKV 的公平比较必须同时控制索引字节与 active token 数，并
-区分 GPU-resident 与 offloaded KV。BinaryPC 更窄的
-hash 与 GQA 共享候选牺牲部分表示能力来换取更廉价的 selector，因此本文直接
-测其官方 CUDA 路径，而不从索引大小推断速度。我们还为 Quest 和 SparQ 提供 matched-active
-token selector control。对 UNIQUE，我们实现其公开 page mean/std 公式并按
-整页 token 统计质量；对 Louver，完整路径测速包含阈值估计，不能把论文中排除
-threshold oracle 的时间当作可部署端到端时间。ParisKV 当前发布适配器面向
-Qwen-family，并依赖 FlashAttention、FlashInfer 与 Hadamard kernel；在其完整
-发布路径未于同模型同硬件无修改运行前，本文只引用论文结果，不伪造 RTX 3090
-横向值。当前可运行的 Microsoft 仓库实际实现 RetroInfer，
-而不是原始 RetrievalAttention artifact，因此本文原生复现 RetroInfer，
-RetrievalAttention 仅作为论文报告值。两者不同的 KV 放置方式使
-equal-index-byte 比较没有意义。
-
-\paragraph{残差补偿。}
-SparQ 已把未选概率质量分配给一个均值 Value \citep{ribar2023sparq}，因此本文
-只把纯均值尾部补偿作为消融，而不将其列为贡献。
-RESA 用 prefill 得到的低秩先验估计稀疏 selector 忽略的 KV 总贡献
-\citep{yang2026resa}，它解决的问题不同于 selector 本身。QKSieve-Robust 使用
-当前 Query 的 packed-index 分数同时估计遗漏 softmax 分区，以及
-request-local 低秩 Value 基中由当前 Query 条件化的系数，再以显式收缩参数和
-精确选中分子组合；它不需要训练先验或 Full 回退。由于该残差提高长上下文稳健性，
-但会增加扫描流量且不会改善 Key selector，本文分别报告 Fast 与 Robust 配置。
-
-\paragraph{评测。}
-LongBench 衡量异构长上下文生成能力 \citep{bai2024longbench}；RULER 在不断
-增长的长度上衡量受控检索与聚合 \citep{hsieh2024ruler}。本文分别报告下游
-任务分数、perplexity、候选召回与 attention mass、子系统延迟、整模型解码、
-请求级延迟和显存。来自不兼容 prompt、kernel 或硬件的数字不会被直接用于
-速度比较。
+\paragraph{残差近似与评测。}
+RESA 从 prefill-derived 低秩先验估计遗漏 attention \citep{yang2026resa}。
+QKSieve-Robust 则使用当前 Query 的 proxy 分数，同时估计遗漏 softmax
+partition 和 request-local Value basis 中的系数，不需要学习式先验。
+LongBench 测量异构长上下文生成，RULER 测量不同长度下的受控检索
+\citep{bai2024longbench,hsieh2024ruler}。本文将下游质量、索引字节、active KV、
+attention latency、整模型 decode，以及 cold/persistent request 成本分别报告；
+不同模型、kernel 或 KV 放置的数值不作为直接速度比较。
