@@ -36,7 +36,7 @@
 ```bash
 python src/verify_qksieve_robust_paper_evidence_20260810.py \
   --project_root . \
-  --persistent_summary RESULTS/persistent/summary.json \
+  --persistent_summary RESULTS/persistent/independent_summary.json \
   --longbench_summary RESULTS/longbench/paired_summary.json \
   --ruler_summary RESULTS/ruler/paired_summary.json \
   --multimodel_summary RESULTS/multimodel/multimodel_summary.json \
