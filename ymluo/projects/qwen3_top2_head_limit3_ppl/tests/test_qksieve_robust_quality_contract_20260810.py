@@ -189,12 +189,21 @@ def test_multimodel_summary_requires_identical_frozen_contract(
                     "bootstrap": {"quality_retention_95ci": [0.98, 1.02]},
                     "attention_fraction_mean": 0.06,
                     "effective_sample_count_mean": 512,
+                    "per_task": {
+                        "narrativeqa": {
+                            "samples": 1,
+                            "full_kv": {"score": 0.5},
+                            contract.METHOD: {"score": 0.5 * retention},
+                        }
+                    },
                 }
             ),
             encoding="utf-8",
         )
     payload = multi_summary.summarize(tmp_path, ("llama", "qwen"), 1, 1)
     assert payload["minimum_quality_retention"] == pytest.approx(0.99)
+    assert payload["models"]["llama"]["full_fallback_count"] == 0
+    assert len(payload["models"]["qwen"]["per_task"]) == 1
 
 
 def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:

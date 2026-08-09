@@ -35,14 +35,53 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         }
         for length in (32768, 65536)
     ]
+    ruler_length_samples = {
+        4096: 10,
+        8192: 10,
+        16384: 10,
+        32768: 10,
+        65536: 5,
+        131072: 5,
+    }
+    ruler_tasks = (
+        "niah_single_1",
+        "niah_single_2",
+        "niah_single_3",
+        "niah_multikey_1",
+        "niah_multikey_2",
+        "niah_multikey_3",
+        "niah_multivalue",
+        "niah_multiquery",
+        "vt",
+        "cwe",
+        "fwe",
+        "qa_squad",
+        "qa_hotpot",
+    )
     ruler_lengths = {
-        str(length): {"quality_retention": 1.0}
-        for length in (4096, 8192, 16384, 32768, 65536, 131072)
+        str(length): {"quality_retention": 1.0, "cells": 13}
+        for length in ruler_length_samples
+    }
+    ruler_cells = {
+        f"{task}@{length}": {
+            "task": task,
+            "length": length,
+            "samples": samples,
+        }
+        for task in ruler_tasks
+        for length, samples in ruler_length_samples.items()
+    }
+    model_per_task = {
+        f"task{i}": {"samples": 10} for i in range(16)
     }
     model_row = {
         "strict_pairs": 160,
         "tasks": 16,
+        "full_fallback_count": 0,
+        "quality_retention": 1.0,
         "quality_retention_95ci": [0.99, 1.01],
+        "mean_attention_fraction": 0.06,
+        "per_task": model_per_task,
     }
     attention_rows = [
         {
@@ -99,6 +138,7 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "schema": "qksieve_robust_longbench_summary_v1",
             "frozen_contract": contract.contract_payload(),
             "strict_pairs": 3750,
+            "rows": 7500,
             "tasks": 16,
             "full_fallback_count": 0,
             "value_sketch_tail_alpha": contract.VALUE_SKETCH_TAIL_ALPHA,
@@ -111,6 +151,7 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             },
             "per_task": longbench_per_task,
             "bootstrap": {
+                "resamples": 10000,
                 "macro_score_delta_95ci": [-0.01, 0.01],
                 "quality_retention_95ci": [0.99, 1.01],
             },
@@ -119,10 +160,14 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "schema": "qksieve_robust_ruler_summary_v1",
             "frozen_contract": contract.contract_payload(),
             "strict_pairs": 650,
-            "tasks": [f"task{i}" for i in range(13)],
+            "rows": 1300,
+            "tasks": list(ruler_tasks),
+            "length_samples": ruler_length_samples,
             "per_length": ruler_lengths,
-            "overall": {"quality_retention": 1.0},
+            "per_task_length": ruler_cells,
+            "overall": {"quality_retention": 1.0, "cells": 78},
             "bootstrap": {
+                "resamples": 10000,
                 "macro_score_delta_95ci": [-0.01, 0.01],
                 "quality_retention_95ci": [0.99, 1.01],
             },

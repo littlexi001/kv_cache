@@ -52,11 +52,17 @@ def summarize(
             raise AssertionError(f"{tag}: Full fallback was observed")
         if summary.get("frozen_contract") != contract.contract_payload():
             raise AssertionError(f"{tag}: frozen contract mismatch")
+        per_task = summary.get("per_task")
+        if not isinstance(per_task, dict) or len(per_task) != expected_tasks:
+            raise AssertionError(f"{tag}: per-task table is incomplete")
+        if sum(int(row.get("samples", 0)) for row in per_task.values()) != expected_pairs:
+            raise AssertionError(f"{tag}: per-task samples do not match pairs")
         full = summary["methods"]["full_kv"]
         ours = summary["methods"][contract.METHOD]
         results[tag] = {
             "strict_pairs": summary["strict_pairs"],
             "tasks": summary["tasks"],
+            "full_fallback_count": summary["full_fallback_count"],
             "full_macro": full["macro_score"],
             "qksieve_macro": ours["macro_score"],
             "quality_retention": ours["quality_retention"],
@@ -68,6 +74,8 @@ def summarize(
             "mean_effective_quantile_samples": summary[
                 "effective_sample_count_mean"
             ],
+            "per_task": per_task,
+            "bootstrap": summary["bootstrap"],
             "manifest_sha256": sha256(manifest_path),
         }
     return {

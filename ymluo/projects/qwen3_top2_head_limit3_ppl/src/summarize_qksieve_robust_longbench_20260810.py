@@ -85,6 +85,7 @@ def summarize(
     payload = base.summarize(rows, expected_pairs, expected_tasks)
     payload.update(
         schema="qksieve_robust_longbench_summary_v1",
+        rows=len(rows),
         frozen_contract=contract.contract_payload(),
         effective_sample_count_mean=base.mean(
             [float(row["packed_qmse_sample_count"]) for row in sparse_rows]

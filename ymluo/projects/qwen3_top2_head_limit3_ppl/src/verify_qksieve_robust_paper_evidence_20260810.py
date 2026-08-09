@@ -12,11 +12,51 @@ from typing import Any
 import qksieve_robust_contract_20260810 as contract
 
 
-RULER_LENGTHS = {"4096", "8192", "16384", "32768", "65536", "131072"}
+RULER_LENGTH_SAMPLES = {
+    "4096": 10,
+    "8192": 10,
+    "16384": 10,
+    "32768": 10,
+    "65536": 5,
+    "131072": 5,
+}
+RULER_LENGTHS = set(RULER_LENGTH_SAMPLES)
+RULER_TASKS = {
+    "niah_single_1",
+    "niah_single_2",
+    "niah_single_3",
+    "niah_multikey_1",
+    "niah_multikey_2",
+    "niah_multikey_3",
+    "niah_multivalue",
+    "niah_multiquery",
+    "vt",
+    "cwe",
+    "fwe",
+    "qa_squad",
+    "qa_hotpot",
+}
 SYSTEM_LENGTHS = {65536, 131072}
 MODELS = {"llama31_8b", "qwen3_4b", "mistral_7b"}
 NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
 AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
+
+
+def _finite_number(value: Any, label: str) -> float:
+    result = float(value)
+    if not math.isfinite(result):
+        raise AssertionError(f"{label} is not finite")
+    return result
+
+
+def _validate_interval(value: Any, label: str) -> list[float]:
+    if not isinstance(value, list) or len(value) != 2:
+        raise AssertionError(f"{label} is missing or malformed")
+    lower = _finite_number(value[0], label)
+    upper = _finite_number(value[1], label)
+    if lower > upper:
+        raise AssertionError(f"{label} has reversed bounds")
+    return [lower, upper]
 
 
 def parse_args() -> argparse.Namespace:
@@ -124,6 +164,8 @@ def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:
         raise AssertionError("LongBench frozen contract drifted")
     if int(payload.get("strict_pairs", -1)) != 3750:
         raise AssertionError("LongBench does not contain 3,750 strict pairs")
+    if int(payload.get("rows", -1)) != 7500:
+        raise AssertionError("LongBench does not contain 7,500 rows")
     if int(payload.get("tasks", -1)) != 16:
         raise AssertionError("LongBench does not contain 16 tasks")
     if int(payload.get("full_fallback_count", -1)) != 0:
@@ -144,11 +186,23 @@ def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:
     if sum(int(row.get("samples", 0)) for row in per_task.values()) != 3750:
         raise AssertionError("LongBench per-task sample counts do not sum to 3,750")
     bootstrap = payload.get("bootstrap", {})
-    if not all(
-        field in bootstrap
-        for field in ("macro_score_delta_95ci", "quality_retention_95ci")
-    ):
-        raise AssertionError("LongBench bootstrap intervals are missing")
+    if int(bootstrap.get("resamples", 0)) < 10000:
+        raise AssertionError("LongBench bootstrap has fewer than 10,000 resamples")
+    _validate_interval(
+        bootstrap.get("macro_score_delta_95ci"),
+        "LongBench macro-score interval",
+    )
+    _validate_interval(
+        bootstrap.get("quality_retention_95ci"),
+        "LongBench retention interval",
+    )
+    if _finite_number(methods["full_kv"].get("macro_score"), "Full macro") <= 0:
+        raise AssertionError("LongBench Full macro score is not positive")
+    if _finite_number(
+        methods[contract.METHOD].get("quality_retention"),
+        "LongBench retention",
+    ) <= 0:
+        raise AssertionError("LongBench quality retention is not positive")
     return {
         "methods": methods,
         "per_task": per_task,
@@ -163,16 +217,54 @@ def validate_ruler(payload: dict[str, Any]) -> dict[str, Any]:
         raise AssertionError("RULER frozen contract drifted")
     if int(payload.get("strict_pairs", -1)) != 650:
         raise AssertionError("RULER does not contain 650 strict pairs")
-    if len(payload.get("tasks", [])) != 13:
-        raise AssertionError("RULER does not contain 13 tasks")
+    if int(payload.get("rows", -1)) != 1300:
+        raise AssertionError("RULER does not contain 1,300 rows")
+    if set(payload.get("tasks", [])) != RULER_TASKS:
+        raise AssertionError("RULER task set differs from the formal 13 tasks")
+    length_samples = {
+        str(length): int(samples)
+        for length, samples in payload.get("length_samples", {}).items()
+    }
+    if length_samples != RULER_LENGTH_SAMPLES:
+        raise AssertionError("RULER per-length sample counts drifted")
     if set(payload.get("per_length", {})) != RULER_LENGTHS:
         raise AssertionError("RULER length grid is incomplete")
+    per_task_length = payload.get("per_task_length")
+    if not isinstance(per_task_length, dict) or len(per_task_length) != 78:
+        raise AssertionError("RULER task-length table is incomplete")
+    observed_cells: set[tuple[str, str]] = set()
+    observed_samples = 0
+    for row in per_task_length.values():
+        task = str(row.get("task"))
+        length = str(int(row.get("length", 0)))
+        if task not in RULER_TASKS or length not in RULER_LENGTH_SAMPLES:
+            raise AssertionError("RULER task-length cell is outside the protocol")
+        cell = (task, length)
+        if cell in observed_cells:
+            raise AssertionError("RULER task-length cell is duplicated")
+        observed_cells.add(cell)
+        samples = int(row.get("samples", -1))
+        if samples != RULER_LENGTH_SAMPLES[length]:
+            raise AssertionError("RULER task-length cell sample count drifted")
+        observed_samples += samples
+    if observed_samples != 650:
+        raise AssertionError("RULER task-length samples do not sum to 650")
+    for length, row in payload["per_length"].items():
+        if int(row.get("cells", -1)) != len(RULER_TASKS):
+            raise AssertionError(f"RULER {length} does not aggregate 13 tasks")
+    if int(payload.get("overall", {}).get("cells", -1)) != 78:
+        raise AssertionError("RULER overall aggregate does not contain 78 cells")
     bootstrap = payload.get("bootstrap", {})
-    if not all(
-        field in bootstrap
-        for field in ("macro_score_delta_95ci", "quality_retention_95ci")
-    ):
-        raise AssertionError("RULER bootstrap intervals are missing")
+    if int(bootstrap.get("resamples", 0)) < 10000:
+        raise AssertionError("RULER bootstrap has fewer than 10,000 resamples")
+    _validate_interval(
+        bootstrap.get("macro_score_delta_95ci"),
+        "RULER macro-score interval",
+    )
+    _validate_interval(
+        bootstrap.get("quality_retention_95ci"),
+        "RULER retention interval",
+    )
     if int(payload.get("fallback_count", -1)) != 0:
         raise AssertionError("RULER observed a Full fallback")
     return {
@@ -195,8 +287,25 @@ def validate_multimodel(payload: dict[str, Any]) -> dict[str, Any]:
             raise AssertionError(f"{tag} does not contain 160 strict pairs")
         if int(row.get("tasks", -1)) != 16:
             raise AssertionError(f"{tag} does not contain 16 tasks")
-        if row.get("quality_retention_95ci") is None:
-            raise AssertionError(f"{tag} confidence interval is missing")
+        if int(row.get("full_fallback_count", -1)) != 0:
+            raise AssertionError(f"{tag} observed a Full fallback")
+        _validate_interval(
+            row.get("quality_retention_95ci"),
+            f"{tag} retention interval",
+        )
+        if _finite_number(row.get("quality_retention"), f"{tag} retention") <= 0:
+            raise AssertionError(f"{tag} quality retention is not positive")
+        fraction = _finite_number(
+            row.get("mean_attention_fraction"),
+            f"{tag} attention fraction",
+        )
+        if not 0.0 < fraction <= 1.0:
+            raise AssertionError(f"{tag} attention fraction is invalid")
+        per_task = row.get("per_task")
+        if not isinstance(per_task, dict) or len(per_task) != 16:
+            raise AssertionError(f"{tag} per-task table is incomplete")
+        if sum(int(item.get("samples", 0)) for item in per_task.values()) != 160:
+            raise AssertionError(f"{tag} per-task samples do not sum to 160")
     return models
 
 
