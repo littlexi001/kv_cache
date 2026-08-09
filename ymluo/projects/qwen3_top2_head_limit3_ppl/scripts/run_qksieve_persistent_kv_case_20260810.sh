@@ -14,13 +14,14 @@ BRANCH_STEPS="${BRANCH_STEPS:-32}"
 APPEND_STEPS="${APPEND_STEPS:-128}"
 SEED="${SEED:-20260810}"
 GPU_TAG="${GPU_TAG:-${CUDA_VISIBLE_DEVICES:-0}}"
+MAX_MEMORY_PER_GPU_GIB="${MAX_MEMORY_PER_GPU_GIB:-22}"
 
 export PATH="$(dirname "${PYTHON}"):/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
 export PYTHONPATH="${SRC_ROOT}:${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export PYTHONUNBUFFERED=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export TOKENIZERS_PARALLELISM=false
-export TORCH_CUDA_ARCH_LIST=8.6
+export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.6}"
 export OMP_NUM_THREADS=2
 export MKL_NUM_THREADS=2
 export OPENBLAS_NUM_THREADS=2
@@ -59,7 +60,7 @@ fi
   --dtype float16 \
   --device cuda \
   --device_map auto \
-  --max_memory_per_gpu_gib 22 \
+  --max_memory_per_gpu_gib "${MAX_MEMORY_PER_GPU_GIB}" \
   --original_max_position_embeddings 4096 \
   --global_max_position 131072 \
   --seed "${SEED}" \
