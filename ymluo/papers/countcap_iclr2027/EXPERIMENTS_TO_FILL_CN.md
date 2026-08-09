@@ -167,6 +167,23 @@ bash scripts/launch_qksieve_robust_ruler_20260810.sh
 RTX 3090 原生 MHA 的 attention、真实模型 decode 和 persistent-cache 结果已经
 完成。投稿硬件复测入口为：
 
+RTX 3090 表不再手工维护。`scripts/make_qksieve_rtx3090_system_rows.py` 会读取
+三 seed Attention、匹配 FIER、真实 MHA Decode 和独立 persistent 生命周期
+artifact，逐项检查候选一致性、MHA 形状、GPU、warmup/iteration、ValueSketch
+开关和复用合同，然后生成
+`data/generated/qksieve_rtx3090_system_rows.tex`。输入文件 SHA、聚合 SHA、所选
+无干扰 Decode artifact 和未舍入数值记录在
+`data/generated/qksieve_rtx3090_system_manifest.json`；当前聚合 SHA 为
+`e30a75542a7f25f48d3218c8519fab993903d4f11d102973146a4fa41e8e9274`。
+英文与中文构建脚本都会先重新生成该文件，论文表格不再复制数字。
+
+需要区分两种构建口径：独立 Decode harness 的 Fast/Robust 构建为
+`.768/1.375`、`.774/1.488`、`.743/1.839` 秒，对应 32/64/128K break-even
+`24/69`、`9/19`、`4/10` token；完整 persistent 生命周期还安装并审计可复用
+状态，因此 32/64K Robust 构建为 `1.759/1.998` 秒，break-even 为 `87/26`
+token。两者不能混写。完整表放在系统附录，正文保留关键数值；匿名稿结论完整
+结束在第 9 页，AI 声明与参考文献从第 10 页开始。
+
 ```bash
 bash scripts/launch_qksieve_h100_matched_20260810.sh
 ```
