@@ -1,0 +1,58 @@
+# Persistent-KV 实验设计
+
+## 研究问题
+
+冻结版 QKSieve-Robust 能否在多轮问答与共享前缀分支中真正复用一次构建的辅助索引，并把索引成本均摊，而不是在每个分支中隐式重建？
+
+## 实验对象
+
+- 模型：`NousResearch/Yarn-Llama-2-7b-128k`，32 Query heads、32 KV heads、head dimension 128，即原生 MHA。
+- 硬件：RTX 3090；后续 H100 使用同一脚本复测。
+- 上下文：由固定文本重复编码得到 32K 与 64K 前缀。
+- 方法：原生 Full FP16 SDPA；冻结 `QKSieve-Robust`，240-bit Key index、rank-16 block-256 INT4 ValueSketch、`alpha=0.5`、最多每 head 1,280 个精确 token。
+- 分支：从同一前缀 logits 的前四个 token 分别开始，每个分支生成 32 token；最后重复第一个分支。
+- 连续追加：回退到前缀后连续生成 128 token。
+- 随机种子：`20260810`；所有方法共享模型、前缀、分支种子与生成长度。
+
+## 指标
+
+1. `cold_persistent_request_ms_per_token`：一次建索引加第一次分支生成的总时间除以生成 token 数，不含 prefill。
+2. `shared_prefix_warm_mean_ms_per_token`：索引已存在时，各热分支的平均整模型延迟。
+3. `shared_prefix_amortized_ms_per_token`：一次建索引与四个分支总生成时间之和，除以四个分支的总 token 数。
+4. `append_only_ms_per_token`：不回退、连续追加 128 token 的平均整模型延迟。
+5. `reuse_tokens_equal`：第一次与最后一次相同种子分支的 token 序列是否逐项相等。
+6. `index_buffers_reused_without_rebuild`：所有层的 Key/Value 索引地址及 Key 重建计数是否在分支间保持不变。
+
+## 通过、失败与证据不足
+
+通过：
+
+- 两项正确性检查都为 `true`；
+- 32K/64K 热分支不包含建索引成本；
+- 64K 热分支相对 Full 有明确加速；
+- 原始 JSON、日志和硬件信息完整保存。
+
+失败：
+
+- 相同分支 token/hash 不一致；
+- 任何索引指针或重建计数变化；
+- kernel 读取旧分支后缀，表现为输出不一致或越界；
+- 热分支仍重新运行 QK factor、Key 编码或 ValueSketch 构建。
+
+证据不足：
+
+- 只有微基准而没有真实模型；
+- Full 与 QKSieve 使用不同模型布局或不同 GPU 数；
+- 并发任务污染延迟；
+- 只报告稳态速度，不报告首次建索引和均摊结果。
+
+## 路径
+
+- 核心接口：`src/run_head_top2_targeted_ppl_20260714.py`
+- 基准：`src/benchmark_qksieve_persistent_kv_20260810.py`
+- 启动：`scripts/run_qksieve_persistent_kv_case_20260810.sh`
+- 输出：`results/20260810_qksieve_persistent_kv_v1/`
+
+## 已知限制
+
+当前分支差异由首 token 构造，主要验证缓存生命周期；它不等价于完整多轮对话质量测试。质量结论仍由独立 LongBench、RULER 与 PPL 实验给出。

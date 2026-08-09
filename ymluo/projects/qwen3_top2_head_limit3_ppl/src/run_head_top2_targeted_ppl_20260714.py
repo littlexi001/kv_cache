@@ -25644,6 +25644,124 @@ def install_resident_value_sketch_cache(
 
 
 @torch.inference_mode()
+def rewind_active_qksieve_cache(
+    cache: Any,
+    active_length: int,
+) -> dict[str, int]:
+    """Rewind a persistent KV cache and its in-place QKSieve indexes.
+
+    The packed buffers are retained.  Subsequent decode steps overwrite the
+    abandoned suffix, which makes shared-prefix branching an O(1) metadata
+    operation instead of an index rebuild.
+    """
+    if _ACTIVE_QABS_PCA_STATES is None:
+        raise RuntimeError("packed qMSE mode must be active before rewinding")
+    active_length = int(active_length)
+    if active_length <= 0:
+        raise ValueError("active_length must be positive")
+    get_seq_length = getattr(cache, "get_seq_length", None)
+    crop = getattr(cache, "crop", None)
+    if not callable(get_seq_length) or not callable(crop):
+        raise TypeError("persistent QKSieve requires a crop-capable cache")
+    cache_length = int(get_seq_length())
+    if active_length > cache_length:
+        raise ValueError(
+            f"cannot rewind cache from {cache_length} to {active_length}"
+        )
+
+    rewinds: list[tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any] | None]] = []
+    for layer_index, state in _ACTIVE_QABS_PCA_STATES.items():
+        indexed_count = state.get("packed_qmse_indexed_count")
+        if indexed_count is None:
+            continue
+        indexed_count = int(indexed_count)
+        if indexed_count < active_length:
+            raise RuntimeError(
+                f"layer {layer_index} Key index has only {indexed_count} tokens"
+            )
+        packed_index = state.get("packed_qmse_index")
+        if not isinstance(packed_index, dict):
+            raise RuntimeError(f"layer {layer_index} lacks a packed Key index")
+        value_runtime = state.get("qksieve_frozen_value_sketch_runtime")
+        if isinstance(value_runtime, dict):
+            value_indexed_count = int(value_runtime.get("indexed_count", 0))
+            if value_indexed_count < active_length:
+                raise RuntimeError(
+                    f"layer {layer_index} Value index has only "
+                    f"{value_indexed_count} tokens"
+                )
+        else:
+            value_runtime = None
+        rewinds.append((state, packed_index, value_runtime))
+    if not rewinds:
+        raise RuntimeError("no initialized QKSieve indexes are active")
+
+    crop(active_length)
+    value_layers = 0
+    for state, packed_index, value_runtime in rewinds:
+        state["packed_qmse_indexed_count"] = active_length
+        if "indexed_count" in packed_index:
+            packed_index["indexed_count"] = active_length
+        if value_runtime is not None:
+            value_runtime["indexed_count"] = active_length
+            prefix = value_runtime.get("prefix")
+            if isinstance(prefix, str) and prefix:
+                state[f"{prefix}_indexed_count"] = active_length
+            value_layers += 1
+        for name in tuple(state):
+            if (
+                name.startswith("qksieve_value_sketch_")
+                and name.endswith("_indexed_count")
+            ):
+                state[name] = active_length
+    return {
+        "active_length": active_length,
+        "key_layers": len(rewinds),
+        "value_layers": value_layers,
+    }
+
+
+def active_qksieve_persistent_state_signature() -> dict[str, Any]:
+    """Return JSON-safe identities and counters for persistent-cache audits."""
+    if _ACTIVE_QABS_PCA_STATES is None:
+        raise RuntimeError("packed qMSE mode must be active")
+
+    def pointer(value: Any) -> int | None:
+        return int(value.data_ptr()) if isinstance(value, torch.Tensor) else None
+
+    layers: list[dict[str, int | None]] = []
+    for layer_index, state in sorted(_ACTIVE_QABS_PCA_STATES.items()):
+        packed_index = state.get("packed_qmse_index")
+        if not isinstance(packed_index, dict):
+            continue
+        value_runtime = state.get("qksieve_frozen_value_sketch_runtime")
+        if not isinstance(value_runtime, dict):
+            value_runtime = {}
+        layers.append(
+            {
+                "layer": int(layer_index),
+                "key_indexed_count": int(
+                    state.get("packed_qmse_indexed_count", 0)
+                ),
+                "value_indexed_count": int(
+                    value_runtime.get("indexed_count", 0)
+                ),
+                "key_rebuild_count": int(
+                    state.get("packed_qmse_rebuild_count", 0)
+                ),
+                "key_code_ptr": pointer(packed_index.get("packed_codes")),
+                "key_scale_ptr": pointer(packed_index.get("key_scales")),
+                "value_code_ptr": pointer(value_runtime.get("packed_codes")),
+                "value_minimum_ptr": pointer(value_runtime.get("minimum")),
+                "value_scale_ptr": pointer(value_runtime.get("scale")),
+            }
+        )
+    if not layers:
+        raise RuntimeError("no initialized QKSieve indexes are active")
+    return {"layer_count": len(layers), "layers": layers}
+
+
+@torch.inference_mode()
 def prebuild_active_packed_qmse_indices(
     cache: Any,
     max_workers: int = 12,
