@@ -202,6 +202,7 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
     for name in (
         "launch_qksieve_robust_ruler_20260810.sh",
         "launch_qksieve_robust_multimodel_longbench_20260810.sh",
+        "launch_qksieve_robust_llama_full_longbench_20260810.sh",
     ):
         text = (scripts / name).read_text(encoding="utf-8")
         assert "QKSIEVE_MAX_QUANTILE_SAMPLE_COUNT=512" in text
