@@ -1064,7 +1064,7 @@ Multi-turn & 3 & Turn-wise Query drift & Stable retention \\
 }
 \end{table}
 
-\subsection{Persistent-KV workload contract (to be completed)}
+\subsection{Persistent-KV workload contract and measured audit}
 \label{app:persistent-kv-todo}
 
 The intended deployment is repeated decoding over a materialized long-context
@@ -1075,9 +1075,9 @@ final submission must populate the following timing contracts independently;
 numbers from one row cannot be used to fill another.
 
 \begin{table}[h]
-\caption{Pre-registered persistent-KV systems evaluation.  All entries are
-currently TODO; each row uses the same quality-checked method and matched dense
-baseline.}
+\caption{Persistent-KV timing contracts.  The current 32/64K audit instantiates
+all rows within one request-local QK basis; H100, 128K, and cross-prompt Query
+drift remain preregistered.}
 \label{tab:persistent-kv-todo}
 \centering
 \resizebox{\linewidth}{!}{
@@ -1092,6 +1092,22 @@ Append-only turn & Delta prefill + delta index append + decode & Multi-turn agen
 \bottomrule
 \end{tabular}}
 \end{table}
+
+The current directly timed results are in \cref{tab:persistent-kv-main}.  For
+32/64K, the matched Full/QKSieve cold latencies are
+83.926/119.551 and 145.195/129.108 ms/token; warm latencies are
+83.714/63.347 and 144.910/65.256 ms/token; four-branch amortized latencies are
+83.762/77.399 and 144.971/81.204 ms/token; append-only latencies are
+83.874/63.611 and 145.012/65.597 ms/token.  These are one-seed RTX~3090
+measurements and exclude the dense prefill shared by both methods.
+
+The audit independently reparses every layer rather than trusting a benchmark
+success flag.  It verifies 32 populated Key and Value indices, six snapshots,
+five rewinds, stable storage pointers and rebuild counters, deterministic
+branch replay, and exactly one token of deferred index append after decode.
+The branch test keeps the request-local QK basis fixed.  A semantically new
+prompt that changes Query statistics is outside this reuse claim and must pay
+for a new request-local transform and index.
 
 Let $P$ be the shared dense-prefill cost, $I$ the one-time persistent-index
 construction cost, $H_f$ and $H_s$ the per-request dense and sparse setup

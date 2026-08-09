@@ -30,6 +30,72 @@ def write_result(root: Path, method: str, warm: float, cold: float) -> None:
         "persistent_contract_passed": True,
         "branches": [{"first_step_ms": warm}],
     }
+    if method == "qksieve_robust":
+        history = 32768
+        branch_steps = 32
+        append_steps = 128
+
+        def snapshot(indexed_count: int) -> dict:
+            return {
+                "layer_count": 1,
+                "layers": [
+                    {
+                        "layer": 0,
+                        "key_indexed_count": indexed_count,
+                        "value_indexed_count": indexed_count,
+                        "key_rebuild_count": 1,
+                        "value_rebuild_count": 1,
+                        "key_code_ptr": 11,
+                        "key_scale_ptr": 12,
+                        "value_code_ptr": 13,
+                        "value_minimum_ptr": 14,
+                        "value_scale_ptr": 15,
+                    }
+                ],
+            }
+
+        replay = [1, 2, 3]
+        payload.update(
+            branch_count=4,
+            branch_steps=branch_steps,
+            append_steps=append_steps,
+            post_decode_index_lag_tokens=1,
+            qk_prebuild={"layers": 1},
+            key_index_prebuild={"layers": 1, "existing_layers": 0},
+            value_prebuild={"layers": 1},
+            value_install={"layers": 1},
+            runtime_extension_preload={
+                "variablebit": 0.1,
+                "query": 0.1,
+                "mixedblock": 0.1,
+                "value_attention": 0.1,
+            },
+            initial_persistent_state_snapshot=snapshot(history),
+            persistent_state_snapshots=[
+                *[
+                    snapshot(history + branch_steps - 1)
+                    for _ in range(5)
+                ],
+                snapshot(history + append_steps - 1),
+            ],
+            rewinds=[
+                {
+                    "active_length": history,
+                    "key_layers": 1,
+                    "value_layers": 1,
+                }
+                for _ in range(5)
+            ],
+            branches=[
+                {
+                    "first_step_ms": warm,
+                    "generated_token_ids": replay,
+                    "generated_token_sha256": "same",
+                }
+                for _ in range(5)
+            ],
+            reuse_hash_equal=True,
+        )
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 

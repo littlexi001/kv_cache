@@ -416,7 +416,7 @@ PPL 16K--128K & 3 个 & 分窗口、aggregate CI & 128K $\ge99\%$ \\
 \end{tabular}}
 \end{table}
 
-\subsection{持久化 KV 使用场景协议（待完成）}
+\subsection{持久化 KV 使用场景协议与实测审计}
 \label{app:persistent-kv-todo}
 
 本文面向已经构建好的长上下文 KV cache 被反复用于 decode 的场景，包括多轮
@@ -426,8 +426,8 @@ decode 都重复支付。正式投稿必须分别填写以下四种计时协议�
 数字替代另一行。
 
 \begin{table}[h]
-\caption{预注册的 persistent-KV 系统实验。当前所有结果均为 TODO；每一行必须
-使用同一个通过质量检查的方法和匹配的 dense baseline。}
+\caption{Persistent-KV 计时协议。当前 32/64K 审计在同一 request-local QK
+坐标内实例化全部行；H100、128K 和跨 prompt Query drift 仍为预注册待测项。}
 \label{tab:persistent-kv-todo}
 \centering
 \resizebox{\linewidth}{!}{
@@ -442,6 +442,19 @@ Append-only turn & 增量 prefill + 增量索引追加 + decode & 多轮 Agent &
 \bottomrule
 \end{tabular}}
 \end{table}
+
+当前直接计时结果见\cref{tab:persistent-kv-main}。32/64K 的匹配
+Full/QKSieve cold 延迟分别为 83.926/119.551 和 145.195/129.108 ms/token；
+warm 为 83.714/63.347 和 144.910/65.256 ms/token；四分支均摊为
+83.762/77.399 和 144.971/81.204 ms/token；append-only 为
+83.874/63.611 和 145.012/65.597 ms/token。这些是单 seed RTX 3090 测量，
+不含两种方法共享的 dense prefill。
+
+审计会独立重新解析每一层，而不是信任 benchmark 写出的成功标志。它验证了
+32 层完整 Key/Value 索引、6 个快照、5 次 rewind、稳定的存储指针和重建计数、
+确定性分支重放，以及 decode 后严格一 token 的延迟索引追加。分支实验固定
+request-local QK basis；若新 prompt 改变 Query 统计，则不属于该复用主张，
+必须重新计算 transform 和索引。
 
 令 $P$ 为共享 dense-prefill 成本，$I$ 为一次性的持久索引构建成本，$H_f$ 和
 $H_s$ 分别为 dense 与 sparse 的逐请求 setup，$D_f$ 和 $D_s$ 为直接测得的

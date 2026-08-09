@@ -116,8 +116,10 @@ complete attention calls reach 1.27--6.37$\times$ for Fast and
 include Query preparation, low-bit scanning, candidate compaction, exact
 sparse attention, and, for Robust, the Value-tail scan and consumer.  In a
 real MHA 7B model, steady whole-model decode reaches 1.32/2.22/3.98$\times$
-for Robust at 32/64/128K; including one-time construction in a 64-token cold
-request gives .81/1.31/2.15$\times$.  We report cold, steady, and persistent
+for Robust at 32/64/128K.  A strict persistent-cache lifecycle run gives
+.70/1.12$\times$ for one 32-token cold branch at 32/64K,
+1.32/2.22$\times$ after index construction, and 1.08/1.79$\times$ when one
+build is amortized over four branches.  We report cold, steady, and persistent
 reuse regimes separately.
 The same-path screen closes the execution-path mismatch at screening scale,
 but its uncertainty does not replace a full deployment-profile evaluation;

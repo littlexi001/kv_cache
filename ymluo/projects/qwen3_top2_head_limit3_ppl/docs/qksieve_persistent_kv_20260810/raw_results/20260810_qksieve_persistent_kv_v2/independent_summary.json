@@ -1,0 +1,57 @@
+{
+  "schema": "qksieve_persistent_kv_summary_v2",
+  "run_root": "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_persistent_kv_20260810\\raw_results\\20260810_qksieve_persistent_kv_v2",
+  "rows": [
+    {
+      "history_tokens": 32768,
+      "seed": 20260810,
+      "full_warm_ms_per_token": 83.71359432203462,
+      "qksieve_warm_ms_per_token": 63.347214098030236,
+      "warm_speedup": 1.3215039605765027,
+      "cold_speedup": 0.7020118694308648,
+      "amortized_speedup": 1.0822200067386585,
+      "append_only_speedup": 1.3185374593401125,
+      "qksieve_prebuild_seconds": 1.7593719772994518,
+      "qksieve_first_step_ms": 80.03306854516268,
+      "reuse_tokens_equal": true,
+      "index_buffers_reused_without_rebuild": true,
+      "rewind_value_layers_correct": true,
+      "persistent_contract_passed": true,
+      "independent_lifecycle_audit": {
+        "layers": 32,
+        "snapshots": 6,
+        "rewinds": 5,
+        "post_decode_index_lag_tokens": 1,
+        "all_index_buffers_stable": true,
+        "deterministic_replay": true
+      }
+    },
+    {
+      "history_tokens": 65536,
+      "seed": 20260810,
+      "full_warm_ms_per_token": 144.90952790220035,
+      "qksieve_warm_ms_per_token": 65.25558467546944,
+      "warm_speedup": 2.220645614055375,
+      "cold_speedup": 1.1246076213964766,
+      "amortized_speedup": 1.7852720020342165,
+      "append_only_speedup": 2.210654822383712,
+      "qksieve_prebuild_seconds": 1.998489137738943,
+      "qksieve_first_step_ms": 81.77655190229416,
+      "reuse_tokens_equal": true,
+      "index_buffers_reused_without_rebuild": true,
+      "rewind_value_layers_correct": true,
+      "persistent_contract_passed": true,
+      "independent_lifecycle_audit": {
+        "layers": 32,
+        "snapshots": 6,
+        "rewinds": 5,
+        "post_decode_index_lag_tokens": 1,
+        "all_index_buffers_stable": true,
+        "deterministic_replay": true
+      }
+    }
+  ],
+  "missing_pairs": [],
+  "all_correct": true,
+  "claim_boundary": "Token equality checks deterministic rewind/replay within each method. Quality relative to Full is measured by the separate LongBench and RULER suites."
+}

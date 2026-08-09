@@ -18,9 +18,9 @@ decode 区间，以及包含 prefill 与初始化的直接请求时间。每个�
 RTX 3090 数字是已审计诊断；仍需补充 matched H100/A100 测量。
 
 本文主张的范围是：对已经构建且可以复用的 KV cache 加速 decode-time
-attention，而不是 sparse prefill。最终系统实验将 cold single-use、warm
-persistent-cache、shared-prefix branching 和 append-only multi-turn 作为四种
-互不混写的计时协议。尚待填写的 workload 网格和 cache 生命周期检查预注册在
+attention，而不是 sparse prefill。我们将 cold single-use、同一 QK 坐标下的
+shared-prefix branching 和 append-only 作为互不混写的计时协议。下文给出已经
+审计的 32/64K 切片，其余 H100/128K 网格预注册在
 \cref{app:persistent-kv-todo}；cold request latency 仍需如实报告为局限，不能与
 warm-path 加速混成同一结论。
 
@@ -159,12 +159,36 @@ Robust 路径。
 \end{tabular}
 \end{table}
 
-Robust 在 32/64/128K 的索引构建时间为 1.375/1.488/1.839 秒，Fast 为
-.768/.774/.743 秒。相对 Full，Robust 的实测 break-even 生成长度为
-69/19/10 token，Fast 为 24/9/4 token。若冷请求只生成 64 token并计入构建，
-Robust 加速为 .81/1.31/2.15$\times$，Fast 为 1.01/1.64/2.75$\times$。
-多轮问答或共享前缀复用只支付一次构建成本，之后得到\cref{tab:mha-decode}的
-稳态加速；本文不混合冷请求和 warm reuse 两种口径。
+\begin{table}[t]
+\caption{同一 MHA 模型和 RTX 3090 上直接计时的 persistent-cache 生命周期。
+Cold 包含完整 Robust 索引构建和一个 32-token 分支；warm 复用索引；四分支
+均摊把一次构建分给 128 个生成 token。比值均为匹配的 Full/QKSieve 墙钟时间。}
+\label{tab:persistent-kv-main}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{rrrrrr}
+\toprule
+历史长度 & Cold & Warm & 四分支均摊 & Append-only & 构建 (s) \\
+\midrule
+32K & .702$\times$ & 1.322$\times$ & 1.082$\times$ & 1.319$\times$ & 1.759 \\
+64K & 1.125$\times$ & 2.221$\times$ & 1.785$\times$ & 2.211$\times$ & 1.998 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+32K 的 Full/QKSieve warm decode 为 83.714/63.347 ms/token，64K 为
+144.910/65.256 ms/token。32/64K 的一次构建分别由 .724/.735 秒 QK factor、
+.518/.603 秒 Key 编码和 .517/.658 秒 ValueSketch 组成。
+
+用实测值计算
+$I/(D_f-D_s)$，break-even 约为 87/26 个生成 token，与
+\cref{tab:persistent-kv-main}直接测得的 32-token cold 结果一致。
+
+生命周期审计在每个长度覆盖全部 32 层、6 个状态快照和 5 次 rewind。
+Key/Value 索引指针与重建计数始终不变；重放 token 和 hash 完全一致；decode 后
+两类索引都严格落后精确 cache 一个注册 token。该实验只在分支与连续生成之间
+复用同一个 request-local QK transform。它没有证明新 prompt 改变 Query 统计后
+仍能复用旧索引；这种情况必须重新构建 request-local 索引。
 
 原生 128K 的修正同 seed 六主题审计推翻了早期结论。QKSieve-Fast 的 pooled
 PPL 保持率仅为 96.319\%（case macro 96.373\%），政治主题最差为 91.100\%。

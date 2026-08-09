@@ -26,12 +26,11 @@ constructed by summing those measurements.  RTX~3090 numbers are audited
 diagnostics; matched H100/A100 measurements remain required.
 
 Our claimed scope is decode-time attention over an already materialized,
-reusable KV cache, rather than sparse prefill.  The final systems evaluation
-will therefore keep cold single-use, warm persistent-cache, shared-prefix
-branching, and append-only multi-turn timing as four separate contracts.  The
-unfilled workload grid and cache-lifecycle checks are preregistered in
-\cref{app:persistent-kv-todo}; cold request latency remains reported as a
-limitation rather than being mixed with the warm-path claim.
+reusable KV cache, rather than sparse prefill.  We therefore keep cold
+single-use, same-basis shared-prefix branching, and append-only timing as
+separate contracts.  An audited 32/64K slice is reported below; the remaining
+H100/128K grid is preregistered in \cref{app:persistent-kv-todo}.  Cold request
+latency remains a limitation rather than being mixed with the warm-path claim.
 
 The complete LongBench table uses the request-local reference profile.  A
 strict smaller screen then runs the sampled-quantile path used by the CUDA
@@ -183,14 +182,40 @@ History & Full & Fast & Robust & Fast sp. & Robust sp. \\
 \end{tabular}
 \end{table}
 
-The Robust index takes 1.375/1.488/1.839 seconds to construct at
-32/64/128K, compared with .768/.774/.743 seconds for Fast.  Against Full,
-the measured break-even generation lengths are 69/19/10 tokens for Robust and
-24/9/4 for Fast.  For a cold request generating exactly 64 tokens, including
-construction, Robust reaches .81/1.31/2.15$\times$ and Fast reaches
-1.01/1.64/2.75$\times$.  Persistent multi-turn or shared-prefix reuse pays
-construction once and then receives the steady speedups in
-\cref{tab:mha-decode}; cold-request and warm-reuse claims are never mixed.
+\begin{table}[t]
+\caption{Directly timed persistent-cache lifecycle on the same MHA model and
+RTX~3090s.  Cold includes the full Robust index build and one 32-token branch;
+warm reuses that index; four-branch amortization shares one build over 128
+generated tokens.  Ratios are matched Full/QKSieve wall times.}
+\label{tab:persistent-kv-main}
+\centering
+\resizebox{\linewidth}{!}{
+\begin{tabular}{rrrrrr}
+\toprule
+History & Cold & Warm & 4-branch amort. & Append-only & Build (s) \\
+\midrule
+32K & .702$\times$ & 1.322$\times$ & 1.082$\times$ & 1.319$\times$ & 1.759 \\
+64K & 1.125$\times$ & 2.221$\times$ & 1.785$\times$ & 2.211$\times$ & 1.998 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Warm Full/QKSieve decode is 83.714/63.347 ms/token at 32K and
+144.910/65.256 ms/token at 64K.  The one-time 32/64K construction splits into
+.724/.735 seconds for QK factors, .518/.603 seconds for Key encoding, and
+.517/.658 seconds for ValueSketch.
+
+A simple $I/(D_f-D_s)$ calculation gives
+approximately 87/26 generated tokens to break even, consistent with the
+direct 32-token cold outcomes in \cref{tab:persistent-kv-main}.
+
+The lifecycle audit covers all 32 layers, six state snapshots, and five
+rewinds per length.  Key/Value index pointers and rebuild counters remain
+unchanged; replayed tokens and hashes match exactly; after decode both indices
+lag the exact cache by the registered one token.  This run reuses one
+request-local QK transform across branches and continuous generation.  It does
+not show that an index can be reused after a new prompt changes Query
+statistics; that case requires rebuilding the request-local index.
 
 At the native 128K boundary, a corrected same-seed six-topic audit reverses
 our initial conclusion.  QKSieve-Fast retains only 96.319\% pooled PPL
