@@ -21,7 +21,7 @@ RTX 3090 数字是已审计诊断；仍需补充 matched H100/A100 测量。
 attention，而不是 sparse prefill。我们将 cold single-use、同一 QK 坐标下的
 shared-prefix branching 和 append-only 作为互不混写的计时协议。下文给出已经
 审计的 32/64K 切片，其余 H100/128K 网格预注册在
-\cref{app:persistent-kv-todo}；cold request latency 仍需如实报告为局限，不能与
+\cref{app:persistent-kv-protocol}；cold request latency 仍需如实报告为局限，不能与
 warm-path 加速混成同一结论。
 
 完整 LongBench 表使用 request-local 参考配置。随后的小规模严格筛查直接运行

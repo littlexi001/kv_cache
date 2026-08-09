@@ -29,7 +29,7 @@ Our claimed scope is decode-time attention over an already materialized,
 reusable KV cache, rather than sparse prefill.  We therefore keep cold
 single-use, same-basis shared-prefix branching, and append-only timing as
 separate contracts.  An audited 32/64K slice is reported below; the remaining
-H100/128K grid is preregistered in \cref{app:persistent-kv-todo}.  Cold request
+H100/128K grid is preregistered in \cref{app:persistent-kv-protocol}.  Cold request
 latency remains a limitation rather than being mixed with the warm-path claim.
 
 The complete LongBench table uses the request-local reference profile.  A

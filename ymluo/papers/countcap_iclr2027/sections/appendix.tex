@@ -1075,7 +1075,7 @@ Multi-turn & 3 & Turn-wise Query drift & Stable retention \\
 \end{table}
 
 \subsection{Persistent-KV workload contract and measured audit}
-\label{app:persistent-kv-todo}
+\label{app:persistent-kv-protocol}
 
 The intended deployment is repeated decoding over a materialized long-context
 KV cache, as in multi-turn agents, shared-prefix rollouts, and repeated queries
@@ -1088,7 +1088,7 @@ numbers from one row cannot be used to fill another.
 \caption{Persistent-KV timing contracts.  The current 32/64K audit instantiates
 all rows within one request-local QK basis; H100, 128K, and cross-prompt Query
 drift remain preregistered.}
-\label{tab:persistent-kv-todo}
+\label{tab:persistent-kv-protocol}
 \centering
 \resizebox{\linewidth}{!}{
 \begin{tabular}{llll}
