@@ -34,16 +34,20 @@
 源码级校验器：
 
 ```bash
-python src/verify_qksieve_frozen_evidence_20260728.py \
+python src/verify_qksieve_robust_paper_evidence_20260810.py \
   --project_root . \
-  --longbench_summary RESULTS/paired_summary.json \
-  --ruler_summary RESULTS/paired_summary.json \
-  --samepath_summary RESULTS/samepath_summary.json \
-  --multimodel_summary RESULTS/multimodel_summary.json \
+  --persistent_summary RESULTS/persistent/summary.json \
+  --longbench_summary RESULTS/longbench/paired_summary.json \
+  --ruler_summary RESULTS/ruler/paired_summary.json \
+  --multimodel_summary RESULTS/multimodel/multimodel_summary.json \
+  --h100_summary RESULTS/h100/summary.json \
   --output RESULTS/frozen_evidence_report.json
 ```
 
-只有报告中 `complete=true` 时，质量和速度才可以合并成论文主结论。校验器同时检查方法合同、源码 SHA256、样本配对、任务覆盖、长度网格和峰值显存字段。
+只有报告中 `complete=true` 时，质量与系统结果才可以组成完整论文证据链。
+校验器强制检查冻结方法合同、3,750 个同路径 LongBench 配对、650 个正式
+RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
+64K/128K 三类系统测速；任一证据缺失都会显式失败。
 
 ## 1. 当前已经完成的证据
 
@@ -64,26 +68,30 @@ python src/verify_qksieve_frozen_evidence_20260728.py \
 | 512K 外推系统压力 | 完成，524,256 history + 32 target | 4%/6% active 的 steady 为 10.72x/7.72x；Full PPL 已为 5510.6，只能支持扩展性而非原生 512K 质量 |
 | 32K Key-only 因果消融 | 完成，六主题 × 两窗口 | QK-balanced + Key-MSE 的 Top-1/KL 显著优于 Key-PCA + Key-MSE，纯 Key-PCA 不冻结 |
 | LongBench m20 allocation 因果消融 | 完成，320 个严格配对 | QK-balanced + Key-MSE / qMSE 保持率 99.923%/99.772%，直接差值 CI 跨零 |
-| 32K allocation 优化路径 | 完成，同一 256-token 窗口 | Key-MSE/qMSE 为 45.577/46.696 ms/token，质量持平；部署冻结 Key-MSE |
+| 32K allocation 优化路径 | 完成，同一 256-token 窗口 | Key-MSE/qMSE 为 45.577/46.696 ms/token，质量持平；论文冻结 qMSE/OAS，Key-MSE 仅作速度消融 |
 | GQA-4 子系统长度扫描 | 完成，8K–128K，包含逐 token 索引追加 | 32K 起超过 Full，64K/128K 为 2.730x/4.162x |
 | 原生 MHA Fast/Robust attention A/B | 完成，RTX 3090、32Q/32KV、8K--128K、3 seeds | Fast 为 1.27--6.37x；Robust 含 ValueSketch 后为 1.08--4.12x；候选集合严格相同 |
 | 原生 MHA 真实模型稳态 decode | 完成，Yarn-Llama-2-7B-128K、32/64/128K | Robust 为 1.32/2.22/3.98x；break-even 为 69/19/10 token |
+| Persistent KV 生命周期 | 完成，32K/64K，cold/warm/四分支均摊/append-only | Warm 为 1.322x/2.221x；四分支均摊为 1.082x/1.785x；独立审计确认 32 层索引未重建且 replay 一致 |
+| FIER 同 consumer 速度 | 完成，原生 MHA、相同 active-token schedule 和精确 sparse-attention consumer | Fast 相对 FIER 为 1.37--3.58x，Robust 在额外支付 Value-tail 后仍为 1.16--2.31x（8K--128K） |
 | Llama official-middle LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行 | Full/QKSieve macro 为 0.459398/0.458852，保持率 99.881%，bootstrap 95% CI 为 [99.424%, 100.347%] |
-| RULER 4K–32K shard 5/6 | 完成，86 个严格配对 | 结果可由正式 launcher 续跑并合并，不能单独作主结果 |
+| 冻结 Robust 正式 RULER | 运行中，13 任务、4K--128K、计划 650 个严格配对 | 完成前不再使用旧 91-pair targeted audit 作为正式主结果 |
+| Llama/Qwen/Mistral 同协议 LongBench screen | 已注册并排队，16 任务、每模型 160 个独立 offset 样本 | 用于跨模型方向一致性与最差任务审计，不替代 Llama 的 3,750 样本主表 |
 | 理论证明 | 完成并写入正文/附录 | 双正交精确性、最优 score 子空间、QK-MSE、bit 分配、排序和输出误差链 |
 | 正文页预算 | 完成当前版式审计 | 正文与结论在第 9 页结束，参考文献从第 10 页开始；完整命题、证明和系统图放入附录 |
 
-Llama LongBench 已可填写论文主表；其余证据不能替代 Qwen/Mistral
-LongBench、完整 RULER、多模型 PPL 和同路径整模型测速。
+Llama reference LongBench 已可填写论文参考表，但最终主结论仍需冻结 Robust
+同路径 3,750 样本结果。完整 RULER、跨模型 screen 和 H100 结果尚未完成，不能
+用旧实验或不同执行路径替代。
 
 ## 2. P0：投稿前必须完成
 
-### 2.1 单模型完整 LongBench（Llama 已完成）
+### 2.1 单模型完整 LongBench（reference 已完成，冻结 Robust 待完成）
 
 脚本：
 
 ```bash
-bash scripts/launch_qksieve_fulltopk_longbench_5gpu_20260728.sh
+bash scripts/launch_qksieve_robust_llama_full_longbench_20260810.sh
 ```
 
 协议：
@@ -95,7 +103,7 @@ bash scripts/launch_qksieve_fulltopk_longbench_5gpu_20260728.sh
 - 同一 stop policy、生成长度、评分代码和 GPU；
 - 总计 7,500 行，不复用旧 Full CSV。
 
-已完成并报告：
+旧 reference profile 已完成并报告：
 
 - 16 个任务的 Full、QKSieve、相对保持率；
 - macro score、macro difference 和 stratified paired-bootstrap 95% CI；
@@ -108,13 +116,17 @@ macro difference 95% CI 为 [-0.002647, 0.001591]，retention 95% CI 为
 [99.424%, 100.347%]。16 个任务均完成，最低任务保持率为 Qasper 的
 97.615%，通过预注册的 macro 至少 99% 标准。
 
+该结果只证明 QK-balanced 表征和完整 proxy top-$k$ 的质量，不等于部署主路径。
+最终冻结 Robust 必须在相同 3,750 个样本上重新生成一份独立的 7,500 行 CSV，
+并由 `summarize_qksieve_robust_longbench_20260810.py` 与总 evidence verifier
+确认零 fallback、16 个任务和 3,750 个严格配对。
+
 ### 2.2 三模型 LongBench 泛化
 
 脚本：
 
 ```bash
-QKSIEVE_DOWNLOAD_MISSING_MODELS=1 \
-bash scripts/launch_qksieve_three_model_longbench_20260728.sh
+bash scripts/launch_qksieve_robust_multimodel_longbench_20260810.sh
 ```
 
 模型：
@@ -123,16 +135,21 @@ bash scripts/launch_qksieve_three_model_longbench_20260728.sh
 - Qwen3-4B-Instruct；
 - Mistral-7B-Instruct-v0.3。
 
-Mistral 使用 tokenizer 自带 chat template；三者保持相同 $\lambda$、Query 数、bit 预算和 token 预算，不允许按模型搜索参数。
+Mistral 使用 tokenizer 自带 chat template；三者保持相同 $\lambda$、Query 数、
+bit 预算、ValueSketch 和 token 预算，不允许按模型搜索参数。当前注册的是每模型
+16 任务、每任务 10 条、offset 40 的 160-pair 独立 screen，用于检验方向一致性
+与最差任务；Llama 的 3,750-pair 主表承担总体质量主结论。
 
-通过标准：三个模型都完成 3,750 个严格配对，最低 macro 保持率目标为 99%。
+通过标准：三个模型均完成 160 个严格配对，给出 task-bootstrap 95\% CI、最差
+任务与零 fallback。若任一模型出现明显系统性失真，再对该模型扩大样本，而不
+在 screen 上调参。
 
 ### 2.3 RULER
 
 脚本：
 
 ```bash
-bash scripts/launch_qksieve_fulltopk_ruler_6gpu_20260728.sh
+bash scripts/launch_qksieve_robust_ruler_20260810.sh
 ```
 
 协议：
@@ -147,25 +164,16 @@ bash scripts/launch_qksieve_fulltopk_ruler_6gpu_20260728.sh
 
 ### 2.4 同一路径整模型速度、请求速度与显存
 
-Reference profile 网格脚本：
+RTX 3090 原生 MHA 的 attention、真实模型 decode 和 persistent-cache 结果已经
+完成。投稿硬件复测入口为：
 
 ```bash
-bash scripts/launch_qksieve_frozen_samepath_length_6gpu_20260728.sh
+bash scripts/launch_qksieve_h100_matched_20260810.sh
 ```
 
-最终 Deployment profile 的 LongBench m20 入口：
-
-```bash
-bash scripts/launch_qksieve_global_keymse_wmma_longbench_m20_5gpu_20260730.sh
-```
-
-其注册方法为
-`qksieve_global_qkbalanced_keymse_wmma_sampled`，必须核验固定模板、
-`allocation_frozen`、WMMA fused、动态 `c=64` sampled quantile、无 fallback，并与
-同一运行中的 Full 严格配对。
-
-旧的 `qksieve_global_qkbalanced_qmse_wmma_sampled` 只作为 allocation
-对照和已有 32K/64K/120K 系统诊断保留，不能把其速度静默改写为 Key-MSE。
+该脚本只运行冻结 qMSE/OAS Robust 与同张量 Full，不能替换成 Key-MSE、Fast、
+旧 global template 或长度门控。每个 artifact 必须记录 GPU 型号、CUDA、PyTorch、
+源码 SHA、候选数、索引字节、peak memory 和直接计时区间。
 
 网格：
 
@@ -223,31 +231,25 @@ break-even 的 $(R,G)$ 边界。Cold、warm 和摊销数字不得合并成一个
 - 如果 cache eviction/reload，两种方法都要公平计入，或单独报告；
 - 这里复用的是不可变索引，不允许复用上一步候选，不启用 learned router 或 Full fallback。
 
-当前 QK-balanced request-local 路径如果会在新请求上重建历史索引，只能进入
-cold 行。完成 persistent index 或 immutable segment 版本后，才能填写 warm、
-shared-prefix 和 append-only 三行。这项工作优先级高于 sparse-prefill 优化。
+Persistent v2 已完成 32K/64K 的 cold、warm、四分支均摊和 append-only 直接
+计时。独立生命周期审计覆盖 32 层、6 个 snapshot 和 5 次 rewind，确认历史
+Key/Value index buffer 未重建、replay token/hash 一致、生成后索引只落后精确
+cache 一个注册 token。该证据允许在同一 request-local basis 下复用不变前缀、
+分支和连续 append；如果新 Prompt 改变 Query 统计量，仍必须重建 basis 与索引，
+不能把它宣称为任意语义新请求的零成本复用。
 
-Query projection + bandwise INT8 的独立融合候选已经以
-`qksieve_fullprompt_auto_plain_qfused_fulltopk` 接入。GPU 验证已经完成：
+GQA-4 fused Query preparation 的历史数值验证保留为 kernel correctness 证据；
+GQA-8 的完整 selection 在 32K 可能更慢，因此不作架构无关加速声明。冻结主
+路径始终是 request-local qMSE/OAS + sampled quantile + Robust ValueSketch，
+不再把旧 global-template、Key-MSE 或 full-topk 路径称为 deployment 主方法。
 
-- GQA-4 的 FP16/BF16、4K/32K 数值结果全部通过，Query prepare 中位加速为
-  1.547x/1.755x，完整 selection 中位加速为 1.204x/1.275x；
-- 真实 LongBench 8 样本 smoke 的 qfused requested/executed/frozen 标志均为
-  1，和 reference 路径预测 exact-match 为 87.5%，平均分差为 -0.00213；
-- GQA-8 在 32K 的完整 selection 只有约 0.883x/0.806x，因此不能把融合实现
-  宣称为任意 GQA 配置上的通用优化；
-- 目标 Llama/Qwen/Mistral 均为 GQA-4，可以把融合结果放入子系统表。
-  Reference profile 仍是
-  `qksieve_fullprompt_auto_plain_fulltopk`；Deployment profile 是上述
-  global-template + WMMA + sampled 方法。在 deployment 的完整同路径任务
-  实验完成前，不把两者拼成同一主结果。
-
-正式验收产物：
+正式 persistent 产物：
 
 ```text
-results/20260728_qksieve_qfused_correctness_native_g4/validation_matrix.json
-results/20260728_qksieve_qfused_longbench_smoke_native_g4_retry2/
-results/20260728_qksieve_qfused_breakdown_gpu5/breakdown.json
+docs/qksieve_persistent_kv_20260810/raw_results/
+  20260810_qksieve_persistent_kv_v2/summary.json
+docs/qksieve_persistent_kv_20260810/raw_results/
+  20260810_qksieve_persistent_kv_v2/independent_summary.json
 ```
 
 ## 3. P0：公平基线
@@ -378,8 +380,8 @@ teacher-forced continuation 只能作为长位置机制证据，不能冒充自�
 ## 6. P2：系统与投稿完整性
 
 - 在 H100 或 A100 单卡重新测 batch=1 TPOT；
-- A100/H100 运行前分别设置 `TORCH_CUDA_ARCH_LIST=8.0/9.0`；所有
-  20260728 launcher 只提供 3090 的 8.6 默认值，不再强制覆盖外部架构；
+- A100/H100 运行前分别设置 `TORCH_CUDA_ARCH_LIST=8.0/9.0`；
+  `launch_qksieve_h100_matched_20260810.sh` 必须记录实际架构和编译配置；
 - 报告 Query projection/quantization、packed scan、top-k、gather、exact sparse attention、cache append、其他模型计算；
 - 报告 median、p5、p95、warm-up、重复次数、CUDA/PyTorch/Transformers 版本和 GPU 时钟；
 - 冻结模型、数据集 revision、随机种子、编译 flags 和匿名 artifact commit；
@@ -389,17 +391,14 @@ teacher-forced continuation 只能作为长位置机制证据，不能冒充自�
 
 ## 7. 当前最短执行顺序
 
-1. 受控归因已经完成：request-local 240-bit 和冻结全 INT8 均恢复约 100%，
-   根因锁定为冻结低比特模板外推。继续补 exact-set recall、attention-mass
-   recall、score RMSE 和 crossing margin，并按 layer/head 定位最小刷新量。
-2. 分别测试只刷新 scale、Key-MSE allocation、QK-balanced transform；随后把
-   最小充分统计量在 prefill 中增量或异步构建，压缩 request-local 固定成本。
-3. 在独立于 20-Newsgroups 的长文本和至少一个新模型上复核 256K Exact-QK
-   top-1,280 的预算充分性，以及改进 proxy 的高保真点。
-4. 完成 request-local deployment profile LongBench m20；通过后再扩到
-   3,750 样本。
-5. 顺序完成 Qwen3/Mistral LongBench 和 RULER 4K--128K。
-6. 完成同文本 8K--128K whole-model/request/memory 网格和 packed FIER 公平
-   对比。
-7. 做 Query drift、跨模型 PPL 与 H100/A100 最终系统账单。
-8. 运行冻结证据校验器，只有 `complete=true` 后才填写剩余主表结果。
+1. 保持数值方法完全冻结，不再做参数或长度规则搜索。
+2. 完成 13 任务、4K--128K、650-pair 正式 RULER，并独立核验 prompt 长度、
+   零 fallback、分任务/分长度结果和 paired bootstrap 区间。
+3. 用同一冻结配置完成 Llama/Qwen/Mistral 各 160-pair 独立 LongBench screen；
+   只在出现系统性失败时扩大样本，不在 screen 上调参。
+4. 完成 Llama 冻结 Robust 的 3,750-pair 同路径 LongBench，将旧 reference
+   结果保留为表征上界，不再作为部署主结果。
+5. 在 H100 完成 64K/128K attention、steady decode、cold/warm/persistent
+   request 与 peak-memory 网格，并保留 RTX 3090 结果作为可复现实验。
+6. 运行总 evidence verifier；只有 `complete=true` 后才更新摘要、主表、图和
+   结论，再重新编译并逐页审计英文/中文 PDF。
