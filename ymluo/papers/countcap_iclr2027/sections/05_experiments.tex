@@ -134,6 +134,33 @@ allocated Key-only and Key-plus-Value auxiliary tensors occupy approximately
 5.47\% and 7.09\% of FP16 K+V in this kernel; the method-level hard rate caps,
 including amortized metadata, are 5.86\% and 7.47\%.
 
+\begin{table}[t]
+\caption{Controlled comparison with the audited packed FIER RTN-1 g32
+implementation.  FIER and Fast use the same active-token schedule and exact
+sparse-attention consumer; Robust additionally estimates the omitted Value
+tail.  Ratios above one favor QKSieve.}
+\label{tab:mha-fier-samepath}
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+History & FIER & Fast & Robust & Fast/FIER & Robust/FIER \\
+\midrule
+8K   & .1816 & .1327 & .1560 & 1.37$\times$ & 1.16$\times$ \\
+16K  & .2951 & .1900 & .2250 & 1.55$\times$ & 1.31$\times$ \\
+32K  & .4647 & .2324 & .2945 & 2.00$\times$ & 1.58$\times$ \\
+64K  & .7329 & .2646 & .3576 & 2.77$\times$ & 2.05$\times$ \\
+128K & 1.3322 & .3722 & .5757 & 3.58$\times$ & 2.31$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:mha-fier-samepath} changes neither model tensors nor the final exact
+K/V consumer between FIER and Fast, so it isolates packed-selector cost.  The
+Robust column is a stricter systems comparison because it also pays for the
+Value-tail estimator.  This is a controlled implementation comparison, not a
+claim about an unmeasured vendor-optimized FIER stack.
+
 \Cref{tab:mha-main} is an attention-subsystem result, not an end-to-end decode
 claim.  It excludes prefill and historical index construction.  We therefore
 measure the same Fast and Robust paths inside a real MHA model separately.

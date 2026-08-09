@@ -113,6 +113,31 @@ Fast 与 Robust 的阈值、候选数和候选集合完全相同，唯一差别�
 Value。kernel 实际分配的 Key-only 与 Key+Value 辅助张量约占 FP16 K+V 的
 5.47\% 与 7.09\%；包含摊销 metadata 后的方法级硬上限为 5.86\% 与 7.47\%。
 
+\begin{table}[t]
+\caption{与审计后的 packed FIER RTN-1 g32 实现做受控比较。FIER 与 Fast
+使用相同 active-token 预算和精确 sparse-attention consumer；Robust 还额外
+估计遗漏 Value tail。比值大于一表示 QKSieve 更快。}
+\label{tab:mha-fier-samepath}
+\centering
+\small
+\begin{tabular}{rrrrrr}
+\toprule
+历史长度 & FIER & Fast & Robust & Fast/FIER & Robust/FIER \\
+\midrule
+8K   & .1816 & .1327 & .1560 & 1.37$\times$ & 1.16$\times$ \\
+16K  & .2951 & .1900 & .2250 & 1.55$\times$ & 1.31$\times$ \\
+32K  & .4647 & .2324 & .2945 & 2.00$\times$ & 1.58$\times$ \\
+64K  & .7329 & .2646 & .3576 & 2.77$\times$ & 2.05$\times$ \\
+128K & 1.3322 & .3722 & .5757 & 3.58$\times$ & 2.31$\times$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:mha-fier-samepath}中，FIER 与 Fast 的模型张量和最终精确 K/V
+consumer 都不变，因此主要隔离 packed selector 成本。Robust 还支付 Value-tail
+估计成本，是更严格的系统比较。该表支持受控实现对比，不外推到未经实测的
+厂商优化 FIER 系统。
+
 \Cref{tab:mha-main}是 attention 子系统结果，不是端到端 decode 主张。它不含
 prefill 和历史索引构建，因此我们又在真实 MHA 模型中直接测量相同 Fast 与
 Robust 路径。

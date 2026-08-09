@@ -28,6 +28,20 @@ Attention 子系统使用一张 RTX 3090、MHA 32Q/32KV、head dimension 128，�
 
 补偿的主要开销来自 selector 扫描时同时累计尾部概率质量和 Value 低秩系数。128K 时，Robust 比 Fast 多 `0.2035 ms/layer`，其中 `0.1765 ms/layer` 来自该扫描。
 
+### 与 FIER 的同路径比较
+
+FIER RTN-1 g32 与 Fast 使用相同 active-token 日程和相同精确 sparse-attention consumer。Robust 额外支付 ValueSketch 成本。数值均为三个 seed 的中位数；`Fast/FIER` 和 `Robust/FIER` 大于一表示 QKSieve 更快。
+
+| 长度 | FIER ms | Fast ms | Robust ms | Fast/FIER | Robust/FIER |
+|---:|---:|---:|---:|---:|---:|
+| 8K | .1816 | .1327 | .1560 | 1.37x | 1.16x |
+| 16K | .2951 | .1900 | .2250 | 1.55x | 1.31x |
+| 32K | .4647 | .2324 | .2945 | 2.00x | 1.58x |
+| 64K | .7329 | .2646 | .3576 | 2.77x | 2.05x |
+| 128K | 1.3322 | .3722 | .5757 | 3.58x | 2.31x |
+
+Fast/FIER 隔离的是 packed selector 成本；Robust/FIER 是包含尾部补偿的完整 attention 路径比较。该结果只支持当前审计实现和 RTX 3090，不等价于对未实测厂商优化实现的速度声明。
+
 ### 真实稳态 Decode
 
 | 长度 | Full | Fast | Robust | Fast 加速 | Robust 加速 |
