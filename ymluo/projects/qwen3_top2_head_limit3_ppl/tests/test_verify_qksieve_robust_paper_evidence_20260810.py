@@ -105,6 +105,14 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "fast_speedup": 8.0,
             "fier_speedup": 2.0,
             "robust_vs_fier": 2.0,
+            "full_kv_bytes": 1000.0,
+            "qksieve_key_index_bytes": 50.0,
+            "qksieve_valuesketch_bytes": 20.0,
+            "qksieve_total_auxiliary_bytes": 70.0,
+            "qksieve_key_index_ratio_of_full_kv": 0.05,
+            "qksieve_total_auxiliary_ratio_of_full_kv": 0.07,
+            "fier_index_bytes": 10.0,
+            "fier_index_ratio_of_full_kv": 0.01,
         }
         for length in (65536, 131072)
     ]
@@ -115,6 +123,12 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "qksieve_steady_ms_per_token": 4.0,
             "steady_decode_speedup": 3.0,
             "qksieve_prebuild_seconds_median": 1.0,
+            "full_peak_allocated_bytes_total": 100.0,
+            "qksieve_peak_allocated_bytes_total": 120.0,
+            "qksieve_to_full_peak_allocated_ratio": 1.2,
+            "full_peak_reserved_bytes_total": 200.0,
+            "qksieve_peak_reserved_bytes_total": 240.0,
+            "qksieve_to_full_peak_reserved_ratio": 1.2,
         }
         for length in (65536, 131072)
     ]
@@ -127,6 +141,18 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "shared_prefix_amortized_speedup": 1.5,
             "append_only_speedup": 2.0,
             "qksieve_index_build_seconds_median": 1.0,
+            "full_cold_peak_allocated_bytes_total": 100.0,
+            "qksieve_cold_peak_allocated_bytes_total": 120.0,
+            "qksieve_to_full_cold_peak_allocated_ratio": 1.2,
+            "full_cold_peak_reserved_bytes_total": 200.0,
+            "qksieve_cold_peak_reserved_bytes_total": 240.0,
+            "qksieve_to_full_cold_peak_reserved_ratio": 1.2,
+            "full_lifecycle_peak_allocated_bytes_total": 110.0,
+            "qksieve_lifecycle_peak_allocated_bytes_total": 132.0,
+            "qksieve_to_full_lifecycle_peak_allocated_ratio": 1.2,
+            "full_lifecycle_peak_reserved_bytes_total": 220.0,
+            "qksieve_lifecycle_peak_reserved_bytes_total": 264.0,
+            "qksieve_to_full_lifecycle_peak_reserved_ratio": 1.2,
         }
         for length in (65536, 131072)
     ]

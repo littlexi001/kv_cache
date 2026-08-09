@@ -34,6 +34,10 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                         "qksieve_valuesketch_candidate_counts_equal": True,
                         "qksieve_valuesketch_candidate_sets_equal": True,
                         "qksieve_valuesketch_tail_alpha": 0.5,
+                        "full_kv_bytes": 1000,
+                        "qksieve_index_bytes": 50,
+                        "qksieve_valuesketch_bytes": 20,
+                        "fier_index_bytes": 10,
                     }
                     for length in (65536, 131072)
                 ],
@@ -49,6 +53,10 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "gpu_name": "NVIDIA H100 80GB HBM3",
                     "steady_mean_ms_per_token": 12.0,
                     "prebuild_wall_seconds": 0.0,
+                    "peak_memory": {
+                        "allocated_bytes_total": 100,
+                        "reserved_bytes_total": 200,
+                    },
                 },
             )
             write_json(
@@ -66,6 +74,10 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "score_mode": contract.SCORE_MODE,
                     "value_sketch_disabled": False,
                     "value_sketch_tail_alpha": 0.5,
+                    "peak_memory": {
+                        "allocated_bytes_total": 120,
+                        "reserved_bytes_total": 240,
+                    },
                 },
             )
             common = {
@@ -77,6 +89,14 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                 "append_only_ms_per_token": 8.0,
                 "prebuild_wall_seconds": 0.0,
                 "gpu_name": "NVIDIA H100 80GB HBM3",
+                "cold_peak_memory": {
+                    "allocated_bytes_total": 100,
+                    "reserved_bytes_total": 200,
+                },
+                "lifecycle_peak_memory": {
+                    "allocated_bytes_total": 110,
+                    "reserved_bytes_total": 220,
+                },
             }
             write_json(
                 tmp_path / "persistent" / f"n{length}" / seed_dir / "full.json",
@@ -100,16 +120,28 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "score_mode": contract.SCORE_MODE,
                     "value_sketch_tail_alpha": 0.5,
                     "persistent_contract_passed": True,
+                    "cold_peak_memory": {
+                        "allocated_bytes_total": 120,
+                        "reserved_bytes_total": 240,
+                    },
+                    "lifecycle_peak_memory": {
+                        "allocated_bytes_total": 132,
+                        "reserved_bytes_total": 264,
+                    },
                 },
             )
 
     payload = summarize(tmp_path, expected_seeds=2)
 
     assert payload["attention"][0]["robust_speedup"] == 4.0
+    assert payload["attention"][0]["qksieve_total_auxiliary_ratio_of_full_kv"] == 0.07
     assert payload["steady_decode"][0]["steady_decode_speedup"] == 3.0
+    assert payload["steady_decode"][0]["qksieve_to_full_peak_allocated_ratio"] == 1.2
     persistent = payload["persistent_requests"][0]
     assert persistent["cold_speedup"] == 0.5
     assert persistent["cold_end_to_end_speedup"] == 0.5
     assert persistent["warm_speedup"] == 2.0
+    assert persistent["qksieve_to_full_cold_peak_reserved_ratio"] == 1.2
+    assert persistent["qksieve_to_full_lifecycle_peak_allocated_ratio"] == 1.2
     assert payload["hardware"]["device_names"] == ["NVIDIA H100 80GB HBM3"]
     assert payload["frozen_contract"] == contract.contract_payload()

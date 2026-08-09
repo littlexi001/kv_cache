@@ -42,6 +42,16 @@ def median(values: list[float]) -> float:
     return float(statistics.median(values))
 
 
+def memory_bytes(payload: dict[str, Any], field: str, kind: str) -> float:
+    memory = payload.get(field)
+    if not isinstance(memory, dict):
+        raise AssertionError(f"missing memory record: {field}")
+    value = float(memory.get(f"{kind}_bytes_total", 0))
+    if value <= 0.0:
+        raise AssertionError(f"invalid memory record: {field}.{kind}: {value}")
+    return value
+
+
 def summarize_attention(run_root: Path, expected_seeds: int) -> list[dict[str, Any]]:
     grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for path in sorted((run_root / "attention").glob("seed*.json")):
@@ -74,6 +84,25 @@ def summarize_attention(run_root: Path, expected_seeds: int) -> list[dict[str, A
             [float(row["qksieve_complete_ms"]) for row in measurements]
         )
         fier = median([float(row["fier_complete_ms"]) for row in measurements])
+        full_kv_bytes = median(
+            [float(row["full_kv_bytes"]) for row in measurements]
+        )
+        key_index_bytes = median(
+            [float(row["qksieve_index_bytes"]) for row in measurements]
+        )
+        value_index_bytes = median(
+            [float(row["qksieve_valuesketch_bytes"]) for row in measurements]
+        )
+        total_auxiliary_bytes = median(
+            [
+                float(row["qksieve_index_bytes"])
+                + float(row["qksieve_valuesketch_bytes"])
+                for row in measurements
+            ]
+        )
+        fier_index_bytes = median(
+            [float(row["fier_index_bytes"]) for row in measurements]
+        )
         rows.append(
             {
                 "history_tokens": length,
@@ -85,6 +114,18 @@ def summarize_attention(run_root: Path, expected_seeds: int) -> list[dict[str, A
                 "fast_speedup": full / fast,
                 "fier_speedup": full / fier,
                 "robust_vs_fier": fier / robust,
+                "full_kv_bytes": full_kv_bytes,
+                "qksieve_key_index_bytes": key_index_bytes,
+                "qksieve_valuesketch_bytes": value_index_bytes,
+                "qksieve_total_auxiliary_bytes": total_auxiliary_bytes,
+                "qksieve_key_index_ratio_of_full_kv": (
+                    key_index_bytes / full_kv_bytes
+                ),
+                "qksieve_total_auxiliary_ratio_of_full_kv": (
+                    total_auxiliary_bytes / full_kv_bytes
+                ),
+                "fier_index_bytes": fier_index_bytes,
+                "fier_index_ratio_of_full_kv": fier_index_bytes / full_kv_bytes,
             }
         )
     return rows
@@ -137,6 +178,18 @@ def summarize_decode(run_root: Path, expected_seeds: int) -> list[dict[str, Any]
         robust_ms = median(
             [float(sparse["steady_mean_ms_per_token"]) for _, sparse in pairs]
         )
+        full_peak_allocated = median(
+            [memory_bytes(full, "peak_memory", "allocated") for full, _ in pairs]
+        )
+        robust_peak_allocated = median(
+            [memory_bytes(sparse, "peak_memory", "allocated") for _, sparse in pairs]
+        )
+        full_peak_reserved = median(
+            [memory_bytes(full, "peak_memory", "reserved") for full, _ in pairs]
+        )
+        robust_peak_reserved = median(
+            [memory_bytes(sparse, "peak_memory", "reserved") for _, sparse in pairs]
+        )
         rows.append(
             {
                 "history_tokens": length,
@@ -145,6 +198,24 @@ def summarize_decode(run_root: Path, expected_seeds: int) -> list[dict[str, Any]
                 "steady_decode_speedup": full_ms / robust_ms,
                 "qksieve_prebuild_seconds_median": median(
                     [float(sparse["prebuild_wall_seconds"]) for _, sparse in pairs]
+                ),
+                "full_peak_allocated_bytes_total": full_peak_allocated,
+                "qksieve_peak_allocated_bytes_total": robust_peak_allocated,
+                "qksieve_to_full_peak_allocated_ratio": median(
+                    [
+                        memory_bytes(sparse, "peak_memory", "allocated")
+                        / memory_bytes(full, "peak_memory", "allocated")
+                        for full, sparse in pairs
+                    ]
+                ),
+                "full_peak_reserved_bytes_total": full_peak_reserved,
+                "qksieve_peak_reserved_bytes_total": robust_peak_reserved,
+                "qksieve_to_full_peak_reserved_ratio": median(
+                    [
+                        memory_bytes(sparse, "peak_memory", "reserved")
+                        / memory_bytes(full, "peak_memory", "reserved")
+                        for full, sparse in pairs
+                    ]
                 ),
             }
         )
@@ -186,6 +257,29 @@ def summarize_persistent(run_root: Path, expected_seeds: int) -> list[dict[str, 
         row["qksieve_index_build_seconds_median"] = median(
             [float(sparse["prebuild_wall_seconds"]) for _, sparse in pairs]
         )
+        for phase, source_field in (
+            ("cold", "cold_peak_memory"),
+            ("lifecycle", "lifecycle_peak_memory"),
+        ):
+            for kind in ("allocated", "reserved"):
+                full_values = [
+                    memory_bytes(full, source_field, kind) for full, _ in pairs
+                ]
+                sparse_values = [
+                    memory_bytes(sparse, source_field, kind) for _, sparse in pairs
+                ]
+                row[f"full_{phase}_peak_{kind}_bytes_total"] = median(full_values)
+                row[f"qksieve_{phase}_peak_{kind}_bytes_total"] = median(
+                    sparse_values
+                )
+                row[f"qksieve_to_full_{phase}_peak_{kind}_ratio"] = median(
+                    [
+                        sparse_value / full_value
+                        for full_value, sparse_value in zip(
+                            full_values, sparse_values, strict=True
+                        )
+                    ]
+                )
         rows.append(row)
     return rows
 
@@ -221,7 +315,9 @@ def summarize(run_root: Path, expected_seeds: int) -> dict[str, Any]:
             "Matched H100 measurements with resident GPU K/V. Attention is a "
             "single MHA-layer path; decode is whole-model steady generation; "
             "persistent cold speed separately includes per-request index build, "
-            "while cold_end_to_end also includes directly timed dense prefill."
+            "while cold_end_to_end also includes directly timed dense prefill. "
+            "Decode/request memory totals sum per-device CUDA peaks; attention "
+            "storage uses exact resident tensor byte counts."
         ),
     }
 

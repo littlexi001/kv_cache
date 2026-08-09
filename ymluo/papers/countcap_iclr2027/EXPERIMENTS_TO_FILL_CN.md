@@ -176,14 +176,22 @@ bash scripts/launch_qksieve_h100_matched_20260810.sh
 源码 SHA、候选数、索引字节、peak memory 和直接计时区间。
 H100 汇总和总 evidence verifier 会再次检查设备名必须包含 `H100`、冻结合同与
 主方法 ID 必须逐字段一致、三类结果均含 64K/128K、至少三个 seed，并拒绝缺失、
-非有限或非正的延迟/加速字段；RTX 3090 结果不能误填进 H100 表。
+非有限或非正的延迟、加速、索引字节和显存字段；RTX 3090 结果不能误填进 H100
+表。整模型进程在模型与 CUDA 扩展加载完成后、dense prefill 开始前重置 CUDA
+peak statistics；原始 artifact 保存逐卡 allocated/reserved peak，汇总表报告逐卡
+峰值之和。Attention 子系统在同一进程内交替测多个方法，因此不使用不公平的
+进程峰值，而是报告 Full K/V、QKSieve Key index、ValueSketch 和 FIER index 的
+精确 resident tensor bytes。
 
 网格：
 
-- 历史长度：16K/32K/64K/128K；
-- decode steps：64/256/1024；
+- H100 历史长度：64K/128K；16K/32K 保留为 RTX 3090 交叉点诊断；
+- steady decode：固定生成 256 token，前 32 token 不进入稳态均值；
+- persistent request：4 个 64-token 分支、一次确定性 replay 和一次 128-token
+  append-only 分支；
 - 每格同时运行 Full 和冻结 QKSieve；
-- 64K/128K 使用两卡只是为了容纳完整 GPU-resident KV，方法本身不做 KV offload。
+- 64K 使用一张 80GB H100，128K 使用两张 80GB H100 只是为了容纳完整
+  GPU-resident KV；方法本身不做 KV offload。
 
 必须报告：
 

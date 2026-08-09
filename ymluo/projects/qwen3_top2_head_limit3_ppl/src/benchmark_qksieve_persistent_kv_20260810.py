@@ -209,6 +209,7 @@ def main() -> None:
     history = speed.repeated_stream(tokenizer, args.text_file, args.history_tokens)
     prefill_context = prefill_query_tail_mode(8) if sparse else direct.nullcontext({})
     sync(input_device)
+    speed.reset_cuda_peak_memory()
     prefill_start = time.perf_counter()
     with prefill_context as prefill_queries:
         cache, previous_logits, measured_prefill_seconds = direct.dense_prompt(
@@ -223,6 +224,7 @@ def main() -> None:
         )
     sync(input_device)
     prefill_wall_seconds = time.perf_counter() - prefill_start
+    post_prefill_memory = speed.cuda_memory_snapshot(peak=False)
     prefix_length = int(cache.get_seq_length())
     if prefix_length != args.history_tokens:
         raise RuntimeError("prefill cache has the wrong sequence length")
@@ -243,6 +245,7 @@ def main() -> None:
     persistent_snapshots: list[dict[str, Any]] = []
     initial_persistent_snapshot: dict[str, Any] = {}
     cold_end_to_end_wall_seconds: float | None = None
+    cold_peak_memory: dict[str, Any] | None = None
     method_name = "direct_countcap" if sparse else "full_attention"
 
     with direct.sparse_context(args, method_name):
@@ -272,6 +275,7 @@ def main() -> None:
             value_install = install_resident_value_sketch_cache(cache)
         sync(input_device)
         prebuild_wall_seconds = time.perf_counter() - prebuild_start
+        post_prebuild_memory = speed.cuda_memory_snapshot(peak=False)
         expected_sparse_layers = int(qk_prebuild.get("layers", 0))
         if sparse:
             initial_persistent_snapshot = (
@@ -318,6 +322,7 @@ def main() -> None:
                 cold_end_to_end_wall_seconds = (
                     time.perf_counter() - prefill_start
                 )
+                cold_peak_memory = speed.cuda_memory_snapshot(peak=True)
             if sparse:
                 snapshot = active_qksieve_persistent_state_signature()
                 validate_sparse_snapshot(
@@ -368,6 +373,8 @@ def main() -> None:
             )
             persistent_snapshots.append(snapshot)
 
+    sync(input_device)
+    lifecycle_peak_memory = speed.cuda_memory_snapshot(peak=True)
     reuse_tokens_equal = (
         branches[0]["generated_token_ids"]
         == repeated_branch["generated_token_ids"]
@@ -418,6 +425,8 @@ def main() -> None:
     )
     if cold_end_to_end_wall_seconds is None:
         raise RuntimeError("cold end-to-end request timing was not recorded")
+    if cold_peak_memory is None:
+        raise RuntimeError("cold request peak memory was not recorded")
     result = {
         "schema": "qksieve_persistent_kv_lifecycle_v2",
         "method": args.method,
@@ -434,6 +443,10 @@ def main() -> None:
         "prefill_wall_seconds": prefill_wall_seconds,
         "measured_prefill_seconds": measured_prefill_seconds,
         "prebuild_wall_seconds": prebuild_wall_seconds,
+        "post_prefill_memory": post_prefill_memory,
+        "post_prebuild_memory": post_prebuild_memory,
+        "cold_peak_memory": cold_peak_memory,
+        "lifecycle_peak_memory": lifecycle_peak_memory,
         "cold_persistent_request_seconds": (
             prebuild_wall_seconds + float(branches[0]["wall_seconds"])
         ),

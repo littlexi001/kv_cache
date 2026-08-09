@@ -133,6 +133,47 @@ def sync(device: torch.device) -> None:
         torch.cuda.synchronize(device)
 
 
+def reset_cuda_peak_memory() -> None:
+    if not torch.cuda.is_available():
+        return
+    for device_index in range(torch.cuda.device_count()):
+        torch.cuda.reset_peak_memory_stats(device_index)
+
+
+def cuda_memory_snapshot(*, peak: bool) -> dict[str, Any]:
+    if not torch.cuda.is_available():
+        return {
+            "allocated_bytes_per_device": [],
+            "reserved_bytes_per_device": [],
+            "allocated_bytes_total": 0,
+            "reserved_bytes_total": 0,
+            "allocated_bytes_max_device": 0,
+            "reserved_bytes_max_device": 0,
+        }
+    allocated_reader = (
+        torch.cuda.max_memory_allocated if peak else torch.cuda.memory_allocated
+    )
+    reserved_reader = (
+        torch.cuda.max_memory_reserved if peak else torch.cuda.memory_reserved
+    )
+    allocated = [
+        int(allocated_reader(device_index))
+        for device_index in range(torch.cuda.device_count())
+    ]
+    reserved = [
+        int(reserved_reader(device_index))
+        for device_index in range(torch.cuda.device_count())
+    ]
+    return {
+        "allocated_bytes_per_device": allocated,
+        "reserved_bytes_per_device": reserved,
+        "allocated_bytes_total": sum(allocated),
+        "reserved_bytes_total": sum(reserved),
+        "allocated_bytes_max_device": max(allocated, default=0),
+        "reserved_bytes_max_device": max(reserved, default=0),
+    }
+
+
 def repeated_stream(tokenizer: Any, path: Path, count: int) -> list[int]:
     tokens = tokenizer(
         path.read_text(encoding="utf-8"),
@@ -234,6 +275,7 @@ def main() -> None:
         else direct.nullcontext({})
     )
     sync(input_device)
+    reset_cuda_peak_memory()
     prefill_wall_start = time.perf_counter()
     with prefill_context as prefill_queries:
         cache, previous_logits, measured_prefill_seconds = direct.dense_prompt(
@@ -248,6 +290,7 @@ def main() -> None:
         )
     sync(input_device)
     prefill_wall_seconds = time.perf_counter() - prefill_wall_start
+    post_prefill_memory = cuda_memory_snapshot(peak=False)
     if int(cache.get_seq_length()) != args.history_tokens:
         raise RuntimeError("prefill cache has the wrong sequence length")
 
@@ -296,6 +339,7 @@ def main() -> None:
             value_install = install_resident_value_sketch_cache(cache)
         sync(input_device)
         prebuild_seconds = time.perf_counter() - online_start
+        post_prebuild_memory = cuda_memory_snapshot(peak=False)
 
         for step in range(args.generation_steps):
             cache, logits, elapsed, _ = run_one_token(
@@ -312,6 +356,7 @@ def main() -> None:
             cumulative_seconds.append(time.perf_counter() - online_start)
 
     sync(input_device)
+    peak_memory = cuda_memory_snapshot(peak=True)
     stage_totals_ms = consume_speed_stage_timings()
     stage_mean_ms_per_token = {
         name: total_ms / args.generation_steps
@@ -360,6 +405,9 @@ def main() -> None:
         "prefill_wall_seconds": prefill_wall_seconds,
         "measured_prefill_seconds": measured_prefill_seconds,
         "prebuild_wall_seconds": prebuild_seconds,
+        "post_prefill_memory": post_prefill_memory,
+        "post_prebuild_memory": post_prebuild_memory,
+        "peak_memory": peak_memory,
         "qk_prebuild": qk_prebuild,
         "value_prebuild": value_prebuild,
         "value_install": value_install,
