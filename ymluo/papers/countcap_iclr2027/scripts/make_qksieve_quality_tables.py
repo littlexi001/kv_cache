@@ -7,12 +7,25 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import sys
 from typing import Any
 
 import make_qksieve_quality_generalization_figure as quality_figure
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_SRC = (
+    ROOT.parents[1]
+    / "projects"
+    / "qwen3_top2_head_limit3_ppl"
+    / "src"
+)
+if str(PROJECT_SRC) not in sys.path:
+    sys.path.insert(0, str(PROJECT_SRC))
+
+import verify_qksieve_robust_paper_evidence_20260810 as evidence_verify
+
+
 MODEL_LABELS = {
     "llama31_8b": "Llama-3.1-8B",
     "qwen3_4b": "Qwen3-4B",
@@ -22,6 +35,11 @@ MODEL_LABELS = {
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--longbench",
+        type=Path,
+        default=ROOT / "data" / "qksieve_robust_longbench_summary.json",
+    )
     parser.add_argument(
         "--ruler",
         type=Path,
@@ -68,6 +86,23 @@ def interval(value: Any) -> str:
     return f"[{percent(value[0])}, {percent(value[1])}]"
 
 
+def longbench_rows(longbench: dict[str, Any]) -> list[str]:
+    methods = longbench["methods"]
+    full = methods["full_kv"]
+    qksieve_names = [name for name in methods if name != "full_kv"]
+    if len(qksieve_names) != 1:
+        raise ValueError("LongBench summary must contain one frozen QKSieve method")
+    ours = methods[qksieve_names[0]]
+    return [
+        "Llama-3.1-8B & {:.4f} & {:.4f} & {} & {} \\\\".format(
+            float(full["macro_score"]),
+            float(ours["macro_score"]),
+            percent(ours["quality_retention"]),
+            interval(longbench["bootstrap"]["quality_retention_95ci"]),
+        )
+    ]
+
+
 def ruler_rows(ruler: dict[str, Any]) -> list[str]:
     rows: list[str] = []
     for length in sorted(int(item) for item in ruler["per_length"]):
@@ -111,6 +146,7 @@ def model_rows(multimodel: dict[str, Any]) -> list[str]:
 
 
 def render(
+    longbench: dict[str, Any],
     ruler: dict[str, Any],
     multimodel: dict[str, Any],
     *,
@@ -118,6 +154,10 @@ def render(
     provenance: str,
 ) -> str:
     if chinese:
+        longbench_caption = (
+            "冻结 QKSieve-Robust 的完整 LongBench 结果，覆盖 16 个任务和 "
+            "3,750 个严格配对。区间为 paired-bootstrap 95\\% CI。"
+        )
         ruler_caption = (
             "冻结 QKSieve-Robust 的正式 RULER 结果。区间为 paired-bootstrap "
             "95\\% CI。"
@@ -129,6 +169,11 @@ def render(
         model_header = "模型"
         retention = "保持率"
     else:
+        longbench_caption = (
+            "Complete LongBench results for frozen QKSieve-Robust over 16 "
+            "tasks and 3,750 strict pairs. The interval is a paired-bootstrap "
+            "95\\% CI."
+        )
         ruler_caption = (
             "Formal RULER results for frozen QKSieve-Robust. Intervals are "
             "paired-bootstrap 95\\% CIs."
@@ -143,6 +188,20 @@ def render(
 
     lines = [
         f"% Generated from frozen evidence: {provenance}",
+        "\\begin{table}[t]",
+        f"\\caption{{{longbench_caption}}}",
+        "\\label{tab:longbench-main}",
+        "\\centering",
+        "\\small",
+        "\\begin{tabular}{lrrrr}",
+        "\\toprule",
+        f"{model_header} & Full & QKSieve & {retention} & Paired 95\\% CI \\\\",
+        "\\midrule",
+        *longbench_rows(longbench),
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\end{table}",
+        "",
         "\\begin{table}[t]",
         f"\\caption{{{ruler_caption}}}",
         "\\label{tab:ruler-formal}",
@@ -177,14 +236,22 @@ def render(
 
 def main() -> None:
     args = parse_args()
+    longbench = read_json(args.longbench)
     ruler = read_json(args.ruler)
     multimodel = read_json(args.multimodel)
+    evidence_verify.validate_longbench(longbench)
+    evidence_verify.validate_ruler(ruler)
+    evidence_verify.validate_multimodel(multimodel)
     quality_figure.validate(ruler, multimodel)
-    provenance = f"ruler={sha256(args.ruler)}; multimodel={sha256(args.multimodel)}"
+    provenance = (
+        f"longbench={sha256(args.longbench)}; ruler={sha256(args.ruler)}; "
+        f"multimodel={sha256(args.multimodel)}"
+    )
     for output, chinese in ((args.output_en, False), (args.output_zh, True)):
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(
             render(
+                longbench,
                 ruler,
                 multimodel,
                 chinese=chinese,

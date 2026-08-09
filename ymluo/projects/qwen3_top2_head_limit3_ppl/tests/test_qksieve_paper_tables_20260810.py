@@ -17,6 +17,16 @@ SPEC.loader.exec_module(MODULE)
 
 
 def test_tables_render_actual_frozen_summary_schema() -> None:
+    longbench = {
+        "methods": {
+            "full_kv": {"macro_score": 0.46},
+            "qksieve_frozen": {
+                "macro_score": 0.4554,
+                "quality_retention": 0.99,
+            },
+        },
+        "bootstrap": {"quality_retention_95ci": [0.985, 0.995]},
+    }
     ruler = {
         "per_length": {
             str(length): {
@@ -47,13 +57,18 @@ def test_tables_render_actual_frozen_summary_schema() -> None:
     }
 
     text = MODULE.render(
+        longbench,
         ruler,
         multimodel,
         chinese=False,
-        provenance="ruler=abc; multimodel=def",
+        provenance="longbench=abc; ruler=def; multimodel=ghi",
     )
 
+    assert "Llama-3.1-8B & 0.4600 & 0.4554 & 99.00\\%" in text
     assert "4K & 0.9000 & 0.8910 & 99.00\\%" in text
     assert "Overall & 0.9000 & 0.8910 & 99.00\\%" in text
     assert "Mistral-7B & 0.5000 & 0.4950 & 99.00\\%" in text
-    assert "Generated from frozen evidence: ruler=abc; multimodel=def" in text
+    assert (
+        "Generated from frozen evidence: longbench=abc; ruler=def; "
+        "multimodel=ghi"
+    ) in text
