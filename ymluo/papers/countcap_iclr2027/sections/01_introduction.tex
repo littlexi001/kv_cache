@@ -1,147 +1,74 @@
 \section{Introduction}
 \label{sec:introduction}
 
-Long-context decoding repeatedly reads the complete key--value (KV) history.
-For each generated token, every query head scores all historical keys and
-aggregates their values, so attention traffic and arithmetic grow linearly
-with context length \citep{dao2022flashattention,dao2023flashattention2}.
-KV eviction reduces this cost by permanently discarding tokens
-\citep{zhang2023h2o,li2024snapkv,cai2024pyramidkv,feng2024adakv}, but a token
-that is unimportant now can become relevant to a later query.
-Query-aware retrieval keeps the history addressable and selects a new subset
-at every decode step \citep{tang2024quest,ribar2023sparq,singhania2024loki}.
-Its central systems constraint is severe: finding the subset must cost much
-less than the exact attention it removes.
+Long-context decoding rereads an increasingly long key--value (KV) history
+for every generated token.  KV eviction reduces this cost by permanently
+discarding states \citep{zhang2023h2o,li2024snapkv,cai2024pyramidkv,
+feng2024adakv}; query-aware retrieval instead keeps all states addressable and
+chooses a fresh subset at each step \citep{ribar2023sparq,tang2024quest,
+singhania2024loki}.  Retrieval is useful only when selecting the subset costs
+substantially less than the dense attention it replaces.
 
-Token-level low-bit retrieval is a particularly direct design.
-An auxiliary Key index estimates all QK scores, top-$k$ identifies candidate
-positions, and exact attention consumes the original K/V at those positions.
-FIER shows that even 1-bit Keys can preserve useful token rankings
-\citep{wang2025fier}.
-However, a uniform Key quantizer treats all coordinates and attention heads
-alike, although the retrieval error that matters is not
-$\|k-\widehat k\|_2^2$ but
-$(q^\top k-q^\top\widehat k)^2$.
-The two objectives coincide only for isotropic queries.
-This leaves a numerical question with direct systems consequences:
-\emph{under a fixed index-byte budget, how should representation capacity be
-distributed according to the joint geometry of the Queries and Keys?}
+Low-bit token indices provide a direct selector: approximate all QK scores,
+choose top-$k$, then apply exact attention to the original K/V.  FIER shows
+that 1-bit Keys can retain useful rankings \citep{wang2025fier}, but a
+uniform Key quantizer minimizes reconstruction error rather than the error
+that attention observes,
+$(q^\top k-q^\top\widehat k)^2$.  These objectives agree only for isotropic
+Queries.  This motivates our central question: \emph{under a fixed index-byte
+budget, how should representation capacity follow the joint Query--Key
+geometry?}
 
-We answer this question with \method, a training-free, GPU-resident exact-KV
-retrieval accelerator.
-For each layer and KV head, the reference profile estimates request-local
-second moments from uniformly sampled prompt Keys and prompt-tail Queries.
-It constructs two different linear transforms, one for Queries and one for
-Keys.
-At full dimension the transforms are biorthogonal and preserve every dot
-product exactly.
-Under the moments used to construct them, the two transformed second moments
-are the same diagonal matrix.
-Its ordered coordinates therefore expose the joint QK score spectrum rather
-than the reconstruction spectrum of Keys alone.
-The frozen main path constructs these moments from the current prompt and
-freezes the resulting per-layer/head transform for that request.  Averaging
-moments across disjoint calibration requests to obtain a model-level template
-is evaluated only as an ablation.
+We introduce \method, a training-free, GPU-resident exact-KV retrieval
+method.  For each layer and KV head, prompt samples define two request-local
+linear transforms.  The transforms are biorthogonal: before quantization they
+preserve every dot product exactly, while both transformed second moments
+equal the same diagonal joint-energy spectrum.  \method groups the 128
+coordinates into eight 16-D bands and assigns each 0/1/2/4/8 bits by exactly
+minimizing empirical attention-logit MSE under a 240-bit token/head budget.
+The resulting Key index adds 5.86\% to FP16 K+V storage.
 
-\method then divides the 128 coordinates into eight 16-D bands.
-For every layer and KV head independently, it assigns
-$0/1/2/4/8$ bits to each band under a fixed 240-bit token/head budget.
-The frozen allocation minimizes an empirical query-weighted
-Key-quantization error, which is exactly a Cartesian-sample estimate of
-attention-logit MSE.  A Key-reconstruction-MSE simplification in the same
-QK-balanced coordinates is retained as an allocation ablation.
-A zero-bit band is physically absent.
-The resulting packed index occupies 30 bytes per token and KV head, or 5.86\%
-of the corresponding FP16 K+V footprint.
-This is an \emph{additional retrieval index}: \method keeps the complete exact
-KV resident on the GPU and does not claim a 1\% physical KV footprint.
-
-At each decode step, the transformed INT8 Query scans the packed index and
-selects
+At decode step $t$, a packed scan selects
 \begin{equation}
  B(N)=\min\{N,1280,\max(256,\lceil0.06N\rceil)\}
  \label{eq:budget-intro}
 \end{equation}
-positions per query head.
-This is the registered 4K--128K schedule, not a claim that a 1,280-token cap
-transfers unchanged to longer contexts.
-The reference profile applies deterministic top-$B(N)$ to all proxy scores.
-The deployment profile estimates the corresponding threshold from the
-capped tail-calibrated sample count in \cref{eq:frozen-quantile-samples} and writes
-candidates during the scan, avoiding an $N$-length score tensor and generic
-top-$k$.
-The selected original FP16 Keys and Values are gathered on GPU and consumed
-by exact sparse QK--softmax--AV.
-There is no exact-QK reranking of a larger candidate pool, learned router,
-task-family rule, protected sink/recent heuristic, or full-attention fallback.
-Every quality and latency result names its producing profile; we do not merge
-cross-profile measurements into a same-path claim.
-\Cref{fig:overview} summarizes the pipeline.
+positions per Query head.  A sampled-quantile kernel avoids materializing an
+$N$-length score vector or invoking generic top-$k$; original FP16 K/V then
+receive exact sparse QK--softmax--AV.  There is no learned router, task rule,
+exact-QK reranking, protected-token heuristic, or Full-attention fallback.
 
-At extreme native lengths, accurate selection alone is not always enough:
-many individually small omitted weights can carry a coherent aggregate
-Value.  We therefore register two consumers.  \emph{QKSieve-Fast} performs
-selected-only exact attention.  \emph{QKSieve-Robust} additionally estimates
-the omitted proxy partition and its rank-16 INT4 Value residual during the
-same index scan, and combines it with the exact selected numerator using a
-fixed $\alpha=.5$ shrinkage.  This adds no exact-attention token, router,
-reranking, or Full fallback.  Its per-token auxiliary footprint is 7.47\% of
-FP16 K+V, versus 5.86\% for Fast.
+Selected-only attention can still fail when many individually small omitted
+weights carry a coherent aggregate Value.  The frozen QKSieve-Robust consumer
+therefore estimates the omitted partition and a current-Query rank-16 INT4
+Value residual during the same scan, for 7.47\% total auxiliary storage.
+QKSieve-Fast removes this residual and serves as the causal cost/quality
+ablation; the main method does not switch profiles at a hand-set length.
+\Cref{fig:overview} shows the complete path.
 
 \begin{figure}[t]
   \centering
   \includegraphics[width=\linewidth]{figures/qksieve_overview.pdf}
-  \caption{\method keeps exact KV on GPU and adds a per-layer/per-KV-head
-  mixed-bit Key index.  The reference profile freezes request-local
-  QK-balanced transforms and allocations after prefill.  The deployment
-  profile reuses the same request-local transform and uses capped
-  sampled-quantile candidate writing.  Both apply exact sparse attention to
-  original KV.}
+  \caption{\method builds request-local QK-balanced mixed-bit indices, scans
+  them for each Query, and applies exact sparse attention to resident FP16
+  K/V.  Robust also estimates the omitted Value tail; neither profile uses
+  reranking or dense fallback.}
   \label{fig:overview}
 \end{figure}
 
-The construction supports a clean error chain.
-The unquantized transform contributes exactly zero score error.
-For Key quantization error $e$, empirical score MSE is
-$\tr(C'_q C_e)$, not $\tr(C_e)$.
-The mixed-bit allocator minimizes a blockwise version of this quantity.
-A score-error radius and the exact top-$k$ margin certify a subset of selected
-tokens.
-Finally, if the selected set omits full-attention probability mass
-$\epsilon$, restricting and renormalizing exact attention changes the
-probability vector by exactly $2\epsilon$ in $\ell_1$, and changes the
-attention output by at most $\epsilon$ times the Value-set diameter.
-These are conditional guarantees, not a claim that near-tied adversarial
-scores are always preserved.
-
 Our contributions are:
 \begin{itemize}
-  \item We derive QK-balanced biorthogonal coordinates that preserve the full
-  dot product exactly and place Query and Key second moments in the same
-  diagonal spectrum.
-  \item We formulate per-layer/per-KV-head mixed-bit indexing as a
-  query-weighted rate-distortion problem and solve it exactly over
-  $0/1/2/4/8$-bit 16-D bands under a hardware-visible byte budget; a causal
-  ablation compares the frozen query-weighted objective with Key-MSE.
-  \item We implement a deterministic packed-index reference and optimized
-  architecture-specific GQA/MHA sampled-quantile deployment paths, both followed by exact
-  GPU-resident sparse attention and neither using reranking, learned routing,
-  or dense fallback.
-  \item We identify omitted Value mass as a failure mode independent of Key
-  ranking and introduce a current-Query, low-rank Value-tail residual with an
-  analytically characterized shrinkage tradeoff.  On 12 native-128K
-  topic/seed cases, the Robust profile retains 99.805\% pooled PPL quality
-  with a [99.100\%, 100.499\%] case-bootstrap interval.  Robust is the frozen
-  length-agnostic main consumer; Fast is reported as a selected-only ablation.
-  \item We provide equal-rate retrieval audits, all-layer allocation
-  statistics, GPU kernel validation, and a complete 3,750-example,
-  16-task Llama-3.1-8B LongBench evaluation with 99.88\% macro-score
-  retention, native-128K Fast/Robust stress tests, an earlier gated ablation,
-  and direct CUDA and whole-model diagnostics from 8K to 128K.  On the frozen
-  native-MHA contract, complete Fast and Robust attention paths reach
-  1.27--6.37$\times$ and 1.08--4.12$\times$, respectively; Robust steady
-  whole-model decode reaches 1.32--3.98$\times$ from 32K to 128K.
-  Profile-specific reporting keeps mechanism, downstream quality,
-  attention-subsystem speed, cold construction, and steady reuse separate.
+  \item We derive full-rank QK-balanced coordinates that exactly preserve
+  dot products and expose a joint score-energy spectrum, then formulate
+  per-head mixed-bit indexing as a hardware-visible rate-distortion problem.
+  \item We implement packed sampled-quantile selectors for GQA and MHA,
+  followed by exact sparse attention, and introduce an explicit low-rank
+  Value-tail correction for diffuse omitted mass.
+  \item We connect quantization error to ranking and output error through
+  exact factorization, logit-MSE, margin, omitted-mass, and residual bounds.
+  \item We evaluate retrieval quality, full LongBench, native-128K stress
+  cases, same-path FIER controls, directly timed attention and decode, and
+  persistent-cache cold/warm/shared-prefix/append-only regimes.  The frozen
+  Robust path reaches 99.805\% pooled 128K perplexity quality and
+  1.08--4.12$\times$ native-MHA attention speedup from 8K to 128K.
 \end{itemize}

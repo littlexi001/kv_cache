@@ -1,199 +1,102 @@
 \section{Analysis}
 \label{sec:analysis}
 
-We state the four links needed for the method claim and defer extended
-statements and all proofs to
-\cref{app:analysis-statements,app:proofs}.
-
-\subsection{Exact score geometry}
-
-Let $\widetilde C_q^{1/2}C_k^{1/2}=U\Sigma V^\top$ and let $A,D$ be the
-factors in \cref{eq:qk-factors}, where both construction moments include
-the consistent spectral floor in \cref{eq:moment-floor}.
-Direct substitution gives
+\paragraph{Exact geometry.}
+Substituting \cref{eq:qk-svd,eq:qk-factors} gives
 \begin{equation}
- AD^\top=I,\qquad
- A^\top\widetilde C_qA=D^\top C_kD=\Sigma.
+ AD^\top=I,qquad
+ A^\top\widetilde C_qA=D^\top C_kD=\Sigma,
  \label{eq:main-exact-balance}
 \end{equation}
-Therefore $(A^\top q)^\top(D^\top k)=q^\top k$ for every Query and Key:
-the full 128-D transform itself introduces no score approximation.
-Under the Cartesian Query--Key second moment, the best rank-$r$ bilinear
-map satisfies
+so the unquantized transform changes no QK score.  Moreover, among rank-$r$
+bilinear approximations, truncating this SVD minimizes expected squared score
+error:
 \begin{equation}
- \min_{\operatorname{rank}(B_r)\le r}
- \mathbb E[(q^\top k-q^\top B_rk)^2]
- =\sum_{\ell>r}\sigma_\ell^2,
+ \min_{\operatorname{rank}(W)\le r}
+ \mathbb E(q^\top k-q^\top Wk)^2=\sum_{j>r}\sigma_j^2.
  \label{eq:main-rank-optimal}
 \end{equation}
-so the singular order measures joint score energy, not Key reconstruction
-energy.  Key-PCA is recovered only for isotropic Queries.  Precise
-conditions, regularization residuals, and the explicit dependent-pair
-fourth-order residual are in
-\cref{eq:optimal-rank-score-map,eq:shrinkage-residual}.  The paired
-dependence boundary is \cref{eq:paired-qk-dependence}; we measure this
-residual rather than assume independence.
+The proofs, regularization conditions, and paired-dependence residual are in
+\cref{app:proofs}.
 
-\subsection{Why the allocator targets score error}
-
-For any finite projected Query sample $\{q'_j\}$ and Key quantization errors
-$\{e_i\}$,
+\paragraph{Why Query-weighted allocation.}
+For quantization error $e=k'-\widehat k'$, independence across the empirical
+Cartesian Query--Key sample gives
 \begin{equation}
- \frac{1}{m_qm_k}\sum_{j,i}({q'_j}^\top e_i)^2
- =\tr(C'_qC_e).
+ \mathbb E(q'^\top e)^2=\tr(C'_qC_e),
  \label{eq:main-qmse}
 \end{equation}
-This identity requires neither Gaussianity nor independent samples.
-QKSieve minimizes its diagonal-band decomposition using the measured
-0/1/2/4/8-bit errors and the exact physical-rate constraint in
-\cref{eq:qmse-allocation}; the finite dynamic program is globally optimal
-for that separable calibration objective; omitted cross-band interactions
-are bounded in \cref{eq:cross-band-bound}.
-
-Calibration optimality is not a held-out guarantee.
-If $\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$, then for any fixed
-error moment
+which is precisely the objective in \cref{eq:band-qmse}; Key-MSE
+$\tr(C_e)$ is correct only for isotropic $C'_q$.  Under Query drift
+$\Delta=C'_{q,\mathrm{dec}}-C'_{q,\mathrm{cal}}$,
 \begin{equation}
  |\tr(\Delta C_e)|\le\|\Delta\|_{\op}\tr(C_e).
  \label{eq:main-drift}
 \end{equation}
-The complete regret, transform-stability, and finite-sample bounds are
-\cref{eq:heldout-allocation-regret,eq:qk-subspace-stability,%
-eq:allocation-selection-regret}; they motivate independent held-out
-Queries rather than certify prompt-tail calibration unconditionally.
-Within a fixed basis, Key-MSE is only a
-$\kappa(C'_q)$-approximation, while a Haar rotation has no expected
-QK-sensitive band order
-(\cref{eq:key-only-condition-bound,eq:random-band-exchangeability}).
-Matched ablations test both consequences.
+This is a stability diagnostic, not an unconditional held-out guarantee.
+Finite-sample, subspace, allocation-regret, and fixed-rate conditional bounds
+are provided in \cref{app:proofs}.
 
-\paragraph{Fixed rate does not imply a fixed template.}
-For condition $c=(x,N,\ell,h,t)$, define
-$\mathcal C_R(c)=\min_{\theta\in\Theta_R}
-4N\eta_c^2(\theta)/m_{r,B}^2(c)$ over rate-$R$ QK coordinates and bits.
-If $\mathcal C_R(c)<1$, exact top-$r$ is contained in proxy top-$B$.
-At fixed rate,
-$\mathbb E_c[\min_\theta L_c(\theta)]
-\le\min_\theta\mathbb E_c[L_c(\theta)]$, strictly absent an almost-sure
-common minimizer.  Thus the template may change without adding bits.
-Length adds crossing pairs and tightens order-statistic margins; proofs are in
-\cref{eq:crossing-probability,eq:conditional-waterfilling,%
-eq:fixed-rate-core-certificate,eq:conditional-policy-dominance}.
-
-\subsection{From retrieval error to model output}
-
-Let exact and proxy scores be $s_i$ and $\widehat s_i$, with
-$\delta_i=s_i-\widehat s_i$ and
-$R_\delta=\max_i\delta_i-\min_i\delta_i$.
-Every exact top-$B$ token whose boundary margin exceeds $R_\delta$ remains
-in proxy top-$B$; centered score RMSE yields the deterministic preserved-core
-certificates in
-\cref{eq:rmse-core-margin,eq:rmse-mass-count}.
-They are not length-uniform: $R_\delta\le2\sqrt{N}\eta$ and the certified
-bad-count scales as $4N\eta^2/m_r^2$, so a fixed-rate proxy can degrade even
-when oracle top-$B$ remains sufficient (\cref{eq:length-amplification}).
-More directly, if $\epsilon_T$ is the mass omitted by oracle exact top-$B$,
-the proxy-selected set omits at most
-$\min\{1,\exp(R_\delta)\epsilon_T\}$ mass
-(\cref{eq:proxy-topb-mass-inflation}).
-
-For the selected set $S$, let
-$\epsilon=\sum_{i\notin S}p_i$ be omitted full-attention mass.
-Because QKSieve recomputes exact scores on $S$,
+\paragraph{Ranking and output.}
+Let exact and proxy errors be $\delta_i=s_i-\widehat s_i$ and
+$R_\delta=\max_i\delta_i-\min_i\delta_i$.  Any exact top-$B$ token whose
+boundary margin exceeds $R_\delta$ remains selected.  The appendix converts
+centered score RMSE into preserved-core and omitted-mass certificates.  For
+the realized selected set $S$, let
+$\epsilon=\sum_{i\notin S}p_i$.  Exact recomputation on $S$ yields
 \begin{equation}
- \|p-\widetilde p\|_1=2\epsilon,\qquad
+ \|p-\widetilde p\|_1=2\epsilon,qquad
  \|o-\widetilde o\|_2
- =\epsilon\|o_{\rm out}-o_{\rm in}\|_2
  \le\epsilon\,\diam\{v_i\}.
  \label{eq:main-output-bound}
 \end{equation}
-The conditional layerwise propagation and next-token margin result are
-\cref{eq:layer-propagation,eq:next-token-stability}.
-These are auditable sufficient conditions, not an adversarial quality
-guarantee.
+Thus selector quality is governed by score margins and omitted probability
+mass, not set recall alone.
 
-\subsection{What the robust residual corrects}
-
-Normalize the exact selected and omitted partitions so that their masses are
-$p$ and $1-p$, and write their conditional Value means as $\mu_S$ and
-$\mu_T$.  Let the Robust estimator induce selected mixture weight
-$\widehat p=Z_S/(Z_S+\alpha\widehat Z_T)$ and omitted conditional mean
-$\widehat\mu_T$.  Its output error has the exact decomposition
+\paragraph{What Robust corrects.}
+Write exact selected and omitted conditional Value means as $\mu_S,\mu_T$,
+their selected mass as $p$, and Robust estimates as
+$\widehat p,\widehat\mu_T$.  Its exact error decomposition is
 \begin{equation}
- \widehat o_\alpha-o
- = (\widehat p-p)(\mu_S-\mu_T)
+ \widehat o_\alpha-o=(\widehat p-p)(\mu_S-\mu_T)
  +(1-\widehat p)(\widehat\mu_T-\mu_T),
  \label{eq:tail-error-decomposition}
 \end{equation}
-and therefore
+hence
 \begin{equation}
- \|\widehat o_\alpha-o\|_2
- \le |\widehat p-p|\,\|\mu_S-\mu_T\|_2
+ \|\widehat o_\alpha-o\|_2\le
+ |\widehat p-p|\|\mu_S-\mu_T\|_2
  +(1-\widehat p)\|\widehat\mu_T-\mu_T\|_2.
  \label{eq:tail-error-bound}
 \end{equation}
-The first term is partition/shrinkage error; the second is Value-tail
-estimation error.  This separates a failure that a better Key top-$k$ cannot
-remove when exact top-$k$ itself omits diffuse Value contribution.
-
-For an idealized exact tail partition, let the tail-mean error be zero mean
-with $V=\mathbb E\|\widehat\mu_T-\mu_T\|_2^2$ and let
-$D=\|\mu_S-\mu_T\|_2^2$.  The Robust tail mixture weight is
-$w_\alpha=\alpha(1-p)/(p+\alpha(1-p))$, giving
+For zero-mean tail-estimation error with variance $V$ and
+$D=\|\mu_S-\mu_T\|_2^2$, a tail mixture weight $w_\alpha$ has risk
 \begin{equation}
  \mathbb E\|\widehat o_\alpha-o\|_2^2
- =((1-p)-w_\alpha)^2D+w_\alpha^2V.
+ =((1-p)-w_\alpha)^2D+w_\alpha^2V,
  \label{eq:tail-bias-variance}
 \end{equation}
-The minimizer satisfies
-$w^\star=(1-p)D/(D+V)$ and
-$\alpha^\star=pD/(pD+V)$.  Thus full tail correction is appropriate only
-when its estimation variance is small.  The registered $\alpha=.5$ is a
-fixed empirical compromise, not a universal optimum; held-out evaluation is
-still required.
-Relative to Fast ($w=0$), any positive correction improves this idealized
-expected error if and only if
+and improves over Fast exactly when
 \begin{equation}
- 0<w_\alpha<\frac{2(1-p)D}{D+V}.
+ 0<w_\alpha<2(1-p)D/(D+V).
  \label{eq:tail-correction-benefit}
 \end{equation}
-This means the correction is not uniformly beneficial for every possible
-query.  We nevertheless freeze one length-agnostic Robust consumer rather
-than introduce a hand-set context boundary.  Held-out downstream evaluation,
-the Fast ablation, and worst-case reporting quantify that empirical tradeoff;
-we do not claim that the fixed shrinkage estimates $D$ or $V$ optimally.
+Robust therefore addresses an omitted-Value failure that better Key ranking
+alone cannot remove, while its fixed shrinkage still requires held-out tests.
 
-\subsection{Complexity and crossover}
-
-Dense attention reads and processes full K/V, whereas QKSieve scans a
-240-bit Key index and performs exact attention on
-$B(N)=\min\{1280,\max(256,\lceil0.06N\rceil)\}$ tokens.
-Both remain $\Theta(N)$ because the packed scan is exhaustive; the gain is
-smaller bytes per scanned token plus capped exact attention.
-The Robust profile additionally scans 66 Value bits per token and accumulates
-a rank-16 numerator; it remains $\Theta(N)$ and trades part of Fast's speed
-for a lower omitted-Value error.
-The frozen main profile incurs this scan at every length.  Fast removes it and
-therefore provides the exact system-cost ablation; both profiles retain the
-same asymptotic complexity.
-
-Let $f_t$ and $s_t$ be synchronized Full and QKSieve decode costs at output
-step $t$, including every retrieval cost, and let $I_{\rm net}$ be index
-construction not hidden by prefill.  QKSieve is faster after $G$ tokens if
-and only if
+\paragraph{Cost and crossover.}
+Both profiles scan $\Theta(N)$ low-bit entries; exact attention is capped by
+\cref{eq:budget-intro}.  Robust also scans 66 Value bits/token.  If $f_t,s_t$
+are directly measured Full and QKSieve step costs and $I_{\rm net}$ is
+unhidden construction, QKSieve breaks even after $G$ tokens iff
 \begin{equation}
  \sum_{t=1}^{G}(f_t-s_t)>I_{\rm net}.
  \label{eq:main-break-even}
 \end{equation}
-If $s_t\ge f_t$ throughout a short-context regime, no output length can
-amortize it without changing the implementation.
-Writing one Full step as $t_{\rm base}+t_{\rm attn}$ gives the zero-attention
-Amdahl ceiling
+For Full non-attention cost $t_{\rm base}$ and attention cost $t_{\rm attn}$,
+the whole-model ceiling is
 \begin{equation}
- \mathrm{speedup}\le
- \frac{t_{\rm base}+t_{\rm attn}}{t_{\rm base}}
- =\frac{1}{1-\phi_{\rm attn}}.
+ \mathrm{speedup}\le(t_{\rm base}+t_{\rm attn})/t_{\rm base}.
  \label{eq:main-amdahl}
 \end{equation}
-The exact request accounting and proof are in
-\cref{eq:exact-break-even,eq:amdahl-ceiling}.
+We therefore report cold, warm, and persistent reuse separately.

@@ -1,128 +1,47 @@
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{KV eviction and compression.}
-Heavy-hitter and observation-window methods retain a bounded subset of past
-KV states \citep{zhang2023h2o,li2024snapkv}.
-PyramidKV and Ada-KV allocate eviction budgets across layers or heads
-\citep{cai2024pyramidkv,feng2024adakv}, while KIVI quantizes retained KV
-\citep{liu2024kivi}.
-These methods reduce physical KV storage.
-\method instead keeps every exact KV pair and adds a selection index, so its
-primary benefit is lower decode-time attention rather than cache capacity.
+\paragraph{KV reduction.}
+H$_2$O, SnapKV, PyramidKV, and Ada-KV reduce physical cache size by evicting
+tokens or allocating retention budgets across layers and heads
+\citep{zhang2023h2o,li2024snapkv,cai2024pyramidkv,feng2024adakv}; KIVI
+quantizes retained KV \citep{liu2024kivi}.  \method instead keeps every
+exact KV pair and adds a retrieval index, targeting decode-time attention
+rather than cache capacity.
 
 \paragraph{Query-aware sparse attention.}
-Quest uses page statistics to prune KV pages \citep{tang2024quest}; UNIQUE
-scores eight-token pages with a Key mean and a variance-derived offset
-\citep{deng2026unique}; SparQ retrieves with salient Query dimensions
-\citep{ribar2023sparq}; Double
-Sparsity combines channel and token sparsity \citep{yang2024doublesparsity}.
-SparCas similarly uses a Query-only dimension filter before token selection
-\citep{sun2026sparcas}.  This dimension-first cascade is the closest precedent
-for any staged band-reading extension of \method; our main method instead scans
-its complete mixed-bit index, and we label the query-adaptive band cascade as a
-mechanism frontier until a complete fused path is timed.
-RetrievalAttention instead treats an offloaded KV cache as a vector database
-and couples approximate retrieval with CPU--GPU execution
-\citep{liu2024retrievalattention}.
-RetroInfer develops this heterogeneous vector-storage direction with a wave
-index and wave buffer \citep{chen2025retroinfer}.
-ParisKV uses data-independent spherical centroids for collision-based coarse
-retrieval, followed by a 4-bit inner-product reranker and optional UVA KV
-fetching \citep{qi2026pariskv}.  Its drift-robust coarse-to-fine design is a
-particularly important contemporary comparison: unlike \method, it retains a
-separate reranking stage and targets offloaded exact KV at extreme lengths.
-SparDA trains a lightweight Forecast projection to move next-layer selection
-off the attention critical path \citep{fu2026sparda}; EvoSparse instead reuses
-importance across decode steps and propagates it across layers
-\citep{han2026evosparse}.  Both exploit learned or temporal prediction,
-whereas \method recomputes a numerical current-Query index score without
-training or cross-step state.
-Loki, ShadowKV, LRQK, SALS, RocketKV, and Thin Keys exploit
-low-dimensional Key or QK structure
+Quest prunes pages using Key statistics \citep{tang2024quest}; SparQ retrieves
+with salient Query dimensions and corrects omitted probability mass with a
+mean Value \citep{ribar2023sparq}; Loki, ShadowKV, LRQK, SALS, RocketKV, and
+Thin Keys exploit low-dimensional Key or QK structure
 \citep{singhania2024loki,sun2024shadowkv,li2025lrqk,mu2025sals,
-behnam2025rocketkv,yao2026thinkeys}.
-PQCache applies product quantization to retrieval \citep{zhang2024pqcache}.
-\method differs in jointly constructing full-rank Query and Key coordinates
-and allocating an unequal bit rate to every layer and KV head under a fixed
-packed-index budget.
+behnam2025rocketkv,yao2026thinkeys}.  RetrievalAttention and RetroInfer couple
+approximate retrieval with offloaded exact KV
+\citep{liu2024retrievalattention,chen2025retroinfer}.  These heterogeneous
+systems address a different placement regime; our main contract keeps exact
+KV resident and measures selection plus exact sparse attention.
 
-\paragraph{Fine-grained low-bit retrieval.}
-FIER is the closest system: it scans 1-bit token-level Keys, applies top-$k$,
-and computes full-precision attention on selected KV
-\citep{wang2025fier}.
-RaBitQCache uses randomized rotation and binary codes for score estimation
-\citep{li2026rabitqcache}; Self-Indexing KVCache uses sign codes for both
-retrieval and storage \citep{yang2026selfindexing}; SVDq uses mixed precision
-in an SVD space for Key reconstruction \citep{hong2025svdq}.
-BinaryPC learns data-dependent binary principal components without gradient
-training, uses a 64-bit Key hash and 7-bit Query probe, shares candidates
-within each GQA group, and rescues high-reconstruction-error Keys
-\citep{yu2026binarypc}.
-Louver instead casts thresholded sparse attention as halfspace range search
-and guarantees zero false negatives relative to the chosen threshold
-\citep{dehghankar2026louver}.  Its threshold oracle and variable-size output
-make fixed-top-$k$ matching a distinct evaluation contract.
-Block-GTQ assigns mixed precision to fixed two-dimensional RoPE blocks in a
-compressed K/V cache using a QK-energy rate model
-\citep{liang2026blockgtq}.
-DGAP studies persistent low-bit K/V storage and selectively repairs local
-top-$k$ distribution drift \citep{dzikanyanga2026dgap}.  Its corrector targets
-quantized K/V values, whereas \method uses a low-bit Key index only for
-selection and reads original K/V for the final attention.
-\method retains FIER's direct token-level workflow but replaces uniform
-Key-only quantization with a request-local QK-balanced transform and
-query-weighted mixed-bit allocation.
-Unlike Block-GTQ and other compressed-KV methods, its bands are learned
-full-rank QK coordinates rather than fixed RoPE pairs, zero-bit bands are
-allowed, and the low-bit structure indexes a separate exact KV cache.
-Consequently, the final attention in \method reads unquantized K/V and its
-index footprint is reported in addition to, rather than instead of, exact KV.
-This makes equal-index-byte and equal-active-token comparisons with FIER,
-RaBitQCache, BinaryPC, and ParisKV essential where their execution contracts
-overlap.  BinaryPC is especially important for
-systems comparison: its much narrower hash and GQA-shared candidate set trade
-representation fidelity for a substantially cheaper selector.  We therefore
-report its official CUDA path directly and do not infer its speed from index
-size.
-Quest, UNIQUE, and SparQ additionally receive matched-active-token selector
-controls.  For UNIQUE we implement the published page-score equations and
-report page-rounded loaded tokens; this is a quality reference, not a claim
-about the authors' fused kernel.  For Louver we include threshold estimation
-inside complete-path timing, because excluding the oracle would understate
-the deployed selector cost.
-ParisKV's released adapter currently supports Qwen-family models and requires
-FlashAttention, FlashInfer, and fast Hadamard kernels; we therefore separate
-its paper-reported end-to-end results from same-model RTX~3090 measurements
-unless that complete released path runs unchanged.  We do not compare its
-offloaded-KV million-token latency directly with GPU-resident \method.
-The currently runnable Microsoft repository implements RetroInfer rather than
-the original RetrievalAttention artifact, so we reproduce RetroInfer as a
-native heterogeneous system and retain RetrievalAttention only as a
-paper-reported comparison.  Their different KV placement precludes a
-meaningful equal-index-byte claim.
+\paragraph{Low-bit selectors.}
+FIER scans 1-bit token-level Keys and applies exact attention to selected KV
+\citep{wang2025fier}.  RaBitQCache and Self-Indexing KVCache use binary codes
+\citep{li2026rabitqcache,yang2026selfindexing}; SVDq assigns mixed precision
+in an SVD space \citep{hong2025svdq}; BinaryPC learns binary principal
+components and shares candidates within GQA groups \citep{yu2026binarypc}.
+Block-GTQ allocates precision to fixed RoPE blocks in a compressed K/V cache
+\citep{liang2026blockgtq}.  \method is distinct in three coupled choices:
+full-rank Query and Key transforms are jointly constructed and exactly
+biorthogonal, bits are allocated per layer/head using Query-weighted logit
+distortion, and the low-bit representation indexes separate exact K/V.
+Equal-rate and same-active-token controls therefore isolate the selector
+rather than conflate it with KV quantization or placement.
 
-\paragraph{Residual compensation.}
-SparQ already assigns the unselected probability mass to a mean Value
-\citep{ribar2023sparq}.  We therefore treat mean-only tail compensation as an
-ablation, not as a contribution.
-RESA estimates the aggregate contribution of KVs omitted by a sparse selector
-from a prefill-derived low-rank prior \citep{yang2026resa}.  This is distinct
-from improving the selector itself.  QKSieve-Robust addresses the same broad
-residual problem but uses the current Query's packed-index scores to estimate
-both the omitted softmax partition and its current-Query-conditioned
-coefficients in a request-local low-rank Value basis.  It then combines this
-estimate with an exact selected numerator under an explicit shrinkage
-parameter.  No trained prior or Full fallback is used.  We report Fast and
-Robust separately because the residual improves long-context robustness while
-adding scan traffic and does not improve the Key selector.
-
-\paragraph{Evaluation.}
-LongBench measures heterogeneous long-context generation
-\citep{bai2024longbench}; RULER measures controlled retrieval and aggregation
-over increasing lengths \citep{hsieh2024ruler}.
-We report downstream task score, perplexity, candidate recall and attention
-mass, subsystem latency, whole-model decode, request latency, and memory
-separately.
-Numbers copied from incompatible prompts, kernels, or hardware are not used
-as direct speed comparisons.
+\paragraph{Residual approximation and evaluation.}
+RESA estimates omitted attention from a prefill-derived low-rank prior
+\citep{yang2026resa}.  QKSieve-Robust instead uses current-Query proxy scores
+to estimate both the omitted softmax partition and coefficients in a
+request-local Value basis, with fixed shrinkage and no learned prior.
+LongBench evaluates heterogeneous generation and RULER controlled retrieval
+across lengths \citep{bai2024longbench,hsieh2024ruler}.  We keep downstream
+quality, index bytes, active KV, attention latency, whole-model decode, and
+cold versus persistent request costs separate; numbers from incompatible
+models, kernels, or KV placement are not treated as direct speed comparisons.
