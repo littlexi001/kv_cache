@@ -70,6 +70,9 @@ $C_q^{1/2}C_k^{1/2}=U\Sigma V^\top$，则全局最优映射为
 这是 Query--Key metric 中的 Eckart--Young 结果。它说明前导
 QK-balanced 坐标是最佳 rank-$r$ 双线性分数近似；Key-PCA 则优化不同的
 Key reconstruction 目标。
+SAKI 对浮点低秩 Key index 给出了这一 covariance-weighted rank-$r$ 最优解
+\citep{zhang2026saki}。QKSieve 则把 $r=d$ 因子作为精确保持 score 的坐标系，
+并在其中分配物理 mixed-bit rate。
 
 \paragraph{推论（陈旧 QK 坐标在相同 rate 下的代价）。}
 对条件 $c$，令

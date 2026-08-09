@@ -233,19 +233,6 @@ The total per-token auxiliary rate is 7.471\%.  Its earlier GQA-4 subsystem
 and whole-model timings are retained in \cref{app:system-diagnostics}; they
 are not combined with the native-MHA speed claim in \cref{tab:mha-main}.
 
-An earlier 64K length gate is tested on the same 80 LongBench examples from
-all 16 tasks.  Full scores .404779; always-on rank-16
-Robust and mean-tail-only variants retain 98.924\% and 98.873\%, while General
-scores .410725 and retains 101.469\%.  Its paired-bootstrap interval is
-[99.249\%, 104.449\%].  We do not interpret the point estimate above 100\% as
-an improvement claim.  The result exposes a short-context Robust perturbation,
-but a 64K switch is not implied by the method's mathematics.  We therefore
-retain General only as a diagnostic ablation and freeze always-on Robust as
-the main method.  Complete same-path Robust LongBench remains required.
-
-At 256K, Exact-QK top-1,280 retains 100.24\%, whereas the frozen 240-bit
-proxy falls from 98.99\% at 128K to 80.77\%.  Local coordinates with fixed
-240-bit allocation restore 100.44\%, while frozen coordinates with local
-bits reach only 89.91\%, identifying coordinate extrapolation rather than
-insufficient exact budget
-(\cref{tab:128k-256k-selector-crossover,tab:256k-selector-cause}).
+Length-gated ablations and the 256K coordinate-extrapolation failure are
+reported in \cref{app:system-diagnostics}; neither changes the frozen
+always-on Robust contract or its registered 4K--128K scope.

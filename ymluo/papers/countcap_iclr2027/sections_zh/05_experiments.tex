@@ -201,19 +201,8 @@ QKSieve-Robust rank-16 INT4 的 $\alpha=.5$ 在六个同 seed case 上冻结，�
 case-bootstrap 95\% 区间为 [99.100\%,100.499\%]，case macro 为 99.812\%，
 最差为 96.980\%。逐 token 辅助 rate 总计 7.471\%。较早的 GQA-4 子系统和
 整模型速度保留在\cref{app:system-diagnostics}中，不与\cref{tab:mha-main}的
-原生 MHA 速度合并。因此 Robust 是通用 128K
-分支，Fast 保留为低风险长度的速度分支。
+原生 MHA 速度合并。因此 always-on Robust 是冻结主方法，Fast 只作为去掉
+ValueSketch 的因果消融。
 
-我们在同一组覆盖 16 任务的 80 个 LongBench 样本上检验早期 64K 长度门控。
-Full 为 .404779；always-on rank-16 Robust
-和仅 mean-tail 版本分别保持 98.924\% 与 98.873\%，General 得分 .410725，
-保持 101.469\%，paired-bootstrap 区间为 [99.249\%,104.449\%]。本文不把高于
-100\% 的点估计解释为提升。该结果暴露了短上下文 Robust 扰动，但 64K 边界
-无法由方法数学推出。因此 General 只作为诊断消融保留，always-on Robust 冻结为
-主方法；仍需完成其完整同路径 LongBench。
-
-在 256K，Exact-QK
-top-1,280 保持 100.24\%，但冻结 240-bit proxy 从 128K 的 98.99\% 降到
-80.77\%。Local 坐标配 fixed 240-bit allocation 恢复到 100.44\%，而冻结
-坐标配 local bit 只有 89.91\%。这说明根因是坐标外推，而不是精确预算不足
-（\cref{tab:128k-256k-selector-crossover,tab:256k-selector-cause}）。
+长度门控消融和 256K 坐标外推失效见\cref{app:system-diagnostics}；它们不改变
+冻结的 always-on Robust 合同及其注册的 4K--128K 适用范围。

@@ -30,6 +30,14 @@ Query/Key 全秩变换联合构造且精确双正交；bit 根据 Query-weighted
 distortion 按层/head 分配；低位表征只索引独立的精确 K/V。因此，等索引率和
 等 active-token 对照能够单独比较 selector，而不混入 KV 量化或放置差异。
 
+SAKI 在本文准备期间公开，它为浮点低秩 Key index 推导了相同的
+covariance-weighted 最优 rank-$r$ 双线性 score map \citep{zhang2026saki}。
+当 $r=d$ 时，其非对称因子与本文未量化 QK-balanced 因子具有相同的代数端点；
+因此本文不把该 weighted low-rank 解本身作为独占创新。QKSieve 进一步研究如何
+在 mixed-bit 字节预算下物理量化并分配该几何、如何用 packed CUDA 路径完成
+选择、如何耦合遗漏 Value consumer，以及如何在下游生成和完整系统计时中验证，
+而不只报告 recall。
+
 \paragraph{残差近似与评测。}
 RESA 从 prefill-derived 低秩先验估计遗漏 attention \citep{yang2026resa}。
 QKSieve-Robust 则使用当前 Query 的 proxy 分数，同时估计遗漏 softmax

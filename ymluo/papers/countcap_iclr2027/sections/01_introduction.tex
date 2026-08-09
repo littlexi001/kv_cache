@@ -59,9 +59,9 @@ ablation; the main method does not switch profiles at a hand-set length.
 
 Our contributions are:
 \begin{itemize}
-  \item We derive full-rank QK-balanced coordinates that exactly preserve
-  dot products and expose a joint score-energy spectrum, then formulate
-  per-head mixed-bit indexing as a hardware-visible rate-distortion problem.
+  \item Starting from covariance-weighted score geometry, we expose its
+  full-rank factors as exact biorthogonal coordinates and formulate per-head
+  mixed-bit indexing as a hardware-visible rate-distortion problem.
   \item We implement packed sampled-quantile selectors for GQA and MHA,
   followed by exact sparse attention, and introduce an explicit low-rank
   Value-tail correction for diffuse omitted mass.

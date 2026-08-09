@@ -35,6 +35,16 @@ distortion, and the low-bit representation indexes separate exact K/V.
 Equal-rate and same-active-token controls therefore isolate the selector
 rather than conflate it with KV quantization or placement.
 
+SAKI, released while this manuscript was in preparation, derives the same
+covariance-weighted optimal rank-$r$ bilinear score map for a floating-point
+low-rank Key index \citep{zhang2026saki}.  At $r=d$, its asymmetric factors
+and our unquantized QK-balanced factors share the same algebraic endpoint;
+we therefore do not claim the weighted low-rank solution itself as exclusive
+novelty.  QKSieve instead studies how that geometry should be physically
+quantized and allocated under a mixed-bit byte budget, selected with a packed
+CUDA path, coupled to an omitted-Value consumer, and validated on downstream
+generation and complete-system timing rather than recall alone.
+
 \paragraph{Residual approximation and evaluation.}
 RESA estimates omitted attention from a prefill-derived low-rank prior
 \citep{yang2026resa}.  QKSieve-Robust instead uses current-Query proxy scores

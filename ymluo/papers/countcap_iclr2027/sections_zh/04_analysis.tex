@@ -15,7 +15,9 @@
  \mathbb E(q^\top k-q^\top Wk)^2=\sum_{j>r}\sigma_j^2.
  \label{eq:main-rank-optimal}
 \end{equation}
-证明、正则化条件与 Query--Key 相关性残差见\cref{app:proofs}。
+同期的 SAKI 对浮点低秩索引推导了相同的 covariance-weighted rank-$r$ 端点
+\citep{zhang2026saki}；本文在 mixed-bit 量化前使用其全秩端点。证明、正则化
+条件与 Query--Key 相关性残差见\cref{app:proofs}。
 
 \paragraph{为什么使用 Query-weighted allocation。}
 对于量化误差 $e=k'-\widehat k'$，经验 Cartesian Query--Key 样本满足

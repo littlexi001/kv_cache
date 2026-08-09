@@ -73,6 +73,10 @@ This is an Eckart--Young result in the Query--Key metric.  It gives a precise
 meaning to ``joint score energy'': before quantization, the leading
 QK-balanced coordinates are the optimal rank-$r$ bilinear approximation,
 whereas Key-PCA is optimal for a different Key-reconstruction objective.
+SAKI states this covariance-weighted rank-$r$ optimum for floating-point
+low-rank Key indexing \citep{zhang2026saki}.  QKSieve uses the $r=d$ factors
+as an exactly score-preserving coordinate system and allocates physical
+mixed-bit rate within that system.
 The theorem assumes independent draws from the construction moments; the
 finite Cartesian-sample identity below is what the allocator actually
 measures.

@@ -16,8 +16,10 @@ error:
  \mathbb E(q^\top k-q^\top Wk)^2=\sum_{j>r}\sigma_j^2.
  \label{eq:main-rank-optimal}
 \end{equation}
-The proofs, regularization conditions, and paired-dependence residual are in
-\cref{app:proofs}.
+Concurrent SAKI derives the same covariance-weighted rank-$r$ endpoint for
+floating-point low-rank indexing \citep{zhang2026saki}; our method uses its
+full-rank endpoint before mixed-bit quantization.  Proofs, regularization
+conditions, and the paired-dependence residual are in \cref{app:proofs}.
 
 \paragraph{Why Query-weighted allocation.}
 For quantization error $e=k'-\widehat k'$, independence across the empirical

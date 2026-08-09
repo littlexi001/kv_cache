@@ -48,8 +48,8 @@ QKSieve-Fast 去掉该残差，作为质量/成本的因果消融；主方法不
 
 本文贡献如下：
 \begin{itemize}
-  \item 推导精确保持点积、显式暴露联合分数能量谱的全秩 QK-balanced 坐标，
-  并将 per-head 混合位宽索引写成硬件可见的 rate-distortion 问题。
+  \item 从 covariance-weighted score geometry 出发，把其全秩因子写成精确
+  双正交坐标，并将 per-head 混合位宽索引写成硬件可见的 rate-distortion 问题。
   \item 实现 GQA/MHA packed sampled-quantile selector 和精确稀疏 attention，
   并提出针对弥散遗漏 mass 的显式低秩 Value-tail 修正。
   \item 通过精确分解、logit-MSE、margin、遗漏 mass 与 residual bound，将量化
