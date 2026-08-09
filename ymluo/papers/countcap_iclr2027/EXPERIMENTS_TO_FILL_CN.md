@@ -206,6 +206,9 @@ token。两者不能混写。完整表放在系统附录，正文保留关键数
 bash scripts/launch_qksieve_h100_matched_20260810.sh
 ```
 
+独立的环境、命令、输出和验收说明见
+`ymluo/projects/qwen3_top2_head_limit3_ppl/docs/qksieve_h100_reproduction_20260810.md`。
+
 该脚本只运行冻结 qMSE/OAS Robust 与同张量 Full，不能替换成 Key-MSE、Fast、
 旧 global template 或长度门控。每个 artifact 必须记录 GPU 型号、CUDA、PyTorch、
 源码 SHA、候选数、索引字节、peak memory 和直接计时区间。
