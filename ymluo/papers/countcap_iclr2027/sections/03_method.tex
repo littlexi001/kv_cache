@@ -23,7 +23,7 @@ uncentered second moments are
 \end{equation}
 We shrink the smaller Query sample,
 \begin{equation}
- S_q=(1-\lambda)\widehat C_q+lambda\tr(\widehat C_q)I/d,
+ S_q=(1-\lambda)\widehat C_q+\lambda\tr(\widehat C_q)I/d,
  \qquad\lambda=.75,
  \label{eq:q-shrink}
 \end{equation}
@@ -50,7 +50,7 @@ and define
 \end{equation}
 For $q'=A^\top q$ and $k'=D^\top k$,
 \begin{equation}
- AD^\top=I,qquad {q'}^\top k'=q^\top k,
+ AD^\top=I,\qquad {q'}^\top k'=q^\top k,
  \label{eq:qk-exact}
 \end{equation}
 while
@@ -84,7 +84,7 @@ distortion is exactly
 \end{equation}
 The per-layer/head allocation is
 \begin{equation}
- b^\star=\arg\min_b\sum_gD_g(b_g)quad\text{s.t.}\quad R(b)\le240.
+ b^\star=\arg\min_b\sum_gD_g(b_g)\quad\text{s.t.}\quad R(b)\le240.
  \label{eq:qmse-allocation}
 \end{equation}
 We enumerate the small feasible set exactly and freeze the result after
