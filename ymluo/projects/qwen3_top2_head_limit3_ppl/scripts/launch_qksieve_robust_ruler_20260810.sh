@@ -76,19 +76,52 @@ if [[ ! -s "${HOT_POT}" ]]; then
   "${PYTHON}" - "${HOT_POT}" <<'PY' \
     >"${RUN_ROOT}/logs/hotpot_download.log" 2>&1 || fail
 import sys
+import os
 from pathlib import Path
-from huggingface_hub import hf_hub_download
+
+import pyarrow.parquet as pq
+import requests
 
 target = Path(sys.argv[1])
-downloaded = Path(hf_hub_download(
-    repo_id="hotpotqa/hotpot_qa",
-    repo_type="dataset",
-    filename="distractor/validation-00000-of-00001.parquet",
-    local_dir=target.parents[1],
-))
 target.parent.mkdir(parents=True, exist_ok=True)
-if downloaded.resolve() != target.resolve():
-    target.write_bytes(downloaded.read_bytes())
+endpoint = os.environ.get("HF_ENDPOINT", "https://hf-mirror.com").rstrip("/")
+urls = [
+    f"{endpoint}/datasets/hotpotqa/hotpot_qa/resolve/main/"
+    "distractor/validation-00000-of-00001.parquet",
+    "https://huggingface.co/datasets/hotpotqa/hotpot_qa/resolve/main/"
+    "distractor/validation-00000-of-00001.parquet",
+]
+partial = target.with_suffix(target.suffix + ".part")
+last_error = None
+for url in dict.fromkeys(urls):
+    try:
+        with requests.get(
+            url,
+            stream=True,
+            timeout=(20, 300),
+            allow_redirects=True,
+        ) as response:
+            response.raise_for_status()
+            with partial.open("wb") as stream:
+                for chunk in response.iter_content(chunk_size=8 << 20):
+                    if chunk:
+                        stream.write(chunk)
+        if partial.stat().st_size < 1_000_000:
+            raise RuntimeError("downloaded HotpotQA parquet is unexpectedly small")
+        metadata = pq.ParquetFile(partial).metadata
+        if metadata.num_rows <= 0:
+            raise RuntimeError("downloaded HotpotQA parquet has no rows")
+        partial.replace(target)
+        print(
+            f"downloaded {target} ({target.stat().st_size} bytes, "
+            f"{metadata.num_rows} rows)"
+        )
+        break
+    except Exception as error:
+        last_error = error
+        partial.unlink(missing_ok=True)
+else:
+    raise RuntimeError("all HotpotQA direct downloads failed") from last_error
 PY
 fi
 
