@@ -10,6 +10,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from summarize_qksieve_h100_20260810 import summarize  # noqa: E402
+import qksieve_robust_contract_20260810 as contract  # noqa: E402
 
 
 def write_json(path: Path, payload: dict) -> None:
@@ -30,6 +31,9 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                         "qksieve_valuesketch_complete_ms": 2.0,
                         "qksieve_complete_ms": 1.0,
                         "fier_complete_ms": 4.0,
+                        "qksieve_valuesketch_candidate_counts_equal": True,
+                        "qksieve_valuesketch_candidate_sets_equal": True,
+                        "qksieve_valuesketch_tail_alpha": 0.5,
                     }
                     for length in (65536, 131072)
                 ],
@@ -59,6 +63,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "gpu_name": "NVIDIA H100 80GB HBM3",
                     "steady_mean_ms_per_token": 4.0,
                     "prebuild_wall_seconds": 1.0,
+                    "score_mode": contract.SCORE_MODE,
                     "value_sketch_disabled": False,
                     "value_sketch_tail_alpha": 0.5,
                 },
@@ -70,6 +75,7 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                 "shared_prefix_amortized_ms_per_token": 12.0,
                 "append_only_ms_per_token": 8.0,
                 "prebuild_wall_seconds": 0.0,
+                "gpu_name": "NVIDIA H100 80GB HBM3",
             }
             write_json(
                 tmp_path / "persistent" / f"n{length}" / seed_dir / "full.json",
@@ -89,6 +95,8 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
                     "shared_prefix_amortized_ms_per_token": 6.0,
                     "append_only_ms_per_token": 4.0,
                     "prebuild_wall_seconds": 2.0,
+                    "score_mode": contract.SCORE_MODE,
+                    "value_sketch_tail_alpha": 0.5,
                     "persistent_contract_passed": True,
                 },
             )
@@ -100,3 +108,5 @@ def test_h100_summary_pairs_all_three_timing_contracts(tmp_path: Path) -> None:
     persistent = payload["persistent_requests"][0]
     assert persistent["cold_speedup"] == 0.5
     assert persistent["warm_speedup"] == 2.0
+    assert payload["hardware"]["device_names"] == ["NVIDIA H100 80GB HBM3"]
+    assert payload["frozen_contract"] == contract.contract_payload()

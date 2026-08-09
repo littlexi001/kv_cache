@@ -174,6 +174,9 @@ bash scripts/launch_qksieve_h100_matched_20260810.sh
 该脚本只运行冻结 qMSE/OAS Robust 与同张量 Full，不能替换成 Key-MSE、Fast、
 旧 global template 或长度门控。每个 artifact 必须记录 GPU 型号、CUDA、PyTorch、
 源码 SHA、候选数、索引字节、peak memory 和直接计时区间。
+H100 汇总和总 evidence verifier 会再次检查设备名必须包含 `H100`、冻结合同与
+主方法 ID 必须逐字段一致、三类结果均含 64K/128K、至少三个 seed，并拒绝缺失、
+非有限或非正的延迟/加速字段；RTX 3090 结果不能误填进 H100 表。
 
 网格：
 
@@ -196,7 +199,7 @@ bash scripts/launch_qksieve_h100_matched_20260810.sh
 
 ### 2.5 持久化 KV 与 Agent 复用场景
 
-**状态：TODO，当前 request-local reference 结果不能直接填写本节。**
+**状态：RTX 3090 的冻结 Robust 32K/64K 证据已完成；H100 64K/128K 复测待完成。**
 
 论文的系统主张限定为“对已经构建且可以复用的 KV cache 加速 decode”，不把
 sparse prefill 作为当前贡献。但必须通过真实 cache 生命周期实验，而不能只用
@@ -209,7 +212,7 @@ steady decode 推断 Agent 场景。需要分别运行并报告：
 | Shared-prefix reuse | 一次 prefill/index，随后 $R$ 个查询或分支 | Agent rollout 的摊销收益和 break-even |
 | Append-only turn | 新 token prefill、增量 index append、随后 decode | 多轮增长时能否维持收益 |
 
-注册网格：
+完整目标网格：
 
 - 历史长度 `16K/32K/64K/128K`；
 - 每次生成 `32/64/256/1024` token；
@@ -231,7 +234,8 @@ break-even 的 $(R,G)$ 边界。Cold、warm 和摊销数字不得合并成一个
 - 如果 cache eviction/reload，两种方法都要公平计入，或单独报告；
 - 这里复用的是不可变索引，不允许复用上一步候选，不启用 learned router 或 Full fallback。
 
-Persistent v2 已完成 32K/64K 的 cold、warm、四分支均摊和 append-only 直接
+Persistent v2 已完成 32K/64K 的 cold、warm、shared-prefix 四分支均摊和
+append-only 直接
 计时。独立生命周期审计覆盖 32 层、6 个 snapshot 和 5 次 rewind，确认历史
 Key/Value index buffer 未重建、replay token/hash 一致、生成后索引只落后精确
 cache 一个注册 token。该证据允许在同一 request-local basis 下复用不变前缀、
@@ -263,7 +267,12 @@ docs/qksieve_persistent_kv_20260810/raw_results/
 | QKSieve uniform bit | 等索引字节 |
 | QKSieve automatic mixed-bit | 主方法 |
 
-当前 FIER 检索结果是经过审计的论文规格复现，只能支持检索质量结论。真正的 packed FIER-g32 CUDA 编码与扫描实现已经完成并通过 CPU 测试、远端编译；它使用 32 B/token/KV-head 的 bit-plane 索引，并与 QKSieve 共用 top-k 和 exact sparse-attention kernel。GPU 数值验证、同路径 LongBench/RULER 和正式速度仍未运行，不能使用旧的 unpacked FP16 参考路径计时或提前填写对比表。
+FIER RTN-1 g32 的 packed CUDA 编码与扫描已经完成 GPU 数值验证和同路径速度
+比较。它使用 32 B/token/KV-head 的 bit-plane 索引，并与 QKSieve 共用相同
+active-token 日程、top-k 和 exact sparse-attention consumer。在 RTX 3090 原生
+MHA 8K--128K 上，Fast 相对 FIER 为 1.37--3.58x，完整 Robust 在额外支付
+ValueSketch 后仍为 1.16--2.31x。该结论只对应本文审计的 packed 实现，不能写成
+对任意厂商优化 FIER 实现的速度结论；H100 上仍需随主系统表重新测量。
 
 Quest 与两种 SparQ reference 的同 harness 质量控制已经接入：
 

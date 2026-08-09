@@ -44,8 +44,40 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         "tasks": 16,
         "quality_retention_95ci": [0.99, 1.01],
     }
-    system_rows = [
-        {"history_tokens": length} for length in (65536, 131072)
+    attention_rows = [
+        {
+            "history_tokens": length,
+            "full_mha_ms": 8.0,
+            "qksieve_robust_ms": 2.0,
+            "qksieve_fast_ms": 1.0,
+            "fier_ms": 4.0,
+            "robust_speedup": 4.0,
+            "fast_speedup": 8.0,
+            "fier_speedup": 2.0,
+            "robust_vs_fier": 2.0,
+        }
+        for length in (65536, 131072)
+    ]
+    decode_rows = [
+        {
+            "history_tokens": length,
+            "full_steady_ms_per_token": 12.0,
+            "qksieve_steady_ms_per_token": 4.0,
+            "steady_decode_speedup": 3.0,
+            "qksieve_prebuild_seconds_median": 1.0,
+        }
+        for length in (65536, 131072)
+    ]
+    persistent_system_rows = [
+        {
+            "history_tokens": length,
+            "cold_speedup": 0.5,
+            "warm_speedup": 2.0,
+            "shared_prefix_amortized_speedup": 1.5,
+            "append_only_speedup": 2.0,
+            "qksieve_index_build_seconds_median": 1.0,
+        }
+        for length in (65536, 131072)
     ]
     longbench_per_task = {
         f"task{i}": {
@@ -107,9 +139,13 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         h100={
             "schema": "qksieve_h100_matched_system_summary_v1",
             "expected_seeds": 3,
-            "attention": system_rows,
-            "steady_decode": system_rows,
-            "persistent_requests": system_rows,
+            "hardware": {"device_names": ["NVIDIA H100 80GB HBM3"]},
+            "frozen_contract": contract.contract_payload(),
+            "methods": {"main": contract.METHOD},
+            "attention": attention_rows,
+            "steady_decode": decode_rows,
+            "persistent_requests": persistent_system_rows,
+            "claim_boundary": "matched H100 evidence",
         },
     )
 
@@ -157,3 +193,39 @@ def test_audit_rejects_persistent_summary_without_independent_audit() -> None:
         assert "independent audit" in str(error)
     else:
         raise AssertionError("missing independent audit was accepted")
+
+
+def test_audit_rejects_non_h100_system_evidence() -> None:
+    rows = [
+        {
+            "history_tokens": length,
+            "full_mha_ms": 8.0,
+            "qksieve_robust_ms": 2.0,
+            "qksieve_fast_ms": 1.0,
+            "fier_ms": 4.0,
+            "robust_speedup": 4.0,
+            "fast_speedup": 8.0,
+            "fier_speedup": 2.0,
+            "robust_vs_fier": 2.0,
+        }
+        for length in (65536, 131072)
+    ]
+    try:
+        verify(
+            PROJECT_ROOT,
+            h100={
+                "schema": "qksieve_h100_matched_system_summary_v1",
+                "expected_seeds": 3,
+                "hardware": {"device_names": ["NVIDIA RTX 3090"]},
+                "frozen_contract": contract.contract_payload(),
+                "methods": {"main": contract.METHOD},
+                "attention": rows,
+                "steady_decode": [],
+                "persistent_requests": [],
+                "claim_boundary": "synthetic",
+            },
+        )
+    except AssertionError as error:
+        assert "non-H100" in str(error)
+    else:
+        raise AssertionError("non-H100 evidence was accepted")

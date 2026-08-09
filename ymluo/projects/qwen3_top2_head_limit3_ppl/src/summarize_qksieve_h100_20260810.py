@@ -10,9 +10,18 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
+import qksieve_robust_contract_20260810 as contract
+
 
 LENGTHS = (65536, 131072)
 METHODS = ("full", "qksieve_valuesketch_top1280")
+
+
+def require_h100(value: Any, source: Path) -> str:
+    name = str(value or "")
+    if "H100" not in name:
+        raise AssertionError(f"non-H100 result: {source}: {name!r}")
+    return name
 
 
 def parse_args() -> argparse.Namespace:
@@ -37,9 +46,16 @@ def summarize_attention(run_root: Path, expected_seeds: int) -> list[dict[str, A
     grouped: dict[int, list[dict[str, Any]]] = defaultdict(list)
     for path in sorted((run_root / "attention").glob("seed*.json")):
         payload = load_json(path)
-        if "H100" not in str(payload.get("gpu", "")):
-            raise AssertionError(f"non-H100 attention result: {path}")
+        require_h100(payload.get("gpu"), path)
         for row in payload["rows"]:
+            if not row.get("qksieve_valuesketch_candidate_counts_equal"):
+                raise AssertionError(f"Robust candidate counts drifted: {path}")
+            if not row.get("qksieve_valuesketch_candidate_sets_equal"):
+                raise AssertionError(f"Robust candidate sets drifted: {path}")
+            if float(row.get("qksieve_valuesketch_tail_alpha", -1.0)) != float(
+                contract.VALUE_SKETCH_TAIL_ALPHA
+            ):
+                raise AssertionError(f"Robust tail alpha drifted: {path}")
             grouped[int(row["history_count"])].append(row)
 
     rows: list[dict[str, Any]] = []
@@ -105,11 +121,15 @@ def summarize_decode(run_root: Path, expected_seeds: int) -> list[dict[str, Any]
     for length in LENGTHS:
         pairs = paired[length]
         for full, sparse in pairs:
-            if "H100" not in str(full.get("gpu_name", "")):
-                raise AssertionError("non-H100 decode result")
+            require_h100(full.get("gpu_name"), run_root / "decode")
+            require_h100(sparse.get("gpu_name"), run_root / "decode")
+            if sparse.get("score_mode") != contract.SCORE_MODE:
+                raise AssertionError("Robust decode score mode drifted")
             if sparse.get("value_sketch_disabled"):
                 raise AssertionError("Robust decode disabled ValueSketch")
-            if float(sparse.get("value_sketch_tail_alpha", -1.0)) != 0.5:
+            if float(sparse.get("value_sketch_tail_alpha", -1.0)) != float(
+                contract.VALUE_SKETCH_TAIL_ALPHA
+            ):
                 raise AssertionError("Robust decode used the wrong tail alpha")
         full_ms = median(
             [float(full["steady_mean_ms_per_token"]) for full, _ in pairs]
@@ -146,7 +166,15 @@ def summarize_persistent(run_root: Path, expected_seeds: int) -> list[dict[str, 
     rows: list[dict[str, Any]] = []
     for length in LENGTHS:
         pairs = paired[length]
-        for _full, sparse in pairs:
+        for full, sparse in pairs:
+            require_h100(full.get("gpu_name"), run_root / "persistent")
+            require_h100(sparse.get("gpu_name"), run_root / "persistent")
+            if sparse.get("score_mode") != contract.SCORE_MODE:
+                raise AssertionError("persistent Robust score mode drifted")
+            if float(sparse.get("value_sketch_tail_alpha", -1.0)) != float(
+                contract.VALUE_SKETCH_TAIL_ALPHA
+            ):
+                raise AssertionError("persistent Robust tail alpha drifted")
             if not sparse.get("persistent_contract_passed"):
                 raise AssertionError("persistent lifecycle contract failed")
         row: dict[str, Any] = {"history_tokens": length}
@@ -161,10 +189,30 @@ def summarize_persistent(run_root: Path, expected_seeds: int) -> list[dict[str, 
     return rows
 
 
+def collect_hardware(run_root: Path) -> list[str]:
+    names: set[str] = set()
+    for path in sorted((run_root / "attention").glob("seed*.json")):
+        names.add(require_h100(load_json(path).get("gpu"), path))
+    for group in ("decode", "persistent"):
+        for path in sorted((run_root / group).glob("n*/seed*/*.json")):
+            names.add(require_h100(load_json(path).get("gpu_name"), path))
+    if not names:
+        raise AssertionError("H100 summary has no hardware records")
+    return sorted(names)
+
+
 def summarize(run_root: Path, expected_seeds: int) -> dict[str, Any]:
     return {
         "schema": "qksieve_h100_matched_system_summary_v1",
         "expected_seeds": expected_seeds,
+        "hardware": {"device_names": collect_hardware(run_root)},
+        "frozen_contract": contract.contract_payload(),
+        "methods": {
+            "full": "native full attention without KV-head replication",
+            "main": contract.METHOD,
+            "fast_ablation": "qksieve_no_value_top1280",
+            "fier_control": "fier_rtn1_g32_top1280",
+        },
         "attention": summarize_attention(run_root, expected_seeds),
         "steady_decode": summarize_decode(run_root, expected_seeds),
         "persistent_requests": summarize_persistent(run_root, expected_seeds),

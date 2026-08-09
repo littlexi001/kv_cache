@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -199,28 +200,86 @@ def validate_multimodel(payload: dict[str, Any]) -> dict[str, Any]:
     return models
 
 
-def _validate_h100_rows(rows: Any, label: str) -> list[dict[str, Any]]:
-    if not isinstance(rows, list) or {
-        int(row["history_tokens"]) for row in rows
-    } != SYSTEM_LENGTHS:
+def _positive_finite(row: dict[str, Any], field: str, label: str) -> None:
+    if field not in row:
+        raise AssertionError(f"H100 {label} is missing {field}")
+    value = float(row[field])
+    if not math.isfinite(value) or value <= 0.0:
+        raise AssertionError(f"H100 {label} has invalid {field}: {value}")
+
+
+def _validate_h100_rows(
+    rows: Any,
+    label: str,
+    required_fields: tuple[str, ...],
+) -> list[dict[str, Any]]:
+    if not isinstance(rows, list) or len(rows) != len(SYSTEM_LENGTHS):
         raise AssertionError(f"H100 {label} lacks 64K/128K")
+    if {int(row["history_tokens"]) for row in rows} != SYSTEM_LENGTHS:
+        raise AssertionError(f"H100 {label} lacks 64K/128K")
+    for row in rows:
+        for field in required_fields:
+            _positive_finite(row, field, label)
     return rows
 
 
 def validate_h100(payload: dict[str, Any]) -> dict[str, Any]:
     if payload.get("schema") != "qksieve_h100_matched_system_summary_v1":
         raise AssertionError("H100 summary schema mismatch")
+    if payload.get("frozen_contract") != contract.contract_payload():
+        raise AssertionError("H100 frozen contract drifted")
     if int(payload.get("expected_seeds", 0)) < 3:
         raise AssertionError("H100 result requires at least three seeds")
+    hardware = payload.get("hardware")
+    names = hardware.get("device_names") if isinstance(hardware, dict) else None
+    if not isinstance(names, list) or not names:
+        raise AssertionError("H100 hardware identity is missing")
+    if any("H100" not in str(name) for name in names):
+        raise AssertionError("H100 evidence contains a non-H100 device")
+    methods = payload.get("methods")
+    if not isinstance(methods, dict) or methods.get("main") != contract.METHOD:
+        raise AssertionError("H100 main method identity drifted")
+    claim_boundary = payload.get("claim_boundary")
+    if not isinstance(claim_boundary, str) or not claim_boundary.strip():
+        raise AssertionError("H100 claim boundary is missing")
     return {
-        "attention": _validate_h100_rows(payload.get("attention"), "attention"),
+        "hardware": hardware,
+        "attention": _validate_h100_rows(
+            payload.get("attention"),
+            "attention",
+            (
+                "full_mha_ms",
+                "qksieve_robust_ms",
+                "qksieve_fast_ms",
+                "fier_ms",
+                "robust_speedup",
+                "fast_speedup",
+                "fier_speedup",
+                "robust_vs_fier",
+            ),
+        ),
         "steady_decode": _validate_h100_rows(
-            payload.get("steady_decode"), "decode"
+            payload.get("steady_decode"),
+            "decode",
+            (
+                "full_steady_ms_per_token",
+                "qksieve_steady_ms_per_token",
+                "steady_decode_speedup",
+                "qksieve_prebuild_seconds_median",
+            ),
         ),
         "persistent_requests": _validate_h100_rows(
-            payload.get("persistent_requests"), "requests"
+            payload.get("persistent_requests"),
+            "requests",
+            (
+                "cold_speedup",
+                "warm_speedup",
+                "shared_prefix_amortized_speedup",
+                "append_only_speedup",
+                "qksieve_index_build_seconds_median",
+            ),
         ),
-        "claim_boundary": payload.get("claim_boundary"),
+        "claim_boundary": claim_boundary,
     }
 
 
