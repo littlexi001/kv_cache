@@ -11,6 +11,9 @@ New-Item -ItemType Directory -Force -Path $OutputDir | Out-Null
 
 Push-Location $PaperDir
 try {
+    & python scripts\make_qksieve_rtx3090_system_rows.py
+    if ($LASTEXITCODE -ne 0) { throw "RTX 3090 system table generation failed." }
+
     & $Tectonic -X compile main_zh.tex --outdir $BuildDir --keep-logs --keep-intermediates
     if ($LASTEXITCODE -ne 0) { throw "Chinese PDF compilation failed." }
 }

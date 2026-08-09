@@ -1,5 +1,6 @@
 \section{Experiments}
 \label{sec:experiments}
+\input{data/generated/qksieve_rtx3090_system_rows.tex}
 
 We test equal-byte retrieval geometry and allocation, frozen downstream
 quality across tasks and models, and whole-model crossover after all
@@ -112,11 +113,7 @@ consumer.  Index construction is excluded from all rows.}
 \toprule
 History & Full & Fast & Robust & Fast sp. & Robust sp. \\
 \midrule
-8K   & .1691 & .1327 & .1560 & 1.27$\times$ & 1.08$\times$ \\
-16K  & .3173 & .1900 & .2250 & 1.67$\times$ & 1.41$\times$ \\
-32K  & .6163 & .2324 & .2945 & 2.65$\times$ & 2.09$\times$ \\
-64K  & 1.2027 & .2646 & .3576 & 4.55$\times$ & 3.36$\times$ \\
-128K & 2.3708 & .3722 & .5757 & 6.37$\times$ & 4.12$\times$ \\
+\QKSieveMhaAttentionRows
 \bottomrule
 \end{tabular}
 \end{table}
@@ -145,11 +142,7 @@ tail.  Ratios above one favor QKSieve.}
 \toprule
 History & FIER & Fast & Robust & Fast/FIER & Robust/FIER \\
 \midrule
-8K   & .1816 & .1327 & .1560 & 1.37$\times$ & 1.16$\times$ \\
-16K  & .2951 & .1900 & .2250 & 1.55$\times$ & 1.31$\times$ \\
-32K  & .4647 & .2324 & .2945 & 2.00$\times$ & 1.58$\times$ \\
-64K  & .7329 & .2646 & .3576 & 2.77$\times$ & 2.05$\times$ \\
-128K & 1.3322 & .3722 & .5757 & 3.58$\times$ & 2.31$\times$ \\
+\QKSieveMhaFierRows
 \bottomrule
 \end{tabular}
 \end{table}
@@ -175,12 +168,16 @@ timed whole-model milliseconds per token.}
 \toprule
 History & Full & Fast & Robust & Fast sp. & Robust sp. \\
 \midrule
-32K  & 84.18 & 51.56 & 63.97 & 1.63$\times$ & 1.32$\times$ \\
-64K  & 144.75 & 52.97 & 65.25 & 2.73$\times$ & 2.22$\times$ \\
-128K & 268.17 & 55.41 & 67.38 & 4.84$\times$ & 3.98$\times$ \\
+\QKSieveMhaDecodeRows
 \bottomrule
 \end{tabular}
 \end{table}
+
+Fast/Robust index construction takes .768/1.375, .774/1.488, and
+.743/1.839 seconds at 32/64/128K, giving break-even lengths of 24/69, 9/19,
+and 4/10 tokens and directly timed 64-token online speedups of 1.01/.81,
+1.64/1.31, and 2.75/2.15$\times$.  Dense prefill and deployment-time CUDA JIT
+are excluded; see \cref{tab:mha-build-break-even}.
 
 \begin{table}[t]
 \caption{Directly timed persistent-cache lifecycle on the same MHA model and
@@ -194,8 +191,7 @@ generated tokens.  Ratios are matched Full/QKSieve wall times.}
 \toprule
 History & Cold & Warm & 4-branch amort. & Append-only & Build (s) \\
 \midrule
-32K & .702$\times$ & 1.322$\times$ & 1.082$\times$ & 1.319$\times$ & 1.759 \\
-64K & 1.125$\times$ & 2.221$\times$ & 1.785$\times$ & 2.211$\times$ & 1.998 \\
+\QKSievePersistentRows
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -209,13 +205,10 @@ A simple $I/(D_f-D_s)$ calculation gives
 approximately 87/26 generated tokens to break even, consistent with the
 direct 32-token cold outcomes in \cref{tab:persistent-kv-main}.
 
-The lifecycle audit covers all 32 layers, six state snapshots, and five
-rewinds per length.  Key/Value index pointers and rebuild counters remain
-unchanged; replayed tokens and hashes match exactly; after decode both indices
-lag the exact cache by the registered one token.  This run reuses one
-request-local QK transform across branches and continuous generation.  It does
-not show that an index can be reused after a new prompt changes Query
-statistics; that case requires rebuilding the request-local index.
+The lifecycle audit covers all 32 layers, six snapshots, and five rewinds,
+with stable index pointers and deterministic replay.  Reuse is valid while
+request-local Query statistics remain fixed; a new prompt requires rebuilding
+the request-local index.
 
 At the native 128K boundary, a corrected same-seed six-topic audit reverses
 our initial conclusion.  QKSieve-Fast retains only 96.319\% pooled PPL

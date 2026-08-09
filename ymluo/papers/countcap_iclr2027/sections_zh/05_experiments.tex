@@ -1,5 +1,6 @@
 \section{实验}
 \label{sec:experiments}
+\input{data/generated/qksieve_rtx3090_system_rows.tex}
 
 \subsection{实验协议}
 
@@ -96,11 +97,7 @@ rank-16 INT4 Value-tail 扫描和 consumer。所有行均不含索引构建。}
 \toprule
 历史长度 & Full & Fast & Robust & Fast 加速 & Robust 加速 \\
 \midrule
-8K   & .1691 & .1327 & .1560 & 1.27$\times$ & 1.08$\times$ \\
-16K  & .3173 & .1900 & .2250 & 1.67$\times$ & 1.41$\times$ \\
-32K  & .6163 & .2324 & .2945 & 2.65$\times$ & 2.09$\times$ \\
-64K  & 1.2027 & .2646 & .3576 & 4.55$\times$ & 3.36$\times$ \\
-128K & 2.3708 & .3722 & .5757 & 6.37$\times$ & 4.12$\times$ \\
+\QKSieveMhaAttentionRows
 \bottomrule
 \end{tabular}
 \end{table}
@@ -124,11 +121,7 @@ Value。kernel 实际分配的 Key-only 与 Key+Value 辅助张量约占 FP16 K+
 \toprule
 历史长度 & FIER & Fast & Robust & Fast/FIER & Robust/FIER \\
 \midrule
-8K   & .1816 & .1327 & .1560 & 1.37$\times$ & 1.16$\times$ \\
-16K  & .2951 & .1900 & .2250 & 1.55$\times$ & 1.31$\times$ \\
-32K  & .4647 & .2324 & .2945 & 2.00$\times$ & 1.58$\times$ \\
-64K  & .7329 & .2646 & .3576 & 2.77$\times$ & 2.05$\times$ \\
-128K & 1.3322 & .3722 & .5757 & 3.58$\times$ & 2.31$\times$ \\
+\QKSieveMhaFierRows
 \bottomrule
 \end{tabular}
 \end{table}
@@ -152,12 +145,15 @@ Robust 路径。
 \toprule
 历史长度 & Full & Fast & Robust & Fast 加速 & Robust 加速 \\
 \midrule
-32K  & 84.18 & 51.56 & 63.97 & 1.63$\times$ & 1.32$\times$ \\
-64K  & 144.75 & 52.97 & 65.25 & 2.73$\times$ & 2.22$\times$ \\
-128K & 268.17 & 55.41 & 67.38 & 4.84$\times$ & 3.98$\times$ \\
+\QKSieveMhaDecodeRows
 \bottomrule
 \end{tabular}
 \end{table}
+
+Fast/Robust 索引在 32/64/128K 的构建时间为 .768/1.375、.774/1.488 和
+.743/1.839 秒，对应 break-even 24/69、9/19 和 4/10 token；直接计时的
+64-token 在线加速为 1.01/.81、1.64/1.31 和 2.75/2.15$\times$。结果不包含
+dense prefill 和部署前 CUDA JIT，完整表见 \cref{tab:mha-build-break-even}。
 
 \begin{table}[t]
 \caption{同一 MHA 模型和 RTX 3090 上直接计时的 persistent-cache 生命周期。
@@ -170,8 +166,7 @@ Cold 包含完整 Robust 索引构建和一个 32-token 分支；warm 复用索�
 \toprule
 历史长度 & Cold & Warm & 四分支均摊 & Append-only & 构建 (s) \\
 \midrule
-32K & .702$\times$ & 1.322$\times$ & 1.082$\times$ & 1.319$\times$ & 1.759 \\
-64K & 1.125$\times$ & 2.221$\times$ & 1.785$\times$ & 2.211$\times$ & 1.998 \\
+\QKSievePersistentRows
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -184,11 +179,9 @@ Cold 包含完整 Robust 索引构建和一个 32-token 分支；warm 复用索�
 $I/(D_f-D_s)$，break-even 约为 87/26 个生成 token，与
 \cref{tab:persistent-kv-main}直接测得的 32-token cold 结果一致。
 
-生命周期审计在每个长度覆盖全部 32 层、6 个状态快照和 5 次 rewind。
-Key/Value 索引指针与重建计数始终不变；重放 token 和 hash 完全一致；decode 后
-两类索引都严格落后精确 cache 一个注册 token。该实验只在分支与连续生成之间
-复用同一个 request-local QK transform。它没有证明新 prompt 改变 Query 统计后
-仍能复用旧索引；这种情况必须重新构建 request-local 索引。
+生命周期审计覆盖全部 32 层、6 个快照和 5 次 rewind，索引指针稳定且重放
+完全确定。复用只在 request-local Query 统计不变时成立；新 prompt 需要重建
+request-local 索引。
 
 原生 128K 的修正同 seed 六主题审计推翻了早期结论。QKSieve-Fast 的 pooled
 PPL 保持率仅为 96.319\%（case macro 96.373\%），政治主题最差为 91.100\%。

@@ -144,6 +144,28 @@ Decode 包围完整 32-token 生成区间并包含方法初始化；Request 还�
 但系统 crossover 很清晰：attention 与整模型 steady 约在 16K 出现收益，
 32-token decode 直到约 128K 才加速，而请求级在 128K 也仅略高于 1。
 
+\begin{table}[!htbp]
+\caption{独立 MHA decode harness 中的一次性索引构建、解析 break-even 生成长度，
+以及计入构建成本后直接计时的 64-token 在线加速。构建列单位为秒；该表不包含
+dense prefill 和部署前 CUDA JIT。}
+\label{tab:mha-build-break-even}
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{rrrrrrr}
+\toprule
+长度 & Fast 构建 & Robust 构建 & Fast BE & Robust BE & Fast 在线 & Robust 在线 \\
+\midrule
+\QKSieveMhaBuildBreakEvenRows
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Break-even 定义为 $\lceil I/(D_f-D_s)\rceil$，其中 $I$ 是索引构建时间，
+$D_f,D_s$ 是直接计时的稳态秒/token。在线列用匹配的 Full 64-token 墙钟时间
+除以“构建加稀疏 decode”。这里的独立 harness 构建低于
+\cref{tab:persistent-kv-main} 的完整 persistent 生命周期构建；后者还包含可复用
+状态的安装和审计。
+
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{figures/qksieve_system_diagnostics.pdf}

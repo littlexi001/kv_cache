@@ -156,6 +156,30 @@ crossover unambiguously: attention-level speedup appears near 16K, steady
 whole-model speedup near 16K, a 32-token decode gain only near 128K, and an
 end-to-end request gain only marginally at 128K.
 
+\begin{table}[!htbp]
+\caption{One-time index construction in the isolated MHA decode harness,
+analytical break-even generation length, and directly timed 64-token online
+speedup including construction.  Build columns are seconds; dense prefill and
+deployment-time CUDA JIT are excluded.}
+\label{tab:mha-build-break-even}
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{rrrrrrr}
+\toprule
+History & Fast build & Robust build & Fast BE & Robust BE & Fast online & Robust online \\
+\midrule
+\QKSieveMhaBuildBreakEvenRows
+\bottomrule
+\end{tabular}}
+\end{table}
+
+Break-even is $\lceil I/(D_f-D_s)\rceil$, where $I$ is index-construction
+time and $D_f,D_s$ are directly timed steady seconds per token.  The online
+columns divide the matched Full 64-token wall time by construction plus sparse
+decode.  These isolated-harness builds are lower than the complete persistent
+lifecycle builds in \cref{tab:persistent-kv-main}, which also install and audit
+reusable state.
+
 \begin{figure}[!htbp]
   \centering
   \includegraphics[width=\linewidth]{figures/qksieve_system_diagnostics.pdf}

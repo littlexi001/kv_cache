@@ -4,8 +4,7 @@
 \method 的 5.86\% QK-balanced Key index 能保持完整 LongBench 质量，但原生
 128K 审计说明 selected-only attention 并非通用 consumer。7.47\% 的 Robust
 配置在 12 个主题/seed case 上修复遗漏 Value 失真，且无需 reranking、learning、
-稠密 fallback 或额外 exact token。64K 门控消融改善了一个短上下文筛查，但其
-启发式边界不属于冻结方法。在原生 MHA 上，Fast 与 Robust attention 在
+稠密 fallback 或额外 exact token。在原生 MHA 上，Fast 与 Robust attention 在
 8K--128K 达到 1.27--6.37$\times$ 与 1.08--4.12$\times$；Robust 稳态 decode
 在 32/64/128K 达到 1.32/2.22/3.98$\times$。计入索引构建后，64-token 冷请求
 达到 .81/1.31/2.15$\times$，因此持久化复用是显式评测场景，而非隐含假设。

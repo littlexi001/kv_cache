@@ -20,6 +20,9 @@ try {
     & python scripts\make_qksieve_system_figure.py
     if ($LASTEXITCODE -ne 0) { throw "System figure generation failed." }
 
+    & python scripts\make_qksieve_rtx3090_system_rows.py
+    if ($LASTEXITCODE -ne 0) { throw "RTX 3090 system table generation failed." }
+
     & python scripts\make_qksieve_256k_oracle_gap_figure.py `
         --summary data\qksieve_256k_oracle_gap.json `
         --output_pdf figures\qksieve_256k_oracle_gap.pdf `

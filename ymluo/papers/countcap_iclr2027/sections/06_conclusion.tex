@@ -5,8 +5,7 @@
 native-128K audit shows that selected-only attention is not a universal
 consumer.  The 7.47\% Robust profile closes this omitted-Value failure on 12
 topic/seed cases without reranking, learning, dense fallback, or extra exact
-tokens.  A 64K-gated ablation helps one short-context screen, but its heuristic
-boundary is excluded from the frozen method.  On native MHA, Fast and Robust
+tokens.  On native MHA, Fast and Robust
 attention reach 1.27--6.37$\times$ and 1.08--4.12$\times$ at 8K--128K; Robust
 steady decode reaches 1.32/2.22/3.98$\times$ at 32/64/128K.  Including index
 construction, a 64-token cold request reaches .81/1.31/2.15$\times$, making
