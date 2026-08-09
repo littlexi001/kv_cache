@@ -24,6 +24,14 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "index_buffers_reused_without_rebuild": True,
             "rewind_value_layers_correct": True,
             "persistent_contract_passed": True,
+            "independent_lifecycle_audit": {
+                "layers": 32,
+                "snapshots": 6,
+                "rewinds": 5,
+                "post_decode_index_lag_tokens": 1,
+                "all_index_buffers_stable": True,
+                "deterministic_replay": True,
+            },
         }
         for length in (32768, 65536)
     ]
@@ -90,3 +98,33 @@ def test_audit_reports_missing_sections() -> None:
         "multimodel",
         "h100",
     }
+
+
+def test_audit_rejects_persistent_summary_without_independent_audit() -> None:
+    rows = [
+        {
+            "history_tokens": length,
+            "warm_speedup": 2.0,
+            "cold_speedup": 0.5,
+            "amortized_speedup": 1.5,
+            "append_only_speedup": 2.0,
+            "reuse_tokens_equal": True,
+            "index_buffers_reused_without_rebuild": True,
+            "rewind_value_layers_correct": True,
+            "persistent_contract_passed": True,
+        }
+        for length in (32768, 65536)
+    ]
+    try:
+        verify(
+            PROJECT_ROOT,
+            persistent={
+                "schema": "qksieve_persistent_kv_summary_v2",
+                "all_correct": True,
+                "rows": rows,
+            },
+        )
+    except AssertionError as error:
+        assert "independent audit" in str(error)
+    else:
+        raise AssertionError("missing independent audit was accepted")

@@ -99,6 +99,19 @@ def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
             )
         ):
             raise AssertionError("persistent row failed a lifecycle check")
+        audit = row.get("independent_lifecycle_audit")
+        if not isinstance(audit, dict):
+            raise AssertionError("persistent row lacks an independent audit")
+        expected_audit = {
+            "layers": 32,
+            "snapshots": 6,
+            "rewinds": 5,
+            "post_decode_index_lag_tokens": 1,
+            "all_index_buffers_stable": True,
+            "deterministic_replay": True,
+        }
+        if any(audit.get(name) != value for name, value in expected_audit.items()):
+            raise AssertionError("persistent independent lifecycle audit drifted")
     return {"rows": rows, "claim_boundary": payload.get("claim_boundary")}
 
 
