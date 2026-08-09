@@ -19,6 +19,7 @@ GPUS="${GPUS:-0,1,2,3,4,5,6,7}"
 LLAMA_MODEL="${LLAMA_MODEL:-${ROOT}/models/Meta-Llama-3.1-8B-Instruct-ms}"
 QWEN_MODEL="${QWEN_MODEL:-${ROOT}/models/Qwen3-4B-Instruct-2507}"
 MISTRAL_MODEL="${MISTRAL_MODEL:-${ROOT}/models/Mistral-7B-Instruct-v0.3}"
+MODEL_TAGS="${MODEL_TAGS:-llama31_8b,qwen3_4b,mistral_7b}"
 
 export PATH="$(dirname "${PYTHON}"):/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
 export PYTHONPATH="${ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
@@ -54,6 +55,13 @@ fail() {
   touch "${RUN_ROOT}/FAILED"
   rm -f "${RUN_ROOT}/RUNNING"
   exit 1
+}
+
+model_selected() {
+  case ",${MODEL_TAGS}," in
+    *",$1,"*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 model_complete() {
@@ -102,9 +110,23 @@ PY
 }
 
 [[ -f "${DATA_DIR}/manifest.json" ]] || { echo "missing LongBench data"; fail; }
-ensure_model "${LLAMA_MODEL}" "meta-llama/Meta-Llama-3.1-8B-Instruct" || fail
-ensure_model "${QWEN_MODEL}" "Qwen/Qwen3-4B-Instruct-2507" || fail
-ensure_model "${MISTRAL_MODEL}" "mistralai/Mistral-7B-Instruct-v0.3" || fail
+IFS=',' read -r -a selected_models <<<"${MODEL_TAGS}"
+[[ "${#selected_models[@]}" -gt 0 ]] || { echo "MODEL_TAGS is empty" >&2; fail; }
+for tag in "${selected_models[@]}"; do
+  case "${tag}" in
+    llama31_8b|qwen3_4b|mistral_7b) ;;
+    *) echo "unsupported MODEL_TAGS entry: ${tag}" >&2; fail ;;
+  esac
+done
+if model_selected llama31_8b; then
+  ensure_model "${LLAMA_MODEL}" "meta-llama/Meta-Llama-3.1-8B-Instruct" || fail
+fi
+if model_selected qwen3_4b; then
+  ensure_model "${QWEN_MODEL}" "Qwen/Qwen3-4B-Instruct-2507" || fail
+fi
+if model_selected mistral_7b; then
+  ensure_model "${MISTRAL_MODEL}" "mistralai/Mistral-7B-Instruct-v0.3" || fail
+fi
 
 IFS=',' read -r -a gpu_list <<<"${GPUS}"
 if [[ "${#gpu_list[@]}" -ne 8 ]]; then
@@ -208,13 +230,19 @@ PY
   touch "${output}/ALL_COMPLETE"
 }
 
-run_model llama31_8b "${LLAMA_MODEL}" llama3 || fail
-run_model qwen3_4b "${QWEN_MODEL}" qwen3 || fail
-run_model mistral_7b "${MISTRAL_MODEL}" tokenizer_chat || fail
+if model_selected llama31_8b; then
+  run_model llama31_8b "${LLAMA_MODEL}" llama3 || fail
+fi
+if model_selected qwen3_4b; then
+  run_model qwen3_4b "${QWEN_MODEL}" qwen3 || fail
+fi
+if model_selected mistral_7b; then
+  run_model mistral_7b "${MISTRAL_MODEL}" tokenizer_chat || fail
+fi
 
 "${PYTHON}" "${COMBINER}" \
   --run_root "${RUN_ROOT}" \
-  --models llama31_8b,qwen3_4b,mistral_7b \
+  --models "${MODEL_TAGS}" \
   --expected_pairs $((16 * MAX_SAMPLES_PER_TASK)) \
   --expected_tasks 16 \
   >"${RUN_ROOT}/logs/combine.log" 2>&1 || fail

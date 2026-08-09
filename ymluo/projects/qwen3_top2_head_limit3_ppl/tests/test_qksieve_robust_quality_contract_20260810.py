@@ -228,6 +228,13 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
         assert "numerical_freeze_commit_sha=" in text
         assert "audited_implementation_commit_sha=" in text
 
+    multimodel = (
+        scripts / "launch_qksieve_robust_multimodel_longbench_20260810.sh"
+    ).read_text(encoding="utf-8")
+    assert "MODEL_TAGS=" in multimodel
+    assert "model_selected()" in multimodel
+    assert '--models "${MODEL_TAGS}"' in multimodel
+
 
 def test_h100_launcher_records_frozen_provenance() -> None:
     script = (
