@@ -386,7 +386,8 @@ teacher-forced continuation 只能作为长位置机制证据，不能冒充自�
 - 报告 median、p5、p95、warm-up、重复次数、CUDA/PyTorch/Transformers 版本和 GPU 时钟；
 - 冻结模型、数据集 revision、随机种子、编译 flags 和匿名 artifact commit；
 - 论文中统一写成“完整 FP16 K/V + 5.859% 检索索引”，不能写成只保留 5.859% KV memory；
-- ICLR 2027 官方模板发布后替换临时模板；
+- ICLR 2027 官方模板已于 2026-08-10 完成逐字节核验；最终提交前仍需重新核对
+  官方规则、9 页正文、匿名性、AI 使用声明与可复现性声明；
 - 删除或替换所有 `TBD`，并由证据校验器重新验证。
 
 ## 7. 当前最短执行顺序

@@ -1,8 +1,7 @@
 \documentclass{article}
 
-% Provisional ICLR 2027 draft. The official 2027 style had not been released
-% when this draft was created; iclr2027_conference.sty is a locally renamed
-% copy of the official ICLR 2026 style.
+% Official ICLR 2027 style, downloaded from the conference author guide and
+% verified byte-for-byte against the released .sty/.bst files on 2026-08-10.
 \usepackage{iclr2027_conference,times}
 \usepackage{amsmath,amssymb,mathtools}
 \usepackage{booktabs}
@@ -97,6 +96,24 @@ decomposition.
 \input{sections/06_conclusion}
 
 \clearpage
+\section*{AI Use Statement}
+Generative AI tools assisted with hypothesis refinement, experimental design,
+method implementation, mathematical derivations and proof drafting, result
+interpretation, literature organization, figure and table preparation,
+translation, and manuscript editing.  Reported numerical claims are tied to
+frozen source revisions and machine-readable artifacts and are checked by
+executable validation scripts; theoretical statements are checked against
+their stated assumptions.  The authors take responsibility for the final
+content, claims, code, and artifacts.
+
+\section*{Reproducibility Statement}
+The complete algorithm and frozen operating point are specified in
+\cref{sec:method}; proofs and applicability conditions are provided in the
+appendix.  The supplementary artifact records source and data revisions,
+per-file checksums, launch commands, hardware and software metadata, paired
+sample identifiers, and bootstrap seeds.  It also includes an evidence
+verifier that rejects results not matching the frozen method contract.
+
 \bibliography{references}
 \bibliographystyle{iclr2027_conference}
 

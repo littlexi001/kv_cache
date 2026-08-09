@@ -1,18 +1,20 @@
 # QKSieve ICLR 2027 论文草稿
 
-## 当前方法决策（2026-08-03）
+## 当前方法决策（2026-08-10）
 
-- 论文主方法恢复并冻结为 **QKSieve-General**：不超过 64K 时使用 Fast
-  路径，超过 64K 时使用带 rank-16 INT4 Value-tail correction 的 Robust
-  路径；不使用 Full Attention 回退。
+- 论文主方法冻结为 **QKSieve-Robust**，在注册的 4K--128K 范围内始终使用
+  request-local QK-balanced + qMSE/OAS mixed-bit selector、sampled-quantile
+  单遍候选写出、原始 FP16 K/V 精确稀疏 attention，以及
+  rank-16/block-256/INT4 ValueSketch（`alpha=0.5`）。
+- 主方法没有长度切换、学习式 router、任务规则、exact-QK 重排或 Full
+  Attention 回退。Fast 仅保留为“去掉 ValueSketch”的受控消融。
 - JointKV 当前真实 32K 连续 decode 未达到质量门槛，不替换主方法；其融合
   Query/LUT/scan CUDA 实现只作为可复用的系统探索保留。
 - 当前最大的部署局限是 QKSieve 仍保留完整 GPU FP16 K/V，5.859%（Fast）
   或约 7.47%（Robust）是额外辅助索引，而不是剩余 KV 占比。因此当前主张
   是稀疏 attention/decode 加速，不能主张 KV 存储压缩。
-- 当前最大的结构性局限是 General 仍由 64K 人工长度边界拼接 Fast 与 Robust；
-  投稿前需要用统一的数值风险量替代硬阈值，或把该边界明确限定为注册部署策略，
-  不宣称它是跨长度的统一最优定律。
+- 当前注册范围是 4K--128K；256K/512K 仅作为失效机理与外推边界研究，不把
+  未经正式验证的超长上下文结果写成主方法保证。
 
 ## 文件
 
@@ -32,16 +34,16 @@
 - `../../projects/qwen3_top2_head_limit3_ppl/docs/20260728_qksieve_retroinfer_official_protocol_zh.md`：RetrievalAttention/RetroInfer 身份审计、固定提交与异构系统公平复现协议。
 - `../../projects/qwen3_top2_head_limit3_ppl/src/run_retroinfer_aligned_longbench_20260728.py`：保持官方 RetroInfer 后端不变、只对齐 LongBench 外壳的严格配对 runner。
 
-## 模板说明
+## 模板与投稿规则
 
-截至 2026-07-26，ICLR 2027 官方模板尚未发布。当前
-`iclr2027_conference.sty/.bst` 由官方 ICLR 2026 模板复制并只修改页眉年份，
-用于提前排版，不应宣称为官方 ICLR 2027 模板。正式投稿前必须：
+`iclr2027_conference.sty/.bst` 已在 2026-08-10 与 ICLR 2027 官方发布包进行
+逐字节核验。官方当前要求：
 
-1. 下载 ICLR 2027 官方模板；
-2. 替换本目录的 `.sty/.bst`；
-3. 重新核对页数、匿名规则和 checklist；
-4. 匿名投稿只编译 `main.tex`，不要提交作者版。
+1. 摘要截止时间为 2026-09-18 AOE，全文截止时间为 2026-09-25 AOE；
+2. 初投稿正文最多 9 页，参考文献、AI 使用声明、可复现性声明和附录不计入；
+3. 投稿必须双盲，匿名版只编译 `main.tex`，不要提交作者版；
+4. 所有作者须在摘要截止前确认作者集合及 OpenReview 账号；
+5. 正式提交前再次以官方 Author Guidelines 为准，避免缓存页面或旧通知。
 
 ## 编译
 
@@ -51,7 +53,8 @@
 .\build.ps1
 ```
 
-当前作者版共 32 页，但正文和结论在第 9 页内结束；第 9 页下半部开始参考文献，后续为参考文献与附录。提交前仍需根据正式 ICLR 2027 模板重新核验页数。
+正文和结论必须在第 9 页内结束；AI 使用声明、可复现性声明、参考文献与附录
+随后排列。每次补实验后都必须重新编译并逐页核验正文页数与匿名性。
 
 脚本使用 Codex 环境附带的 Tectonic。输出：
 
