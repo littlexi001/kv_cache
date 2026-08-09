@@ -15,6 +15,7 @@ RUN_ROOT="${RUN_ROOT:-${ROOT}/results/20260810_qksieve_robust_ruler_v1}"
 RUNNER="${ROOT}/src/run_sample_calibrated_ruler_20260717.py"
 PREPARE="${ROOT}/src/prepare_hierarchical_ruler_data_20260716.py"
 SUMMARIZER="${ROOT}/src/summarize_qksieve_robust_ruler_20260810.py"
+PROMPT_AUDITOR="${ROOT}/src/audit_qksieve_ruler_prompt_lengths_20260810.py"
 METHOD="qksieve_qmse_oas_requestlocal_valuesketch16_sorted_c64"
 TASKS="niah_single_1,niah_single_2,niah_single_3,niah_multikey_1,niah_multikey_2,niah_multikey_3,niah_multivalue,niah_multiquery,vt,cwe,fwe,qa_squad,qa_hotpot"
 SHORT_LENGTHS="4096,8192,16384,32768"
@@ -144,6 +145,15 @@ prepare_data "${SHORT_DATA}" "${SHORT_LENGTHS}" 10 \
 prepare_data "${LONG_DATA}" "${LONG_LENGTHS}" 5 \
   >"${RUN_ROOT}/logs/prepare_long.log" 2>&1 || fail
 
+"${PYTHON}" "${PROMPT_AUDITOR}" \
+  --model_name_or_path "${MODEL}" \
+  --examples_jsonl "${SHORT_DATA}" \
+  --examples_jsonl "${LONG_DATA}" \
+  --prompt_wrapper llama3 \
+  --expected_rows 650 \
+  --output "${RUN_ROOT}/prompt_length_audit.json" \
+  >"${RUN_ROOT}/logs/prompt_length_audit.log" 2>&1 || fail
+
 {
   echo "schema=qksieve_robust_ruler_protocol_v1"
   echo "git_commit=$(git -C "${ROOT}" rev-parse HEAD 2>/dev/null || echo unknown)"
@@ -159,7 +169,8 @@ prepare_data "${LONG_DATA}" "${LONG_LENGTHS}" 5 \
     "${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json" \
     "${ROOT}/src/run_head_top2_targeted_ppl_20260714.py" \
     "${ROOT}/src/run_sample_calibrated_longbench_20260717.py" \
-    "${RUNNER}" "${SUMMARIZER}" \
+    "${RUNNER}" "${SUMMARIZER}" "${PROMPT_AUDITOR}" \
+    "${RUN_ROOT}/prompt_length_audit.json" \
     "${SHORT_DATA}" "${SHORT_DATA}.manifest.json" \
     "${LONG_DATA}" "${LONG_DATA}.manifest.json"
 } >"${RUN_ROOT}/manifest.txt" || fail
