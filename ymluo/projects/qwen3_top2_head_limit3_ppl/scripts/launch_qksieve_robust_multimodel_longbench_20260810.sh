@@ -9,6 +9,7 @@ RUNNER="${ROOT}/src/run_sample_calibrated_longbench_20260717.py"
 SUMMARIZER="${ROOT}/src/summarize_qksieve_robust_longbench_20260810.py"
 COMBINER="${ROOT}/src/summarize_qksieve_robust_multimodel_20260810.py"
 FROZEN_CONFIG="${ROOT}/configs/qksieve_robust_iclr2027_frozen_20260810.json"
+DIRECT_DOWNLOADER="${ROOT}/src/download_hf_snapshot_direct_20260810.py"
 METHOD="qksieve_qmse_oas_requestlocal_valuesketch16_sorted_c64"
 TASKS="narrativeqa,qasper,multifieldqa_en,hotpotqa,2wikimqa,musique,gov_report,qmsum,multi_news,trec,triviaqa,samsum,passage_count,passage_retrieval_en,lcc,repobench-p"
 MAX_SAMPLES_PER_TASK="${MAX_SAMPLES_PER_TASK:-10}"
@@ -78,7 +79,7 @@ PY
 ensure_model() {
   local path="$1" repo="$2"
   if model_complete "${path}"; then return; fi
-  "${PYTHON}" - "${repo}" "${path}" <<'PY' || return 1
+  if "${PYTHON}" - "${repo}" "${path}" <<'PY'
 import os
 import sys
 from huggingface_hub import snapshot_download
@@ -89,6 +90,14 @@ snapshot_download(
     token=os.environ.get("HF_TOKEN"),
 )
 PY
+  then
+    model_complete "${path}" && return
+  fi
+  "${PYTHON}" "${DIRECT_DOWNLOADER}" \
+    --repo_id "${repo}" \
+    --local_dir "${path}" \
+    --endpoint "${HF_ENDPOINT}" \
+    --endpoint https://huggingface.co || return 1
   model_complete "${path}"
 }
 
@@ -133,7 +142,7 @@ PY
       "${DATA_DIR}/manifest.json" \
       "${FROZEN_CONFIG}" \
       "${ROOT}/src/run_head_top2_targeted_ppl_20260714.py" \
-      "${RUNNER}" "${SUMMARIZER}"
+      "${RUNNER}" "${SUMMARIZER}" "${DIRECT_DOWNLOADER}"
   } >"${output}/manifest.txt" || return 1
 
   if [[ ! -f "${output}/smoke/ALL_COMPLETE" ]]; then
