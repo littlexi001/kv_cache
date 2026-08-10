@@ -171,7 +171,7 @@ Fast/Robust 索引在 32/64/128K 的构建时间为 .768/1.375、.774/1.488 和
 64-token 在线加速为 1.01/.81、1.64/1.31 和 2.75/2.15$\times$。结果不包含
 dense prefill 和部署前 CUDA JIT，完整表见 \cref{tab:mha-build-break-even}。
 
-\begin{table}[t]
+\begin{table}[H]
 \caption{同一 MHA 模型和 RTX 3090 上直接计时的 persistent-cache 生命周期。
 Cold-index 包含 Robust 索引构建和一个 32-token 分支，但不含 dense prefill；
 Cold-E2E 包含 prefill。Warm 复用索引；四分支把一次构建均摊给 128 个生成
