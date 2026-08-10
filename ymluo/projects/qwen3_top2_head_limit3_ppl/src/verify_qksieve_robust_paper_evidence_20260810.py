@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
@@ -40,6 +41,7 @@ SYSTEM_LENGTHS = {65536, 131072}
 MODELS = {"llama31_8b", "qwen3_4b", "mistral_7b"}
 NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
 AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
+SOURCE_MANIFEST = "qksieve_robust_source_manifest_20260810.json"
 
 
 def _finite_number(value: Any, label: str) -> float:
@@ -109,6 +111,39 @@ def validate_frozen_config(project_root: Path) -> dict[str, Any]:
     if any(bool(numerical[name]) for name in forbidden):
         raise AssertionError("frozen method enabled a forbidden special path")
     return payload
+
+
+def validate_frozen_sources(project_root: Path) -> dict[str, Any]:
+    manifest_path = project_root / "configs" / SOURCE_MANIFEST
+    payload = read_json(manifest_path)
+    if payload.get("schema") != "qksieve_frozen_source_manifest_v1":
+        raise AssertionError("frozen source manifest schema mismatch")
+    if payload.get("audited_implementation_commit_sha") != AUDITED_IMPLEMENTATION_SHA:
+        raise AssertionError("frozen source manifest implementation SHA drifted")
+    files = payload.get("files")
+    if not isinstance(files, dict) or not files:
+        raise AssertionError("frozen source manifest is empty")
+
+    root = project_root.resolve()
+    observed: dict[str, str] = {}
+    for relative, expected in sorted(files.items()):
+        relative_path = Path(relative)
+        if relative_path.is_absolute() or ".." in relative_path.parts:
+            raise AssertionError(f"unsafe frozen source path: {relative}")
+        path = (root / relative_path).resolve()
+        if root not in path.parents or not path.is_file():
+            raise AssertionError(f"frozen source is missing: {relative}")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest != expected:
+            raise AssertionError(
+                f"frozen source drifted: {relative}; expected {expected}, observed {digest}"
+            )
+        observed[relative] = digest
+    return {
+        "manifest": str(manifest_path),
+        "recorded_from_commit": payload.get("recorded_from_commit"),
+        "files": observed,
+    }
 
 
 def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
@@ -467,6 +502,7 @@ def verify(
     report: dict[str, Any] = {
         "schema": "qksieve_robust_paper_evidence_audit_v1",
         "frozen_config": validate_frozen_config(project_root),
+        "frozen_sources": validate_frozen_sources(project_root),
     }
     validators = {
         "persistent": (persistent, validate_persistent),

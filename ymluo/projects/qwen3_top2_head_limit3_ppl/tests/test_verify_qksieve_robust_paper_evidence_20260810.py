@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from pathlib import Path
+
+import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
@@ -9,7 +13,39 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 import qksieve_robust_contract_20260810 as contract  # noqa: E402
-from verify_qksieve_robust_paper_evidence_20260810 import verify  # noqa: E402
+from verify_qksieve_robust_paper_evidence_20260810 import (  # noqa: E402
+    validate_frozen_sources,
+    verify,
+)
+
+
+def test_frozen_source_manifest_accepts_exact_bytes_and_rejects_drift(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "src" / "kernel.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("frozen = True\n", encoding="utf-8")
+    digest = hashlib.sha256(source.read_bytes()).hexdigest()
+    config = tmp_path / "configs"
+    config.mkdir()
+    (config / "qksieve_robust_source_manifest_20260810.json").write_text(
+        json.dumps(
+            {
+                "schema": "qksieve_frozen_source_manifest_v1",
+                "audited_implementation_commit_sha": (
+                    "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
+                ),
+                "recorded_from_commit": "test",
+                "files": {"src/kernel.py": digest},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert validate_frozen_sources(tmp_path)["files"]["src/kernel.py"] == digest
+    source.write_text("frozen = False\n", encoding="utf-8")
+    with pytest.raises(AssertionError, match="frozen source drifted"):
+        validate_frozen_sources(tmp_path)
 
 
 def test_audit_accepts_complete_synthetic_evidence() -> None:

@@ -1,0 +1,22 @@
+{
+  "schema": "qksieve_frozen_source_manifest_v1",
+  "method_id": "qksieve_robust_iclr2027_frozen_20260810",
+  "recorded_from_commit": "92a001029bdd69272e0e284ee92bde0fb6548ed7",
+  "audited_implementation_commit_sha": "f300fb280a597ceb124d454cdfc9a0a1665d6a04",
+  "files": {
+    "src/run_head_top2_targeted_ppl_20260714.py": "f37f24e91de033752445bcb650b8a72e4765aa47654dec40ca5e87fe23a22871",
+    "src/run_sample_calibrated_longbench_20260717.py": "c65736ea92056b872af3d540269c9200ff1444b68d0e5e86285c01c08a437164",
+    "src/run_sample_calibrated_ruler_20260717.py": "5904eef089a3fc7e56e878c1718fa446bf10d38e080da73a1790c781200b01ad",
+    "src/qksieve_robust_contract_20260810.py": "1e32bbf0d109b3ee51e73acb70c797ea4179a2a457af47a623d82c075c13ad32",
+    "src/mixedblock_spectral_cuda_20260729.py": "496085129b6444115b67857e3a45a23575aef2ac7f11113076d12fab3fd81400",
+    "src/qksieve_valuesketch_cuda_20260801.py": "020b2433fc147c9d4c6974e89b95a5a03c271d45e364699a3c1a8a612d18cf55",
+    "src/qksieve_query_cuda_20260728.py": "6898714538c171c5d88caa90c749c80c10681d4905130807c06419a44a8fc6af",
+    "src/variablebit_spectral_cuda_20260727.py": "4b461a8bb75efb04825cd7dad9e55d5c0a76e0c46a351fe055416e34cd812be9",
+    "src/qabs_cuda_kernels.py": "daa4b4baa6c7de769196c5304fbc161c631b68cdbea7809308b49b3a9753355e",
+    "src/benchmark_qksieve_mixedblock_cuda_20260729.py": "90ca76c4df80ee5d4ebd0abfa99de469a97f3d37a23e7b2a4a084f22b1b80e6d",
+    "src/benchmark_qksieve_fier_mha_speed_20260808.py": "4e9d28e6136bd6fb1950795d7adddd5e33e5f8a156ffdbdbac91d711cf4863ca",
+    "src/run_qksieve_fier_autoregressive_speed_20260808.py": "875105701ae3af4e5711caf485312062f26bed0e31a924853a5486e9c2650962",
+    "src/benchmark_qksieve_persistent_kv_20260810.py": "81d42715510922325075722dfe4b89ecd520fdab962a4830491a1246b4f3c546"
+  },
+  "claim_boundary": "Any byte change in these numerical or timing paths invalidates the frozen paper evidence until explicitly re-audited."
+}
