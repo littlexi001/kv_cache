@@ -238,6 +238,12 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "tasks": 16,
             "full_fallback_count": 0,
             "value_sketch_tail_alpha": contract.VALUE_SKETCH_TAIL_ALPHA,
+            "sample_count_audit": {
+                "schema": "qksieve_decode_mean_sample_count_v1",
+                "rows": 3750,
+                "max_abs_error": 0.0,
+            },
+            "summarizer_sha256": "0" * 64,
             "methods": {
                 "full_kv": {"macro_score": 1.0},
                 contract.METHOD: {

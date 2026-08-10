@@ -147,6 +147,39 @@ def test_robust_longbench_summary_adds_task_bootstrap() -> None:
     assert payload["bootstrap"]["quality_retention_95ci"] == pytest.approx(
         [0.98, 0.98]
     )
+    assert payload["sample_count_audit"]["rows"] == 1
+    assert payload["sample_count_audit"]["max_abs_error"] == 0.0
+
+
+@pytest.mark.parametrize(
+    ("prompt_tokens", "generated_tokens", "observed"),
+    ((173, 249, 242.0), (190, 234, 246.55128205128204)),
+)
+def test_longbench_audit_reconstructs_decode_mean_sample_count(
+    prompt_tokens: int,
+    generated_tokens: int,
+    observed: float,
+) -> None:
+    row = {
+        **_sparse_fields(165),
+        "prompt_tokens": str(prompt_tokens),
+        "generated_tokens": str(generated_tokens),
+        "configured_attention_fraction": "1.0",
+        "packed_qmse_sample_count": str(observed),
+    }
+    assert long_summary.audit_sparse_result_row(row) == pytest.approx(0.0)
+
+
+def test_longbench_audit_rejects_wrong_decode_mean_sample_count() -> None:
+    row = {
+        **_sparse_fields(165),
+        "prompt_tokens": "173",
+        "generated_tokens": "249",
+        "configured_attention_fraction": "1.0",
+        "packed_qmse_sample_count": "165",
+    }
+    with pytest.raises(AssertionError, match="decode-mean"):
+        long_summary.audit_sparse_result_row(row)
 
 
 def test_robust_ruler_summary_requires_strict_contract() -> None:

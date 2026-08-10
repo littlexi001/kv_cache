@@ -77,18 +77,18 @@ RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
 | Persistent KV 生命周期 | 完成，32K/64K，cold/warm/四分支均摊/append-only | Warm 为 1.322x/2.221x；四分支均摊为 1.082x/1.785x；独立审计确认 32 层索引未重建且 replay 一致 |
 | FIER 同 consumer 速度 | 完成，原生 MHA、相同 active-token schedule 和精确 sparse-attention consumer | Fast 相对 FIER 为 1.37--3.58x，Robust 在额外支付 Value-tail 后仍为 1.16--2.31x（8K--128K） |
 | Llama official-middle LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行 | Full/QKSieve macro 为 0.459398/0.458852，保持率 99.881%，bootstrap 95% CI 为 [99.424%, 100.347%] |
+| 冻结 Robust 完整 LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行、零 fallback | Full/Robust macro 为 0.459011/0.458692，保持率 99.930%，task-bootstrap 95% CI 为 [99.538%, 100.213%] |
 | 冻结 Robust 正式 RULER | 修正后的审计运行进行中，13 任务、4K--128K、计划 650 个严格配对 | 缺少逐行 attention diagnostics 的旧运行已排除；完成前不写正式 RULER 主结果 |
 | Llama/Qwen/Mistral 同协议 LongBench screen | 完成，16 任务、每模型 160 个独立 offset 样本、共 480 个严格配对 | 保持率分别为 98.681%/100.211%/98.487%，三个 task-bootstrap 区间均跨 100%，fallback 为 0 |
 | 理论证明 | 完成并写入正文/附录 | 双正交精确性、最优 score 子空间、QK-MSE、bit 分配、排序和输出误差链 |
 | 正文页预算 | 完成当前版式审计 | 正文与结论在第 9 页结束，参考文献从第 10 页开始；完整命题、证明和系统图放入附录 |
 
-Llama reference LongBench 与三模型独立 screen 已完成，但最终主结论仍需冻结
-Robust 同路径 3,750 样本结果。完整 RULER 和 H100 结果尚未完成，不能用旧实验
-或不同执行路径替代。
+Llama reference、冻结 Robust 完整 LongBench 与三模型独立 screen 均已完成。
+完整 RULER 和 H100 结果尚未完成，不能用旧实验或不同执行路径替代。
 
 ## 2. P0：投稿前必须完成
 
-### 2.1 单模型完整 LongBench（reference 已完成，冻结 Robust 待完成）
+### 2.1 单模型完整 LongBench（reference 与冻结 Robust 均已完成）
 
 脚本：
 
@@ -118,10 +118,12 @@ macro difference 95% CI 为 [-0.002647, 0.001591]，retention 95% CI 为
 [99.424%, 100.347%]。16 个任务均完成，最低任务保持率为 Qasper 的
 97.615%，通过预注册的 macro 至少 99% 标准。
 
-该结果只证明 QK-balanced 表征和完整 proxy top-$k$ 的质量，不等于部署主路径。
-最终冻结 Robust 必须在相同 3,750 个样本上重新生成一份独立的 7,500 行 CSV，
-并由 `summarize_qksieve_robust_longbench_20260810.py` 与总 evidence verifier
-确认零 fallback、16 个任务和 3,750 个严格配对。
+上述旧结果只证明 QK-balanced 表征和完整 proxy top-$k$ 的质量。冻结 Robust
+已经在独立的相同规模协议上完成：Full/Robust macro 为
+0.459011/0.458692，保持率为 99.930%，task-bootstrap 95% CI 为
+[99.538%, 100.213%]。后处理器验证了 7,500 行、3,750 个严格配对、16 个
+任务和零 fallback；对于两个极短 MultiNews 样本，还按每个 decode 步骤的
+实际历史长度重建 sampled-quantile sample count，最大审计误差为 0。
 
 ### 2.2 三模型 LongBench 泛化
 

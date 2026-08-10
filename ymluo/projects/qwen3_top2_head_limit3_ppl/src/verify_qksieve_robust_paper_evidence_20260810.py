@@ -218,6 +218,23 @@ def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:
         contract.VALUE_SKETCH_TAIL_ALPHA
     ):
         raise AssertionError("LongBench ValueSketch shrinkage drifted")
+    sample_count_audit = payload.get("sample_count_audit")
+    if not isinstance(sample_count_audit, dict):
+        raise AssertionError("LongBench lacks the decode-mean sample-count audit")
+    if sample_count_audit.get("schema") != (
+        "qksieve_decode_mean_sample_count_v1"
+    ):
+        raise AssertionError("LongBench sample-count audit schema drifted")
+    if int(sample_count_audit.get("rows", -1)) != 3750:
+        raise AssertionError("LongBench sample-count audit is incomplete")
+    if _finite_number(
+        sample_count_audit.get("max_abs_error"),
+        "LongBench sample-count audit error",
+    ) > 1e-6:
+        raise AssertionError("LongBench sample-count audit failed")
+    summarizer_sha = payload.get("summarizer_sha256")
+    if not isinstance(summarizer_sha, str) or len(summarizer_sha) != 64:
+        raise AssertionError("LongBench summarizer SHA256 is missing")
     methods = payload.get("methods")
     if not isinstance(methods, dict) or set(methods) != {
         "full_kv",
@@ -251,6 +268,7 @@ def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:
         "methods": methods,
         "per_task": per_task,
         "bootstrap": bootstrap,
+        "sample_count_audit": sample_count_audit,
     }
 
 
