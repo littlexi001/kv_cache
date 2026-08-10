@@ -460,3 +460,17 @@ teacher-forced continuation 只能作为长位置机制证据，不能冒充自�
    request 与 peak-memory 网格，并保留 RTX 3090 结果作为可复现实验。
 6. 运行总 evidence verifier；只有 `complete=true` 后才更新摘要、主表、图和
    结论，再重新编译并逐页审计英文/中文 PDF。
+
+## 8. 最终证据收口
+
+全部正式实验完成并同步到 `data/` 后，只运行下面这一条命令生成投稿候选版本：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\finalize_evidence.ps1
+```
+
+脚本会强制核验冻结 SHA、persistent KV、3,750 对 LongBench、650 对 RULER、
+Llama/Qwen/Mistral 三模型和 H100 64K/128K 证据；随后重新生成表格与图片，编译
+匿名版、署名版和中文阅读版，并检查参考文献必须从英文 PDF 第 10 页开始、匿名版
+不得泄露作者信息、三份 PDF 不得残留 `TBD`、`TODO` 或 `PLACEHOLDER`。任一条件
+不满足时脚本直接失败，不能把该版本标记为最终稿。
