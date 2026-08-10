@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
+import statistics
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,18 @@ PRELOADED_EXTENSIONS = {
     "mixedblock",
     "value_attention",
 }
+AGGREGATE_FIELDS = (
+    "full_warm_ms_per_token",
+    "qksieve_warm_ms_per_token",
+    "warm_speedup",
+    "cold_speedup",
+    "amortized_speedup",
+    "append_only_speedup",
+    "qksieve_prebuild_seconds",
+    "qksieve_first_step_ms",
+)
+BOOTSTRAP_RESAMPLES = 10_000
+BOOTSTRAP_SEED = 20260810
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,6 +58,60 @@ def load_rows(run_root: Path) -> dict[tuple[int, int], dict[str, dict[str, Any]]
 
 def ratio(full: dict[str, Any], sparse: dict[str, Any], field: str) -> float:
     return float(full[field]) / float(sparse[field])
+
+
+def percentile(values: list[float], fraction: float) -> float:
+    if not values:
+        raise ValueError("cannot take a percentile of an empty list")
+    ordered = sorted(values)
+    position = fraction * (len(ordered) - 1)
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def bootstrap_median_interval(
+    values: list[float],
+    *,
+    seed: int,
+) -> tuple[float, float]:
+    if len(values) == 1:
+        return values[0], values[0]
+    rng = random.Random(seed)
+    samples = [
+        statistics.median(rng.choices(values, k=len(values)))
+        for _ in range(BOOTSTRAP_RESAMPLES)
+    ]
+    return percentile(samples, 0.025), percentile(samples, 0.975)
+
+
+def aggregate_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    by_history: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_history.setdefault(int(row["history_tokens"]), []).append(row)
+
+    aggregates: list[dict[str, Any]] = []
+    for history_tokens, source in sorted(by_history.items()):
+        source = sorted(source, key=lambda row: int(row["seed"]))
+        aggregate: dict[str, Any] = {
+            "history_tokens": history_tokens,
+            "seed_count": len(source),
+            "seeds": [int(row["seed"]) for row in source],
+        }
+        for field_index, field in enumerate(AGGREGATE_FIELDS):
+            values = [float(row[field]) for row in source]
+            low, high = bootstrap_median_interval(
+                values,
+                seed=BOOTSTRAP_SEED + history_tokens + field_index,
+            )
+            aggregate[field] = statistics.median(values)
+            aggregate[f"{field}_min"] = min(values)
+            aggregate[f"{field}_max"] = max(values)
+            aggregate[f"{field}_bootstrap_ci95_low"] = low
+            aggregate[f"{field}_bootstrap_ci95_high"] = high
+        aggregates.append(aggregate)
+    return aggregates
 
 
 def audit_snapshot(
@@ -242,10 +310,18 @@ def summarize(run_root: Path) -> dict[str, Any]:
                 "independent_lifecycle_audit": lifecycle_audit,
             }
         )
+    aggregates = aggregate_rows(rows)
     return {
         "schema": "qksieve_persistent_kv_summary_v2",
         "run_root": str(run_root),
         "rows": rows,
+        "aggregate_rows": aggregates,
+        "statistics": {
+            "point_estimate": "median_across_seeds",
+            "interval": "seed_bootstrap_median_percentile_95",
+            "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
+            "bootstrap_seed": BOOTSTRAP_SEED,
+        },
         "missing_pairs": missing,
         "all_correct": bool(rows)
         and not missing
@@ -262,7 +338,8 @@ def summarize(run_root: Path) -> dict[str, Any]:
         "claim_boundary": (
             "Token equality checks deterministic rewind/replay within each "
             "method. Quality relative to Full is measured by the separate "
-            "LongBench and RULER suites."
+            "LongBench and RULER suites. Timing intervals resample independent "
+            "seed-level workloads and do not represent cross-hardware variance."
         ),
     }
 

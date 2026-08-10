@@ -12,8 +12,15 @@ if str(SRC_DIR) not in sys.path:
 from summarize_qksieve_persistent_kv_20260810 import summarize  # noqa: E402
 
 
-def write_result(root: Path, method: str, warm: float, cold: float) -> None:
-    path = root / "n32768" / "seed7" / f"{method}.json"
+def write_result(
+    root: Path,
+    method: str,
+    warm: float,
+    cold: float,
+    *,
+    seed: int = 7,
+) -> None:
+    path = root / "n32768" / f"seed{seed}" / f"{method}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "schema": "qksieve_persistent_kv_lifecycle_v2",
@@ -111,3 +118,31 @@ def test_summary_pairs_methods_and_computes_speedups(tmp_path: Path) -> None:
     assert row["warm_speedup"] == 2.0
     assert row["cold_speedup"] == 0.8
     assert row["qksieve_prebuild_seconds"] == 1.25
+    aggregate = result["aggregate_rows"][0]
+    assert aggregate["seed_count"] == 1
+    assert aggregate["seeds"] == [7]
+    assert aggregate["warm_speedup"] == 2.0
+    assert aggregate["warm_speedup_bootstrap_ci95_low"] == 2.0
+    assert aggregate["warm_speedup_bootstrap_ci95_high"] == 2.0
+
+
+def test_summary_aggregates_independent_seeds(tmp_path: Path) -> None:
+    for seed, sparse_warm in ((7, 40.0), (8, 50.0), (9, 80.0)):
+        write_result(tmp_path, "full", warm=80.0, cold=80.0, seed=seed)
+        write_result(
+            tmp_path,
+            "qksieve_robust",
+            warm=sparse_warm,
+            cold=100.0,
+            seed=seed,
+        )
+
+    aggregate = summarize(tmp_path)["aggregate_rows"][0]
+
+    assert aggregate["seed_count"] == 3
+    assert aggregate["seeds"] == [7, 8, 9]
+    assert aggregate["warm_speedup"] == 1.6
+    assert aggregate["warm_speedup_min"] == 1.0
+    assert aggregate["warm_speedup_max"] == 2.0
+    assert aggregate["warm_speedup_bootstrap_ci95_low"] == 1.0
+    assert aggregate["warm_speedup_bootstrap_ci95_high"] == 2.0

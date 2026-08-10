@@ -270,6 +270,22 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
     assert "model_selected()" in multimodel
     assert '--models "${MODEL_TAGS}"' in multimodel
 
+    tail_accelerator = (
+        scripts / "launch_qksieve_ruler_tail_accelerator_20260810.sh"
+    ).read_text(encoding="utf-8")
+    for pinned in ("2.7.1+cu126", "4.53.1", "2.2.6"):
+        assert pinned in tail_accelerator
+    assert "software stack drifted" in tail_accelerator
+
+    persistent_multiseed = (
+        scripts / "launch_qksieve_persistent_multiseed_20260810.sh"
+    ).read_text(encoding="utf-8")
+    for pinned in ("2.7.1+cu126", "4.53.1", "2.2.6"):
+        assert pinned in persistent_multiseed
+    assert "20260810,20260811,20260812" in persistent_multiseed
+    assert "qksieve_frozen_source_manifest_v1" in persistent_multiseed
+    assert "persistent_multiseed_protocol_v1" in persistent_multiseed
+
 
 def test_h100_launcher_records_frozen_provenance() -> None:
     script = (

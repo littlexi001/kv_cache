@@ -61,6 +61,36 @@ for path in "${PYTHON}" "${MODEL}/config.json" "${FULL_DATA}" \
   fi
 done
 
+"${PYTHON}" - <<'PY' || fail
+import sys
+
+import numpy
+import torch
+import transformers
+
+observed = {
+    "python": sys.version.split()[0],
+    "torch": torch.__version__,
+    "cuda": torch.version.cuda,
+    "transformers": transformers.__version__,
+    "numpy": numpy.__version__,
+}
+expected = {
+    "torch": "2.7.1+cu126",
+    "cuda": "12.6",
+    "transformers": "4.53.1",
+    "numpy": "2.2.6",
+}
+for name, value in expected.items():
+    if observed[name] != value:
+        raise AssertionError(f"software stack drifted: {name}={observed[name]}")
+if sys.version_info[:2] != (3, 10):
+    raise AssertionError(f"software stack drifted: python={observed['python']}")
+if not torch.cuda.is_available():
+    raise AssertionError("CUDA is unavailable")
+print(observed)
+PY
+
 "${PYTHON}" - "${FULL_DATA}" "${COMPLETED_SNAPSHOT}" \
   "${FILTERED_DATA}" "${RUN_ROOT}/filter_audit.json" "${METHOD}" <<'PY' || fail
 import csv
@@ -124,6 +154,19 @@ PY
   echo "method=${METHOD}"
   echo "gpus=${GPUS}"
   echo "order=reverse_of_frozen_jsonl"
+  "${PYTHON}" - <<'PY'
+import sys
+
+import numpy
+import torch
+import transformers
+
+print(f"python={sys.version.split()[0]}")
+print(f"torch={torch.__version__}")
+print(f"torch_cuda={torch.version.cuda}")
+print(f"transformers={transformers.__version__}")
+print(f"numpy={numpy.__version__}")
+PY
   sha256sum "${FROZEN_CONFIG}" "${RUNNER}" "${FULL_DATA}" \
     "${COMPLETED_SNAPSHOT}" "${FILTERED_DATA}" "$0"
   nvidia-smi --query-gpu=index,name,uuid,memory.total,driver_version \
