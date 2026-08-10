@@ -103,6 +103,10 @@ def interval(value: Any) -> str:
     return f"[{percent(value[0])}, {percent(value[1])}]"
 
 
+def latex_text(value: Any) -> str:
+    return str(value).replace("_", "\\_")
+
+
 def longbench_rows(longbench: dict[str, Any]) -> list[str]:
     methods = longbench["methods"]
     full = methods["full_kv"]
@@ -118,6 +122,26 @@ def longbench_rows(longbench: dict[str, Any]) -> list[str]:
             interval(longbench["bootstrap"]["quality_retention_95ci"]),
         )
     ]
+
+
+def longbench_task_rows(longbench: dict[str, Any]) -> list[str]:
+    rows: list[str] = []
+    for task, result in sorted(longbench["per_task"].items()):
+        methods = [name for name in result if name not in {"samples", "full_kv"}]
+        if len(methods) != 1:
+            raise ValueError(f"LongBench task {task} lacks one QKSieve method")
+        full = result["full_kv"]
+        ours = result[methods[0]]
+        rows.append(
+            "{} & {} & {:.4f} & {:.4f} & {} \\\\".format(
+                latex_text(task),
+                int(result["samples"]),
+                float(full["score"]),
+                float(ours["score"]),
+                percent(ours["quality_retention"]),
+            )
+        )
+    return rows
 
 
 def ruler_rows(ruler: dict[str, Any]) -> list[str]:
@@ -283,6 +307,11 @@ def render(
         model_caption = (
             "同一冻结配置的跨模型 LongBench screen，每个模型 160 个严格配对。"
         )
+        task_caption = (
+            "冻结 QKSieve-Robust 在完整 LongBench 上的 16 个分任务结果。"
+        )
+        task_header = "任务"
+        samples_header = "样本数"
         history = "长度"
         model_header = "模型"
         retention = "保持率"
@@ -300,6 +329,11 @@ def render(
             "Cross-model LongBench screen under one frozen configuration, "
             "with 160 strict pairs per model."
         )
+        task_caption = (
+            "Per-task results for frozen QKSieve-Robust on complete LongBench."
+        )
+        task_header = "Task"
+        samples_header = "Samples"
         history = "Length"
         model_header = "Model"
         retention = "Retention"
@@ -319,6 +353,20 @@ def render(
         "\\bottomrule",
         "\\end{tabular}",
         "\\end{table}",
+        "",
+        "\\begin{table*}[t]",
+        f"\\caption{{{task_caption}}}",
+        "\\label{tab:longbench-per-task}",
+        "\\centering",
+        "\\small",
+        "\\begin{tabular}{lrrrr}",
+        "\\toprule",
+        f"{task_header} & {samples_header} & Full & QKSieve & {retention} \\\\ ",
+        "\\midrule",
+        *longbench_task_rows(longbench),
+        "\\bottomrule",
+        "\\end{tabular}",
+        "\\end{table*}",
         "",
         "\\begin{table}[t]",
         f"\\caption{{{ruler_caption}}}",

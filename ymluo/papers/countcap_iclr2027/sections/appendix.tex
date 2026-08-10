@@ -1007,6 +1007,9 @@ claims, code, and presentation.
 \FloatBarrier
 \input{sections/appendix_system_diagnostics}
 
+\IfFileExists{data/generated/qksieve_quality_appendix.tex}{%
+\input{data/generated/qksieve_quality_appendix.tex}
+}{%
 \clearpage
 \section{Completed Llama-3.1-8B LongBench Results}
 \label{app:longbench}
@@ -1051,7 +1054,13 @@ task-stratified paired-bootstrap 95\% intervals are
 [99.424\%, 100.347\%] for retention.  The finalizer verifies 7,500 CSV rows,
 3,750 strict pairs, 16 tasks, frozen-path execution fields, prompt limits,
 and source hashes.
+}
 
+\IfFileExists{data/generated/qksieve_quality_appendix.tex}{%
+\clearpage
+\section{Additional system protocols}
+\label{app:missing}
+}{%
 \clearpage
 \section{Required Final Experiments}
 \label{app:missing}
@@ -1075,6 +1084,7 @@ Multi-turn & 3 & Turn-wise Query drift & Stable retention \\
 \end{tabular}
 }
 \end{table}
+}
 
 \subsection{Persistent-KV workload contract and measured audit}
 \label{app:persistent-kv-protocol}

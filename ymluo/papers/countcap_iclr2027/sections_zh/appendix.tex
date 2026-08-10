@@ -362,6 +362,9 @@ compiler flag、GPU clock、warm-up 次数、重复次数与随机种子。
 \FloatBarrier
 \input{sections_zh/appendix_system_diagnostics}
 
+\IfFileExists{data/generated/qksieve_quality_appendix_zh.tex}{%
+\input{data/generated/qksieve_quality_appendix_zh.tex}
+}{%
 \FloatBarrier
 \section{已完成的 Llama-3.1-8B LongBench 结果}
 \label{app:longbench}
@@ -403,7 +406,13 @@ Qasper（97.615\%）、NarrativeQA（97.708\%）和 Musique（98.389\%）；
 macro-score difference [$-.002647$, $.001591$]，保持率
 [99.424\%, 100.347\%]。finalizer 已验证 7,500 行 CSV、3,750 个严格 pair、
 16 个任务、冻结路径字段、prompt limit 和 source hash。
+}
 
+\IfFileExists{data/generated/qksieve_quality_appendix_zh.tex}{%
+\clearpage
+\section{补充系统协议}
+\label{app:missing}
+}{%
 \clearpage
 \section{正式投稿仍需补齐的实验}
 \label{app:missing}
@@ -425,6 +434,7 @@ PPL 16K--128K & 3 个 & 分窗口、aggregate CI & 128K $\ge99\%$ \\
 \bottomrule
 \end{tabular}}
 \end{table}
+}
 
 \subsection{持久化 KV 使用场景协议与实测审计}
 \label{app:persistent-kv-protocol}

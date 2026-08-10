@@ -25,6 +25,9 @@ shared-prefix branching 和 append-only 作为互不混写的计时协议。下�
 \cref{app:persistent-kv-protocol}；cold request latency 仍需如实报告为局限，不能与
 warm-path 加速混成同一结论。
 
+\IfFileExists{data/generated/qksieve_quality_tables_zh.tex}{%
+\input{data/generated/qksieve_quality_tables_zh.tex}
+}{%
 完整 LongBench 表使用 request-local 参考配置。随后的小规模严格筛查直接运行
 CUDA 测速所对应的 sampled-quantile 路径。
 
@@ -57,6 +60,7 @@ Llama-3.1-8B & .459398 & .458852 & 99.881\% &
 .884776/.884135，即保持 99.928\%，paired-bootstrap 区间为
 [99.559\%, 100.294\%]。该小实验用于筛查任务族与长度失效模式，不作为
 正式大规模 RULER 表；quality harness 中的时间也不进入系统速度结论。
+}
 
 \subsection{等 rate 索引质量}
 
@@ -182,6 +186,9 @@ $I/(D_f-D_s)$，break-even 约为 87/26 个生成 token，与
 生命周期审计覆盖全部 32 层、6 个快照和 5 次 rewind，索引指针稳定且重放
 完全确定。复用只在 request-local Query 统计不变时成立；新 prompt 需要重建
 request-local 索引。
+
+\IfFileExists{data/generated/qksieve_h100_tables_zh.tex}{%
+\input{data/generated/qksieve_h100_tables_zh.tex}}{}
 
 原生 128K 的修正同 seed 六主题审计推翻了早期结论。QKSieve-Fast 的 pooled
 PPL 保持率仅为 96.319\%（case macro 96.373\%），政治主题最差为 91.100\%。

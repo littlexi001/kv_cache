@@ -26,6 +26,24 @@ def test_tables_render_actual_frozen_summary_schema() -> None:
             },
         },
         "bootstrap": {"quality_retention_95ci": [0.985, 0.995]},
+        "per_task": {
+            "multi_news": {
+                "samples": 200,
+                "full_kv": {"score": 0.25},
+                "qksieve_frozen": {
+                    "score": 0.2475,
+                    "quality_retention": 0.99,
+                },
+            },
+            "qasper": {
+                "samples": 200,
+                "full_kv": {"score": 0.46},
+                "qksieve_frozen": {
+                    "score": 0.4554,
+                    "quality_retention": 0.99,
+                },
+            },
+        },
     }
     ruler = {
         "per_length": {
@@ -68,6 +86,8 @@ def test_tables_render_actual_frozen_summary_schema() -> None:
     assert "4K & 0.9000 & 0.8910 & 99.00\\%" in text
     assert "Overall & 0.9000 & 0.8910 & 99.00\\%" in text
     assert "Mistral-7B & 0.5000 & 0.4950 & 99.00\\%" in text
+    assert "multi\\_news & 200 & 0.2500 & 0.2475 & 99.00\\%" in text
+    assert "\\label{tab:longbench-per-task}" in text
     assert (
         "Generated from frozen evidence: longbench=abc; ruler=def; "
         "multimodel=ghi"
