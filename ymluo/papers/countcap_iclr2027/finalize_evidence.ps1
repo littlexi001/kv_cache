@@ -41,7 +41,10 @@ $TexContracts = @(
     },
     @{
         Path = Join-Path $PaperDir "sections\appendix.tex"
-        Snippets = @("\input{data/generated/qksieve_quality_appendix.tex}")
+        Snippets = @(
+            "\input{data/generated/qksieve_quality_appendix.tex}",
+            "\input{data/generated/qksieve_shrinkage_tables.tex}"
+        )
     },
     @{
         Path = Join-Path $PaperDir "sections_zh\05_experiments.tex"
@@ -52,7 +55,10 @@ $TexContracts = @(
     },
     @{
         Path = Join-Path $PaperDir "sections_zh\appendix.tex"
-        Snippets = @("\input{data/generated/qksieve_quality_appendix_zh.tex}")
+        Snippets = @(
+            "\input{data/generated/qksieve_quality_appendix_zh.tex}",
+            "\input{data/generated/qksieve_shrinkage_tables_zh.tex}"
+        )
     }
 )
 foreach ($Contract in $TexContracts) {
@@ -87,6 +93,9 @@ try {
 
     & python scripts\make_qksieve_h100_tables.py
     if ($LASTEXITCODE -ne 0) { throw "H100 table generation failed." }
+
+    & python scripts\make_qksieve_shrinkage_tables.py
+    if ($LASTEXITCODE -ne 0) { throw "Shrinkage table generation failed." }
 
     & python scripts\make_qksieve_rtx3090_system_rows.py
     if ($LASTEXITCODE -ne 0) { throw "RTX 3090 table generation failed." }

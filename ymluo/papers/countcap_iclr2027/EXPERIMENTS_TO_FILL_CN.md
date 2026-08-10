@@ -40,6 +40,7 @@ python src/verify_qksieve_robust_paper_evidence_20260810.py \
   --longbench_summary RESULTS/longbench/paired_summary.json \
   --ruler_summary RESULTS/ruler/paired_summary.json \
   --multimodel_summary RESULTS/multimodel/multimodel_summary.json \
+  --shrinkage_summary RESULTS/shrinkage/summary.json \
   --h100_summary RESULTS/h100/summary.json \
   --output RESULTS/frozen_evidence_report.json
 ```
@@ -47,7 +48,8 @@ python src/verify_qksieve_robust_paper_evidence_20260810.py \
 只有报告中 `complete=true` 时，质量与系统结果才可以组成完整论文证据链。
 校验器强制检查冻结方法合同、3,750 个同路径 LongBench 配对、650 个正式
 RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
-64K/128K 三类系统测速；任一证据缺失都会显式失败。
+64K/128K 三类系统测速，以及固定 shrinkage 的严格配对敏感性；任一证据缺失
+都会显式失败。
 
 ## 1. 当前已经完成的证据
 
