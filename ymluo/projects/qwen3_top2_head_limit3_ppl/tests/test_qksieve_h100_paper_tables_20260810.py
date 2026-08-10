@@ -64,6 +64,7 @@ def test_h100_tables_render_all_three_timing_contracts() -> None:
     assert "8.00$\\times$ & 4.00$\\times$ & 2.00$\\times$ & 7.47\\%" in text
     assert "64K & 12.000 & 4.000 & 3.00$\\times$ & 1.250 & 1.080$\\times$" in text
     assert "0.80$\\times$ & 0.50$\\times$ & 2.00$\\times$" in text
+    assert "\\resizebox{\\textwidth}{!}{%" in text
 
 
 def test_h100_tables_have_synchronized_chinese_labels() -> None:
@@ -71,4 +72,3 @@ def test_h100_tables_have_synchronized_chinese_labels() -> None:
     assert "匹配 H100" in text
     assert "Cold E2E" in text
     assert "峰值显存比" in text
-
