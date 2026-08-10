@@ -374,6 +374,12 @@ TurboQuant、Q-Filters、RaBitQCache 至少完成索引质量或方法级比较�
 | Active KV 0.5/1/2/4% | 同一索引 | 质量-延迟 Pareto |
 | Query 样本 1/4/8/16/32 | 参数冻结 | calibration 与 held-out regret |
 
+固定 shrinkage 的正式敏感性协议已经实现于
+`scripts/launch_qksieve_shrinkage_sensitivity_20260810.sh`。该实验严格使用 prompt
+最后 8 个 Query 校准，并对五个系数做跨 Llama/Qwen、体育/医学的逐条件配对；
+`lambda=0.75` 仍保持冻结，实验结果只决定论文能否声明超参数稳定，不能用于重新
+选择系数。当前状态为代码与协议完成、GPU 结果待补。
+
 为拆分坐标系和 bit 分配收益，已加入三个真实 256-bit 路径：
 `qksieve_fullprompt_keypca_uniform1_fulltopk` 与
 `qksieve_fullprompt_qkbalanced_uniform1_fulltopk`、`qksieve_fullprompt_random_uniform1_fulltopk`。

@@ -636,6 +636,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--sample_stride", type=int, default=32)
     parser.add_argument("--calibration_steps", type=int, default=8)
+    parser.add_argument(
+        "--calibration_source",
+        choices=("decode_prefix", "prefill_tail"),
+        default="decode_prefix",
+        help=(
+            "Use the first decode records, or the captured final prefill "
+            "Queries. The frozen QKSieve paper path uses prefill_tail."
+        ),
+    )
     parser.add_argument("--total_rate_budget", type=int, default=15)
     parser.add_argument("--query_shrinkage", type=float, default=0.5)
     parser.add_argument("--selected_fractions", default="0.01,0.02,0.06")
@@ -659,6 +668,48 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_calibration_and_evaluation(
+    payload: dict[str, Any],
+    layer: int,
+    layer_records: list[dict[str, Any]],
+    calibration_steps: int,
+    calibration_source: str,
+    device: torch.device,
+) -> tuple[torch.Tensor, list[dict[str, Any]], int]:
+    if calibration_source == "decode_prefix":
+        if len(layer_records) <= calibration_steps:
+            raise ValueError(f"layer {layer} has no held-out queries")
+        calibration = torch.stack(
+            [
+                record["query"].to(device).float()[0, :, 0, :]
+                for record in layer_records[:calibration_steps]
+            ],
+            dim=0,
+        )
+        return calibration, layer_records[calibration_steps:], calibration_steps
+
+    if calibration_source != "prefill_tail":
+        raise ValueError(f"unknown calibration source: {calibration_source}")
+    prefill_queries = payload.get("prefill_queries")
+    if not isinstance(prefill_queries, dict):
+        raise ValueError("trace has no captured prefill Queries")
+    raw = prefill_queries.get(layer, prefill_queries.get(str(layer)))
+    if raw is None:
+        raise ValueError(f"trace has no prefill Queries for layer {layer}")
+    query = raw.to(device).float()
+    if query.ndim != 4 or query.shape[0] != 1:
+        raise ValueError(
+            f"layer {layer} prefill Query shape must be [1,H,N,D], got {query.shape}"
+        )
+    if query.shape[2] < calibration_steps:
+        raise ValueError(
+            f"layer {layer} has only {query.shape[2]} prefill Queries; "
+            f"need {calibration_steps}"
+        )
+    calibration = query[0, :, -calibration_steps:, :].permute(1, 0, 2)
+    return calibration.contiguous(), layer_records, 0
+
+
 @torch.inference_mode()
 def main() -> None:
     args = parse_args()
@@ -678,8 +729,16 @@ def main() -> None:
     spectrum_rows = []
     for layer, layer_records in sorted(by_layer.items()):
         layer_records.sort(key=lambda row: int(row["step"]))
-        if len(layer_records) <= args.calibration_steps:
-            raise ValueError(f"layer {layer} has no held-out queries")
+        calibration, evaluation_records, evaluation_start = (
+            resolve_calibration_and_evaluation(
+                payload,
+                layer,
+                layer_records,
+                args.calibration_steps,
+                args.calibration_source,
+                device,
+            )
+        )
         raw_key = next(
             (
                 record.get("key")
@@ -696,13 +755,6 @@ def main() -> None:
         kv_head_count = int(key.shape[0])
         query_head_count = int(layer_records[0]["query"].shape[1])
         groups = query_head_count // kv_head_count
-        calibration = torch.stack(
-            [
-                record["query"].to(device).float()[0, :, 0, :]
-                for record in layer_records[: args.calibration_steps]
-            ],
-            dim=0,
-        )
         calibration_scaling = float(layer_records[0]["scaling"])
 
         prepared = []
@@ -1340,8 +1392,8 @@ def main() -> None:
 
         top_count = max(1, math.ceil(args.top_fraction * history_count))
         for heldout_index, record in enumerate(
-            layer_records[args.calibration_steps :],
-            start=args.calibration_steps,
+            evaluation_records,
+            start=evaluation_start,
         ):
             query = record["query"].to(device).float()[0, :, 0, :]
             scaling = float(record["scaling"])
@@ -1413,6 +1465,7 @@ def main() -> None:
             "label": args.label,
             "sample_stride": args.sample_stride,
             "calibration_steps": args.calibration_steps,
+            "calibration_source": args.calibration_source,
             "total_rate_budget": args.total_rate_budget,
             "query_shrinkage": args.query_shrinkage,
             "selected_fractions": selected_fractions,
