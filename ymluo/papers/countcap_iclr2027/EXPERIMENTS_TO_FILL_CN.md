@@ -186,6 +186,14 @@ bash scripts/launch_qksieve_robust_ruler_20260810.sh
 `packed_qmse_value_sketch_executed=1`、`sampled_quantile_fallback=0`，再进入
 最终汇总。
 
+分布式尾部补跑只允许按样本原子合并：优先采用主机上的完整 Full--Robust pair；
+主机缺失时才采用补充机上的完整 pair，禁止把两台机器的半对拼在一起。正式
+`paired_summary.json` 还必须携带 `merge_audit.json`，证明 1,300 行、650 对、
+78 个完整 task-length 单元和 `cross_host_pair_composition_count=0`。两台机器
+分别生成只读 runtime provenance，核对冻结 commit、PyTorch/CUDA/Transformers、
+8 张 RTX 3090、Prompt 长度审计，以及 Llama 四个权重分片和 tokenizer/config
+文件的逐文件 SHA256；任一项不一致时汇总器和总 evidence verifier 都会拒绝结果。
+
 ### 2.4 同一路径整模型速度、请求速度与显存
 
 RTX 3090 原生 MHA 的 attention、真实模型 decode 和 persistent-cache 结果已经
