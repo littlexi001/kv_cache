@@ -192,7 +192,8 @@ $I/(D_f-D_s)$，break-even 约为 87/26 个生成 token，与
 
 生命周期审计覆盖全部 32 层、6 个快照和 5 次 rewind，索引指针稳定且重放
 完全确定。复用只在 request-local Query 统计不变时成立；新 prompt 需要重建
-request-local 索引。
+request-local 索引。这里的 append-only 指同一前缀上连续生成 128 个 token，
+并逐 token 追加精确 K/V 与辅助索引；它不包含新用户轮次的一段增量 prefill。
 
 \IfFileExists{data/generated/qksieve_h100_tables_zh.tex}{%
 \input{data/generated/qksieve_h100_tables_zh.tex}}{}

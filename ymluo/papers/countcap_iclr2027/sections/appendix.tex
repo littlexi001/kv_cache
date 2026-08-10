@@ -1114,7 +1114,7 @@ Contract & Included interval & Intended use & Required report \\
 Cold single-use & Dense prefill + index build + $G$ decode & One-shot request & E2E, TTFT, TPOT \\
 Warm persistent & Query setup + $G$ decode; KV/index resident & Cached-prefix query & E2E, first token, TPOT \\
 Shared-prefix reuse & One prefill/index shared by $R$ branches & Agent rollouts & Amortized latency, throughput, break-even \\
-Append-only turn & Delta prefill + delta index append + decode & Multi-turn agent & Append cost, TPOT, turn-wise quality \\
+Append-only growth & 128-step autoregressive continuation + per-token index append & Long decode/cache growth & TPOT, append correctness \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -1151,9 +1151,9 @@ R G(D_f-D_s) > I + R(H_s-H_f) + A,
 \end{equation}
 rather than being inferred from steady-state attention speed alone.
 
-The evaluation grid is $N\in\{16,32,64,128\}$K,
+The extended evaluation grid is $N\in\{16,32,64,128\}$K,
 $G\in\{32,64,256,1024\}$, and $R\in\{1,2,4,8,16,32\}$ on repeated-query,
-append-only dialogue, and branching-rollout traces.  It reports latency,
+continuous append-only decode, and branching-rollout traces.  It reports latency,
 throughput, peak memory, index bytes, active KV, and quality retention for
 every cell.  Resident-cache timing excludes cache lookup only when that lookup
 is identical for Full and \method; eviction or reload costs are reported

@@ -221,7 +221,9 @@ direct 32-token cold outcomes in \cref{tab:persistent-kv-main}.
 The lifecycle audit covers all 32 layers, six snapshots, and five rewinds,
 with stable index pointers and deterministic replay.  Reuse is valid while
 request-local Query statistics remain fixed; a new prompt requires rebuilding
-the request-local index.
+the request-local index.  Here append-only means one uninterrupted 128-token
+autoregressive continuation whose exact K/V and auxiliary index entries grow
+one token at a time.  It does not include delta prefill for a new user turn.
 
 \IfFileExists{data/generated/qksieve_h100_tables.tex}{%
 \input{data/generated/qksieve_h100_tables.tex}}{}

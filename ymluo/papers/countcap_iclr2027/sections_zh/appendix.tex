@@ -461,7 +461,7 @@ decode 都重复支付。以下四种计时协议独立报告，不能拿其中�
 Cold single-use & Dense prefill + 建索引 + $G$ token decode & 单次请求 & E2E、TTFT、TPOT \\
 Warm persistent & Query setup + $G$ token decode；KV/index 常驻 & 缓存前缀查询 & E2E、首 token、TPOT \\
 Shared-prefix reuse & 一次 prefill/index 被 $R$ 个分支共享 & Agent rollout & 摊销延迟、吞吐、break-even \\
-Append-only turn & 增量 prefill + 增量索引追加 + decode & 多轮 Agent & 追加成本、TPOT、逐轮质量 \\
+Append-only 增长 & 128-step 自回归续写 + 逐 token 索引追加 & 长生成/cache 增长 & TPOT、追加正确性 \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -494,8 +494,8 @@ R G(D_f-D_s) > I + R(H_s-H_f) + A,
 \end{equation}
 不能仅根据稳态 attention 加速比推算请求级优势。
 
-实验网格为 $N\in\{16,32,64,128\}$K、$G\in\{32,64,256,1024\}$、
-$R\in\{1,2,4,8,16,32\}$，覆盖 repeated-query、append-only dialogue 和
+扩展实验网格为 $N\in\{16,32,64,128\}$K、$G\in\{32,64,256,1024\}$、
+$R\in\{1,2,4,8,16,32\}$，覆盖 repeated-query、连续 append-only decode 和
 branching-rollout trace。每个单元报告 latency、throughput、峰值显存、索引
 字节数、active KV 和质量保持率。只有 Full 与 \method 的 cache lookup 完全
 一致时，resident-cache 计时才可以同时排除 lookup；发生 eviction 或 reload
