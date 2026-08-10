@@ -361,7 +361,7 @@ def render(
         "\\small",
         "\\begin{tabular}{lrrrr}",
         "\\toprule",
-        f"{task_header} & {samples_header} & Full & QKSieve & {retention} \\\\ ",
+        f"{task_header} & {samples_header} & Full & QKSieve & {retention} \\\\",
         "\\midrule",
         *longbench_task_rows(longbench),
         "\\bottomrule",

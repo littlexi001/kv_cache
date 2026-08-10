@@ -1,0 +1,152 @@
+{
+  "schema": "qksieve_runtime_provenance_v1",
+  "captured_utc": "2026-08-10T04:11:56.956535+00:00",
+  "role": "primary",
+  "host": "CISL-NF5468M5-3090",
+  "platform": "Linux-5.15.0-84-generic-x86_64-with-glibc2.31",
+  "audited_implementation_commit_sha": "f300fb280a597ceb124d454cdfc9a0a1665d6a04",
+  "numerical_freeze_commit_sha": "328e01718deebfdfc80dbd8e588a1a95a1832b59",
+  "visible_cuda_devices": "0,1,2,3,4,5,6,7",
+  "software": {
+    "python": "3.10.18",
+    "pytorch": "2.7.1+cu126",
+    "transformers": "4.53.1",
+    "numpy": "2.2.6",
+    "cuda_runtime": "12.6",
+    "cudnn": 90501
+  },
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-0efdf1b0-2eca-a4de-1533-d2320ca95946",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 1,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-8f67429a-7c4e-aae8-394f-2ee0beb9164b",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 2,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-759f778f-8461-9cfe-199b-cb207bb07a76",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 3,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-75e39d3e-aad9-8f18-d3df-d0aca5814e6e",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 4,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-f74d1ae9-36f5-14d3-9538-c8acd915b3da",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 5,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-1074abb0-5d74-a5c9-696d-c7cf67b0881a",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 6,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-e5edbac0-e2f1-9f97-4c8f-f6134cde7b58",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    },
+    {
+      "index": 7,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-cac6953d-94bb-96aa-59a7-4e065232b95d",
+      "memory_mib": 24576,
+      "driver": "570.133.07"
+    }
+  ],
+  "run_manifest": {
+    "path": "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_robust_ruler_v2_audited/manifest.txt",
+    "sha256": "9376f46030025345ee91f2bfb5a9be13971d48af362947136ec1b8d3e8a97afb"
+  },
+  "model": {
+    "path": "/home/fdong/qksieve_iclr2027/models/Meta-Llama-3.1-8B-Instruct-ms",
+    "download_manifest": {
+      "sha256": "fa6c10af4057aaaffe3164b084a9688c7df0a2a6fb599ccd2f71b5938ff77767",
+      "payload": {
+        "source": "ModelScope",
+        "model_id": "LLM-Research/Meta-Llama-3.1-8B-Instruct",
+        "model_dir": "/home/fdong/qksieve_iclr2027/models/Meta-Llama-3.1-8B-Instruct-ms",
+        "weight_files": [
+          "model-00001-of-00004.safetensors",
+          "model-00002-of-00004.safetensors",
+          "model-00003-of-00004.safetensors",
+          "model-00004-of-00004.safetensors"
+        ],
+        "weight_bytes": 16060556376,
+        "config_contract": {
+          "model_type": "llama",
+          "hidden_size": 4096,
+          "num_hidden_layers": 32,
+          "num_attention_heads": 32,
+          "num_key_value_heads": 8
+        },
+        "metadata_sha256": {
+          "config.json": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e",
+          "generation_config.json": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd",
+          "tokenizer_config.json": "177c7b61e616fecb84c17ce0591acb92c6c4d60e9ac5ababfb940ff23bbcd424",
+          "model.safetensors.index.json": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b"
+        }
+      }
+    },
+    "files": {
+      "config.json": {
+        "bytes": 855,
+        "sha256": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e"
+      },
+      "generation_config.json": {
+        "bytes": 184,
+        "sha256": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd"
+      },
+      "model-00001-of-00004.safetensors": {
+        "bytes": 4976698672,
+        "sha256": "2b1879f356aed350030bb40eb45ad362c89d9891096f79a3ab323d3ba5607668"
+      },
+      "model-00002-of-00004.safetensors": {
+        "bytes": 4999802720,
+        "sha256": "09d433f650646834a83c580877bd60c6d1f88f7755305c12576b5c7058f9af15"
+      },
+      "model-00003-of-00004.safetensors": {
+        "bytes": 4915916176,
+        "sha256": "fc1cdddd6bfa91128d6e94ee73d0ce62bfcdb7af29e978ddcab30c66ae9ea7fa"
+      },
+      "model-00004-of-00004.safetensors": {
+        "bytes": 1168138808,
+        "sha256": "92ecfe1a2414458b4821ac8c13cf8cb70aed66b5eea8dc5ad9eeb4ff309d6d7b"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 23950,
+        "sha256": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b"
+      },
+      "tokenizer.json": {
+        "bytes": 9085657,
+        "sha256": "79e3e522635f3171300913bb421464a87de6222182a0570b9b2ccba2a964b2b4"
+      },
+      "tokenizer_config.json": {
+        "bytes": 55351,
+        "sha256": "177c7b61e616fecb84c17ce0591acb92c6c4d60e9ac5ababfb940ff23bbcd424"
+      }
+    }
+  },
+  "environment": {
+    "python_executable": "/home/fdong/miniconda3/envs/nanogpt/bin/python3.10"
+  }
+}

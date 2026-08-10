@@ -312,6 +312,7 @@ def merge_rows(
     expected_method_set = set(METHODS)
     duplicate_rows = 0
     duplicate_output_mismatches = 0
+    duplicate_output_mismatch_records: list[dict[str, Any]] = []
     duplicate_timing_mismatches = 0
     sources: dict[
         str,
@@ -370,6 +371,23 @@ def merge_rows(
                 or previous.get("score") != candidate.get("score")
             ):
                 duplicate_output_mismatches += 1
+                duplicate_output_mismatch_records.append(
+                    {
+                        "task": sample_key[0],
+                        "sample_id": sample_key[1],
+                        "method": method,
+                        "primary_score": previous.get("score"),
+                        "supplement_score": candidate.get("score"),
+                        "score_mismatch": previous.get("score")
+                        != candidate.get("score"),
+                        "primary_prediction_sha256": hashlib.sha256(
+                            previous.get("prediction", "").encode("utf-8")
+                        ).hexdigest(),
+                        "supplement_prediction_sha256": hashlib.sha256(
+                            candidate.get("prediction", "").encode("utf-8")
+                        ).hexdigest(),
+                    }
+                )
             if any(
                 previous.get(field) != candidate.get(field)
                 for field in (
@@ -454,6 +472,7 @@ def merge_rows(
         },
         "duplicate_rows_primary_preferred": duplicate_rows,
         "duplicate_output_mismatches": duplicate_output_mismatches,
+        "duplicate_output_mismatch_records": duplicate_output_mismatch_records,
         "duplicate_timing_mismatches": duplicate_timing_mismatches,
         "primary_pairs_selected": primary_pairs_selected,
         "supplement_pairs_selected": supplement_pairs_selected,

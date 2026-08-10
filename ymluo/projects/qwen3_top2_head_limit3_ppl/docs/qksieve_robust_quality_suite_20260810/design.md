@@ -3,8 +3,9 @@
 ## 问题
 
 冻结后的 QKSieve-Robust 已有 32K--128K PPL、MHA attention 与真实 decode
-证据，但正式 RULER 和跨模型结果仍来自旧 selector、旧 `alpha=1.0` 或小规模
-诊断。它们不能直接作为冻结主方法的论文结果。
+证据。本子问题要求重新获得与冻结 selector、`alpha=0.5` 和无 fallback 合同
+完全一致的正式 RULER 与跨模型结果，避免复用旧 selector、旧 `alpha=1.0` 或
+小规模诊断。
 
 ## 假设
 

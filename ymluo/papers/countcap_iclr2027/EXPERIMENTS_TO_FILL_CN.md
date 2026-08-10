@@ -79,14 +79,16 @@ RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
 | FIER 同 consumer 速度 | 完成，原生 MHA、相同 active-token schedule 和精确 sparse-attention consumer | Fast 相对 FIER 为 1.37--3.58x，Robust 在额外支付 Value-tail 后仍为 1.16--2.31x（8K--128K） |
 | Llama official-middle LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行 | Full/QKSieve macro 为 0.459398/0.458852，保持率 99.881%，bootstrap 95% CI 为 [99.424%, 100.347%] |
 | 冻结 Robust 完整 LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行、零 fallback | Full/Robust macro 为 0.459011/0.458692，保持率 99.930%，task-bootstrap 95% CI 为 [99.538%, 100.213%] |
-| 冻结 Robust 正式 RULER | 修正后的审计运行进行中，13 任务、4K--128K、计划 650 个严格配对 | 缺少逐行 attention diagnostics 的旧运行已排除；完成前不写正式 RULER 主结果 |
+| 冻结 Robust 正式 RULER | 完成，13 任务、4K--128K、650 个严格配对、1,300 行 | Full/Robust macro 为 0.841560/0.844359，保持率 100.333%，95% CI [99.185%, 101.750%]；零 fallback |
 | Llama/Qwen/Mistral 同协议 LongBench screen | 完成，16 任务、每模型 160 个独立 offset 样本、共 480 个严格配对 | 保持率分别为 98.681%/100.211%/98.487%，三个 task-bootstrap 区间均跨 100%，fallback 为 0 |
 | Query shrinkage 敏感性 | 完成，4 条 32K trace、5 个 $\lambda$、1/2/4% active、122,880 个严格条件 | 冻结 $\lambda=0.75$ 在三个比例上的 recall/mass regret 均为 0，RMSE/best 为 1.000 |
 | 理论证明 | 完成并写入正文/附录 | 双正交精确性、最优 score 子空间、QK-MSE、bit 分配、排序和输出误差链 |
 | 正文页预算 | 完成当前版式审计 | 正文与结论在第 9 页结束，参考文献从第 10 页开始；完整命题、证明和系统图放入附录 |
 
 Llama reference、冻结 Robust 完整 LongBench 与三模型独立 screen 均已完成。
-完整 RULER 和 H100 结果尚未完成，不能用旧实验或不同执行路径替代。
+完整 RULER 已通过合同、Prompt、模型哈希和跨主机原子合并审计。当前唯一缺少的
+P0 证据是真实 H100 上的 64K/128K attention、稳态 decode 和请求级速度；不能
+用 RTX 3090 结果代填。
 
 ## 2. P0：投稿前必须完成
 
@@ -193,6 +195,14 @@ bash scripts/launch_qksieve_robust_ruler_20260810.sh
 分别生成只读 runtime provenance，核对冻结 commit、PyTorch/CUDA/Transformers、
 8 张 RTX 3090、Prompt 长度审计，以及 Llama 四个权重分片和 tokenizer/config
 文件的逐文件 SHA256；任一项不一致时汇总器和总 evidence verifier 都会拒绝结果。
+
+最终结果：Full/QKSieve task-length macro 为 `0.841560/0.844359`，保持率
+`100.333%`，task-length bootstrap 95% CI 为 `[99.185%, 101.750%]`。4K--128K
+分长度保持率依次为 `99.535%/99.942%/101.241%/99.693%/100.000%/101.727%`；
+平均 active attention 为 `4.971%`。最差单元是 `niah_multikey_2@128K` 的
+`1.0 -> 0.8`，因此正文只能声称总体没有系统性长度崩溃，不能声称每个单元等价。
+合并选择 624 个主机 pair 与 26 个补充机 pair，跨主机半对拼接为 0。33 条重叠
+结果中有 1 条预测文本不同但两侧分数同为 0，已在审计中记录预测 SHA256。
 
 ### 2.4 同一路径整模型速度、请求速度与显存
 

@@ -1,0 +1,74 @@
+{
+  "schema": "qksieve_ruler_distributed_merge_v1",
+  "rows": 1300,
+  "strict_pairs": 650,
+  "tasks": 13,
+  "lengths": [
+    4096,
+    8192,
+    16384,
+    32768,
+    65536,
+    131072
+  ],
+  "per_length_pairs": {
+    "4096": 130,
+    "8192": 130,
+    "16384": 130,
+    "32768": 130,
+    "65536": 65,
+    "131072": 65
+  },
+  "duplicate_rows_primary_preferred": 33,
+  "duplicate_output_mismatches": 1,
+  "duplicate_output_mismatch_records": [
+    {
+      "task": "qa_squad_65536",
+      "sample_id": "qa_squad_65536_2",
+      "method": "qksieve_qmse_oas_requestlocal_valuesketch16_sorted_c64",
+      "primary_score": "0.0",
+      "supplement_score": "0.0",
+      "score_mismatch": false,
+      "primary_prediction_sha256": "5025cde629ba7e17b3b18981709f10487b02a8d0a75b2577bf08f8504a971533",
+      "supplement_prediction_sha256": "05bae6e07d0f027cf3a062857756ea0cd0c2780350ad571e80df303f20e80012"
+    }
+  ],
+  "duplicate_timing_mismatches": 33,
+  "primary_pairs_selected": 624,
+  "supplement_pairs_selected": 26,
+  "primary_partial_pairs_discarded": 1,
+  "supplement_partial_pairs_ignored": 0,
+  "cross_host_pair_composition_count": 0,
+  "claim_boundary": "A strict pair is selected atomically from one host. Complete primary pairs are authoritative; otherwise a complete supplement pair is used. Complementary half-pairs are rejected. Duplicate outputs are audited.",
+  "sources": {
+    "primary": {
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard0\\sample_results.csv": "ea6f3b7ba5cb68beb584b7a221b3e0cd03991f49abdda7b65e5164f0e255ddbd",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard1\\sample_results.csv": "0e337097c7ca9a2deb922be918b9259e622ae9bf7784e0deb4d2dffbbf6e8334",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard2\\sample_results.csv": "9465b974f28fff1390064f2489f6851b664daf1aa5208fa517dce66986e938e0",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard3\\sample_results.csv": "0b8019a2d851a8f903f607f6b6639c3b874c18a9f8a98850795a33952fe8c358",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard4\\sample_results.csv": "853184d7bf0b4e746e39f17137bd363927e9ae754bc434f800a6a7099e3e66cd",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard5\\sample_results.csv": "547a307db3d92e23324c7c239f4655bd4d8fd5969c12b030ebfdfedf82c40eda",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard6\\sample_results.csv": "2235e7738df2f004bf8f5bb971ba159618dba8eae11f6293530dccb376f7240e",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard7\\sample_results.csv": "076f8d388f3fc565fc26060d78ba583f8718c690439e70178d7caadb22521ff2",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard8\\sample_results.csv": "55fc1223199e515f75439fc541874f74f5465f971255190d8dcff7050e2b4447",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\primary\\shard9\\sample_results.csv": "aca58fe3b2b12177d7e19a70cf2c90dfb3b3d40b0f4634bcbabe58d9c24e7399"
+    },
+    "supplement": {
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\supplement\\shard0\\sample_results.csv": "ad9df159b53829d878e7cc6ef9248842ce38501a377571073c7b5f19aff25355",
+      "ymluo\\projects\\qwen3_top2_head_limit3_ppl\\docs\\qksieve_robust_quality_suite_20260810\\raw_results\\ruler_v2_distributed_audited\\supplement\\shard1\\sample_results.csv": "eddae9d6e76133f9633390667aa978c1ecf8cb5f486fa6d03915a8093f69ddab"
+    }
+  },
+  "merged_sha256": "b27ef7fd63c3bf836b4fca457da92d288acb60fe4a0e88a4e03b13460b1353f8",
+  "protocol_audit": {
+    "schema": "qksieve_ruler_distributed_protocol_audit_v1",
+    "passed": true,
+    "primary_manifest_sha256": "9376f46030025345ee91f2bfb5a9be13971d48af362947136ec1b8d3e8a97afb",
+    "supplement_manifest_sha256": "6ca2b5275a7c3cd8dfea504cf5803d31c97c31eae7566bbf0c3573c180df5847",
+    "prompt_length_audit_sha256": "eb7fe38066aea0e0355942506c970d25939ac9436a293bcf449806e3c3f215d9",
+    "primary_runtime_sha256": "b86fcfc8cbe4684565e7d7a4e23b33169ce52364fc2e72cfba3b8385edeec61e",
+    "supplement_runtime_sha256": "7ae59cff39dbb0b21f0d77b8a505e040b47c647caa84006446c7e43ba6e53ef2",
+    "model_files_sha256": "22ea0f39094b0a16f620cbee44a183af2edd5d6e43f5b6d836fad55b7c5e1cce",
+    "primary_driver": "570.133.07",
+    "supplement_driver": "550.54.15"
+  }
+}

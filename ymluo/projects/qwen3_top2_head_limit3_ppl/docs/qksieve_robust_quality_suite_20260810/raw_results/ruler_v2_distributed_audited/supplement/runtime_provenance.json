@@ -1,0 +1,152 @@
+{
+  "schema": "qksieve_runtime_provenance_v1",
+  "captured_utc": "2026-08-10T04:11:59.760750+00:00",
+  "role": "supplement",
+  "host": "CISL-NF5468M6",
+  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+  "audited_implementation_commit_sha": "f300fb280a597ceb124d454cdfc9a0a1665d6a04",
+  "numerical_freeze_commit_sha": "328e01718deebfdfc80dbd8e588a1a95a1832b59",
+  "visible_cuda_devices": "0,1,2,3,4,5,6,7",
+  "software": {
+    "python": "3.10.20",
+    "pytorch": "2.7.1+cu126",
+    "transformers": "4.53.1",
+    "numpy": "2.2.6",
+    "cuda_runtime": "12.6",
+    "cudnn": 90501
+  },
+  "gpus": [
+    {
+      "index": 0,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-0f7bf512-eb13-2cb2-98f6-cfe09416f3db",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 1,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-37442abf-36f2-3178-eca7-1a3b4c233ebc",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 2,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-70fa1173-fce1-955a-7536-03447db3884c",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 3,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-7b951f00-f856-308c-bb8d-20c8caf018cf",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 4,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-164fd62e-970b-433f-0a52-03d3fe859dfd",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 5,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-71f512f0-4afd-d94c-7669-9c941bae8e53",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 6,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-8710b41b-d602-de07-2e00-ebc5ef85b76b",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    },
+    {
+      "index": 7,
+      "name": "NVIDIA GeForce RTX 3090",
+      "uuid": "GPU-dc928690-6a16-678e-307d-cc578d6c2d61",
+      "memory_mib": 24576,
+      "driver": "550.54.15"
+    }
+  ],
+  "run_manifest": {
+    "path": "/data/u21307130306/qksieve_ruler_accel_20260810/results/20260810_qksieve_robust_ruler_tail_accel_v2_matched/manifest.txt",
+    "sha256": "6ca2b5275a7c3cd8dfea504cf5803d31c97c31eae7566bbf0c3573c180df5847"
+  },
+  "model": {
+    "path": "/data/u21307130306/qksieve_iclr2027/models/Meta-Llama-3.1-8B-Instruct-ms",
+    "download_manifest": {
+      "sha256": "18717e9bb0e76ce2138e335e6c75bd4948d88a8e860d8226d0ced49b51429ea9",
+      "payload": {
+        "source": "ModelScope",
+        "model_id": "LLM-Research/Meta-Llama-3.1-8B-Instruct",
+        "model_dir": "/data/u21307130306/qksieve_iclr2027/models/Meta-Llama-3.1-8B-Instruct-ms",
+        "weight_files": [
+          "model-00001-of-00004.safetensors",
+          "model-00002-of-00004.safetensors",
+          "model-00003-of-00004.safetensors",
+          "model-00004-of-00004.safetensors"
+        ],
+        "weight_bytes": 16060556376,
+        "config_contract": {
+          "model_type": "llama",
+          "hidden_size": 4096,
+          "num_hidden_layers": 32,
+          "num_attention_heads": 32,
+          "num_key_value_heads": 8
+        },
+        "metadata_sha256": {
+          "config.json": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e",
+          "generation_config.json": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd",
+          "tokenizer_config.json": "177c7b61e616fecb84c17ce0591acb92c6c4d60e9ac5ababfb940ff23bbcd424",
+          "model.safetensors.index.json": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b"
+        }
+      }
+    },
+    "files": {
+      "config.json": {
+        "bytes": 855,
+        "sha256": "29e4c210b0d6ac178b16b2a255a568bdb23b581e50ca1ef6a6d071dd85704e6e"
+      },
+      "generation_config.json": {
+        "bytes": 184,
+        "sha256": "189fb0c0d7fd8a527db217c0a60a0e013f0394cd8800f9697a666a9e75e5f7fd"
+      },
+      "model-00001-of-00004.safetensors": {
+        "bytes": 4976698672,
+        "sha256": "2b1879f356aed350030bb40eb45ad362c89d9891096f79a3ab323d3ba5607668"
+      },
+      "model-00002-of-00004.safetensors": {
+        "bytes": 4999802720,
+        "sha256": "09d433f650646834a83c580877bd60c6d1f88f7755305c12576b5c7058f9af15"
+      },
+      "model-00003-of-00004.safetensors": {
+        "bytes": 4915916176,
+        "sha256": "fc1cdddd6bfa91128d6e94ee73d0ce62bfcdb7af29e978ddcab30c66ae9ea7fa"
+      },
+      "model-00004-of-00004.safetensors": {
+        "bytes": 1168138808,
+        "sha256": "92ecfe1a2414458b4821ac8c13cf8cb70aed66b5eea8dc5ad9eeb4ff309d6d7b"
+      },
+      "model.safetensors.index.json": {
+        "bytes": 23950,
+        "sha256": "146776fce3f6db1103aa6f249e65ee5544c5923ce6f971b092eee79aa6e5d37b"
+      },
+      "tokenizer.json": {
+        "bytes": 9085657,
+        "sha256": "79e3e522635f3171300913bb421464a87de6222182a0570b9b2ccba2a964b2b4"
+      },
+      "tokenizer_config.json": {
+        "bytes": 55351,
+        "sha256": "177c7b61e616fecb84c17ce0591acb92c6c4d60e9ac5ababfb940ff23bbcd424"
+      }
+    }
+  },
+  "environment": {
+    "python_executable": "/data/u21307130306/qksieve_env_torch271_py310/bin/python3.10"
+  }
+}

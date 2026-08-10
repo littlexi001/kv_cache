@@ -1,11 +1,13 @@
 \section{局限与结论}
 \label{sec:conclusion}
 
-冻结 Robust 在完整 LongBench 上保持 Full 的 99.930\%，在 12 个原生 128K case
-上保持 99.805\% pooled PPL，且不使用 reranking、learning 或稠密 fallback。
+冻结 Robust 在完整 LongBench 上保持 Full 的 99.930\%，在正式 650-pair RULER
+上保持 100.333\%，并在 12 个原生 128K case 上保持 99.805\% pooled PPL，且
+不使用 reranking、learning 或稠密 fallback。
 原生 MHA Fast/Robust attention 在 8K--128K 达到
 1.27--6.37$\times$/1.08--4.12$\times$；Robust 稳态 decode 在 32/64/128K 达到
 1.32/2.22/3.98$\times$。64-token 冷请求为 .81/1.31/2.15$\times$，因此复用是
 显式场景。精确 K/V 仍常驻，辅助索引额外占 7.47\%；新 prompt 需要重建 basis
 与索引，sparse prefill 不在本文范围内，32K cold 延迟仍低于 Full。MHA 速度与
-GQA 任务质量保持独立证据合同，冻结泛化主张截止 128K。
+GQA 任务质量保持独立证据合同。RULER 有一个仅含 5 条样本的 128K 单元从 1.0
+降至 .8，因此结果支持总体而非逐单元等价；冻结泛化主张截止 128K。

@@ -1,0 +1,21 @@
+% Generated from frozen evidence: longbench=382f0f892e8d1e098fc94b5d966a6b759d018ff267952e0cfa71127ee5dd7a1f; ruler=bf945639ecd056b0dc0e7e6411be5c081a0fcaea7821caffa41028eae77c82b1; multimodel=9ceadaace51808989a222df6669ca5261e233c8ebd21f67b3f2bcd9851b8bf30
+\begin{table}[t]
+\caption{冻结 QKSieve-Robust 的任务质量。完整 LongBench、RULER 和跨模型筛查分别包含 3,750、650 和每模型 160 个严格配对；区间按任务或任务--长度单元 bootstrap。}
+\label{tab:quality-main}
+\centering
+\small
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+评测 / 模型 & Full & QKSieve & 保持率 & Paired 95\% CI \\
+\midrule
+完整 LB / Llama-3.1-8B & 0.4590 & 0.4587 & 99.93\% & [99.54\%, 100.21\%] \\
+RULER / Llama-3.1-8B & 0.8416 & 0.8444 & 100.33\% & [99.18\%, 101.75\%] \\
+\midrule
+LB 筛查 / Llama-3.1-8B & 0.4264 & 0.4208 & 98.68\% & [96.39\%, 100.50\%] \\
+LB 筛查 / Qwen3-4B & 0.3972 & 0.3980 & 100.21\% & [98.91\%, 101.72\%] \\
+LB 筛查 / Mistral-7B & 0.4216 & 0.4153 & 98.49\% & [95.08\%, 100.89\%] \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}

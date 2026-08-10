@@ -30,8 +30,8 @@
 - 使用官方 middle truncation、7,500 token 上限和模型对应 chat template；
 - 主指标为 macro score、相对 Full、分任务最差值和 task bootstrap 区间。
 
-这批 160 样本只承担跨模型转移检查。Llama 的完整 3,750 样本 Robust
-LongBench 仍需单独完成，不能由该小表替代。
+这批 160 样本只承担跨模型转移检查，不能替代已经独立完成的 Llama
+3,750-pair 完整 Robust LongBench 主表。
 
 ## 运行入口
 
@@ -41,3 +41,13 @@ bash scripts/launch_qksieve_robust_multimodel_longbench_20260810.sh
 ```
 
 两个入口都支持在保留有效 CSV 的情况下续跑，并在汇总前执行冻结契约审计。
+
+## 验收条件
+
+- RULER 必须是 650 个完整、同主机的 Full--Robust pair，不能跨主机拼半对；
+- 78 个 task-length 单元全部存在，Prompt 不超过 131,072 token；
+- 每条 Robust 行都执行 packed qMSE、最多 512 个 quantile 样本和 ValueSketch；
+- fallback 为 0；
+- 汇总必须保存运行环境、模型逐文件 SHA256、原始 CSV SHA256 和 bootstrap 区间；
+- 若总体区间通过但存在单独失败 cell，只能报告总体没有系统性崩溃，不能声称
+  每个任务和长度都与 Full 等价。

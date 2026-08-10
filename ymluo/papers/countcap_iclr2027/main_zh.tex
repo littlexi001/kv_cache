@@ -82,7 +82,9 @@ Selected-only Fast 配置增加 5.86\% 的 FP16 K+V 存储；冻结的 Robust �
 召回率从 43.36\% 提高到 73.44\%，selected attention mass 从 76.40\% 提高到
 83.48\%。冻结 Robust 在完整的 3,750 样本 Llama-3.1-8B LongBench 上保持 Full
 宏平均分数的 99.930\%（task-bootstrap 95\% CI 为
-[99.538\%, 100.213\%]），且没有稠密 fallback。在 12 个原生 128K 主题/seed case 上，Robust 的 pooled
+[99.538\%, 100.213\%]），且没有稠密 fallback；正式 650-pair RULER 保持
+100.333\%（task--length-bootstrap 95\% CI 为 [99.185\%, 101.750\%]）。在 12 个
+原生 128K 主题/seed case 上，Robust 的 pooled
 PPL 质量保持率为 99.805\%，而 Fast 为 96.319\%。
 
 在 RTX 3090 上直接计时的原生 MHA attention 完整路径（包含检索与精确稀疏

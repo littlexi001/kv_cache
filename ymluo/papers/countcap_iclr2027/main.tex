@@ -75,7 +75,9 @@ exact top-$k$ recall from 43.36\% to 73.44\% and selected attention mass from
 76.40\% to 83.48\% over an equal-rate FIER reproduction.  The complete
 3,750-example Llama-3.1-8B LongBench evaluation of the frozen Robust path
 retains 99.930\% of Full-attention macro score (task-bootstrap 95\% CI
-[99.538\%, 100.213\%]) with no dense fallback.  On 12 native-128K topic/seed cases, Robust
+[99.538\%, 100.213\%]) with no dense fallback; formal 650-pair RULER retains
+100.333\% (task--length-bootstrap 95\% CI [99.185\%, 101.750\%]).  On 12
+native-128K topic/seed cases, Robust
 retains 99.805\% pooled perplexity quality, versus 96.319\% for Fast.
 
 Directly timed native-MHA attention, including selection and exact sparse

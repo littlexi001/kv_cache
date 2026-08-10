@@ -1,0 +1,85 @@
+{
+  "schema": "qksieve_ruler_prompt_length_audit_v1",
+  "model_name_or_path": "/home/fdong/qksieve_iclr2027/models/Meta-Llama-3.1-8B-Instruct-ms",
+  "model_max_position_embeddings": 131072,
+  "audited_max_sequence_tokens": 131072,
+  "prompt_wrapper": "llama3",
+  "force_no_chat_tasks": [],
+  "input_files": [
+    {
+      "path": "/home/fdong/qksieve_iclr2027/data/qksieve_robust_ruler_20260810/llama31_8b_ruler13_4k32k_m10_seed42.jsonl",
+      "sha256": "87f4f27710d4cd8f1a9a33b00e1cd21e8c5d4df85a4556944b034ad500e32587"
+    },
+    {
+      "path": "/home/fdong/qksieve_iclr2027/data/qksieve_robust_ruler_20260810/llama31_8b_ruler13_64k128k_m5_seed42.jsonl",
+      "sha256": "b1aaf339afd8d4d8f7246563112356301c416ba7083081ab21e1e7002ab7e7a3"
+    }
+  ],
+  "expected_rows": 650,
+  "observed_rows": 650,
+  "expected_rows_ok": true,
+  "overflow_rows": 0,
+  "all_within_model_limit": true,
+  "per_requested_length": {
+    "4096": {
+      "rows": 130,
+      "min_prompt_tokens": 2588,
+      "mean_prompt_tokens": 3566.2,
+      "max_prompt_tokens": 4087,
+      "max_prompt_plus_generation_tokens": 4137,
+      "minimum_remaining_tokens": 126935,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    },
+    "8192": {
+      "rows": 130,
+      "min_prompt_tokens": 5429,
+      "mean_prompt_tokens": 7538.584615384615,
+      "max_prompt_tokens": 8099,
+      "max_prompt_plus_generation_tokens": 8207,
+      "minimum_remaining_tokens": 122865,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    },
+    "16384": {
+      "rows": 130,
+      "min_prompt_tokens": 13451,
+      "mean_prompt_tokens": 15796.784615384615,
+      "max_prompt_tokens": 16331,
+      "max_prompt_plus_generation_tokens": 16361,
+      "minimum_remaining_tokens": 114711,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    },
+    "32768": {
+      "rows": 130,
+      "min_prompt_tokens": 29416,
+      "mean_prompt_tokens": 32042.53846153846,
+      "max_prompt_tokens": 32705,
+      "max_prompt_plus_generation_tokens": 32755,
+      "minimum_remaining_tokens": 98317,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    },
+    "65536": {
+      "rows": 65,
+      "min_prompt_tokens": 61582,
+      "mean_prompt_tokens": 64702.16923076923,
+      "max_prompt_tokens": 65385,
+      "max_prompt_plus_generation_tokens": 65513,
+      "minimum_remaining_tokens": 65559,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    },
+    "131072": {
+      "rows": 65,
+      "min_prompt_tokens": 113792,
+      "mean_prompt_tokens": 129469.58461538462,
+      "max_prompt_tokens": 130964,
+      "max_prompt_plus_generation_tokens": 131022,
+      "minimum_remaining_tokens": 50,
+      "overflow_rows": 0,
+      "overflow_examples": []
+    }
+  }
+}

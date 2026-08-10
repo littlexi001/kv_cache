@@ -1,13 +1,16 @@
 \section{Limitations and Conclusion}
 \label{sec:conclusion}
 
-The frozen Robust path retains 99.930\% of Full on complete LongBench and
-99.805\% pooled PPL over 12 native-128K cases, without reranking, learning,
-or dense fallback.  Native-MHA Fast/Robust attention reaches
+The frozen Robust path retains 99.930\% of Full on complete LongBench,
+100.333\% on formal 650-pair RULER, and 99.805\% pooled PPL over 12
+native-128K cases, without reranking, learning, or dense fallback.
+Native-MHA Fast/Robust attention reaches
 1.27--6.37$\times$/1.08--4.12$\times$ at 8K--128K, and Robust steady decode
 reaches 1.32/2.22/3.98$\times$ at 32/64/128K.  A 64-token cold request reaches
 .81/1.31/2.15$\times$, so reuse is an explicit regime.  Exact K/V remains
 resident and auxiliary indices add 7.47\%; new prompts rebuild the basis and
 index, sparse prefill is outside scope, and 32K cold latency is below parity.
-We keep MHA speed and GQA task-quality contracts separate and stop the frozen
-generalization claim at 128K.
+We keep MHA speed and GQA task-quality contracts separate.  One 128K RULER
+cell drops from 1.0 to .8 over five examples, so the result supports aggregate
+rather than cell-wise equivalence; we stop the frozen generalization claim at
+128K.

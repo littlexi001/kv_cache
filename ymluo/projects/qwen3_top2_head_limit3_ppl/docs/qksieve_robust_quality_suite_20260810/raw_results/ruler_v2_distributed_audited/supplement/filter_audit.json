@@ -1,0 +1,11 @@
+{
+  "schema": "qksieve_ruler_tail_filter_v1",
+  "source_examples": 130,
+  "snapshot_rows": 126,
+  "snapshot_strict_pairs": 62,
+  "missing_examples": 68,
+  "order": "reverse_of_frozen_jsonl",
+  "source_sha256": "b1aaf339afd8d4d8f7246563112356301c416ba7083081ab21e1e7002ab7e7a3",
+  "snapshot_sha256": "8a5fed8cd55a29b46e936a711a3726cf3dd49ffa2f72ecc9025c177bbce1c2fa",
+  "filtered_sha256": "7ad2360c44138275581e37eef1d896780999598ae84bea93984ea545f3008481"
+}

@@ -1,0 +1,80 @@
+% Generated from frozen evidence: longbench=382f0f892e8d1e098fc94b5d966a6b759d018ff267952e0cfa71127ee5dd7a1f; ruler=bf945639ecd056b0dc0e7e6411be5c081a0fcaea7821caffa41028eae77c82b1; multimodel=9ceadaace51808989a222df6669ca5261e233c8ebd21f67b3f2bcd9851b8bf30
+\begin{table}[t]
+\caption{Complete LongBench results for frozen QKSieve-Robust over 16 tasks and 3,750 strict pairs. The interval is a paired-bootstrap 95\% CI.}
+\label{tab:longbench-main}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & Full & QKSieve & Retention & Paired 95\% CI \\
+\midrule
+Llama-3.1-8B & 0.4590 & 0.4587 & 99.93\% & [99.54\%, 100.21\%] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table*}[t]
+\caption{Per-task results for frozen QKSieve-Robust on complete LongBench.}
+\label{tab:longbench-per-task}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Task & Samples & Full & QKSieve & Retention \\
+\midrule
+2wikimqa & 200 & 0.4685 & 0.4690 & 100.11\% \\
+gov\_report & 200 & 0.3384 & 0.3373 & 99.67\% \\
+hotpotqa & 200 & 0.4865 & 0.4830 & 99.27\% \\
+lcc & 500 & 0.6322 & 0.6336 & 100.22\% \\
+multi\_news & 200 & 0.2703 & 0.2697 & 99.78\% \\
+multifieldqa\_en & 150 & 0.5595 & 0.5576 & 99.66\% \\
+musique & 200 & 0.2732 & 0.2760 & 101.05\% \\
+narrativeqa & 200 & 0.2427 & 0.2425 & 99.90\% \\
+passage\_count & 200 & 0.0991 & 0.0916 & 92.43\% \\
+passage\_retrieval\_en & 200 & 0.6850 & 0.6850 & 100.00\% \\
+qasper & 200 & 0.4571 & 0.4546 & 99.46\% \\
+qmsum & 200 & 0.2328 & 0.2309 & 99.22\% \\
+repobench-p & 500 & 0.5456 & 0.5498 & 100.78\% \\
+samsum & 200 & 0.4434 & 0.4432 & 99.95\% \\
+trec & 200 & 0.6950 & 0.6950 & 100.00\% \\
+triviaqa & 200 & 0.9149 & 0.9202 & 100.58\% \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table}[t]
+\caption{Formal RULER results for frozen QKSieve-Robust. Intervals are paired-bootstrap 95\% CIs.}
+\label{tab:ruler-formal}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Length & Full & QKSieve & Retention & Paired 95\% CI \\
+\midrule
+4K & 0.8831 & 0.8790 & 99.54\% & [98.85\%, 100.00\%] \\
+8K & 0.8876 & 0.8871 & 99.94\% & [99.28\%, 100.79\%] \\
+16K & 0.8781 & 0.8890 & 101.24\% & [99.06\%, 105.35\%] \\
+32K & 0.8342 & 0.8317 & 99.69\% & [99.02\%, 100.00\%] \\
+64K & 0.8092 & 0.8092 & 100.00\% & [100.00\%, 100.00\%] \\
+128K & 0.7572 & 0.7703 & 101.73\% & [95.21\%, 111.35\%] \\
+\midrule
+Overall & 0.8416 & 0.8444 & 100.33\% & [99.18\%, 101.75\%] \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\caption{Cross-model LongBench screen under one frozen configuration, with 160 strict pairs per model.}
+\label{tab:multimodel-formal}
+\centering
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Model & Full & QKSieve & Retention & Paired 95\% CI \\
+\midrule
+Llama-3.1-8B & 0.4264 & 0.4208 & 98.68\% & [96.39\%, 100.50\%] \\
+Qwen3-4B & 0.3972 & 0.3980 & 100.21\% & [98.91\%, 101.72\%] \\
+Mistral-7B & 0.4216 & 0.4153 & 98.49\% & [95.08\%, 100.89\%] \\
+\bottomrule
+\end{tabular}
+\end{table}

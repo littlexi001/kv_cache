@@ -138,6 +138,24 @@ def test_merge_audits_duplicate_output_mismatch() -> None:
     )
     assert len(merged) == 2
     assert audit["duplicate_output_mismatches"] == 1
+    assert audit["duplicate_output_mismatch_records"] == [
+        {
+            "task": "task_a_4096",
+            "sample_id": "a",
+            "method": contract.METHOD,
+            "primary_score": "1.0",
+            "supplement_score": "1.0",
+            "score_mismatch": False,
+            "primary_prediction_sha256": (
+                "2689367b205c16ce32ed4200942b8b8b"
+                "1e262dfc70d9bc9fbc77c49699a4f1df"
+            ),
+            "supplement_prediction_sha256": (
+                "9d6f965ac832e40a5df6c06afe983e3b"
+                "449c07b843ff51ce76204de05c690d11"
+            ),
+        }
+    ]
 
 
 def test_merge_rejects_frozen_config_drift() -> None:
