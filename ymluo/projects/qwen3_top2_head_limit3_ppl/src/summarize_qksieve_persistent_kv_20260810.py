@@ -317,8 +317,8 @@ def summarize(run_root: Path) -> dict[str, Any]:
         "rows": rows,
         "aggregate_rows": aggregates,
         "statistics": {
-            "point_estimate": "median_across_seeds",
-            "interval": "seed_bootstrap_median_percentile_95",
+            "point_estimate": "median_across_independent_process_repetitions",
+            "interval": "process_repetition_bootstrap_median_percentile_95",
             "bootstrap_resamples": BOOTSTRAP_RESAMPLES,
             "bootstrap_seed": BOOTSTRAP_SEED,
         },
@@ -339,7 +339,8 @@ def summarize(run_root: Path) -> dict[str, Any]:
             "Token equality checks deterministic rewind/replay within each "
             "method. Quality relative to Full is measured by the separate "
             "LongBench and RULER suites. Timing intervals resample independent "
-            "seed-level workloads and do not represent cross-hardware variance."
+            "process repetitions of one fixed deterministic workload; they do "
+            "not represent workload-distribution or cross-hardware variance."
         ),
     }
 

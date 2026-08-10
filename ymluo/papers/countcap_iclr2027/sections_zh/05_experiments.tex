@@ -69,6 +69,11 @@ Llama-3.1-8B & .459398 & .458852 & 99.881\% &
 正式大规模 RULER 表；quality harness 中的时间也不进入系统速度结论。
 }
 
+\IfFileExists{data/generated/qksieve_quality_tables_zh.tex}{%
+PassageCount 是 LongBench 中唯一相对保持率低于 95\% 的任务：Full 为 .0991，
+Robust 为 .0916（92.43\%）。由于 Full 分母本身很小，相对比例会放大绝对
+$.0075$ 的下降，因此本文将该弱项单独报告。}{ }
+
 \subsection{等 rate 索引质量}
 
 在 12 个 held-out 32K window 上，使用 240 index bit 和 1,280 个精确 token

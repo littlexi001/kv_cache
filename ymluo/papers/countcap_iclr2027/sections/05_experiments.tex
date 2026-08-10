@@ -83,6 +83,12 @@ length failure modes; it is not presented as a formal full-size RULER table,
 and its quality-harness timing is excluded from systems claims.
 }
 
+\IfFileExists{data/generated/qksieve_quality_tables.tex}{%
+PassageCount is the only LongBench task below 95\% relative retention:
+.0991 for Full versus .0916 for Robust (92.43\%).  We report this case
+explicitly because its small Full denominator makes the relative ratio look
+larger than the absolute $.0075$ decrease.}{ }
+
 \subsection{Index quality at equal rate}
 
 At 240 index bits and 1,280 exact tokens over 12 held-out 32K windows,
