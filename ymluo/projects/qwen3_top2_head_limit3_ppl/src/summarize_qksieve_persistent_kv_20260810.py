@@ -27,8 +27,11 @@ PRELOADED_EXTENSIONS = {
 AGGREGATE_FIELDS = (
     "full_warm_ms_per_token",
     "qksieve_warm_ms_per_token",
+    "full_cold_end_to_end_ms_per_token",
+    "qksieve_cold_end_to_end_ms_per_token",
     "warm_speedup",
     "cold_speedup",
+    "cold_end_to_end_speedup",
     "amortized_speedup",
     "append_only_speedup",
     "qksieve_prebuild_seconds",
@@ -282,6 +285,17 @@ def summarize(run_root: Path) -> dict[str, Any]:
                     full,
                     sparse,
                     "cold_persistent_request_ms_per_token",
+                ),
+                "full_cold_end_to_end_ms_per_token": full[
+                    "cold_end_to_end_request_ms_per_token"
+                ],
+                "qksieve_cold_end_to_end_ms_per_token": sparse[
+                    "cold_end_to_end_request_ms_per_token"
+                ],
+                "cold_end_to_end_speedup": ratio(
+                    full,
+                    sparse,
+                    "cold_end_to_end_request_ms_per_token",
                 ),
                 "amortized_speedup": ratio(
                     full,

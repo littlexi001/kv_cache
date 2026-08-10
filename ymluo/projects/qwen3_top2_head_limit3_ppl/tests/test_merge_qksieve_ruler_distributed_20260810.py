@@ -81,13 +81,43 @@ def test_merge_prefers_primary_and_fills_missing_pair() -> None:
     assert audit["strict_pairs"] == 2
     assert audit["duplicate_rows_primary_preferred"] == 2
     assert audit["duplicate_output_mismatches"] == 0
+    assert audit["primary_pairs_selected"] == 1
+    assert audit["supplement_pairs_selected"] == 1
+    assert audit["cross_host_pair_composition_count"] == 0
 
 
 def test_merge_rejects_incomplete_grid() -> None:
-    with pytest.raises(AssertionError, match="incomplete pairs"):
+    with pytest.raises(AssertionError, match="pair-atomic.*incomplete pairs"):
         merge_rows(
             [row("task_a_4096", "a", "full_kv")],
             [],
+            expected_tasks=("task_a",),
+            expected_length_samples={4096: 1},
+        )
+
+
+def test_merge_discards_primary_half_pair_in_favor_of_complete_supplement() -> None:
+    primary = [row("task_a_4096", "a", "full_kv", prediction="primary")]
+    supplement = pair("task_a_4096", "a")
+    supplement[0]["prediction"] = "supplement"
+    merged, audit = merge_rows(
+        primary,
+        supplement,
+        expected_tasks=("task_a",),
+        expected_length_samples={4096: 1},
+    )
+    full = next(item for item in merged if item["method"] == "full_kv")
+    assert full["prediction"] == "supplement"
+    assert audit["primary_pairs_selected"] == 0
+    assert audit["supplement_pairs_selected"] == 1
+    assert audit["primary_partial_pairs_discarded"] == 1
+
+
+def test_merge_rejects_complementary_half_pairs() -> None:
+    with pytest.raises(AssertionError, match="pair-atomic.*incomplete pairs"):
+        merge_rows(
+            [row("task_a_4096", "a", "full_kv")],
+            [row("task_a_4096", "a", contract.METHOD)],
             expected_tasks=("task_a",),
             expected_length_samples={4096: 1},
         )

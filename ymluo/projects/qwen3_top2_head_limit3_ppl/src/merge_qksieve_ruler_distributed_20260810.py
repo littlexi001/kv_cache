@@ -136,15 +136,22 @@ def merge_rows(
     expected_tasks: tuple[str, ...] = EXPECTED_TASKS,
     expected_length_samples: dict[int, int] = EXPECTED_LENGTH_SAMPLES,
 ) -> tuple[list[dict[str, str]], dict[str, Any]]:
-    chosen: dict[tuple[str, str, str], dict[str, str]] = {}
+    expected_method_set = set(METHODS)
     duplicate_rows = 0
     duplicate_output_mismatches = 0
     duplicate_timing_mismatches = 0
+    sources: dict[
+        str,
+        dict[tuple[str, str], dict[str, dict[str, str]]],
+    ] = {}
     for source_name, rows in (
         ("primary", primary_rows),
         ("supplement", supplement_rows),
     ):
         local_seen: set[tuple[str, str, str]] = set()
+        grouped: dict[
+            tuple[str, str], dict[str, dict[str, str]]
+        ] = defaultdict(dict)
         for row in rows:
             key = row_key(row)
             if key in local_seen:
@@ -156,20 +163,42 @@ def merge_rows(
                 validate_full_row(row)
             else:
                 raise AssertionError(f"unexpected RULER method: {row['method']}")
-            if key not in chosen:
-                chosen[key] = row
-                continue
+            grouped[(row["task"], row["sample_id"])][row["method"]] = row
+        sources[source_name] = grouped
+
+    primary = sources["primary"]
+    supplement = sources["supplement"]
+    chosen_pairs: dict[
+        tuple[str, str], dict[str, dict[str, str]]
+    ] = {}
+    primary_pairs_selected = 0
+    supplement_pairs_selected = 0
+    primary_partial_pairs_discarded = 0
+    supplement_partial_pairs_ignored = 0
+    incomplete: dict[str, dict[str, list[str]]] = {}
+    for sample_key in sorted(set(primary) | set(supplement)):
+        primary_pair = primary.get(sample_key, {})
+        supplement_pair = supplement.get(sample_key, {})
+        primary_complete = set(primary_pair) == expected_method_set
+        supplement_complete = set(supplement_pair) == expected_method_set
+
+        for method in sorted(set(primary_pair) & set(supplement_pair)):
             duplicate_rows += 1
-            previous = chosen[key]
-            if any(previous.get(field) != row.get(field) for field in CONFIG_FIELDS):
+            previous = primary_pair[method]
+            candidate = supplement_pair[method]
+            key = (*sample_key, method)
+            if any(
+                previous.get(field) != candidate.get(field)
+                for field in CONFIG_FIELDS
+            ):
                 raise AssertionError(f"duplicate configuration drifted: {key}")
             if (
-                previous.get("prediction") != row.get("prediction")
-                or previous.get("score") != row.get("score")
+                previous.get("prediction") != candidate.get("prediction")
+                or previous.get("score") != candidate.get("score")
             ):
                 duplicate_output_mismatches += 1
             if any(
-                previous.get(field) != row.get(field)
+                previous.get(field) != candidate.get(field)
                 for field in (
                     "prefill_seconds",
                     "query_seconds",
@@ -180,22 +209,29 @@ def merge_rows(
             ):
                 duplicate_timing_mismatches += 1
 
-    by_sample: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for task, sample_id, method in chosen:
-        by_sample[(task, sample_id)].add(method)
-    expected_method_set = set(METHODS)
-    incomplete = {
-        key: sorted(methods)
-        for key, methods in by_sample.items()
-        if methods != expected_method_set
-    }
+        if primary_complete:
+            chosen_pairs[sample_key] = primary_pair
+            primary_pairs_selected += 1
+            if supplement_pair and not supplement_complete:
+                supplement_partial_pairs_ignored += 1
+        elif supplement_complete:
+            chosen_pairs[sample_key] = supplement_pair
+            supplement_pairs_selected += 1
+            if primary_pair:
+                primary_partial_pairs_discarded += 1
+        else:
+            incomplete[f"{sample_key[0]}::{sample_key[1]}"] = {
+                "primary": sorted(primary_pair),
+                "supplement": sorted(supplement_pair),
+            }
     if incomplete:
-        raise AssertionError(f"distributed merge has incomplete pairs: {incomplete}")
+        raise AssertionError(
+            "pair-atomic distributed merge has incomplete pairs: "
+            f"{incomplete}"
+        )
 
     cells: Counter[tuple[str, int]] = Counter()
-    for (task, _sample_id), methods in by_sample.items():
-        if methods != expected_method_set:
-            raise AssertionError("method-pair audit failed")
+    for task, _sample_id in chosen_pairs:
         base_task, _, length_text = task.rpartition("_")
         if not length_text.isdigit():
             raise AssertionError(f"invalid RULER task: {task}")
@@ -215,8 +251,13 @@ def merge_rows(
         raise AssertionError(f"RULER cell grid drifted: differences={missing}, extra={extra}")
 
     method_order = {method: index for index, method in enumerate(METHODS)}
+    chosen = [
+        row
+        for pair in chosen_pairs.values()
+        for row in pair.values()
+    ]
     merged = sorted(
-        chosen.values(),
+        chosen,
         key=lambda row: (
             int(row["requested_length"]),
             row["base_task"],
@@ -229,7 +270,7 @@ def merge_rows(
     audit = {
         "schema": "qksieve_ruler_distributed_merge_v1",
         "rows": len(merged),
-        "strict_pairs": len(by_sample),
+        "strict_pairs": len(chosen_pairs),
         "tasks": len(expected_tasks),
         "lengths": sorted(expected_length_samples),
         "per_length_pairs": {
@@ -241,9 +282,16 @@ def merge_rows(
         "duplicate_rows_primary_preferred": duplicate_rows,
         "duplicate_output_mismatches": duplicate_output_mismatches,
         "duplicate_timing_mismatches": duplicate_timing_mismatches,
+        "primary_pairs_selected": primary_pairs_selected,
+        "supplement_pairs_selected": supplement_pairs_selected,
+        "primary_partial_pairs_discarded": primary_partial_pairs_discarded,
+        "supplement_partial_pairs_ignored": supplement_partial_pairs_ignored,
+        "cross_host_pair_composition_count": 0,
         "claim_boundary": (
-            "Primary rows are authoritative; supplement rows fill only missing "
-            "(task, sample_id, method) keys. Duplicate outputs are audited."
+            "A strict pair is selected atomically from one host. Complete "
+            "primary pairs are authoritative; otherwise a complete supplement "
+            "pair is used. Complementary half-pairs are rejected. Duplicate "
+            "outputs are audited."
         ),
     }
     return merged, audit

@@ -28,6 +28,7 @@ def write_result(
         "history_tokens": 32768,
         "shared_prefix_warm_mean_ms_per_token": warm,
         "cold_persistent_request_ms_per_token": cold,
+        "cold_end_to_end_request_ms_per_token": cold * 2.0,
         "shared_prefix_amortized_ms_per_token": warm + 1.0,
         "append_only_ms_per_token": warm - 1.0,
         "prebuild_wall_seconds": 1.25 if method == "qksieve_robust" else 0.0,
@@ -117,6 +118,7 @@ def test_summary_pairs_methods_and_computes_speedups(tmp_path: Path) -> None:
     row = result["rows"][0]
     assert row["warm_speedup"] == 2.0
     assert row["cold_speedup"] == 0.8
+    assert row["cold_end_to_end_speedup"] == 0.8
     assert row["qksieve_prebuild_seconds"] == 1.25
     aggregate = result["aggregate_rows"][0]
     assert aggregate["seed_count"] == 1
