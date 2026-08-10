@@ -250,6 +250,7 @@ def test_quality_launchers_pin_postfreeze_runtime_contract() -> None:
     scripts = Path(__file__).resolve().parents[1] / "scripts"
     for name in (
         "launch_qksieve_robust_ruler_20260810.sh",
+        "launch_qksieve_ruler_tail_accelerator_20260810.sh",
         "launch_qksieve_robust_multimodel_longbench_20260810.sh",
         "launch_qksieve_robust_llama_full_longbench_20260810.sh",
     ):
