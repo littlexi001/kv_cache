@@ -72,3 +72,16 @@ def test_tables_render_actual_frozen_summary_schema() -> None:
         "Generated from frozen evidence: longbench=abc; ruler=def; "
         "multimodel=ghi"
     ) in text
+
+    main_text = MODULE.render_main(
+        longbench,
+        ruler,
+        multimodel,
+        chinese=False,
+        provenance="longbench=abc; ruler=def; multimodel=ghi",
+    )
+    assert "Full LB / Llama-3.1-8B & 0.4600 & 0.4554 & 99.00\\%" in main_text
+    assert "RULER / Llama-3.1-8B & 0.9000 & 0.8910 & 99.00\\%" in main_text
+    assert "LB screen / Mistral-7B & 0.5000 & 0.4950 & 99.00\\%" in main_text
+    assert "\\label{tab:quality-main}" in main_text
+    assert "\\resizebox{\\columnwidth}{!}" in main_text

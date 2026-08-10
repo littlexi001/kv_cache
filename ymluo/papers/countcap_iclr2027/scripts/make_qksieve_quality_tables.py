@@ -62,6 +62,23 @@ def parse_args() -> argparse.Namespace:
             ROOT / "data" / "generated" / "qksieve_quality_tables_zh.tex"
         ),
     )
+    parser.add_argument(
+        "--appendix_en",
+        type=Path,
+        default=(
+            ROOT / "data" / "generated" / "qksieve_quality_appendix.tex"
+        ),
+    )
+    parser.add_argument(
+        "--appendix_zh",
+        type=Path,
+        default=(
+            ROOT
+            / "data"
+            / "generated"
+            / "qksieve_quality_appendix_zh.tex"
+        ),
+    )
     return parser.parse_args()
 
 
@@ -143,6 +160,107 @@ def model_rows(multimodel: dict[str, Any]) -> list[str]:
             )
         )
     return rows
+
+
+def compact_rows(
+    longbench: dict[str, Any],
+    ruler: dict[str, Any],
+    multimodel: dict[str, Any],
+    *,
+    chinese: bool,
+) -> list[str]:
+    methods = longbench["methods"]
+    full = methods["full_kv"]
+    qksieve_names = [name for name in methods if name != "full_kv"]
+    if len(qksieve_names) != 1:
+        raise ValueError("LongBench summary must contain one frozen QKSieve method")
+    ours = methods[qksieve_names[0]]
+    complete_label = (
+        "完整 LB / Llama-3.1-8B"
+        if chinese
+        else "Full LB / Llama-3.1-8B"
+    )
+    ruler_label = "RULER / Llama-3.1-8B"
+    screen_prefix = "LB 筛查" if chinese else "LB screen"
+    rows = [
+        "{} & {:.4f} & {:.4f} & {} & {} \\\\".format(
+            complete_label,
+            float(full["macro_score"]),
+            float(ours["macro_score"]),
+            percent(ours["quality_retention"]),
+            interval(longbench["bootstrap"]["quality_retention_95ci"]),
+        )
+    ]
+    ruler_overall = ruler["overall"]
+    rows.append(
+        "{} & {:.4f} & {:.4f} & {} & {} \\\\".format(
+            ruler_label,
+            float(ruler_overall["full_macro"]),
+            float(ruler_overall["qksieve_macro"]),
+            percent(ruler_overall["quality_retention"]),
+            interval(ruler["bootstrap"]["quality_retention_95ci"]),
+        )
+    )
+    rows.append("\\midrule")
+    for model in quality_figure.MODEL_ORDER:
+        result = multimodel["models"][model]
+        rows.append(
+            "{} / {} & {:.4f} & {:.4f} & {} & {} \\\\".format(
+                screen_prefix,
+                MODEL_LABELS[model],
+                float(result["full_macro"]),
+                float(result["qksieve_macro"]),
+                percent(result["quality_retention"]),
+                interval(result["quality_retention_95ci"]),
+            )
+        )
+    return rows
+
+
+def render_main(
+    longbench: dict[str, Any],
+    ruler: dict[str, Any],
+    multimodel: dict[str, Any],
+    *,
+    chinese: bool,
+    provenance: str,
+) -> str:
+    if chinese:
+        caption = (
+            "冻结 QKSieve-Robust 的任务质量。完整 LongBench、RULER 和跨模型筛查"
+            "分别包含 3,750、650 和每模型 160 个严格配对；区间按任务或"
+            "任务--长度单元 bootstrap。"
+        )
+        evaluation = "评测 / 模型"
+        retention = "保持率"
+    else:
+        caption = (
+            "Task quality for frozen QKSieve-Robust. Complete LongBench, "
+            "RULER, and each cross-model screen contain 3,750, 650, and 160 "
+            "strict pairs; intervals bootstrap tasks or task--length cells."
+        )
+        evaluation = "Evaluation / model"
+        retention = "Retention"
+    lines = [
+        f"% Generated from frozen evidence: {provenance}",
+        "\\begin{table}[t]",
+        f"\\caption{{{caption}}}",
+        "\\label{tab:quality-main}",
+        "\\centering",
+        "\\small",
+        "\\resizebox{\\columnwidth}{!}{%",
+        "\\begin{tabular}{@{}lrrrr@{}}",
+        "\\toprule",
+        f"{evaluation} & Full & QKSieve & {retention} & Paired 95\\% CI \\\\",
+        "\\midrule",
+        *compact_rows(longbench, ruler, multimodel, chinese=chinese),
+        "\\bottomrule",
+        "\\end{tabular}%",
+        "}",
+        "\\end{table}",
+        "",
+    ]
+    return "\n".join(lines)
 
 
 def render(
@@ -248,6 +366,21 @@ def main() -> None:
         f"multimodel={sha256(args.multimodel)}"
     )
     for output, chinese in ((args.output_en, False), (args.output_zh, True)):
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            render_main(
+                longbench,
+                ruler,
+                multimodel,
+                chinese=chinese,
+                provenance=provenance,
+            ),
+            encoding="utf-8",
+        )
+    for output, chinese in (
+        (args.appendix_en, False),
+        (args.appendix_zh, True),
+    ):
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(
             render(
