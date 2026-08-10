@@ -8,7 +8,7 @@ $GeneratedDir = Join-Path $DataDir "generated"
 $PdfDir = Join-Path $RepoRoot "output\pdf"
 
 $PersistentSummary = Join-Path $ProjectDir `
-    "docs\qksieve_persistent_kv_20260810\raw_results\20260810_qksieve_persistent_kv_v2\independent_summary.json"
+    "docs\qksieve_persistent_kv_20260810\raw_results\20260810_qksieve_persistent_kv_v3_multiseed\independent_summary.json"
 $LongBenchSummary = Join-Path $DataDir "qksieve_robust_longbench_summary.json"
 $RulerSummary = Join-Path $DataDir "qksieve_robust_ruler_summary.json"
 $MultimodelSummary = Join-Path $DataDir "qksieve_robust_multimodel_summary.json"

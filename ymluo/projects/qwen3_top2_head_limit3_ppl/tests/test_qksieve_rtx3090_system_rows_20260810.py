@@ -89,3 +89,7 @@ def test_bilingual_paper_consumes_generated_system_rows() -> None:
         assert "make_qksieve_rtx3090_system_rows.py" in build.read_text(
             encoding="utf-8"
         )
+
+    finalizer = (paper / "finalize_evidence.ps1").read_text(encoding="utf-8")
+    assert "20260810_qksieve_persistent_kv_v3_multiseed" in finalizer
+    assert "20260810_qksieve_persistent_kv_v2" not in finalizer
