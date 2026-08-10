@@ -1092,14 +1092,18 @@ Multi-turn & 3 & Turn-wise Query drift & Stable retention \\
 The intended deployment is repeated decoding over a materialized long-context
 KV cache, as in multi-turn agents, shared-prefix rollouts, and repeated queries
 over a common memory.  This does not remove prefill from accounting: it changes
-whether prefill and index construction are paid once or once per decode.  The
-final submission must populate the following timing contracts independently;
+whether prefill and index construction are paid once or once per decode.  We
+report the following timing contracts independently;
 numbers from one row cannot be used to fill another.
 
 \begin{table}[h]
+\IfFileExists{data/generated/qksieve_h100_tables.tex}{%
+\caption{Persistent-KV timing contracts.  The RTX~3090 audit instantiates
+32/64K and the matched H100 audit instantiates 64/128K.  Cross-prompt Query
+drift is outside the current reuse claim.}}{%
 \caption{Persistent-KV timing contracts.  The current 32/64K audit instantiates
 all rows within one request-local QK basis; H100, 128K, and cross-prompt Query
-drift remain preregistered.}
+drift remain preregistered.}}
 \label{tab:persistent-kv-protocol}
 \centering
 \resizebox{\linewidth}{!}{

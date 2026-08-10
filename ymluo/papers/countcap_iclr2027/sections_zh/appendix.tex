@@ -442,12 +442,15 @@ PPL 16K--128K & 3 个 & 分窗口、aggregate CI & 128K $\ge99\%$ \\
 本文面向已经构建好的长上下文 KV cache 被反复用于 decode 的场景，包括多轮
 Agent、共享前缀的多分支 rollout，以及针对同一长期记忆的多次查询。这并不从
 统计中删除 prefill，而是区分 prefill 和索引构建究竟只支付一次，还是每次
-decode 都重复支付。正式投稿必须分别填写以下四种计时协议，不能拿其中一行的
+decode 都重复支付。以下四种计时协议独立报告，不能拿其中一行的
 数字替代另一行。
 
 \begin{table}[h]
+\IfFileExists{data/generated/qksieve_h100_tables_zh.tex}{%
+\caption{Persistent-KV 计时协议。RTX 3090 审计覆盖 32/64K，匹配 H100 审计
+覆盖 64/128K；跨 prompt Query drift 不属于当前复用主张。}}{%
 \caption{Persistent-KV 计时协议。当前 32/64K 审计在同一 request-local QK
-坐标内实例化全部行；H100、128K 和跨 prompt Query drift 仍为预注册待测项。}
+坐标内实例化全部行；H100、128K 和跨 prompt Query drift 仍为预注册待测项。}}
 \label{tab:persistent-kv-protocol}
 \centering
 \resizebox{\linewidth}{!}{

@@ -24,13 +24,22 @@ forward, a directly timed decode horizon, and a directly timed request that
 includes prefill and initialization.  Every auxiliary stage is also invoked
 and timed independently for diagnosis, but no complete-path latency is
 constructed by summing those measurements.  RTX~3090 numbers are audited
-diagnostics; matched H100/A100 measurements remain required.
+diagnostics.
+\IfFileExists{data/generated/qksieve_h100_tables.tex}{%
+Matched H100 measurements are reported in
+\cref{tab:h100-attention,tab:h100-decode,tab:h100-requests}.}{%
+Matched H100 measurements remain required.}
 
 Our claimed scope is decode-time attention over an already materialized,
 reusable KV cache, rather than sparse prefill.  We therefore keep cold
 single-use, same-basis shared-prefix branching, and append-only timing as
-separate contracts.  An audited 32/64K slice is reported below; the remaining
-H100/128K grid is preregistered in \cref{app:persistent-kv-protocol}.  Cold request
+separate contracts.  An audited 32/64K slice is reported below.
+\IfFileExists{data/generated/qksieve_h100_tables.tex}{%
+The matched 64/128K H100 lifecycle grid is reported in
+\cref{tab:h100-requests}.}{%
+The remaining H100/128K grid is preregistered in
+\cref{app:persistent-kv-protocol}.}
+Cold request
 latency remains a limitation rather than being mixed with the warm-path claim.
 
 \IfFileExists{data/generated/qksieve_quality_tables.tex}{%

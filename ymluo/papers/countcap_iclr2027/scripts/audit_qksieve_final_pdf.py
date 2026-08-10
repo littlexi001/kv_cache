@@ -15,6 +15,16 @@ from pypdf import PdfReader
 PLACEHOLDER_PATTERN = re.compile(r"\b(?:TBD|TODO|PLACEHOLDER)\b", re.IGNORECASE)
 REFERENCE_PATTERN = re.compile(r"(?im)^\s*references\s*$")
 AUTHOR_MARKERS = ("Yiming Luo", "Fudan University")
+STALE_ENGLISH_MARKERS = (
+    "Required Final Experiments",
+    "Complete reference-profile LongBench result",
+    "Matched H100 measurements remain required",
+)
+STALE_CHINESE_MARKERS = (
+    "正式投稿仍需补齐的实验",
+    "完整 reference-profile LongBench 结果",
+    "仍需补充 matched H100 测量",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -54,6 +64,11 @@ def reference_page(pages: list[str]) -> int:
     return matches[0]
 
 
+def stale_markers(pages: list[str], markers: tuple[str, ...]) -> list[str]:
+    full_text = "\n".join(pages)
+    return [marker for marker in markers if marker in full_text]
+
+
 def audit_english_pages(
     pages: list[str], *, anonymous: bool
 ) -> dict[str, Any]:
@@ -67,6 +82,9 @@ def audit_english_pages(
     placeholders = placeholder_pages(pages)
     if placeholders:
         raise AssertionError(f"placeholder text remains on pages {placeholders}")
+    stale = stale_markers(pages, STALE_ENGLISH_MARKERS)
+    if stale:
+        raise AssertionError(f"stale draft claims remain: {', '.join(stale)}")
     full_text = "\n".join(pages)
     identities = [marker for marker in AUTHOR_MARKERS if marker in full_text]
     if anonymous and identities:
@@ -81,6 +99,7 @@ def audit_english_pages(
         "anonymous": anonymous,
         "identity_markers": identities,
         "placeholder_pages": placeholders,
+        "stale_markers": stale,
     }
 
 
@@ -90,9 +109,13 @@ def audit_chinese_pages(pages: list[str]) -> dict[str, Any]:
         raise AssertionError(
             f"Chinese PDF contains placeholder text on pages {placeholders}"
         )
+    stale = stale_markers(pages, STALE_CHINESE_MARKERS)
+    if stale:
+        raise AssertionError(f"Chinese PDF contains stale draft claims: {stale}")
     return {
         "pages": len(pages),
         "placeholder_pages": placeholders,
+        "stale_markers": stale,
     }
 
 

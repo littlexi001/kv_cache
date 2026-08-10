@@ -49,3 +49,15 @@ def test_final_pdf_audit_rejects_anonymous_identity_and_placeholders() -> None:
     placeholder[3] += "\nTBD"
     with pytest.raises(AssertionError, match="placeholder"):
         MODULE.audit_english_pages(placeholder, anonymous=True)
+
+
+def test_final_pdf_audit_rejects_stale_draft_claims() -> None:
+    for marker in MODULE.STALE_ENGLISH_MARKERS:
+        pages = english_pages()
+        pages[2] += "\n" + marker
+        with pytest.raises(AssertionError, match="stale draft claims"):
+            MODULE.audit_english_pages(pages, anonymous=True)
+
+    for marker in MODULE.STALE_CHINESE_MARKERS:
+        with pytest.raises(AssertionError, match="stale draft claims"):
+            MODULE.audit_chinese_pages(["正文", marker])

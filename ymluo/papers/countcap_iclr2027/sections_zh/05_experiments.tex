@@ -16,13 +16,20 @@ held-out-position PPL。
 同步 batch-one 计时分别报告完整 attention、整模型稳态 forward、直接测量的
 decode 区间，以及包含 prefill 与初始化的直接请求时间。每个辅助阶段也通过
 独立调用直接计时以定位瓶颈，但完整路径绝不由这些阶段数字相加得到。
-RTX 3090 数字是已审计诊断；仍需补充 matched H100/A100 测量。
+RTX 3090 数字是已审计诊断。
+\IfFileExists{data/generated/qksieve_h100_tables_zh.tex}{%
+匹配 H100 结果见
+\cref{tab:h100-attention,tab:h100-decode,tab:h100-requests}。}{%
+仍需补充 matched H100 测量。}
 
 本文主张的范围是：对已经构建且可以复用的 KV cache 加速 decode-time
 attention，而不是 sparse prefill。我们将 cold single-use、同一 QK 坐标下的
 shared-prefix branching 和 append-only 作为互不混写的计时协议。下文给出已经
-审计的 32/64K 切片，其余 H100/128K 网格预注册在
-\cref{app:persistent-kv-protocol}；cold request latency 仍需如实报告为局限，不能与
+审计的 32/64K 切片。
+\IfFileExists{data/generated/qksieve_h100_tables_zh.tex}{%
+匹配的 H100 64/128K 生命周期结果见\cref{tab:h100-requests}。}{%
+其余 H100/128K 网格预注册在\cref{app:persistent-kv-protocol}。}
+cold request latency 仍需如实报告为局限，不能与
 warm-path 加速混成同一结论。
 
 \IfFileExists{data/generated/qksieve_quality_tables_zh.tex}{%
