@@ -130,6 +130,28 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
         "mean_attention_fraction": 0.06,
         "per_task": model_per_task,
     }
+    shrinkage_rows = []
+    for shrinkage in (0.0, 0.25, 0.5, 0.75, 0.9):
+        for fraction in (0.01, 0.02, 0.04):
+            row = {
+                "shrinkage": shrinkage,
+                "selected_fraction": fraction,
+                "conditions": 100,
+            }
+            for metric in (
+                "top2_recall",
+                "selected_attention_mass",
+                "top2_attention_mass_recall",
+                "score_pearson",
+                "score_rmse",
+            ):
+                row[metric] = 0.9
+                row[f"{metric}_paired"] = {
+                    "clusters": 20,
+                    "delta_vs_production": 0.0,
+                    "ci95": [-0.01, 0.01],
+                }
+            shrinkage_rows.append(row)
     attention_rows = [
         {
             "history_tokens": length,
@@ -255,6 +277,40 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
                 for tag in ("llama31_8b", "qwen3_4b", "mistral_7b")
             },
         },
+        shrinkage={
+            "schema": "qksieve_shrinkage_sensitivity_v1",
+            "complete": True,
+            "method": "qk_balanced",
+            "calibration_source": "prefill_tail",
+            "production_shrinkage": 0.75,
+            "labels": [
+                "qwen3_4b_sports32k",
+                "qwen3_4b_medicine32k",
+                "llama31_8b_sports32k",
+                "llama31_8b_medicine32k",
+            ],
+            "shrinkages": [0.0, 0.25, 0.5, 0.75, 0.9],
+            "selected_fractions": [0.01, 0.02, 0.04],
+            "strict_paired_conditions": 100,
+            "bootstrap_samples": 10000,
+            "aggregate": shrinkage_rows,
+            "per_label": {
+                label: [{} for _ in range(15)]
+                for label in (
+                    "qwen3_4b_sports32k",
+                    "qwen3_4b_medicine32k",
+                    "llama31_8b_sports32k",
+                    "llama31_8b_medicine32k",
+                )
+            },
+            "acceptance": {
+                "passed": True,
+                "checks": [{}, {}, {}],
+                "failures": [],
+            },
+            "source_sha256": {"summary.json": "abc"},
+            "claim_boundary": "paired mechanism-only sensitivity evidence",
+        },
         h100={
             "schema": "qksieve_h100_matched_system_summary_v1",
             "expected_seeds": 3,
@@ -289,6 +345,7 @@ def test_audit_reports_missing_sections() -> None:
         "longbench",
         "ruler",
         "multimodel",
+        "shrinkage",
         "h100",
     }
 

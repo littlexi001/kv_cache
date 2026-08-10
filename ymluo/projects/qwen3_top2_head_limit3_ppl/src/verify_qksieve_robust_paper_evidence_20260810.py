@@ -39,6 +39,14 @@ RULER_TASKS = {
 }
 SYSTEM_LENGTHS = {65536, 131072}
 MODELS = {"llama31_8b", "qwen3_4b", "mistral_7b"}
+SHRINKAGE_LABELS = {
+    "qwen3_4b_sports32k",
+    "qwen3_4b_medicine32k",
+    "llama31_8b_sports32k",
+    "llama31_8b_medicine32k",
+}
+SHRINKAGES = {0.0, 0.25, 0.5, 0.75, 0.9}
+SHRINKAGE_FRACTIONS = {0.01, 0.02, 0.04}
 NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
 AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
 SOURCE_MANIFEST = "qksieve_robust_source_manifest_20260810.json"
@@ -68,6 +76,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--longbench_summary", type=Path)
     parser.add_argument("--ruler_summary", type=Path)
     parser.add_argument("--multimodel_summary", type=Path)
+    parser.add_argument("--shrinkage_summary", type=Path)
     parser.add_argument("--h100_summary", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
@@ -374,6 +383,99 @@ def validate_multimodel(payload: dict[str, Any]) -> dict[str, Any]:
     return models
 
 
+def validate_shrinkage(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("schema") != "qksieve_shrinkage_sensitivity_v1":
+        raise AssertionError("shrinkage sensitivity schema mismatch")
+    if payload.get("complete") is not True:
+        raise AssertionError("shrinkage sensitivity result is incomplete")
+    if payload.get("method") != "qk_balanced":
+        raise AssertionError("shrinkage sensitivity method drifted")
+    if payload.get("calibration_source") != "prefill_tail":
+        raise AssertionError("shrinkage sensitivity did not use prompt calibration")
+    if not math.isclose(float(payload.get("production_shrinkage", -1.0)), 0.75):
+        raise AssertionError("production shrinkage drifted")
+    if set(payload.get("labels", [])) != SHRINKAGE_LABELS:
+        raise AssertionError("shrinkage sensitivity trace grid drifted")
+    if {float(value) for value in payload.get("shrinkages", [])} != SHRINKAGES:
+        raise AssertionError("shrinkage sensitivity lambda grid drifted")
+    if {
+        float(value) for value in payload.get("selected_fractions", [])
+    } != SHRINKAGE_FRACTIONS:
+        raise AssertionError("shrinkage sensitivity sparsity grid drifted")
+    paired_conditions = int(payload.get("strict_paired_conditions", 0))
+    if paired_conditions <= 0:
+        raise AssertionError("shrinkage sensitivity has no strict pairs")
+    if int(payload.get("bootstrap_samples", 0)) < 10000:
+        raise AssertionError("shrinkage sensitivity bootstrap is incomplete")
+
+    aggregate = payload.get("aggregate")
+    if not isinstance(aggregate, list) or len(aggregate) != 15:
+        raise AssertionError("shrinkage sensitivity aggregate grid is incomplete")
+    observed: set[tuple[float, float]] = set()
+    required_metrics = (
+        "top2_recall",
+        "selected_attention_mass",
+        "top2_attention_mass_recall",
+        "score_pearson",
+        "score_rmse",
+    )
+    for row in aggregate:
+        key = (float(row["shrinkage"]), float(row["selected_fraction"]))
+        if key in observed:
+            raise AssertionError("shrinkage sensitivity aggregate cell is duplicated")
+        observed.add(key)
+        if int(row.get("conditions", -1)) <= 0:
+            raise AssertionError("shrinkage sensitivity cell has no conditions")
+        for metric in required_metrics:
+            _finite_number(row.get(metric), f"shrinkage {metric}")
+            paired = row.get(f"{metric}_paired")
+            if not isinstance(paired, dict) or int(paired.get("clusters", 0)) <= 0:
+                raise AssertionError(f"shrinkage {metric} lacks paired clusters")
+            _finite_number(
+                paired.get("delta_vs_production"),
+                f"shrinkage {metric} paired delta",
+            )
+            _validate_interval(paired.get("ci95"), f"shrinkage {metric} interval")
+    expected = {
+        (shrinkage, fraction)
+        for shrinkage in SHRINKAGES
+        for fraction in SHRINKAGE_FRACTIONS
+    }
+    if observed != expected:
+        raise AssertionError("shrinkage sensitivity aggregate cells drifted")
+
+    per_label = payload.get("per_label")
+    if not isinstance(per_label, dict) or set(per_label) != SHRINKAGE_LABELS:
+        raise AssertionError("shrinkage sensitivity per-trace grid is incomplete")
+    if any(
+        not isinstance(rows, list) or len(rows) != 15
+        for rows in per_label.values()
+    ):
+        raise AssertionError("shrinkage sensitivity per-trace cells are incomplete")
+    acceptance = payload.get("acceptance")
+    if not isinstance(acceptance, dict) or not isinstance(
+        acceptance.get("passed"), bool
+    ):
+        raise AssertionError("shrinkage sensitivity acceptance result is missing")
+    if len(acceptance.get("checks", [])) != 3:
+        raise AssertionError("shrinkage sensitivity acceptance checks are incomplete")
+    if not isinstance(payload.get("source_sha256"), dict) or not payload[
+        "source_sha256"
+    ]:
+        raise AssertionError("shrinkage sensitivity source hashes are missing")
+    claim_boundary = payload.get("claim_boundary")
+    if not isinstance(claim_boundary, str) or not claim_boundary.strip():
+        raise AssertionError("shrinkage sensitivity claim boundary is missing")
+    return {
+        "production_shrinkage": payload["production_shrinkage"],
+        "strict_paired_conditions": paired_conditions,
+        "aggregate": aggregate,
+        "per_label": per_label,
+        "acceptance": acceptance,
+        "claim_boundary": claim_boundary,
+    }
+
+
 def _positive_finite(row: dict[str, Any], field: str, label: str) -> None:
     if field not in row:
         raise AssertionError(f"H100 {label} is missing {field}")
@@ -497,6 +599,7 @@ def verify(
     longbench: dict[str, Any] | None = None,
     ruler: dict[str, Any] | None = None,
     multimodel: dict[str, Any] | None = None,
+    shrinkage: dict[str, Any] | None = None,
     h100: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
@@ -509,6 +612,7 @@ def verify(
         "longbench": (longbench, validate_longbench),
         "ruler": (ruler, validate_ruler),
         "multimodel": (multimodel, validate_multimodel),
+        "shrinkage": (shrinkage, validate_shrinkage),
         "h100": (h100, validate_h100),
     }
     missing: list[str] = []
@@ -529,6 +633,7 @@ def main() -> None:
         "longbench": args.longbench_summary,
         "ruler": args.ruler_summary,
         "multimodel": args.multimodel_summary,
+        "shrinkage": args.shrinkage_summary,
         "h100": args.h100_summary,
     }
     report = verify(

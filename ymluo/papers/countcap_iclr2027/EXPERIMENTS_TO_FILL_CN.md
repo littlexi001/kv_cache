@@ -378,7 +378,9 @@ TurboQuant、Q-Filters、RaBitQCache 至少完成索引质量或方法级比较�
 `scripts/launch_qksieve_shrinkage_sensitivity_20260810.sh`。该实验严格使用 prompt
 最后 8 个 Query 校准，并对五个系数做跨 Llama/Qwen、体育/医学的逐条件配对；
 `lambda=0.75` 仍保持冻结，实验结果只决定论文能否声明超参数稳定，不能用于重新
-选择系数。当前状态为代码与协议完成、GPU 结果待补。
+选择系数。最终证据门会拒绝缺轨迹、缺系数、缺稀疏率、非 prompt 校准或少于
+10,000 次 bootstrap 的结果；预注册阈值是否通过则原样进入审计报告，不能隐藏
+失败。当前状态为代码与协议完成、GPU 结果待补。
 
 为拆分坐标系和 bit 分配收益，已加入三个真实 256-bit 路径：
 `qksieve_fullprompt_keypca_uniform1_fulltopk` 与
