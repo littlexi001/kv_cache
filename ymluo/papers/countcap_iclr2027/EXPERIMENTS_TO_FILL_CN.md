@@ -198,7 +198,7 @@ artifact，逐项检查候选一致性、MHA 形状、GPU、warmup/iteration、V
 `data/generated/qksieve_rtx3090_system_rows.tex`。输入文件 SHA、聚合 SHA、所选
 无干扰 Decode artifact 和未舍入数值记录在
 `data/generated/qksieve_rtx3090_system_manifest.json`；当前聚合 SHA 为
-`b70f850b2c16917c580edae1cdb4382a272db7bd59cadd9e6ffc31bb4f77c5be`。
+`07969b9252cdd4490c757484dc5a3dc6880dc6a2083bb2b1ca4ad4b6d1738d19`。
 英文与中文构建脚本都会先重新生成该文件，论文表格不再复制数字。
 
 需要区分两种构建口径：独立 Decode harness 的 Fast/Robust 构建为

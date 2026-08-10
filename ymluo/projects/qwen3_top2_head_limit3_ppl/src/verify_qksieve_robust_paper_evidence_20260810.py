@@ -51,6 +51,33 @@ SHRINKAGE_FRACTIONS = {0.01, 0.02, 0.04}
 NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
 AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
 SOURCE_MANIFEST = "qksieve_robust_source_manifest_20260810.json"
+PERSISTENT_RUN_MANIFEST_SHA = (
+    "4e2eeaad3fa3e728d2945f4cfb2bd24765f4da4c0392aa53c96ad93110068375"
+)
+PERSISTENT_SOFTWARE = {
+    "python": "3.10.20",
+    "pytorch": "2.7.1+cu126",
+    "transformers": "4.53.1",
+    "cuda_runtime": "12.6",
+    "cudnn": 90501,
+}
+PERSISTENT_MODEL_HASHES = {
+    "pytorch_model-00001-of-00002.bin": (
+        "e15eff64c7ef2159ecd7228424d4d3ba813e9bcda2f6cb543accbe5028bd0ae0"
+    ),
+    "pytorch_model-00002-of-00002.bin": (
+        "0f85245cab4358e94a5cadce299ddb16964a22d86eece081caa5e05616f3828a"
+    ),
+    "pytorch_model.bin.index.json": (
+        "e572e08c4d4e81c7916197f6fcd2956a2f05e5919f28d72c9ba4f351efae1e29"
+    ),
+    "config.json": (
+        "bf8239b8842439a1149effb9af58e5eba5db867d414abaf4c071b3ba48a6a215"
+    ),
+    "tokenizer.model": (
+        "9e556afd44213b6bd1be2b850ebbbd98f5481437a8021afaf58ee7fb1818d347"
+    ),
+}
 
 
 def _finite_number(value: Any, label: str) -> float:
@@ -250,9 +277,25 @@ def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
         "point_estimate"
     ) != "median_across_independent_process_repetitions":
         raise AssertionError("persistent process-repetition statistics drifted")
+    protocol = payload.get("protocol_audit")
+    expected_protocol = {
+        "schema": "qksieve_persistent_run_protocol_audit_v1",
+        "passed": True,
+        "manifest_sha256": PERSISTENT_RUN_MANIFEST_SHA,
+        "audited_implementation_commit_sha": AUDITED_IMPLEMENTATION_SHA,
+        "lengths": [32768, 65536],
+        "seeds": [20260810, 20260811, 20260812],
+        "gpu_name": "NVIDIA GeForce RTX 3090",
+        "driver": "555.42.02",
+        "software": PERSISTENT_SOFTWARE,
+        "model_hashes": PERSISTENT_MODEL_HASHES,
+    }
+    if protocol != expected_protocol:
+        raise AssertionError("persistent run protocol audit drifted")
     return {
         "rows": rows,
         "aggregate_rows": aggregate_rows,
+        "protocol_audit": protocol,
         "claim_boundary": payload.get("claim_boundary"),
     }
 

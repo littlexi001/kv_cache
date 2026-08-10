@@ -148,3 +148,15 @@ def test_summary_aggregates_independent_seeds(tmp_path: Path) -> None:
     assert aggregate["warm_speedup_max"] == 2.0
     assert aggregate["warm_speedup_bootstrap_ci95_low"] == 1.0
     assert aggregate["warm_speedup_bootstrap_ci95_high"] == 2.0
+
+
+def test_protocol_audit_is_required_for_publication_summary(tmp_path: Path) -> None:
+    write_result(tmp_path, "full", warm=80.0, cold=80.0)
+    write_result(tmp_path, "qksieve_robust", warm=40.0, cold=100.0)
+
+    try:
+        summarize(tmp_path, require_protocol=True)
+    except AssertionError as error:
+        assert "manifest is missing" in str(error)
+    else:
+        raise AssertionError("publication summary accepted a missing manifest")

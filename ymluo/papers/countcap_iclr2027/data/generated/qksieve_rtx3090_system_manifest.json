@@ -1,6 +1,6 @@
 {
   "schema": "qksieve_rtx3090_system_table_manifest_v1",
-  "aggregate_sha256": "b70f850b2c16917c580edae1cdb4382a272db7bd59cadd9e6ffc31bb4f77c5be",
+  "aggregate_sha256": "07969b9252cdd4490c757484dc5a3dc6880dc6a2083bb2b1ca4ad4b6d1738d19",
   "inputs": {
     "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/mha_valuesketch_speed_ab_20260809/artifacts/attention/seed20260809.json": "2f8da9e09b4c93379588ff29426a5eb06de03437037408c5bcd7622b48007492",
     "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/mha_valuesketch_speed_ab_20260809/artifacts/attention/seed20260810.json": "2dcdeab5ac49842e7d0356302a88e03d90c7fec2c9eaa2ccff0e08829e724222",
@@ -14,10 +14,10 @@
     "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/mha_valuesketch_speed_ab_20260809/artifacts/decode_strict/n131072/seed20260809/full.json": "fb72da8969f0d4434d3514ef04423d50ad87d488774495b0a9bfc8b9b6fa09aa",
     "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/mha_valuesketch_speed_ab_20260809/artifacts/decode_strict/n131072/seed20260809/qksieve_no_value_top1280.json": "92a581e9bb6360081e54337583d18fc4478b404efd56d79551313cd7c369221f",
     "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/mha_valuesketch_speed_ab_20260809/artifacts/decode_strict/n131072/seed20260809/qksieve_valuesketch_top1280.json": "9cfabc59fb2cb605622332ec43bbc2094cd05adabbb063f1795087767bfdbd8b",
-    "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/qksieve_persistent_kv_20260810/raw_results/20260810_qksieve_persistent_kv_v3_multiseed/independent_summary.json": "8ca4ca717b94ad57a77d10ef47549fb1ff88281367f1cba80ca4b00af69f646b"
+    "ymluo/projects/qwen3_top2_head_limit3_ppl/docs/qksieve_persistent_kv_20260810/raw_results/20260810_qksieve_persistent_kv_v3_multiseed/independent_summary.json": "3010a24a85da1457881e54b3a04582aae01c61dc18a83a7c96723af1e574b742"
   },
   "output": "ymluo/papers/countcap_iclr2027/data/generated/qksieve_rtx3090_system_rows.tex",
-  "output_sha256": "de0937445e4fe4519ece1b1693f9ff4543400f6f014480ef2c76ee6d0f59787b",
+  "output_sha256": "188bf16098cbeef2ed364f906edf345bc04b2db038dce826fb42ad5e11c9946a",
   "attention_rows": [
     {
       "history_tokens": 8192.0,

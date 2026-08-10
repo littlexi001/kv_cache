@@ -14,9 +14,28 @@ if str(SRC_DIR) not in sys.path:
 
 import qksieve_robust_contract_20260810 as contract  # noqa: E402
 from verify_qksieve_robust_paper_evidence_20260810 import (  # noqa: E402
+    AUDITED_IMPLEMENTATION_SHA,
+    PERSISTENT_MODEL_HASHES,
+    PERSISTENT_RUN_MANIFEST_SHA,
+    PERSISTENT_SOFTWARE,
     validate_frozen_sources,
     verify,
 )
+
+
+def persistent_protocol_audit() -> dict:
+    return {
+        "schema": "qksieve_persistent_run_protocol_audit_v1",
+        "passed": True,
+        "manifest_sha256": PERSISTENT_RUN_MANIFEST_SHA,
+        "audited_implementation_commit_sha": AUDITED_IMPLEMENTATION_SHA,
+        "lengths": [32768, 65536],
+        "seeds": [20260810, 20260811, 20260812],
+        "gpu_name": "NVIDIA GeForce RTX 3090",
+        "driver": "555.42.02",
+        "software": PERSISTENT_SOFTWARE,
+        "model_hashes": PERSISTENT_MODEL_HASHES,
+    }
 
 
 def test_frozen_source_manifest_accepts_exact_bytes_and_rejects_drift(
@@ -265,6 +284,7 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "statistics": {
                 "point_estimate": "median_across_independent_process_repetitions"
             },
+            "protocol_audit": persistent_protocol_audit(),
         },
         longbench={
             "schema": "qksieve_robust_longbench_summary_v1",
@@ -449,12 +469,85 @@ def test_audit_rejects_persistent_summary_without_independent_audit() -> None:
                 "schema": "qksieve_persistent_kv_summary_v2",
                 "all_correct": True,
                 "rows": rows,
+                "protocol_audit": persistent_protocol_audit(),
             },
         )
     except AssertionError as error:
         assert "independent audit" in str(error)
     else:
         raise AssertionError("missing independent audit was accepted")
+
+
+def test_audit_rejects_persistent_summary_without_protocol_audit() -> None:
+    persistent_rows = [
+        {
+            "history_tokens": length,
+            "seed": seed,
+            "warm_speedup": 2.0,
+            "cold_speedup": 0.5,
+            "cold_end_to_end_speedup": 0.4,
+            "amortized_speedup": 1.5,
+            "append_only_speedup": 2.0,
+            "reuse_tokens_equal": True,
+            "index_buffers_reused_without_rebuild": True,
+            "rewind_value_layers_correct": True,
+            "persistent_contract_passed": True,
+            "independent_lifecycle_audit": {
+                "layers": 32,
+                "snapshots": 6,
+                "rewinds": 5,
+                "post_decode_index_lag_tokens": 1,
+                "all_index_buffers_stable": True,
+                "deterministic_replay": True,
+            },
+        }
+        for length in (32768, 65536)
+        for seed in (20260810, 20260811, 20260812)
+    ]
+    aggregate_rows = [
+        {
+            "history_tokens": length,
+            "seed_count": 3,
+            "seeds": [20260810, 20260811, 20260812],
+            **{
+                key: value
+                for field, value in {
+                    "full_warm_ms_per_token": 100.0,
+                    "qksieve_warm_ms_per_token": 50.0,
+                    "full_cold_end_to_end_ms_per_token": 200.0,
+                    "qksieve_cold_end_to_end_ms_per_token": 500.0,
+                    "warm_speedup": 2.0,
+                    "cold_speedup": 0.5,
+                    "cold_end_to_end_speedup": 0.4,
+                    "amortized_speedup": 1.5,
+                    "append_only_speedup": 2.0,
+                    "qksieve_prebuild_seconds": 1.0,
+                }.items()
+                for key in (
+                    field,
+                    f"{field}_bootstrap_ci95_low",
+                    f"{field}_bootstrap_ci95_high",
+                )
+            },
+        }
+        for length in (32768, 65536)
+    ]
+    with pytest.raises(AssertionError, match="protocol audit"):
+        verify(
+            PROJECT_ROOT,
+            persistent={
+                "schema": "qksieve_persistent_kv_summary_v2",
+                "all_correct": True,
+                "rows": persistent_rows,
+                "aggregate_rows": aggregate_rows,
+                "missing_pairs": [],
+                "statistics": {
+                    "point_estimate": (
+                        "median_across_independent_process_repetitions"
+                    )
+                },
+            },
+        )
 
 
 def test_audit_rejects_non_h100_system_evidence() -> None:
