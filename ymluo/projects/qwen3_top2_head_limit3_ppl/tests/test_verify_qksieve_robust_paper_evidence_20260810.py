@@ -330,6 +330,14 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
                 "quality_retention_95ci": [0.99, 1.01],
             },
             "fallback_count": 0,
+            "distributed_merge_audit": {
+                "schema": "qksieve_ruler_distributed_merge_v1",
+                "rows": 1300,
+                "strict_pairs": 650,
+                "cross_host_pair_composition_count": 0,
+                "protocol_audit": {"passed": True},
+            },
+            "distributed_merge_audit_sha256": "e" * 64,
         },
         multimodel={
             "schema": "qksieve_robust_multimodel_summary_v1",

@@ -458,10 +458,26 @@ def validate_ruler(payload: dict[str, Any]) -> dict[str, Any]:
     )
     if int(payload.get("fallback_count", -1)) != 0:
         raise AssertionError("RULER observed a Full fallback")
+    merge_audit = payload.get("distributed_merge_audit")
+    if (
+        not isinstance(merge_audit, dict)
+        or merge_audit.get("schema") != "qksieve_ruler_distributed_merge_v1"
+        or int(merge_audit.get("rows", -1)) != 1300
+        or int(merge_audit.get("strict_pairs", -1)) != 650
+        or int(merge_audit.get("cross_host_pair_composition_count", -1)) != 0
+        or merge_audit.get("protocol_audit", {}).get("passed") is not True
+    ):
+        raise AssertionError("RULER distributed merge audit failed")
+    merge_audit_sha = payload.get("distributed_merge_audit_sha256")
+    if not isinstance(merge_audit_sha, str) or not re.fullmatch(
+        r"[0-9a-f]{64}", merge_audit_sha
+    ):
+        raise AssertionError("RULER distributed merge audit SHA256 is missing")
     return {
         "overall": payload["overall"],
         "per_length": payload["per_length"],
         "bootstrap": bootstrap,
+        "distributed_merge_audit": merge_audit,
     }
 
 

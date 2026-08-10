@@ -256,6 +256,18 @@ def summarize(
 
 def main() -> None:
     args = parse_args()
+    merge_audit_path = args.run_root / "merge_audit.json"
+    if not merge_audit_path.is_file():
+        raise AssertionError("formal RULER summary requires a merge audit")
+    merge_audit = json.loads(merge_audit_path.read_text(encoding="utf-8"))
+    if (
+        merge_audit.get("schema") != "qksieve_ruler_distributed_merge_v1"
+        or int(merge_audit.get("rows", -1)) != 1300
+        or int(merge_audit.get("strict_pairs", -1)) != 650
+        or int(merge_audit.get("cross_host_pair_composition_count", -1)) != 0
+        or merge_audit.get("protocol_audit", {}).get("passed") is not True
+    ):
+        raise AssertionError("formal RULER distributed merge audit failed")
     tasks = base.parse_csv_values(args.expected_tasks)
     length_samples = base.parse_length_samples(args.expected_length_samples)
     rows = base.load_rows(args.run_root)
@@ -273,6 +285,8 @@ def main() -> None:
         writer.writeheader()
         writer.writerows(rows)
     payload["merged_csv_sha256"] = base.sha256(merged)
+    payload["distributed_merge_audit"] = merge_audit
+    payload["distributed_merge_audit_sha256"] = base.sha256(merge_audit_path)
     output.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

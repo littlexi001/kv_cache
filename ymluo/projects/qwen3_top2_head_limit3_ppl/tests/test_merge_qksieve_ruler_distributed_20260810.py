@@ -11,7 +11,10 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import qksieve_robust_contract_20260810 as contract  # noqa: E402
-from merge_qksieve_ruler_distributed_20260810 import merge_rows  # noqa: E402
+from merge_qksieve_ruler_distributed_20260810 import (  # noqa: E402
+    merge_rows,
+    validate_distributed_protocol,
+)
 
 
 def row(task: str, sample_id: str, method: str, prediction: str = "ok") -> dict[str, str]:
@@ -148,3 +151,8 @@ def test_merge_rejects_frozen_config_drift() -> None:
             expected_tasks=("task_a",),
             expected_length_samples={4096: 1},
         )
+
+
+def test_protocol_audit_rejects_missing_manifests(tmp_path: Path) -> None:
+    with pytest.raises(AssertionError, match="protocol file is missing"):
+        validate_distributed_protocol(tmp_path / "primary", tmp_path / "supplement")

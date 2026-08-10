@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import math
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
@@ -39,6 +40,11 @@ EXPECTED_LENGTH_SAMPLES = {
     131072: 5,
 }
 METHODS = ("full_kv", contract.METHOD)
+NUMERICAL_FREEZE_SHA = "328e01718deebfdfc80dbd8e588a1a95a1832b59"
+AUDITED_IMPLEMENTATION_SHA = "f300fb280a597ceb124d454cdfc9a0a1665d6a04"
+RUNNER_SHA = "5904eef089a3fc7e56e878c1718fa446bf10d38e080da73a1790c781200b01ad"
+CONFIG_SHA = "4712565e231a681bf77da16e2a8e60074c41da3fae6d06f8e3e00d319776fa33"
+LONG_DATA_SHA = "b1aaf339afd8d4d8f7246563112356301c416ba7083081ab21e1e7002ab7e7a3"
 ROBUST_FIELDS = {
     "executed_path": contract.METHOD,
     "configured_index_bits_per_token": 306.0,
@@ -73,6 +79,173 @@ def discover(root: Path) -> list[Path]:
     if not paths:
         raise AssertionError(f"no shard CSVs found under {root}")
     return paths
+
+
+def _manifest(path: Path) -> tuple[dict[str, str], dict[str, str]]:
+    text = path.read_text(encoding="utf-8")
+    values: dict[str, str] = {}
+    hashes: dict[str, str] = {}
+    for line in text.splitlines():
+        match = re.match(r"^([0-9a-f]{64})  (.+)$", line)
+        if match:
+            hashes[Path(match.group(2).replace("\\", "/")).name] = match.group(1)
+        elif "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return values, hashes
+
+
+def _runtime(root: Path, role: str) -> dict[str, Any]:
+    path = root / "runtime_provenance.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    expected = {
+        "schema": "qksieve_runtime_provenance_v1",
+        "role": role,
+        "audited_implementation_commit_sha": AUDITED_IMPLEMENTATION_SHA,
+        "numerical_freeze_commit_sha": NUMERICAL_FREEZE_SHA,
+        "visible_cuda_devices": "0,1,2,3,4,5,6,7",
+    }
+    if any(payload.get(key) != value for key, value in expected.items()):
+        raise AssertionError(f"{role} runtime provenance drifted")
+    software = payload.get("software", {})
+    if not str(software.get("python", "")).startswith("3.10.") or {
+        key: software.get(key)
+        for key in ("pytorch", "transformers", "numpy", "cuda_runtime", "cudnn")
+    } != {
+        "pytorch": "2.7.1+cu126",
+        "transformers": "4.53.1",
+        "numpy": "2.2.6",
+        "cuda_runtime": "12.6",
+        "cudnn": 90501,
+    }:
+        raise AssertionError(f"{role} software stack drifted")
+    gpus = payload.get("gpus")
+    if (
+        not isinstance(gpus, list)
+        or len(gpus) != 8
+        or {int(row.get("index", -1)) for row in gpus} != set(range(8))
+        or any(
+            row.get("name") != "NVIDIA GeForce RTX 3090"
+            or int(row.get("memory_mib", -1)) != 24576
+            for row in gpus
+        )
+    ):
+        raise AssertionError(f"{role} GPU inventory drifted")
+    if payload.get("run_manifest", {}).get("sha256") != sha256(
+        root / "manifest.txt"
+    ):
+        raise AssertionError(f"{role} run-manifest hash drifted")
+    model = payload.get("model")
+    if not isinstance(model, dict) or not isinstance(model.get("files"), dict):
+        raise AssertionError(f"{role} model hashes are missing")
+    return payload
+
+
+def validate_distributed_protocol(
+    primary_root: Path,
+    supplement_root: Path,
+) -> dict[str, Any]:
+    primary_manifest = primary_root / "manifest.txt"
+    supplement_manifest = supplement_root / "manifest.txt"
+    prompt_path = primary_root / "prompt_length_audit.json"
+    for path in (primary_manifest, supplement_manifest, prompt_path):
+        if not path.is_file():
+            raise AssertionError(f"distributed RULER protocol file is missing: {path}")
+    primary_values, primary_hashes = _manifest(primary_manifest)
+    supplement_values, supplement_hashes = _manifest(supplement_manifest)
+    primary_expected = {
+        "schema": "qksieve_robust_ruler_protocol_v1",
+        "numerical_freeze_commit_sha": NUMERICAL_FREEZE_SHA,
+        "audited_implementation_commit_sha": AUDITED_IMPLEMENTATION_SHA,
+        "tasks": ",".join(EXPECTED_TASKS),
+        "short_lengths": "4096,8192,16384,32768; samples=10",
+        "long_lengths": "65536,131072; samples=5",
+        "method": contract.METHOD,
+        "max_quantile_samples": "512",
+        "value_tail_alpha": "0.5",
+    }
+    supplement_expected = {
+        "schema": "qksieve_ruler_tail_accelerator_protocol_v1",
+        "numerical_freeze_commit_sha": NUMERICAL_FREEZE_SHA,
+        "audited_implementation_commit_sha": AUDITED_IMPLEMENTATION_SHA,
+        "method": contract.METHOD,
+        "gpus": "0,1,2,3,4,5,6,7",
+        "order": "reverse_of_frozen_jsonl",
+    }
+    if any(primary_values.get(key) != value for key, value in primary_expected.items()):
+        raise AssertionError("primary RULER manifest drifted")
+    if any(
+        supplement_values.get(key) != value
+        for key, value in supplement_expected.items()
+    ):
+        raise AssertionError("supplement RULER manifest drifted")
+    for hashes, role in (
+        (primary_hashes, "primary"),
+        (supplement_hashes, "supplement"),
+    ):
+        expected_hashes = {
+            "qksieve_robust_iclr2027_frozen_20260810.json": CONFIG_SHA,
+            "run_sample_calibrated_ruler_20260717.py": RUNNER_SHA,
+            "llama31_8b_ruler13_64k128k_m5_seed42.jsonl": LONG_DATA_SHA,
+        }
+        if any(hashes.get(name) != digest for name, digest in expected_hashes.items()):
+            raise AssertionError(f"{role} frozen input hash drifted")
+
+    prompt = json.loads(prompt_path.read_text(encoding="utf-8"))
+    if (
+        prompt.get("schema") != "qksieve_ruler_prompt_length_audit_v1"
+        or int(prompt.get("model_max_position_embeddings", -1)) != 131072
+        or int(prompt.get("expected_rows", -1)) != 650
+        or int(prompt.get("observed_rows", -1)) != 650
+        or prompt.get("expected_rows_ok") is not True
+        or int(prompt.get("overflow_rows", -1)) != 0
+        or prompt.get("all_within_model_limit") is not True
+    ):
+        raise AssertionError("RULER prompt-length audit failed")
+
+    primary_runtime = _runtime(primary_root, "primary")
+    supplement_runtime = _runtime(supplement_root, "supplement")
+    primary_model = primary_runtime["model"]
+    supplement_model = supplement_runtime["model"]
+    if primary_model["files"] != supplement_model["files"]:
+        raise AssertionError("distributed RULER model file hashes differ")
+    for model, role in (
+        (primary_model, "primary"),
+        (supplement_model, "supplement"),
+    ):
+        download = model.get("download_manifest")
+        payload = download.get("payload") if isinstance(download, dict) else None
+        if (
+            not isinstance(payload, dict)
+            or payload.get("model_id") != "LLM-Research/Meta-Llama-3.1-8B-Instruct"
+            or int(payload.get("weight_bytes", -1)) != 16060556376
+            or payload.get("config_contract")
+            != {
+                "model_type": "llama",
+                "hidden_size": 4096,
+                "num_hidden_layers": 32,
+                "num_attention_heads": 32,
+                "num_key_value_heads": 8,
+            }
+        ):
+            raise AssertionError(f"{role} model identity drifted")
+    model_files_sha = hashlib.sha256(
+        json.dumps(primary_model["files"], sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    return {
+        "schema": "qksieve_ruler_distributed_protocol_audit_v1",
+        "passed": True,
+        "primary_manifest_sha256": sha256(primary_manifest),
+        "supplement_manifest_sha256": sha256(supplement_manifest),
+        "prompt_length_audit_sha256": sha256(prompt_path),
+        "primary_runtime_sha256": sha256(primary_root / "runtime_provenance.json"),
+        "supplement_runtime_sha256": sha256(
+            supplement_root / "runtime_provenance.json"
+        ),
+        "model_files_sha256": model_files_sha,
+        "primary_driver": primary_runtime["gpus"][0]["driver"],
+        "supplement_driver": supplement_runtime["gpus"][0]["driver"],
+    }
 
 
 def read_rows(paths: Iterable[Path]) -> tuple[list[str], list[dict[str, str]]]:
@@ -307,6 +480,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    protocol_audit = validate_distributed_protocol(
+        args.primary_root,
+        args.supplement_root,
+    )
     primary_paths = discover(args.primary_root)
     supplement_paths = discover(args.supplement_root)
     primary_header, primary_rows = read_rows(primary_paths)
@@ -325,6 +502,7 @@ def main() -> None:
         "supplement": {str(path): sha256(path) for path in supplement_paths},
     }
     audit["merged_sha256"] = sha256(output)
+    audit["protocol_audit"] = protocol_audit
     (args.output_root / "merge_audit.json").write_text(
         json.dumps(audit, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
