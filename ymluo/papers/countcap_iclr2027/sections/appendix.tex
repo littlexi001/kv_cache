@@ -1119,13 +1119,14 @@ Append-only growth & 128-step autoregressive continuation + per-token index appe
 \end{tabular}}
 \end{table}
 
-The current directly timed results are in \cref{tab:persistent-kv-main}.  For
-32/64K, the matched Full/QKSieve cold latencies are
-83.926/119.551 and 145.195/129.108 ms/token; warm latencies are
-83.714/63.347 and 144.910/65.256 ms/token; four-branch amortized latencies are
-83.762/77.399 and 144.971/81.204 ms/token; append-only latencies are
-83.874/63.611 and 145.012/65.597 ms/token.  These are one-seed RTX~3090
-measurements and exclude the dense prefill shared by both methods.
+The current directly timed results are in \cref{tab:persistent-kv-main}.
+They are medians over three independent process executions of one fixed,
+deterministic workload, with process-repetition intervals rather than a claim
+about workload or hardware variance.  For 32/64K, median Full/QKSieve warm
+latencies are \QKSievePersistentWarmLatencyText\ ms/token, and median index
+construction is \QKSievePersistentBuildText\ seconds.  The table separately
+reports cold-index timing without dense prefill and cold-E2E timing with dense
+prefill; these two quantities must not be interchanged.
 
 The audit independently reparses every layer rather than trusting a benchmark
 success flag.  It verifies 32 populated Key and Value indices, six snapshots,

@@ -40,7 +40,7 @@ PERSISTENT_SUMMARY = (
     / "docs"
     / "qksieve_persistent_kv_20260810"
     / "raw_results"
-    / "20260810_qksieve_persistent_kv_v2"
+    / "20260810_qksieve_persistent_kv_v3_multiseed"
     / "independent_summary.json"
 )
 DECODE_PATHS = {
@@ -238,12 +238,39 @@ def decode_evidence() -> tuple[list[dict[str, float]], list[Path]]:
 def persistent_evidence() -> tuple[list[dict[str, Any]], Path]:
     payload = read_json(PERSISTENT_SUMMARY)
     validate_persistent(payload)
-    return sorted(payload["rows"], key=lambda row: int(row["history_tokens"])), PERSISTENT_SUMMARY
+    rows = sorted(
+        payload["aggregate_rows"], key=lambda row: int(row["history_tokens"])
+    )
+    for row in rows:
+        saved_seconds = (
+            float(row["full_warm_ms_per_token"])
+            - float(row["qksieve_warm_ms_per_token"])
+        ) / 1000.0
+        if saved_seconds <= 0.0:
+            raise AssertionError("persistent warm path has no per-token saving")
+        row["break_even_tokens"] = math.ceil(
+            float(row["qksieve_prebuild_seconds"]) / saved_seconds
+        )
+    return rows, PERSISTENT_SUMMARY
 
 
 def command(name: str, rows: list[str]) -> str:
     body = "%\n".join(rows)
     return f"\\newcommand{{\\{name}}}{{%\n{body}%\n}}\n"
+
+
+def scalar_command(name: str, value: str) -> str:
+    return f"\\newcommand{{\\{name}}}{{{value}}}\n"
+
+
+def speed_with_interval(row: dict[str, Any], field: str) -> str:
+    return (
+        "{:.3f}$\\times$ {{\\scriptsize[{:.3f},{:.3f}]}}".format(
+            float(row[field]),
+            float(row[f"{field}_bootstrap_ci95_low"]),
+            float(row[f"{field}_bootstrap_ci95_high"]),
+        )
+    )
 
 
 def render(
@@ -298,17 +325,31 @@ def render(
         )
         for row in decode
     ]
-    persistent_rows = [
-        "{}K & {:.3f}$\\times$ & {:.3f}$\\times$ & {:.3f}$\\times$ & {:.3f}$\\times$ & {:.3f} \\\\".format(
-            int(row["history_tokens"]) // 1024,
-            float(row["cold_speedup"]),
-            float(row["warm_speedup"]),
-            float(row["amortized_speedup"]),
-            float(row["append_only_speedup"]),
-            float(row["qksieve_prebuild_seconds"]),
+    persistent_rows = []
+    for row in persistent:
+        build = (
+            "{:.3f} {{\\scriptsize[{:.3f},{:.3f}]}}".format(
+                float(row["qksieve_prebuild_seconds"]),
+                float(row["qksieve_prebuild_seconds_bootstrap_ci95_low"]),
+                float(row["qksieve_prebuild_seconds_bootstrap_ci95_high"]),
+            )
         )
-        for row in persistent
-    ]
+        persistent_rows.append(
+            "{}K & {} & {} & {} & {} & {} & {} \\\\".format(
+                int(row["history_tokens"]) // 1024,
+                speed_with_interval(row, "cold_speedup"),
+                speed_with_interval(row, "cold_end_to_end_speedup"),
+                speed_with_interval(row, "warm_speedup"),
+                speed_with_interval(row, "amortized_speedup"),
+                speed_with_interval(row, "append_only_speedup"),
+                build,
+            )
+        )
+    persistent_by_length = {
+        int(row["history_tokens"]): row for row in persistent
+    }
+    persistent_32 = persistent_by_length[32768]
+    persistent_64 = persistent_by_length[65536]
     return "\n".join(
         [
             f"% Generated from audited RTX 3090 evidence: {provenance}",
@@ -317,6 +358,29 @@ def render(
             command("QKSieveMhaDecodeRows", decode_rows),
             command("QKSieveMhaBuildBreakEvenRows", build_rows),
             command("QKSievePersistentRows", persistent_rows),
+            scalar_command(
+                "QKSievePersistentWarmLatencyText",
+                "{:.3f}/{:.3f}; {:.3f}/{:.3f}".format(
+                    float(persistent_32["full_warm_ms_per_token"]),
+                    float(persistent_32["qksieve_warm_ms_per_token"]),
+                    float(persistent_64["full_warm_ms_per_token"]),
+                    float(persistent_64["qksieve_warm_ms_per_token"]),
+                ),
+            ),
+            scalar_command(
+                "QKSievePersistentBuildText",
+                "{:.3f}/{:.3f}".format(
+                    float(persistent_32["qksieve_prebuild_seconds"]),
+                    float(persistent_64["qksieve_prebuild_seconds"]),
+                ),
+            ),
+            scalar_command(
+                "QKSievePersistentBreakEvenText",
+                "{}/{}".format(
+                    int(persistent_32["break_even_tokens"]),
+                    int(persistent_64["break_even_tokens"]),
+                ),
+            ),
         ]
     )
 

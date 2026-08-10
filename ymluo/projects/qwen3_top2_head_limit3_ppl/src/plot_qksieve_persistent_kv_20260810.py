@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import statistics
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -27,13 +28,24 @@ def main() -> None:
     summary = load(args.run_root / "independent_summary.json")
     if summary.get("all_correct") is not True:
         raise AssertionError("persistent lifecycle audit did not pass")
-    rows = sorted(summary["rows"], key=lambda row: row["history_tokens"])
+    rows = sorted(
+        summary["aggregate_rows"], key=lambda row: row["history_tokens"]
+    )
     if [row["history_tokens"] for row in rows] != [32768, 65536]:
         raise AssertionError("expected matched 32K and 64K results")
+    if any(int(row.get("seed_count", -1)) != 3 for row in rows):
+        raise AssertionError("expected three process repetitions per length")
 
-    labels = ("Cold", "Warm", "4-branch\navg.", "Append\nonly")
+    labels = (
+        "Cold\nindex",
+        "Cold\nE2E",
+        "Warm",
+        "4-branch\navg.",
+        "Append\nonly",
+    )
     fields = (
         "cold_speedup",
+        "cold_end_to_end_speedup",
         "warm_speedup",
         "amortized_speedup",
         "append_only_speedup",
@@ -56,11 +68,22 @@ def main() -> None:
 
     for index, row in enumerate(rows):
         values = [float(row[field]) for field in fields]
+        lower = [
+            value - float(row[f"{field}_bootstrap_ci95_low"])
+            for field, value in zip(fields, values)
+        ]
+        upper = [
+            float(row[f"{field}_bootstrap_ci95_high"]) - value
+            for field, value in zip(fields, values)
+        ]
         positions = x + (index - 0.5) * width
         bars = speed_axis.bar(
             positions,
             values,
             width,
+            yerr=np.asarray([lower, upper]),
+            capsize=2.5,
+            error_kw={"elinewidth": 0.8, "capthick": 0.8},
             label=f"{row['history_tokens'] // 1024}K",
             color=colors[index],
             edgecolor="white",
@@ -70,7 +93,7 @@ def main() -> None:
     speed_axis.axhline(1.0, color="#374151", linestyle="--", linewidth=1)
     speed_axis.set_xticks(x, labels)
     speed_axis.set_ylabel("Whole-model speedup vs. Full")
-    speed_axis.set_ylim(0.0, 2.55)
+    speed_axis.set_ylim(0.0, 2.85)
     speed_axis.set_title("(a) Measured request lifecycle", pad=38)
     speed_axis.legend(
         frameon=False,
@@ -91,13 +114,18 @@ def main() -> None:
     ):
         values = []
         for length in lengths:
-            payload = load(
-                args.run_root
-                / f"n{length}"
-                / "seed20260810"
-                / "qksieve_robust.json"
-            )
-            values.append(float(payload[key]["total_seconds"]))
+            stage_values = [
+                float(
+                    load(
+                        args.run_root
+                        / f"n{length}"
+                        / f"seed{seed}"
+                        / "qksieve_robust.json"
+                    )[key]["total_seconds"]
+                )
+                for seed in (20260810, 20260811, 20260812)
+            ]
+            values.append(statistics.median(stage_values))
         build_axis.bar(
             np.arange(len(lengths)),
             values,
@@ -109,11 +137,23 @@ def main() -> None:
             linewidth=0.5,
         )
         bottoms += np.asarray(values)
-    for position, total in enumerate(bottoms):
-        build_axis.text(position, total + 0.04, f"{total:.2f}s", ha="center", fontsize=8)
+    for position, row in enumerate(rows):
+        total = float(row["qksieve_prebuild_seconds"])
+        low = float(row["qksieve_prebuild_seconds_bootstrap_ci95_low"])
+        high = float(row["qksieve_prebuild_seconds_bootstrap_ci95_high"])
+        build_axis.errorbar(
+            position,
+            total,
+            yerr=np.asarray([[total - low], [high - total]]),
+            fmt="none",
+            ecolor="#111827",
+            capsize=3,
+            linewidth=1,
+        )
+        build_axis.text(position, high + 0.05, f"{total:.2f}s", ha="center", fontsize=8)
     build_axis.set_xticks(np.arange(len(lengths)), ["32K", "64K"])
     build_axis.set_ylabel("One-time build latency (s)")
-    build_axis.set_ylim(0.0, 2.35)
+    build_axis.set_ylim(0.0, 1.95)
     build_axis.set_title("(b) Directly timed index construction", pad=38)
     build_axis.legend(
         frameon=False,

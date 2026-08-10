@@ -173,27 +173,27 @@ dense prefill 和部署前 CUDA JIT，完整表见 \cref{tab:mha-build-break-eve
 
 \begin{table}[t]
 \caption{同一 MHA 模型和 RTX 3090 上直接计时的 persistent-cache 生命周期。
-Cold 包含完整 Robust 索引构建和一个 32-token 分支；warm 复用索引；四分支
-均摊把一次构建分给 128 个生成 token。比值均为匹配的 Full/QKSieve 墙钟时间。}
+Cold-index 包含 Robust 索引构建和一个 32-token 分支，但不含 dense prefill；
+Cold-E2E 包含 prefill。Warm 复用索引；四分支把一次构建均摊给 128 个生成
+token。表中为固定确定性工作负载上三个独立进程的中位数和 95\% 进程重复区间。}
 \label{tab:persistent-kv-main}
 \centering
 \resizebox{\linewidth}{!}{
-\begin{tabular}{rrrrrr}
+\begin{tabular}{rrrrrrr}
 \toprule
-历史长度 & Cold & Warm & 四分支均摊 & Append-only & 构建 (s) \\
+历史长度 & Cold-index & Cold-E2E & Warm & 四分支 & Append-only & 构建 (s) \\
 \midrule
 \QKSievePersistentRows
 \bottomrule
 \end{tabular}}
 \end{table}
 
-32K 的 Full/QKSieve warm decode 为 83.714/63.347 ms/token，64K 为
-144.910/65.256 ms/token。32/64K 的一次构建分别由 .724/.735 秒 QK factor、
-.518/.603 秒 Key 编码和 .517/.658 秒 ValueSketch 组成。
-
-用实测值计算
-$I/(D_f-D_s)$，break-even 约为 87/26 个生成 token，与
-\cref{tab:persistent-kv-main}直接测得的 32-token cold 结果一致。
+32/64K 的 Full/QKSieve warm 延迟中位数分别为
+\QKSievePersistentWarmLatencyText\ ms/token；Robust 构建中位数分别为
+\QKSievePersistentBuildText\ 秒。按匹配实测值计算
+$\lceil I/(D_f-D_s)\rceil$，break-even 分别为
+\QKSievePersistentBreakEvenText\ 个生成 token。因此 32K 的单次 32-token
+Cold-E2E 如实低于 $1\times$；64K 单次请求大致打平，复用前缀后才获得显著收益。
 
 生命周期审计覆盖全部 32 层、6 个快照和 5 次 rewind，索引指针稳定且重放
 完全确定。复用只在 request-local Query 统计不变时成立；新 prompt 需要重建

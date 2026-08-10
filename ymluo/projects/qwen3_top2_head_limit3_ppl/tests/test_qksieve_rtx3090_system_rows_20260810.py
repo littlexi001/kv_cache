@@ -30,6 +30,8 @@ def test_raw_rtx3090_evidence_generates_frozen_paper_rows() -> None:
     assert [int(row["history_tokens"]) for row in decode] == list(
         MODULE.DECODE_LENGTHS
     )
+    assert [int(row["history_tokens"]) for row in persistent] == [32768, 65536]
+    assert all(int(row["seed_count"]) == 3 for row in persistent)
 
     row128 = attention[-1]
     assert round(row128["fast_speedup"], 2) == 6.37
@@ -50,7 +52,9 @@ def test_raw_rtx3090_evidence_generates_frozen_paper_rows() -> None:
     )
     assert "128K & 2.3708 & 0.3722 & 0.5757" in text
     assert "128K & 0.743 & 1.839 & 4 & 10" in text
-    assert "64K & 1.125$\\times$ & 2.221$\\times$" in text
+    assert "64K & 1.312$\\times$ {\\scriptsize[1.295,1.319]}" in text
+    assert "1.013$\\times$ {\\scriptsize[1.011,1.013]}" in text
+    assert "\\newcommand{\\QKSievePersistentBreakEvenText}{56/19}" in text
     assert "Generated from audited RTX 3090 evidence: test-sha" in text
 
 

@@ -466,12 +466,12 @@ Append-only 增长 & 128-step 自回归续写 + 逐 token 索引追加 & 长生�
 \end{tabular}}
 \end{table}
 
-当前直接计时结果见\cref{tab:persistent-kv-main}。32/64K 的匹配
-Full/QKSieve cold 延迟分别为 83.926/119.551 和 145.195/129.108 ms/token；
-warm 为 83.714/63.347 和 144.910/65.256 ms/token；四分支均摊为
-83.762/77.399 和 144.971/81.204 ms/token；append-only 为
-83.874/63.611 和 145.012/65.597 ms/token。这些是单 seed RTX 3090 测量，
-不含两种方法共享的 dense prefill。
+当前直接计时结果见\cref{tab:persistent-kv-main}。表中为一个固定确定性工作负载
+上三个独立进程的中位数和进程重复区间，不表示工作负载分布或跨硬件方差。
+32/64K 的 Full/QKSieve warm 延迟中位数为
+\QKSievePersistentWarmLatencyText\ ms/token，索引构建中位数为
+\QKSievePersistentBuildText\ 秒。表中将不含 dense prefill 的 Cold-index
+与包含 prefill 的 Cold-E2E 分开报告，二者不能互换。
 
 审计会独立重新解析每一层，而不是信任 benchmark 写出的成功标志。它验证了
 32 层完整 Key/Value 索引、6 个快照、5 次 rewind、稳定的存储指针和重建计数、

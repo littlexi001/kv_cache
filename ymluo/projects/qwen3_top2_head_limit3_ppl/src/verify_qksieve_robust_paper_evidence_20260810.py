@@ -162,20 +162,31 @@ def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
         raise AssertionError("persistent summary schema mismatch")
     if payload.get("all_correct") is not True:
         raise AssertionError("persistent lifecycle audit failed")
+    if payload.get("missing_pairs") not in (None, []):
+        raise AssertionError("persistent summary has missing Full/Robust pairs")
     rows = payload.get("rows")
-    if not isinstance(rows, list) or {int(row["history_tokens"]) for row in rows} != {
-        32768,
-        65536,
-    }:
-        raise AssertionError("persistent summary lacks 32K/64K")
+    expected_lengths = {32768, 65536}
+    expected_seeds = {20260810, 20260811, 20260812}
+    if not isinstance(rows, list) or len(rows) != 6:
+        raise AssertionError("persistent summary requires six paired process runs")
+    for history_tokens in expected_lengths:
+        source = [
+            row for row in rows if int(row["history_tokens"]) == history_tokens
+        ]
+        if len(source) != 3 or {int(row["seed"]) for row in source} != expected_seeds:
+            raise AssertionError(
+                "persistent summary requires three fixed process repetitions "
+                f"at {history_tokens} tokens"
+            )
     for row in rows:
         for field in (
             "warm_speedup",
             "cold_speedup",
+            "cold_end_to_end_speedup",
             "amortized_speedup",
             "append_only_speedup",
         ):
-            if float(row[field]) <= 0.0:
+            if not math.isfinite(float(row[field])) or float(row[field]) <= 0.0:
                 raise AssertionError(f"invalid persistent metric: {field}")
         if not all(
             bool(row[field])
@@ -200,7 +211,50 @@ def validate_persistent(payload: dict[str, Any]) -> dict[str, Any]:
         }
         if any(audit.get(name) != value for name, value in expected_audit.items()):
             raise AssertionError("persistent independent lifecycle audit drifted")
-    return {"rows": rows, "claim_boundary": payload.get("claim_boundary")}
+
+    aggregate_rows = payload.get("aggregate_rows")
+    if (
+        not isinstance(aggregate_rows, list)
+        or len(aggregate_rows) != 2
+        or {int(row["history_tokens"]) for row in aggregate_rows}
+        != expected_lengths
+    ):
+        raise AssertionError("persistent summary lacks two aggregate rows")
+    aggregate_metrics = (
+        "full_warm_ms_per_token",
+        "qksieve_warm_ms_per_token",
+        "full_cold_end_to_end_ms_per_token",
+        "qksieve_cold_end_to_end_ms_per_token",
+        "warm_speedup",
+        "cold_speedup",
+        "cold_end_to_end_speedup",
+        "amortized_speedup",
+        "append_only_speedup",
+        "qksieve_prebuild_seconds",
+    )
+    for row in aggregate_rows:
+        if int(row.get("seed_count", -1)) != 3 or {
+            int(seed) for seed in row.get("seeds", [])
+        } != expected_seeds:
+            raise AssertionError("persistent aggregate seed coverage drifted")
+        for field in aggregate_metrics:
+            value = float(row[field])
+            low = float(row[f"{field}_bootstrap_ci95_low"])
+            high = float(row[f"{field}_bootstrap_ci95_high"])
+            if not all(math.isfinite(item) and item > 0.0 for item in (value, low, high)):
+                raise AssertionError(f"invalid persistent aggregate: {field}")
+            if not low <= value <= high:
+                raise AssertionError(f"persistent aggregate interval misses: {field}")
+    statistics_payload = payload.get("statistics")
+    if not isinstance(statistics_payload, dict) or statistics_payload.get(
+        "point_estimate"
+    ) != "median_across_independent_process_repetitions":
+        raise AssertionError("persistent process-repetition statistics drifted")
+    return {
+        "rows": rows,
+        "aggregate_rows": aggregate_rows,
+        "claim_boundary": payload.get("claim_boundary"),
+    }
 
 
 def validate_longbench(payload: dict[str, Any]) -> dict[str, Any]:

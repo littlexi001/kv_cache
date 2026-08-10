@@ -3,7 +3,7 @@
 ## 审计对象
 
 - 图：`figures/persistent_kv_lifecycle.png` 和对应 PDF。
-- 数据：`raw_results/20260810_qksieve_persistent_kv_v2/independent_summary.json`。
+- 数据：`raw_results/20260810_qksieve_persistent_kv_v3_multiseed/independent_summary.json`。
 - 生成脚本：`src/plot_qksieve_persistent_kv_20260810.py`。
 - 审计日期：2026-08-10。
 
@@ -16,7 +16,8 @@
 | 坐标轴标签与单位可读 | 通过 |
 | 每个子图只使用一种纵轴单位 | 通过 |
 | 速度比中的 `1x` 基线明确 | 通过 |
-| 32K/64K、各阶段与四种生命周期均有定义 | 通过 |
+| 32K/64K、各阶段与五种生命周期口径均有定义 | 通过 |
+| 三次进程重复区间与 cold-E2E 均直接来自汇总文件 | 通过 |
 | 关键数值同时在正文表格中给出 | 通过 |
 | 图前给出指标定义、数据来源与结论边界 | 通过 |
 | 无裸露 LaTeX、乱码或裁切 | 通过 |
@@ -26,6 +27,6 @@
 
 本次没有可用的独立 reviewer 工具，因此由当前执行者按同一检查表完成审计。
 图现在支持的结论仅是：在该 RTX 3090 MHA 模型上，索引复用使 32K/64K 的
-真实整模型 decode 分别达到 1.32x/2.22x；一次性构建由 QK 因子、Key 编码和
+真实整模型 warm decode 中位数分别达到 1.47x/2.50x；一次性构建由 QK 因子、Key 编码和
 ValueSketch 三个同量级阶段组成。它不证明 H100、多模型质量、128K 请求级结果，
 也不证明 Query 统计变化后的跨请求索引复用。

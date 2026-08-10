@@ -1,4 +1,4 @@
-% Generated from audited RTX 3090 evidence: e30a75542a7f25f48d3218c8519fab993903d4f11d102973146a4fa41e8e9274
+% Generated from audited RTX 3090 evidence: b70f850b2c16917c580edae1cdb4382a272db7bd59cadd9e6ffc31bb4f77c5be
 \newcommand{\QKSieveMhaAttentionRows}{%
 8K & 0.1691 & 0.1327 & 0.1560 & 1.27$\times$ & 1.08$\times$ \\%
 16K & 0.3173 & 0.1900 & 0.2250 & 1.67$\times$ & 1.41$\times$ \\%
@@ -28,6 +28,12 @@
 }
 
 \newcommand{\QKSievePersistentRows}{%
-32K & 0.702$\times$ & 1.322$\times$ & 1.082$\times$ & 1.319$\times$ & 1.759 \\%
-64K & 1.125$\times$ & 2.221$\times$ & 1.785$\times$ & 2.211$\times$ & 1.998 \\%
+32K & 0.806$\times$ {\scriptsize[0.693,0.809]} & 0.963$\times$ {\scriptsize[0.948,0.971]} & 1.474$\times$ {\scriptsize[1.177,1.487]} & 1.220$\times$ {\scriptsize[1.001,1.229]} & 1.472$\times$ {\scriptsize[1.174,1.484]} & 1.486 {\scriptsize[1.469,1.566]} \\%
+64K & 1.312$\times$ {\scriptsize[1.295,1.319]} & 1.013$\times$ {\scriptsize[1.011,1.013]} & 2.503$\times$ {\scriptsize[2.488,2.522]} & 2.040$\times$ {\scriptsize[2.022,2.053]} & 2.493$\times$ {\scriptsize[2.479,2.511]} & 1.650 {\scriptsize[1.647,1.681]} \\%
 }
+
+\newcommand{\QKSievePersistentWarmLatencyText}{84.002/57.032; 145.081/57.973}
+
+\newcommand{\QKSievePersistentBuildText}{1.486/1.650}
+
+\newcommand{\QKSievePersistentBreakEvenText}{56/19}

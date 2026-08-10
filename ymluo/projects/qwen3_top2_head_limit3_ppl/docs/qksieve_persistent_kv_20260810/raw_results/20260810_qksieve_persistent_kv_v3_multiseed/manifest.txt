@@ -1,0 +1,27 @@
+schema=qksieve_persistent_multiseed_protocol_v1
+seeds=20260810,20260811,20260812
+gpus_32k=4,5
+gpus_64k=4,5,6
+audited_implementation_commit_sha=f300fb280a597ceb124d454cdfc9a0a1665d6a04
+python=3.10.20
+torch=2.7.1+cu126
+torch_cuda=12.6
+transformers=4.53.1
+numpy=2.2.6
+f5922f9802af5d6925692503e2d3cf1f1566563da1e14dcb76188ead796be79a  /home/fdong/qksieve_iclr2027/configs/qksieve_robust_source_manifest_20260810.json
+5c8a007d19ac25cc5d24758c10b021d55531bf9370a1759db0d1bc0e14f5bb5f  /home/fdong/qksieve_iclr2027/scripts/run_qksieve_persistent_kv_case_20260810.sh
+29058b3b7e0ea6a044328941637590d82e16048ed317c725faa6aedfcc47406b  /home/fdong/qksieve_iclr2027/src/summarize_qksieve_persistent_kv_20260810.py
+ad33721d310ab82579a7be029429f3b6513b100b37cb6550d1701f7d84340ef0  scripts/launch_qksieve_persistent_multiseed_20260810.sh
+0f85245cab4358e94a5cadce299ddb16964a22d86eece081caa5e05616f3828a  /home/fdong/qksieve_iclr2027/models/Yarn-Llama-2-7b-128k/pytorch_model-00002-of-00002.bin
+e572e08c4d4e81c7916197f6fcd2956a2f05e5919f28d72c9ba4f351efae1e29  /home/fdong/qksieve_iclr2027/models/Yarn-Llama-2-7b-128k/pytorch_model.bin.index.json
+bf8239b8842439a1149effb9af58e5eba5db867d414abaf4c071b3ba48a6a215  /home/fdong/qksieve_iclr2027/models/Yarn-Llama-2-7b-128k/config.json
+e15eff64c7ef2159ecd7228424d4d3ba813e9bcda2f6cb543accbe5028bd0ae0  /home/fdong/qksieve_iclr2027/models/Yarn-Llama-2-7b-128k/pytorch_model-00001-of-00002.bin
+9e556afd44213b6bd1be2b850ebbbd98f5481437a8021afaf58ee7fb1818d347  /home/fdong/qksieve_iclr2027/models/Yarn-Llama-2-7b-128k/tokenizer.model
+0, NVIDIA GeForce RTX 3090, GPU-b289c218-9d5b-e541-5403-5c2587248c68, 24576, 555.42.02
+1, NVIDIA GeForce RTX 3090, GPU-d33c5483-db05-1491-33f9-3f03f79e5428, 24576, 555.42.02
+2, NVIDIA GeForce RTX 3090, GPU-0db92088-279f-e691-2b5f-c87d19dcd227, 24576, 555.42.02
+3, NVIDIA GeForce RTX 3090, GPU-461db0f9-60e7-25f7-f61f-10592ee212c5, 24576, 555.42.02
+4, NVIDIA GeForce RTX 3090, GPU-01f1f5a3-5eed-2889-e042-7398b7634c02, 24576, 555.42.02
+5, NVIDIA GeForce RTX 3090, GPU-32aca65f-566d-5646-0b69-fc5f65006b79, 24576, 555.42.02
+6, NVIDIA GeForce RTX 3090, GPU-d0714f59-9194-8b6b-f192-e363430734b6, 24576, 555.42.02
+7, NVIDIA GeForce RTX 3090, GPU-11c01422-a778-4ab9-0d9c-28b9e37161ff, 24576, 555.42.02

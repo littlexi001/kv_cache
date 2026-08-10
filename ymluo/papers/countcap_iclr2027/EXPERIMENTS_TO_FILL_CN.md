@@ -75,7 +75,7 @@ RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
 | GQA-4 子系统长度扫描 | 完成，8K–128K，包含逐 token 索引追加 | 32K 起超过 Full，64K/128K 为 2.730x/4.162x |
 | 原生 MHA Fast/Robust attention A/B | 完成，RTX 3090、32Q/32KV、8K--128K、3 seeds | Fast 为 1.27--6.37x；Robust 含 ValueSketch 后为 1.08--4.12x；候选集合严格相同 |
 | 原生 MHA 真实模型稳态 decode | 完成，Yarn-Llama-2-7B-128K、32/64/128K | Robust 为 1.32/2.22/3.98x；break-even 为 69/19/10 token |
-| Persistent KV 生命周期 | 完成，32K/64K，cold/warm/四分支均摊/append-only | Warm 为 1.322x/2.221x；四分支均摊为 1.082x/1.785x；独立审计确认 32 层索引未重建且 replay 一致 |
+| Persistent KV 生命周期 | 完成，32K/64K，每个长度 3 次独立进程，cold-index/cold-E2E/warm/四分支均摊/append-only | Warm 中位数为 1.474x/2.503x；cold-E2E 为 0.963x/1.013x；四分支均摊为 1.220x/2.040x；独立审计确认 32 层索引未重建且 replay 一致 |
 | FIER 同 consumer 速度 | 完成，原生 MHA、相同 active-token schedule 和精确 sparse-attention consumer | Fast 相对 FIER 为 1.37--3.58x，Robust 在额外支付 Value-tail 后仍为 1.16--2.31x（8K--128K） |
 | Llama official-middle LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行 | Full/QKSieve macro 为 0.459398/0.458852，保持率 99.881%，bootstrap 95% CI 为 [99.424%, 100.347%] |
 | 冻结 Robust 完整 LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行、零 fallback | Full/Robust macro 为 0.459011/0.458692，保持率 99.930%，task-bootstrap 95% CI 为 [99.538%, 100.213%] |
@@ -198,14 +198,14 @@ artifact，逐项检查候选一致性、MHA 形状、GPU、warmup/iteration、V
 `data/generated/qksieve_rtx3090_system_rows.tex`。输入文件 SHA、聚合 SHA、所选
 无干扰 Decode artifact 和未舍入数值记录在
 `data/generated/qksieve_rtx3090_system_manifest.json`；当前聚合 SHA 为
-`e30a75542a7f25f48d3218c8519fab993903d4f11d102973146a4fa41e8e9274`。
+`b70f850b2c16917c580edae1cdb4382a272db7bd59cadd9e6ffc31bb4f77c5be`。
 英文与中文构建脚本都会先重新生成该文件，论文表格不再复制数字。
 
 需要区分两种构建口径：独立 Decode harness 的 Fast/Robust 构建为
 `.768/1.375`、`.774/1.488`、`.743/1.839` 秒，对应 32/64/128K break-even
 `24/69`、`9/19`、`4/10` token；完整 persistent 生命周期还安装并审计可复用
-状态，因此 32/64K Robust 构建为 `1.759/1.998` 秒，break-even 为 `87/26`
-token。两者不能混写。完整表放在系统附录，正文保留关键数值；匿名稿结论完整
+状态，三次进程重复的 32/64K Robust 构建中位数为 `1.486/1.650` 秒，
+break-even 为 `56/19` token。两者不能混写。完整表放在系统附录，正文保留关键数值；匿名稿结论完整
 结束在第 9 页，AI 声明与参考文献从第 10 页开始。
 
 ```bash
@@ -305,9 +305,7 @@ GQA-8 的完整 selection 在 32K 可能更慢，因此不作架构无关加速�
 
 ```text
 docs/qksieve_persistent_kv_20260810/raw_results/
-  20260810_qksieve_persistent_kv_v2/summary.json
-docs/qksieve_persistent_kv_20260810/raw_results/
-  20260810_qksieve_persistent_kv_v2/independent_summary.json
+  20260810_qksieve_persistent_kv_v3_multiseed/independent_summary.json
 ```
 
 ## 3. P0：公平基线

@@ -200,29 +200,31 @@ are excluded; see \cref{tab:mha-build-break-even}.
 
 \begin{table}[t]
 \caption{Directly timed persistent-cache lifecycle on the same MHA model and
-RTX~3090s.  Cold includes the full Robust index build and one 32-token branch;
-warm reuses that index; four-branch amortization shares one build over 128
-generated tokens.  Ratios are matched Full/QKSieve wall times.}
+RTX~3090 host.  Cold-index includes the Robust build and one 32-token branch
+but excludes dense prefill; cold-E2E includes prefill.  Warm reuses the index;
+four-branch amortization shares one build over 128 generated tokens.  Entries
+are medians and 95\% process-repetition intervals from three independent
+processes on one fixed deterministic workload.}
 \label{tab:persistent-kv-main}
 \centering
 \resizebox{\linewidth}{!}{
-\begin{tabular}{rrrrrr}
+\begin{tabular}{rrrrrrr}
 \toprule
-History & Cold & Warm & 4-branch amort. & Append-only & Build (s) \\
+History & Cold-index & Cold-E2E & Warm & 4-branch & Append-only & Build (s) \\
 \midrule
 \QKSievePersistentRows
 \bottomrule
 \end{tabular}}
 \end{table}
 
-Warm Full/QKSieve decode is 83.714/63.347 ms/token at 32K and
-144.910/65.256 ms/token at 64K.  The one-time 32/64K construction splits into
-.724/.735 seconds for QK factors, .518/.603 seconds for Key encoding, and
-.517/.658 seconds for ValueSketch.
-
-A simple $I/(D_f-D_s)$ calculation gives
-approximately 87/26 generated tokens to break even, consistent with the
-direct 32-token cold outcomes in \cref{tab:persistent-kv-main}.
+For 32/64K, median Full/QKSieve warm latency is
+\QKSievePersistentWarmLatencyText\ ms/token; median Robust construction is
+\QKSievePersistentBuildText\ seconds.  The matched
+$\lceil I/(D_f-D_s)\rceil$ break-even is
+\QKSievePersistentBreakEvenText\ generated tokens.  The 32K cold-E2E result
+is therefore honestly below $1\times$, whereas 64K is approximately break-even
+for a single 32-token request and benefits substantially once the prefix is
+reused.
 
 The lifecycle audit covers all 32 layers, six snapshots, and five rewinds,
 with stable index pointers and deterministic replay.  Reuse is valid while
