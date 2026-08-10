@@ -1,10 +1,11 @@
 \section{局限与结论}
 \label{sec:conclusion}
 
-\method 的 5.86\% QK-balanced Key index 能保持完整 LongBench 质量，但原生
-128K 审计说明 selected-only attention 并非通用 consumer。7.47\% 的 Robust
-配置在 12 个主题/seed case 上修复遗漏 Value 失真，且无需 reranking、learning、
-稠密 fallback 或额外 exact token。在原生 MHA 上，Fast 与 Robust attention 在
-8K--128K 达到 1.27--6.37$\times$ 与 1.08--4.12$\times$；Robust 稳态 decode
-在 32/64/128K 达到 1.32/2.22/3.98$\times$。计入索引构建后，64-token 冷请求
-达到 .81/1.31/2.15$\times$，因此持久化复用是显式评测场景，而非隐含假设。
+冻结 Robust 在完整 LongBench 上保持 Full 的 99.930\%，在 12 个原生 128K case
+上保持 99.805\% pooled PPL，且不使用 reranking、learning 或稠密 fallback。
+原生 MHA Fast/Robust attention 在 8K--128K 达到
+1.27--6.37$\times$/1.08--4.12$\times$；Robust 稳态 decode 在 32/64/128K 达到
+1.32/2.22/3.98$\times$。64-token 冷请求为 .81/1.31/2.15$\times$，因此复用是
+显式场景。精确 K/V 仍常驻，辅助索引额外占 7.47\%；新 prompt 需要重建 basis
+与索引，sparse prefill 不在本文范围内，32K cold 延迟仍低于 Full。MHA 速度与
+GQA 任务质量保持独立证据合同，冻结泛化主张截止 128K。
