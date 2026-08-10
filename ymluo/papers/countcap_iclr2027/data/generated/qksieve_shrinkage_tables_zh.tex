@@ -1,0 +1,47 @@
+% Generated from paired shrinkage evidence: aafa4d1c9a7d4c906cb56f8799f1f6b8a4e9f802834bf677decebee23be0d0f2
+\subsection{固定 Query shrinkage 敏感性}
+\label{app:shrinkage-sensitivity}
+\begin{table*}[t]
+\caption{固定 Query shrinkage 的严格配对敏感性。四条 32K 真实文本轨迹覆盖 Llama/Qwen 与体育/医学；每个 $\lambda$ 使用相同层、解码步、Query head 和 KV head。粗体为冻结的 $\lambda=0.75$。}
+\label{tab:shrinkage-grid}
+\centering\small
+\begin{tabular}{rrrrrrr}
+\toprule
+选取比例 & $\lambda$ & Top-2 召回 & 选中质量 & Top-2 质量召回 & Pearson & RMSE \\
+\midrule
+1.00\% & 0.00 & 37.95\% & 75.15\% & 86.81\% & 0.9045 & 1.1534 \\
+1.00\% & 0.25 & 43.70\% & 77.20\% & 89.36\% & 0.9508 & 0.8364 \\
+1.00\% & 0.50 & 44.97\% & 77.59\% & 89.86\% & 0.9596 & 0.7598 \\
+\textbf{1.00\%} & \textbf{0.75} & \textbf{45.60\%} & \textbf{77.86\%} & \textbf{90.20\%} & \textbf{0.9647} & \textbf{0.7118} \\
+1.00\% & 0.90 & 45.36\% & 77.83\% & 90.16\% & 0.9639 & 0.7165 \\
+2.00\% & 0.00 & 60.18\% & 80.03\% & 94.29\% & 0.9045 & 1.1534 \\
+2.00\% & 0.25 & 70.50\% & 81.98\% & 96.78\% & 0.9508 & 0.8364 \\
+2.00\% & 0.50 & 73.14\% & 82.36\% & 97.27\% & 0.9596 & 0.7598 \\
+\textbf{2.00\%} & \textbf{0.75} & \textbf{74.47\%} & \textbf{82.61\%} & \textbf{97.60\%} & \textbf{0.9647} & \textbf{0.7118} \\
+2.00\% & 0.90 & 73.86\% & 82.60\% & 97.58\% & 0.9639 & 0.7165 \\
+4.00\% & 0.00 & 79.42\% & 85.09\% & 102.47\% & 0.9045 & 1.1534 \\
+4.00\% & 0.25 & 89.73\% & 86.79\% & 104.69\% & 0.9508 & 0.8364 \\
+4.00\% & 0.50 & 91.95\% & 87.13\% & 105.13\% & 0.9596 & 0.7598 \\
+\textbf{4.00\%} & \textbf{0.75} & \textbf{93.16\%} & \textbf{87.34\%} & \textbf{105.42\%} & \textbf{0.9647} & \textbf{0.7118} \\
+4.00\% & 0.90 & 92.81\% & 87.34\% & 105.41\% & 0.9639 & 0.7165 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table}[t]
+\caption{冻结 $\lambda=0.75$ 相对五个候选 shrinkage 中最优值的 regret。}
+\label{tab:shrinkage-regret}
+\centering\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{rrrrrr}
+\toprule
+选取比例 & Top-2 召回 & 召回 regret & 选中质量 & 质量 regret & RMSE/best \\
+\midrule
+1.00\% & 45.60\% & 0.00\% & 77.86\% & 0.00\% & 1.000$\times$ \\
+2.00\% & 74.47\% & 0.00\% & 82.61\% & 0.00\% & 1.000$\times$ \\
+4.00\% & 93.16\% & 0.00\% & 87.34\% & 0.00\% & 1.000$\times$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+预注册稳定性检查通过。该实验只检验 selector 的数值敏感性，不能替代 LongBench、RULER 或 PPL 的下游质量证据。选取比例为 4\% 时，Top-2 质量召回可以超过 100\%，因为分子使用选中 4\% token 的 attention mass，分母仍是 oracle Top-2\% mass。

@@ -1,0 +1,53 @@
+{
+  "schema": "qksieve_shrinkage_fast_grid_equivalence_v1",
+  "passed": true,
+  "conditions": 30720,
+  "allocation_conditions": 40,
+  "condition_keys_identical": true,
+  "allocations_identical": true,
+  "metrics": {
+    "top2_recall": {
+      "max_abs_difference": 0.0015625357627868652,
+      "mean_abs_difference": 4.199109389305381e-07,
+      "max_tolerance": 0.002,
+      "mean_tolerance": 2e-06
+    },
+    "selected_attention_mass": {
+      "max_abs_difference": 0.00023102760314941406,
+      "mean_abs_difference": 1.3083335943520068e-07,
+      "max_tolerance": 0.0005,
+      "mean_tolerance": 2e-06
+    },
+    "oracle_top2_attention_mass": {
+      "max_abs_difference": 9.5367431640625e-07,
+      "mean_abs_difference": 1.0113872122019529e-07,
+      "max_tolerance": 2e-06,
+      "mean_tolerance": 2e-06
+    },
+    "top2_attention_mass_recall": {
+      "max_abs_difference": 0.00033038072966884435,
+      "mean_abs_difference": 1.1814533134001737e-07,
+      "max_tolerance": 0.0005,
+      "mean_tolerance": 2e-06
+    },
+    "score_pearson": {
+      "max_abs_difference": 4.172325134277344e-07,
+      "mean_abs_difference": 4.7299545258283616e-08,
+      "max_tolerance": 2e-06,
+      "mean_tolerance": 2e-06
+    },
+    "score_rmse": {
+      "max_abs_difference": 2.384185791015625e-07,
+      "mean_abs_difference": 1.735315890982747e-08,
+      "max_tolerance": 2e-06,
+      "mean_tolerance": 2e-06
+    }
+  },
+  "source_sha256": {
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v1/analysis/qwen3_4b_sports32k/lambda_0p00/per_head.csv": "ede4a5aa022a9df72834333940ed6ac38d25b876fd0c8d297e60a540b3321459",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p00/per_head.csv": "96c21ec552192075b65b79704e6835267ee7c8575b4cde95544589e7468f9223",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v1/analysis/qwen3_4b_sports32k/lambda_0p00/allocations.csv": "443e403b8cd3d7ebc2b8c11b50cec933bd41402d8262a5ab37e6fd58e40e3c35",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p00/allocations.csv": "f6d783d1d5d011aae217b6af53efc561938152bee280c8dfd9263ced18460887"
+  },
+  "claim_boundary": "Batched GEMM may exchange one token at a numerical top-k tie; the rate allocation and paired condition grid must be exact."
+}

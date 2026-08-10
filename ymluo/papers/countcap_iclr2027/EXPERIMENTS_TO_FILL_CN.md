@@ -41,6 +41,7 @@ python src/verify_qksieve_robust_paper_evidence_20260810.py \
   --ruler_summary RESULTS/ruler/paired_summary.json \
   --multimodel_summary RESULTS/multimodel/multimodel_summary.json \
   --shrinkage_summary RESULTS/shrinkage/summary.json \
+  --shrinkage_equivalence RESULTS/shrinkage/equivalence_audit.json \
   --h100_summary RESULTS/h100/summary.json \
   --output RESULTS/frozen_evidence_report.json
 ```
@@ -48,8 +49,8 @@ python src/verify_qksieve_robust_paper_evidence_20260810.py \
 只有报告中 `complete=true` 时，质量与系统结果才可以组成完整论文证据链。
 校验器强制检查冻结方法合同、3,750 个同路径 LongBench 配对、650 个正式
 RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
-64K/128K 三类系统测速，以及固定 shrinkage 的严格配对敏感性；任一证据缺失
-都会显式失败。
+64K/128K 三类系统测速，以及固定 shrinkage 的严格配对敏感性和快速分析器
+等价审计；任一证据缺失都会显式失败。
 
 ## 1. 当前已经完成的证据
 
@@ -80,6 +81,7 @@ RULER 配对、Llama/Qwen/Mistral 覆盖、persistent 生命周期和 H100 的
 | 冻结 Robust 完整 LongBench | 完成，3,750/3,750 严格配对、16/16 任务、7,500 行、零 fallback | Full/Robust macro 为 0.459011/0.458692，保持率 99.930%，task-bootstrap 95% CI 为 [99.538%, 100.213%] |
 | 冻结 Robust 正式 RULER | 修正后的审计运行进行中，13 任务、4K--128K、计划 650 个严格配对 | 缺少逐行 attention diagnostics 的旧运行已排除；完成前不写正式 RULER 主结果 |
 | Llama/Qwen/Mistral 同协议 LongBench screen | 完成，16 任务、每模型 160 个独立 offset 样本、共 480 个严格配对 | 保持率分别为 98.681%/100.211%/98.487%，三个 task-bootstrap 区间均跨 100%，fallback 为 0 |
+| Query shrinkage 敏感性 | 完成，4 条 32K trace、5 个 $\lambda$、1/2/4% active、122,880 个严格条件 | 冻结 $\lambda=0.75$ 在三个比例上的 recall/mass regret 均为 0，RMSE/best 为 1.000 |
 | 理论证明 | 完成并写入正文/附录 | 双正交精确性、最优 score 子空间、QK-MSE、bit 分配、排序和输出误差链 |
 | 正文页预算 | 完成当前版式审计 | 正文与结论在第 9 页结束，参考文献从第 10 页开始；完整命题、证明和系统图放入附录 |
 
@@ -378,13 +380,17 @@ TurboQuant、Q-Filters、RaBitQCache 至少完成索引质量或方法级比较�
 | Active KV 0.5/1/2/4% | 同一索引 | 质量-延迟 Pareto |
 | Query 样本 1/4/8/16/32 | 参数冻结 | calibration 与 held-out regret |
 
-固定 shrinkage 的正式敏感性协议已经实现于
-`scripts/launch_qksieve_shrinkage_sensitivity_20260810.sh`。该实验严格使用 prompt
+固定 shrinkage 的正式敏感性协议已经由
+`scripts/launch_qksieve_shrinkage_grid_fast_20260810.sh` 完成。该实验严格使用 prompt
 最后 8 个 Query 校准，并对五个系数做跨 Llama/Qwen、体育/医学的逐条件配对；
 `lambda=0.75` 仍保持冻结，实验结果只决定论文能否声明超参数稳定，不能用于重新
 选择系数。最终证据门会拒绝缺轨迹、缺系数、缺稀疏率、非 prompt 校准或少于
 10,000 次 bootstrap 的结果；预注册阈值是否通过则原样进入审计报告，不能隐藏
-失败。当前状态为代码与协议完成、GPU 结果待补。
+失败。正式结果包含 122,880 个严格配对条件；冻结的 `lambda=0.75` 在
+1/2/4% 三个选取比例上的 recall regret、attention-mass regret 均为 0，
+RMSE/best 均为 1.000。快速网格分析器还与旧标量分析器做了 30,720 条真实条件
+的等价审计：condition key 和 40 个 layer/head allocation 完全一致，平均
+Top-2 recall 绝对差为 $4.2\times10^{-7}$，最大差等于 top-k 边界的一个 token。
 
 为拆分坐标系和 bit 分配收益，已加入三个真实 256-bit 路径：
 `qksieve_fullprompt_keypca_uniform1_fulltopk` 与

@@ -1,0 +1,47 @@
+% Generated from paired shrinkage evidence: aafa4d1c9a7d4c906cb56f8799f1f6b8a4e9f802834bf677decebee23be0d0f2
+\subsection{Fixed Query-shrinkage sensitivity}
+\label{app:shrinkage-sensitivity}
+\begin{table*}[t]
+\caption{Strictly paired sensitivity to fixed Query shrinkage on four real 32K traces spanning Llama/Qwen and sports/medicine. Every $\lambda$ uses the same layer, decode step, Query head, and KV head. Bold marks the frozen $\lambda=0.75$.}
+\label{tab:shrinkage-grid}
+\centering\small
+\begin{tabular}{rrrrrrr}
+\toprule
+Selected & $\lambda$ & Top-2 recall & Selected mass & Top-2 mass recall & Pearson & RMSE \\
+\midrule
+1.00\% & 0.00 & 37.95\% & 75.15\% & 86.81\% & 0.9045 & 1.1534 \\
+1.00\% & 0.25 & 43.70\% & 77.20\% & 89.36\% & 0.9508 & 0.8364 \\
+1.00\% & 0.50 & 44.97\% & 77.59\% & 89.86\% & 0.9596 & 0.7598 \\
+\textbf{1.00\%} & \textbf{0.75} & \textbf{45.60\%} & \textbf{77.86\%} & \textbf{90.20\%} & \textbf{0.9647} & \textbf{0.7118} \\
+1.00\% & 0.90 & 45.36\% & 77.83\% & 90.16\% & 0.9639 & 0.7165 \\
+2.00\% & 0.00 & 60.18\% & 80.03\% & 94.29\% & 0.9045 & 1.1534 \\
+2.00\% & 0.25 & 70.50\% & 81.98\% & 96.78\% & 0.9508 & 0.8364 \\
+2.00\% & 0.50 & 73.14\% & 82.36\% & 97.27\% & 0.9596 & 0.7598 \\
+\textbf{2.00\%} & \textbf{0.75} & \textbf{74.47\%} & \textbf{82.61\%} & \textbf{97.60\%} & \textbf{0.9647} & \textbf{0.7118} \\
+2.00\% & 0.90 & 73.86\% & 82.60\% & 97.58\% & 0.9639 & 0.7165 \\
+4.00\% & 0.00 & 79.42\% & 85.09\% & 102.47\% & 0.9045 & 1.1534 \\
+4.00\% & 0.25 & 89.73\% & 86.79\% & 104.69\% & 0.9508 & 0.8364 \\
+4.00\% & 0.50 & 91.95\% & 87.13\% & 105.13\% & 0.9596 & 0.7598 \\
+\textbf{4.00\%} & \textbf{0.75} & \textbf{93.16\%} & \textbf{87.34\%} & \textbf{105.42\%} & \textbf{0.9647} & \textbf{0.7118} \\
+4.00\% & 0.90 & 92.81\% & 87.34\% & 105.41\% & 0.9639 & 0.7165 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{table}[t]
+\caption{Regret of frozen $\lambda=0.75$ relative to the best of five shrinkage candidates.}
+\label{tab:shrinkage-regret}
+\centering\small
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{rrrrrr}
+\toprule
+Selected & Top-2 recall & Recall regret & Selected mass & Mass regret & RMSE/best \\
+\midrule
+1.00\% & 45.60\% & 0.00\% & 77.86\% & 0.00\% & 1.000$\times$ \\
+2.00\% & 74.47\% & 0.00\% & 82.61\% & 0.00\% & 1.000$\times$ \\
+4.00\% & 93.16\% & 0.00\% & 87.34\% & 0.00\% & 1.000$\times$ \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+The preregistered stability check passed. This is a selector-level numerical sensitivity test; it does not replace downstream LongBench, RULER, or PPL evidence. At 4\% selected, Top-2 mass recall can exceed 100\% because its numerator covers 4\% of tokens while the denominator remains oracle Top-2\% mass.

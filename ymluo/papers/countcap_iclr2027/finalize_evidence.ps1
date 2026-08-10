@@ -13,6 +13,7 @@ $LongBenchSummary = Join-Path $DataDir "qksieve_robust_longbench_summary.json"
 $RulerSummary = Join-Path $DataDir "qksieve_robust_ruler_summary.json"
 $MultimodelSummary = Join-Path $DataDir "qksieve_robust_multimodel_summary.json"
 $ShrinkageSummary = Join-Path $DataDir "qksieve_shrinkage_sensitivity_summary.json"
+$ShrinkageEquivalence = Join-Path $DataDir "qksieve_shrinkage_fast_grid_equivalence.json"
 $H100Summary = Join-Path $DataDir "qksieve_h100_matched_summary.json"
 $EvidenceReport = Join-Path $GeneratedDir "qksieve_frozen_evidence_report.json"
 $PdfAudit = Join-Path $GeneratedDir "qksieve_final_pdf_audit.json"
@@ -23,6 +24,7 @@ $RequiredEvidence = @(
     $RulerSummary,
     $MultimodelSummary,
     $ShrinkageSummary,
+    $ShrinkageEquivalence,
     $H100Summary
 )
 foreach ($Path in $RequiredEvidence) {
@@ -81,6 +83,7 @@ try {
         --ruler_summary $RulerSummary `
         --multimodel_summary $MultimodelSummary `
         --shrinkage_summary $ShrinkageSummary `
+        --shrinkage_equivalence $ShrinkageEquivalence `
         --h100_summary $H100Summary `
         --output $EvidenceReport
     if ($LASTEXITCODE -ne 0) { throw "Frozen evidence verification failed." }

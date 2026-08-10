@@ -123,8 +123,11 @@ def render(summary: dict[str, Any], *, chinese: bool, provenance: str) -> str:
         failure_text = "；失败项：" + "；".join(failures) if failures else ""
         conclusion = (
             f"预注册稳定性检查{status}{failure_text}。该实验只检验 selector 的数值"
-            "敏感性，不能替代 LongBench、RULER 或 PPL 的下游质量证据。"
+            "敏感性，不能替代 LongBench、RULER 或 PPL 的下游质量证据。选取比例"
+            "为 4% 时，Top-2 质量召回可以超过 100%，因为分子使用选中 4% "
+            "token 的 attention mass，分母仍是 oracle Top-2% mass。"
         )
+        subsection = "固定 Query shrinkage 敏感性"
         fraction_label = "选取比例"
         recall_label = "Top-2 召回"
         mass_label = "选中质量"
@@ -147,8 +150,11 @@ def render(summary: dict[str, Any], *, chinese: bool, provenance: str) -> str:
         conclusion = (
             f"The preregistered stability check {status}{failure_text}. This is a "
             "selector-level numerical sensitivity test; it does not replace "
-            "downstream LongBench, RULER, or PPL evidence."
+            "downstream LongBench, RULER, or PPL evidence. At 4% selected, "
+            "Top-2 mass recall can exceed 100% because its numerator covers "
+            "4% of tokens while the denominator remains oracle Top-2% mass."
         )
+        subsection = "Fixed Query-shrinkage sensitivity"
         fraction_label = "Selected"
         recall_label = "Top-2 recall"
         mass_label = "Selected mass"
@@ -159,7 +165,7 @@ def render(summary: dict[str, Any], *, chinese: bool, provenance: str) -> str:
     return "\n".join(
         [
             f"% Generated from paired shrinkage evidence: {provenance}",
-            "\\subsection{Fixed Query-shrinkage sensitivity}",
+            f"\\subsection{{{subsection}}}",
             "\\label{app:shrinkage-sensitivity}",
             "\\begin{table*}[t]",
             f"\\caption{{{grid_caption}}}",
@@ -168,7 +174,7 @@ def render(summary: dict[str, Any], *, chinese: bool, provenance: str) -> str:
             "\\begin{tabular}{rrrrrrr}",
             "\\toprule",
             f"{fraction_label} & $\\lambda$ & {recall_label} & {mass_label} & "
-            f"{top2_mass_label} & Pearson & RMSE \\\\ ",
+            f"{top2_mass_label} & Pearson & RMSE \\\\",
             "\\midrule",
             *grid_rows,
             "\\bottomrule",
@@ -183,7 +189,7 @@ def render(summary: dict[str, Any], *, chinese: bool, provenance: str) -> str:
             "\\begin{tabular}{rrrrrr}",
             "\\toprule",
             f"{fraction_label} & {recall_label} & {recall_regret} & "
-            f"{mass_label} & {mass_regret} & RMSE/best \\\\ ",
+            f"{mass_label} & {mass_regret} & RMSE/best \\\\",
             "\\midrule",
             *check_rows,
             "\\bottomrule",

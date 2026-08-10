@@ -317,6 +317,37 @@ def test_audit_accepts_complete_synthetic_evidence() -> None:
             "source_sha256": {"summary.json": "abc"},
             "claim_boundary": "paired mechanism-only sensitivity evidence",
         },
+        shrinkage_equivalence={
+            "schema": "qksieve_shrinkage_fast_grid_equivalence_v1",
+            "passed": True,
+            "conditions": 30720,
+            "allocation_conditions": 40,
+            "condition_keys_identical": True,
+            "allocations_identical": True,
+            "metrics": {
+                name: {
+                    "max_abs_difference": 1e-7,
+                    "mean_abs_difference": 1e-8,
+                    "max_tolerance": 1e-6,
+                    "mean_tolerance": 1e-6,
+                }
+                for name in (
+                    "top2_recall",
+                    "selected_attention_mass",
+                    "oracle_top2_attention_mass",
+                    "top2_attention_mass_recall",
+                    "score_pearson",
+                    "score_rmse",
+                )
+            },
+            "source_sha256": {
+                "reference_rows": "a" * 64,
+                "candidate_rows": "b" * 64,
+                "reference_allocations": "c" * 64,
+                "candidate_allocations": "d" * 64,
+            },
+            "claim_boundary": "one-token numerical ties only",
+        },
         h100={
             "schema": "qksieve_h100_matched_system_summary_v1",
             "expected_seeds": 3,
@@ -352,6 +383,7 @@ def test_audit_reports_missing_sections() -> None:
         "ruler",
         "multimodel",
         "shrinkage",
+        "shrinkage_equivalence",
         "h100",
     }
 

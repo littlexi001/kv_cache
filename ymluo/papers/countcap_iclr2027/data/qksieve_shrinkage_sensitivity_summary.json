@@ -1,0 +1,1461 @@
+{
+  "schema": "qksieve_shrinkage_sensitivity_v1",
+  "complete": true,
+  "method": "qk_balanced",
+  "calibration_source": "prefill_tail",
+  "production_shrinkage": 0.75,
+  "labels": [
+    "qwen3_4b_sports32k",
+    "qwen3_4b_medicine32k",
+    "llama31_8b_sports32k",
+    "llama31_8b_medicine32k"
+  ],
+  "shrinkages": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    0.9
+  ],
+  "selected_fractions": [
+    0.01,
+    0.02,
+    0.04
+  ],
+  "strict_paired_conditions": 122880,
+  "bootstrap_samples": 10000,
+  "aggregate": [
+    {
+      "shrinkage": 0.0,
+      "selected_fraction": 0.01,
+      "conditions": 40960,
+      "top2_recall": 0.37951210572464333,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.07645195028053423,
+        "ci95": [
+          -0.09003536069114944,
+          -0.06292160615258581
+        ]
+      },
+      "selected_attention_mass": 0.7514856206309559,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.027102610851216014,
+        "ci95": [
+          -0.03888042053965365,
+          -0.018414773533966127
+        ]
+      },
+      "top2_attention_mass_recall": 0.8681405198546599,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.03390888964013357,
+        "ci95": [
+          -0.04964369434649825,
+          -0.022344845794232248
+        ]
+      },
+      "score_pearson": 0.904480108844291,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.060211747919674964,
+        "ci95": [
+          -0.07106319058864756,
+          -0.04892650856487307
+        ]
+      },
+      "score_rmse": 1.1533689992766085,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.4415796027940814,
+        "ci95": [
+          0.3795255211873336,
+          0.4993865130281938
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.25,
+      "selected_fraction": 0.01,
+      "conditions": 40960,
+      "top2_recall": 0.4370079861047998,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.01895606990037777,
+        "ci95": [
+          -0.022259388866268638,
+          -0.015456303509572536
+        ]
+      },
+      "selected_attention_mass": 0.7719502555612963,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.00663797592087576,
+        "ci95": [
+          -0.009970350722473995,
+          -0.0038694405392175214
+        ]
+      },
+      "top2_attention_mass_recall": 0.8936161256757259,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.008433283819067583,
+        "ci95": [
+          -0.013105345194953771,
+          -0.004581040997823039
+        ]
+      },
+      "score_pearson": 0.9507711173180724,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.01392073944589356,
+        "ci95": [
+          -0.016882258945115608,
+          -0.01104076077699574
+        ]
+      },
+      "score_rmse": 0.8363984265208273,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.12460903003830026,
+        "ci95": [
+          0.1002720304338709,
+          0.14799437740204213
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.5,
+      "selected_fraction": 0.01,
+      "conditions": 40960,
+      "top2_recall": 0.4496751079455862,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.006288948059591348,
+        "ci95": [
+          -0.008473148338225656,
+          -0.004250798307275545
+        ]
+      },
+      "selected_attention_mass": 0.7758930645072724,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.002695166974899621,
+        "ci95": [
+          -0.004569847493835368,
+          -0.001194575456693201
+        ]
+      },
+      "top2_attention_mass_recall": 0.8985693383045146,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.003480071190278977,
+        "ci95": [
+          -0.006143674215181818,
+          -0.001377505539003323
+        ]
+      },
+      "score_pearson": 0.9595767048027483,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.005115151961217634,
+        "ci95": [
+          -0.006999412389668578,
+          -0.003321775301592425
+        ]
+      },
+      "score_rmse": 0.7597521630232222,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.04796276654069516,
+        "ci95": [
+          0.03173800601154198,
+          0.06475508575321783
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.75,
+      "selected_fraction": 0.01,
+      "conditions": 40960,
+      "top2_recall": 0.45596405600517753,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "selected_attention_mass": 0.7785882314821719,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "top2_attention_mass_recall": 0.9020494094947935,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_pearson": 0.964691856763966,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_rmse": 0.711789396482527,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.9,
+      "selected_fraction": 0.01,
+      "conditions": 40960,
+      "top2_recall": 0.45359619725822997,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.002367858746947604,
+        "ci95": [
+          -0.003682720956767298,
+          -0.0011352089195133888
+        ]
+      },
+      "selected_attention_mass": 0.7783184863906172,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0002697450915547961,
+        "ci95": [
+          -0.0007601415552380786,
+          0.0002983904884081309
+        ]
+      },
+      "top2_attention_mass_recall": 0.9016146144531376,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0004347950416558888,
+        "ci95": [
+          -0.0010885695548859076,
+          0.0003458562533523945
+        ]
+      },
+      "score_pearson": 0.9639399470586796,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0007519097052863799,
+        "ci95": [
+          -0.001538813379520434,
+          6.762097800674165e-06
+        ]
+      },
+      "score_rmse": 0.7165483317785402,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.004758935296013078,
+        "ci95": [
+          -0.004720856935746269,
+          0.014307230379113198
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.0,
+      "selected_fraction": 0.02,
+      "conditions": 40960,
+      "top2_recall": 0.6018409451658954,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.14286827223913862,
+        "ci95": [
+          -0.16352047919673168,
+          -0.12100825613354572
+        ]
+      },
+      "selected_attention_mass": 0.8002544061044319,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.025890140771844018,
+        "ci95": [
+          -0.03687792701437502,
+          -0.017889734099449016
+        ]
+      },
+      "top2_attention_mass_recall": 0.9428664953744373,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.033122752788949585,
+        "ci95": [
+          -0.04831216583796504,
+          -0.02217694733477402
+        ]
+      },
+      "score_pearson": 0.904480108844291,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.060211747919674964,
+        "ci95": [
+          -0.07114948072798143,
+          -0.0491693091855268
+        ]
+      },
+      "score_rmse": 1.1533689992766085,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.4415796027940814,
+        "ci95": [
+          0.3799034952728743,
+          0.4993681932609161
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.25,
+      "selected_fraction": 0.02,
+      "conditions": 40960,
+      "top2_recall": 0.7050024910673528,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.03970672633768117,
+        "ci95": [
+          -0.047020981219693565,
+          -0.03188140131264845
+        ]
+      },
+      "selected_attention_mass": 0.8198267491470688,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.006317797729207086,
+        "ci95": [
+          -0.009490591540211426,
+          -0.0037675928283351823
+        ]
+      },
+      "top2_attention_mass_recall": 0.967794187949039,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.008195060214347905,
+        "ci95": [
+          -0.012775216536956577,
+          -0.004570716611415265
+        ]
+      },
+      "score_pearson": 0.9507711173180724,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.01392073944589356,
+        "ci95": [
+          -0.016907787372801974,
+          -0.011072932934039274
+        ]
+      },
+      "score_rmse": 0.8363984265208273,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.12460903003830026,
+        "ci95": [
+          0.1004351714415634,
+          0.14748857374846921
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.5,
+      "selected_fraction": 0.02,
+      "conditions": 40960,
+      "top2_recall": 0.7313892864389345,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.013319930966099491,
+        "ci95": [
+          -0.01829550655977073,
+          -0.008681515550288168
+        ]
+      },
+      "selected_attention_mass": 0.8236219645050369,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.002522582371238968,
+        "ci95": [
+          -0.004348923583770556,
+          -0.0011112777184098378
+        ]
+      },
+      "top2_attention_mass_recall": 0.9726650764281658,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0033241717352211707,
+        "ci95": [
+          -0.005966897180196611,
+          -0.0013029287947574635
+        ]
+      },
+      "score_pearson": 0.9595767048027483,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.005115151961217634,
+        "ci95": [
+          -0.007005411243480921,
+          -0.0033340930851409214
+        ]
+      },
+      "score_rmse": 0.7597521630232222,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.04796276654069516,
+        "ci95": [
+          0.031999800088124176,
+          0.06484853643004954
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.75,
+      "selected_fraction": 0.02,
+      "conditions": 40960,
+      "top2_recall": 0.744709217405034,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "selected_attention_mass": 0.8261445468762758,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "top2_attention_mass_recall": 0.975989248163387,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_pearson": 0.964691856763966,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_rmse": 0.711789396482527,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.9,
+      "selected_fraction": 0.02,
+      "conditions": 40960,
+      "top2_recall": 0.7385550428451098,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.006154174559924286,
+        "ci95": [
+          -0.009062674438500836,
+          -0.003392664752918792
+        ]
+      },
+      "selected_attention_mass": 0.8260449773215441,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -9.956955473171547e-05,
+        "ci95": [
+          -0.0005679663976115989,
+          0.00046802798991848235
+        ]
+      },
+      "top2_attention_mass_recall": 0.9757672008105146,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.00022204735287232325,
+        "ci95": [
+          -0.0008673445973181515,
+          0.000536300597632362
+        ]
+      },
+      "score_pearson": 0.9639399470586796,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0007519097052863799,
+        "ci95": [
+          -0.0015314411658619066,
+          9.048211759363744e-06
+        ]
+      },
+      "score_rmse": 0.7165483317785402,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.004758935296013078,
+        "ci95": [
+          -0.0047635036550036595,
+          0.014316067728773302
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.0,
+      "selected_fraction": 0.04,
+      "conditions": 40960,
+      "top2_recall": 0.7941911430410983,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.13742446931428276,
+        "ci95": [
+          -0.16126748429710458,
+          -0.11351721397895746
+        ]
+      },
+      "selected_attention_mass": 0.850893328462007,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.02253744836507394,
+        "ci95": [
+          -0.03209125338269587,
+          -0.015667946907747136
+        ]
+      },
+      "top2_attention_mass_recall": 1.0246760488860673,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.02956213149063842,
+        "ci95": [
+          -0.0430472925068716,
+          -0.019795851737994783
+        ]
+      },
+      "score_pearson": 0.904480108844291,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.060211747919674964,
+        "ci95": [
+          -0.07119076533344923,
+          -0.04902811298110464
+        ]
+      },
+      "score_rmse": 1.1533689992766085,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.4415796027940814,
+        "ci95": [
+          0.37972752193270937,
+          0.49952041128346536
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.25,
+      "selected_fraction": 0.04,
+      "conditions": 40960,
+      "top2_recall": 0.897292606474366,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.03432300588101498,
+        "ci95": [
+          -0.04042635746767701,
+          -0.028182277933319715
+        ]
+      },
+      "selected_attention_mass": 0.8679112981804792,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.005519478646601783,
+        "ci95": [
+          -0.008296898034004697,
+          -0.003336383872774605
+        ]
+      },
+      "top2_attention_mass_recall": 1.0468891418920976,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.007349038484608173,
+        "ci95": [
+          -0.011491092125006616,
+          -0.004114679092226652
+        ]
+      },
+      "score_pearson": 0.9507711173180724,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.01392073944589356,
+        "ci95": [
+          -0.016949399897239346,
+          -0.011085253507844754
+        ]
+      },
+      "score_rmse": 0.8363984265208273,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.12460903003830026,
+        "ci95": [
+          0.10090346856397445,
+          0.14759468101537093
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.5,
+      "selected_fraction": 0.04,
+      "conditions": 40960,
+      "top2_recall": 0.9195276756705425,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.012087936684838495,
+        "ci95": [
+          -0.016217755505276727,
+          -0.008174907909888137
+        ]
+      },
+      "selected_attention_mass": 0.8712750436458009,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0021557331812800838,
+        "ci95": [
+          -0.0036756104565665733,
+          -0.0009978262585718769
+        ]
+      },
+      "top2_attention_mass_recall": 1.0513273705288158,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.00291080984789005,
+        "ci95": [
+          -0.005207368292913088,
+          -0.001170323466640184
+        ]
+      },
+      "score_pearson": 0.9595767048027483,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.005115151961217634,
+        "ci95": [
+          -0.006992657373011753,
+          -0.0033523940017039424
+        ]
+      },
+      "score_rmse": 0.7597521630232222,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.04796276654069516,
+        "ci95": [
+          0.03201924438514197,
+          0.06464442112987398
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.75,
+      "selected_fraction": 0.04,
+      "conditions": 40960,
+      "top2_recall": 0.931615612355381,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "selected_attention_mass": 0.873430776827081,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "top2_attention_mass_recall": 1.0542381803767058,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_pearson": 0.964691856763966,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      },
+      "score_rmse": 0.711789396482527,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.0,
+        "ci95": [
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "shrinkage": 0.9,
+      "selected_fraction": 0.04,
+      "conditions": 40960,
+      "top2_recall": 0.9280793498532148,
+      "top2_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0035362625021662097,
+        "ci95": [
+          -0.0059642153752247394,
+          -0.0012171906608273281
+        ]
+      },
+      "selected_attention_mass": 0.8733613568070723,
+      "selected_attention_mass_paired": {
+        "clusters": 20,
+        "delta_vs_production": -6.942002000869252e-05,
+        "ci95": [
+          -0.00048741066510956445,
+          0.0004088104381480661
+        ]
+      },
+      "top2_attention_mass_recall": 1.054098214925034,
+      "top2_attention_mass_recall_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0001399654516717419,
+        "ci95": [
+          -0.0007511630737644736,
+          0.0005488261776918078
+        ]
+      },
+      "score_pearson": 0.9639399470586796,
+      "score_pearson_paired": {
+        "clusters": 20,
+        "delta_vs_production": -0.0007519097052863799,
+        "ci95": [
+          -0.0015486333140506759,
+          6.233090934983831e-06
+        ]
+      },
+      "score_rmse": 0.7165483317785402,
+      "score_rmse_paired": {
+        "clusters": 20,
+        "delta_vs_production": 0.004758935296013078,
+        "ci95": [
+          -0.004616928468904007,
+          0.014573383864708375
+        ]
+      }
+    }
+  ],
+  "per_label": {
+    "qwen3_4b_sports32k": [
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.37776245686400217,
+        "selected_attention_mass": 0.7638253467732283,
+        "top2_attention_mass_recall": 0.8747699246290722,
+        "score_pearson": 0.9151045477308799,
+        "score_rmse": 1.160390352392278
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.43360382685932564,
+        "selected_attention_mass": 0.7811857461783802,
+        "top2_attention_mass_recall": 0.8958216088911286,
+        "score_pearson": 0.9541320104908664,
+        "score_rmse": 0.8593589341006009
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.44481064423016503,
+        "selected_attention_mass": 0.78529346849391,
+        "top2_attention_mass_recall": 0.901178286987124,
+        "score_pearson": 0.961089487024583,
+        "score_rmse": 0.7899817981509841
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4501733456592774,
+        "selected_attention_mass": 0.789068397963274,
+        "top2_attention_mass_recall": 0.9063420849008252,
+        "score_pearson": 0.9643213919131085,
+        "score_rmse": 0.7547194544094964
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4483856259394088,
+        "selected_attention_mass": 0.7884244892000425,
+        "top2_attention_mass_recall": 0.9052260182128521,
+        "score_pearson": 0.9629991267167497,
+        "score_rmse": 0.769873970716435
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.5927430826719501,
+        "selected_attention_mass": 0.8107487936787947,
+        "top2_attention_mass_recall": 0.9428972427747795,
+        "score_pearson": 0.9151045477308799,
+        "score_rmse": 1.160390352392278
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6931999324500794,
+        "selected_attention_mass": 0.8271946623724944,
+        "top2_attention_mass_recall": 0.9632292315654922,
+        "score_pearson": 0.9541320104908664,
+        "score_rmse": 0.8593589341006009
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7156291317456634,
+        "selected_attention_mass": 0.831237831866747,
+        "top2_attention_mass_recall": 0.9686025695555145,
+        "score_pearson": 0.961089487024583,
+        "score_rmse": 0.7899817981509841
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7265525935363257,
+        "selected_attention_mass": 0.8347389834932983,
+        "top2_attention_mass_recall": 0.9735223696916364,
+        "score_pearson": 0.9643213919131085,
+        "score_rmse": 0.7547194544094964
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7221955992252334,
+        "selected_attention_mass": 0.8343054963588656,
+        "top2_attention_mass_recall": 0.9726230766274966,
+        "score_pearson": 0.9629991267167497,
+        "score_rmse": 0.769873970716435
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.791856548585929,
+        "selected_attention_mass": 0.8599127988505643,
+        "top2_attention_mass_recall": 1.018107427645009,
+        "score_pearson": 0.9151045477308799,
+        "score_rmse": 1.160390352392278
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8915084956272039,
+        "selected_attention_mass": 0.8738923055308987,
+        "top2_attention_mass_recall": 1.035739680432016,
+        "score_pearson": 0.9541320104908664,
+        "score_rmse": 0.8593589341006009
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9118992733536289,
+        "selected_attention_mass": 0.8776174312995864,
+        "top2_attention_mass_recall": 1.0408147024281789,
+        "score_pearson": 0.961089487024583,
+        "score_rmse": 0.7899817981509841
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9216998412739486,
+        "selected_attention_mass": 0.8805558804539032,
+        "top2_attention_mass_recall": 1.045117747184122,
+        "score_pearson": 0.9643213919131085,
+        "score_rmse": 0.7547194544094964
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9178039671038277,
+        "selected_attention_mass": 0.8801418585222563,
+        "top2_attention_mass_recall": 1.0442248082370498,
+        "score_pearson": 0.9629991267167497,
+        "score_rmse": 0.769873970716435
+      }
+    ],
+    "qwen3_4b_medicine32k": [
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.33491043629983325,
+        "selected_attention_mass": 0.6948992293942865,
+        "top2_attention_mass_recall": 0.8165593079938844,
+        "score_pearson": 0.8846819634432904,
+        "score_rmse": 1.3048727653571404
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.41763641938450746,
+        "selected_attention_mass": 0.7340023213208042,
+        "top2_attention_mass_recall": 0.8664242057158844,
+        "score_pearson": 0.9443167836114299,
+        "score_rmse": 0.9239548300305614
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4318643247534055,
+        "selected_attention_mass": 0.7400040787146281,
+        "top2_attention_mass_recall": 0.8743144180567469,
+        "score_pearson": 0.9534313040552661,
+        "score_rmse": 0.8444011118248455
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4374859677525819,
+        "selected_attention_mass": 0.744119170058184,
+        "top2_attention_mass_recall": 0.8798590045189485,
+        "score_pearson": 0.9568259742169175,
+        "score_rmse": 0.8102632736598026
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4354687560698949,
+        "selected_attention_mass": 0.7445736104691605,
+        "top2_attention_mass_recall": 0.8805472718697274,
+        "score_pearson": 0.9553410562628415,
+        "score_rmse": 0.8238585614584736
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.5292559908994008,
+        "selected_attention_mass": 0.7526311492736568,
+        "top2_attention_mass_recall": 0.8999372382961155,
+        "score_pearson": 0.8846819634432904,
+        "score_rmse": 1.3048727653571404
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6660823174548568,
+        "selected_attention_mass": 0.790405997158814,
+        "top2_attention_mass_recall": 0.9491063792753266,
+        "score_pearson": 0.9443167836114299,
+        "score_rmse": 0.9239548300305614
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6924214290251257,
+        "selected_attention_mass": 0.7962381186247512,
+        "top2_attention_mass_recall": 0.9569169217720628,
+        "score_pearson": 0.9534313040552661,
+        "score_rmse": 0.8444011118248455
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7036551018973114,
+        "selected_attention_mass": 0.7999547487779637,
+        "top2_attention_mass_recall": 0.9620518553972943,
+        "score_pearson": 0.9568259742169175,
+        "score_rmse": 0.8102632736598026
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6991966366796987,
+        "selected_attention_mass": 0.8004444382291694,
+        "top2_attention_mass_recall": 0.9627788241166855,
+        "score_pearson": 0.9553410562628415,
+        "score_rmse": 0.8238585614584736
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.7255613820205327,
+        "selected_attention_mass": 0.8152167646665476,
+        "top2_attention_mass_recall": 0.9935686198805342,
+        "score_pearson": 0.8846819634432904,
+        "score_rmse": 1.3048727653571404
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8697245908522746,
+        "selected_attention_mass": 0.8480174023628934,
+        "top2_attention_mass_recall": 1.0373301373940194,
+        "score_pearson": 0.9443167836114299,
+        "score_rmse": 0.9239548300305614
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8936892816593172,
+        "selected_attention_mass": 0.853099707904039,
+        "top2_attention_mass_recall": 1.0443007240828592,
+        "score_pearson": 0.9534313040552661,
+        "score_rmse": 0.8444011118248455
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9036648678738857,
+        "selected_attention_mass": 0.8561404919630149,
+        "top2_attention_mass_recall": 1.0485969304689207,
+        "score_pearson": 0.9568259742169175,
+        "score_rmse": 0.8102632736598026
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8999380609020591,
+        "selected_attention_mass": 0.8564881106081884,
+        "top2_attention_mass_recall": 1.04916826756089,
+        "score_pearson": 0.9553410562628415,
+        "score_rmse": 0.8238585614584736
+      }
+    ],
+    "llama31_8b_sports32k": [
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4127107293177687,
+        "selected_attention_mass": 0.7944701688120404,
+        "top2_attention_mass_recall": 0.9018400915341772,
+        "score_pearson": 0.9141281262971461,
+        "score_rmse": 1.0610260520094017
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4552839715441223,
+        "selected_attention_mass": 0.8046809047147689,
+        "top2_attention_mass_recall": 0.9142514445695269,
+        "score_pearson": 0.9559914407262113,
+        "score_rmse": 0.7655745742915314
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4645445306188776,
+        "selected_attention_mass": 0.8061056649479724,
+        "top2_attention_mass_recall": 0.915883188098087,
+        "score_pearson": 0.9628098002751357,
+        "score_rmse": 0.6997615941210824
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.47184540333255426,
+        "selected_attention_mass": 0.8073707270392333,
+        "top2_attention_mass_recall": 0.9170797652855981,
+        "score_pearson": 0.9704923802695703,
+        "score_rmse": 0.6353827294638904
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.46943375197588466,
+        "selected_attention_mass": 0.8071086105112044,
+        "top2_attention_mass_recall": 0.9167244935728377,
+        "score_pearson": 0.9706515185243916,
+        "score_rmse": 0.6281482005491853
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6600778310399619,
+        "selected_attention_mass": 0.8359976381478191,
+        "top2_attention_mass_recall": 0.9710407449718332,
+        "score_pearson": 0.9141281262971461,
+        "score_rmse": 1.0610260520094017
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7448668020864716,
+        "selected_attention_mass": 0.8456864884952665,
+        "top2_attention_mass_recall": 0.9831978336587781,
+        "score_pearson": 0.9559914407262113,
+        "score_rmse": 0.7655745742915314
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7673506284569157,
+        "selected_attention_mass": 0.8470256772779976,
+        "top2_attention_mass_recall": 0.9847634305697284,
+        "score_pearson": 0.9628098002751357,
+        "score_rmse": 0.6997615941210824
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7838412593206158,
+        "selected_attention_mass": 0.8483549670985667,
+        "top2_attention_mass_recall": 0.9860517953289673,
+        "score_pearson": 0.9704923802695703,
+        "score_rmse": 0.6353827294638904
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7758969236048869,
+        "selected_attention_mass": 0.8483487971447176,
+        "top2_attention_mass_recall": 0.9860413081478328,
+        "score_pearson": 0.9706515185243916,
+        "score_rmse": 0.6281482005491853
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8436755484668538,
+        "selected_attention_mass": 0.8771537531145441,
+        "top2_attention_mass_recall": 1.0454118309389742,
+        "score_pearson": 0.9141281262971461,
+        "score_rmse": 1.0610260520094017
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9245413320197258,
+        "selected_attention_mass": 0.8857681514811702,
+        "top2_attention_mass_recall": 1.0565218863586778,
+        "score_pearson": 0.9559914407262113,
+        "score_rmse": 0.7655745742915314
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9400584523042198,
+        "selected_attention_mass": 0.8869705860517569,
+        "top2_attention_mass_recall": 1.058008054124366,
+        "score_pearson": 0.9628098002751357,
+        "score_rmse": 0.6997615941210824
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9559085198561661,
+        "selected_attention_mass": 0.8881386760258465,
+        "top2_attention_mass_recall": 1.0590850794746074,
+        "score_pearson": 0.9704923802695703,
+        "score_rmse": 0.6353827294638904
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9531112787895836,
+        "selected_attention_mass": 0.8882876419214881,
+        "top2_attention_mass_recall": 1.0593959962890949,
+        "score_pearson": 0.9706515185243916,
+        "score_rmse": 0.6281482005491853
+      }
+    ],
+    "llama31_8b_medicine32k": [
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.3926648004169692,
+        "selected_attention_mass": 0.7527477375442686,
+        "top2_attention_mass_recall": 0.879392755261506,
+        "score_pearson": 0.9040057979058475,
+        "score_rmse": 1.087186827347614
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4415077266312437,
+        "selected_attention_mass": 0.7679320500312314,
+        "top2_attention_mass_recall": 0.8979672435263637,
+        "score_pearson": 0.9486442344437819,
+        "score_rmse": 0.7967053676606156
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4574809321798966,
+        "selected_attention_mass": 0.7721690458725788,
+        "top2_attention_mass_recall": 0.9029014600761002,
+        "score_pearson": 0.9609762278560083,
+        "score_rmse": 0.704864147995977
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.4643515072762966,
+        "selected_attention_mass": 0.7737946308679966,
+        "top2_attention_mass_recall": 0.9049167832738021,
+        "score_pearson": 0.9671276806562673,
+        "score_rmse": 0.646792128396919
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.01,
+        "conditions": 10240,
+        "top2_recall": 0.46109665504773145,
+        "selected_attention_mass": 0.7731672353820613,
+        "top2_attention_mass_recall": 0.9039606741571333,
+        "score_pearson": 0.9667680867307353,
+        "score_rmse": 0.6443125943900668
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.6252868760522687,
+        "selected_attention_mass": 0.8016400433174568,
+        "top2_attention_mass_recall": 0.9575907554550213,
+        "score_pearson": 0.9040057979058475,
+        "score_rmse": 1.087186827347614
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7158609122780035,
+        "selected_attention_mass": 0.8160198485617002,
+        "top2_attention_mass_recall": 0.9756433072965592,
+        "score_pearson": 0.9486442344437819,
+        "score_rmse": 0.7967053676606156
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7501559565280331,
+        "selected_attention_mass": 0.8199862302506518,
+        "top2_attention_mass_recall": 0.9803773838153574,
+        "score_pearson": 0.9609762278560083,
+        "score_rmse": 0.704864147995977
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.764787914865883,
+        "selected_attention_mass": 0.8215294881352747,
+        "top2_attention_mass_recall": 0.9823309722356498,
+        "score_pearson": 0.9671276806562673,
+        "score_rmse": 0.646792128396919
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.02,
+        "conditions": 10240,
+        "top2_recall": 0.7569310118706198,
+        "selected_attention_mass": 0.8210811775534239,
+        "top2_attention_mass_recall": 0.9816255943500437,
+        "score_pearson": 0.9667680867307353,
+        "score_rmse": 0.6443125943900668
+      },
+      {
+        "shrinkage": 0.0,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.8156710930910777,
+        "selected_attention_mass": 0.8512899972163723,
+        "top2_attention_mass_recall": 1.0416163170797517,
+        "score_pearson": 0.9040057979058475,
+        "score_rmse": 1.087186827347614
+      },
+      {
+        "shrinkage": 0.25,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9033960073982599,
+        "selected_attention_mass": 0.8639673333469545,
+        "top2_attention_mass_recall": 1.057964863383677,
+        "score_pearson": 0.9486442344437819,
+        "score_rmse": 0.7967053676606156
+      },
+      {
+        "shrinkage": 0.5,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9324636953650043,
+        "selected_attention_mass": 0.8674124493278214,
+        "top2_attention_mass_recall": 1.0621860014798585,
+        "score_pearson": 0.9609762278560083,
+        "score_rmse": 0.704864147995977
+      },
+      {
+        "shrinkage": 0.75,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9451892204175237,
+        "selected_attention_mass": 0.8688880588655593,
+        "top2_attention_mass_recall": 1.0641529643791727,
+        "score_pearson": 0.9671276806562673,
+        "score_rmse": 0.646792128396919
+      },
+      {
+        "shrinkage": 0.9,
+        "selected_fraction": 0.04,
+        "conditions": 10240,
+        "top2_recall": 0.9414640926173888,
+        "selected_attention_mass": 0.8685278161763563,
+        "top2_attention_mass_recall": 1.0636037876131013,
+        "score_pearson": 0.9667680867307353,
+        "score_rmse": 0.6443125943900668
+      }
+    ]
+  },
+  "acceptance": {
+    "passed": true,
+    "thresholds": {
+      "mass_regret_max": 0.01,
+      "top2_recall_regret_max": 0.02,
+      "score_rmse_ratio_to_best_max": 1.1
+    },
+    "checks": [
+      {
+        "selected_fraction": 0.01,
+        "production_mass_regret": 0.0,
+        "production_recall_regret": 0.0,
+        "production_rmse_ratio_to_best": 1.0
+      },
+      {
+        "selected_fraction": 0.02,
+        "production_mass_regret": 0.0,
+        "production_recall_regret": 0.0,
+        "production_rmse_ratio_to_best": 1.0
+      },
+      {
+        "selected_fraction": 0.04,
+        "production_mass_regret": 0.0,
+        "production_recall_regret": 0.0,
+        "production_rmse_ratio_to_best": 1.0
+      }
+    ],
+    "failures": []
+  },
+  "source_sha256": {
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p00/summary.json": "d4ecc80b47eaff0b638dace1a11c69fe810bb0ca369c1c99719a38470a57cafb",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p00/per_head.csv": "96c21ec552192075b65b79704e6835267ee7c8575b4cde95544589e7468f9223",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p00/summary.json": "d06b7b91876f4d3fd437d2ceae92f7c9fdc459b9c55a3b21142c2036657d1a41",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p00/per_head.csv": "13009d7bf5833176925c2e21fba2aa47983d1da155e098708f08858e08c03943",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p00/summary.json": "bb2929a6bb5db749d6982de9cb7cd91deae68f9215fd0c8ee26a92e1c4b6a76c",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p00/per_head.csv": "37cb85f8baac1c709468e453cba89818ab45e77be0a73cc40806e97df1719a34",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p00/summary.json": "d9312744786ce1d644f3e6e2749b7a4b87e8bbe4196e00593fc9b495741fcc69",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p00/per_head.csv": "0d19a5d1cf54cd2ce99224b02020d6e5fedcf1428976678261acc4d11800f329",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p25/summary.json": "d9e6bda847c28403379611ed2f90e99b34cd2e003217d7c1ebc7c4477758b069",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p25/per_head.csv": "fba331cafe866ca2fddb46382025dcc00629d0830634e98e4223caf8ce5a9fb5",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p25/summary.json": "eb48b77b0741c2c669cde71d7238e3dae274cbd741a18497f1c29bba7a7d7257",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p25/per_head.csv": "6f828316cc1c6a5b157e36004d003015ff4ead03255548c0ef312c86ad97dfad",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p25/summary.json": "2ee8f9ba0811eaa4c4ec40154a2896e4bf4e47f828fa2d96a4ac4f26cf51546a",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p25/per_head.csv": "495afc0aacea0d9c8d3d937624af419e7d2bf9cb30fc4c052b9176aa50d6914a",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p25/summary.json": "f6afd3436c6184790b2a1de74999a527159d26604943884911c89d4342489b3f",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p25/per_head.csv": "f82eb619dc81cde3158229b72985192fdb444f053f93dd8f52c38077e7ed5536",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p50/summary.json": "3f0a9c91a8913d8f386cbae0d98953201085f6216341dd2f5289cd6493bd9eb2",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p50/per_head.csv": "a47bf48f948b00f2397bb6e05e80e6c92d6e524a311956a9073aa2afabe4c341",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p50/summary.json": "6210c3b68be15e51e5edfb2d0c7fa0dd4788ee0b8819dfa132bc108d3fcf479a",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p50/per_head.csv": "4c59c270e0eff3a8257b0295979d87a0f1c99706426157d8c4dc3d231f710674",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p50/summary.json": "43e6a4c37c4850b16a5b73c68d82840bee121e112be0b192b339fe29e82150ff",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p50/per_head.csv": "5fc26b728d63266e824bddb3380d97bffbf8566ba81b43bb7083131f552520fb",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p50/summary.json": "455f372c3c29abc9a062654ba35fe1800a9349a782974ac2f55d9b683a1c9711",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p50/per_head.csv": "116e1162ea068457e0287bc80371b5136926d78b1f077a10a2f48988e1e9a383",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p75/summary.json": "50868827f5f990be9481da75bc57f4ba1ed3666e30ecebe4d8eb41cd8adc7aab",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p75/per_head.csv": "1ed658f2b28c306268b85bda8cd66a3ec1a61f397372bf4c262efe6e84ab8cbd",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p75/summary.json": "a57e0866cef84145fbfa254579dbe9dd0d06d93fc1a31ac92cd39476d627e9d6",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p75/per_head.csv": "4933c7d60e946c507cb786bbb13702a84bb18ac59ba2869c79269d9b906c512f",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p75/summary.json": "197e3ac5db59d942d3449671d3e1025bd07416be1459fc42d9b5b44b1f826ebd",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p75/per_head.csv": "80e34566860272bf380b5418bb2d3a87238ad86fa294082c770faa32d71758b4",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p75/summary.json": "294ceb94438a72535debc3342b8835ea1a7533144dada91f8946cf8ea1da56a9",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p75/per_head.csv": "3411bcc114b0bfdb25a39c999d22d6e478304d0005735a73c39d222b47d2b88a",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p90/summary.json": "8ea2c21558cb3710075fdf623aaaabf93e800b715ae48e513b2eb28f6ebd4488",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_sports32k/lambda_0p90/per_head.csv": "92259ebf27c7c33e292b3fe22d95425341fea1fe2bf8b132a638ba08c80a027a",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p90/summary.json": "f9f71ae2df6d9788a4d41fe851897b514a098f7e9f2c90048f3c767af3ffa871",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/qwen3_4b_medicine32k/lambda_0p90/per_head.csv": "83f01012761a9757c6c2030d4950037e0c8922944961ca09a548bf2679f1ace4",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p90/summary.json": "d8826b38058cacc3cfabdbc9e318296e7b07ba706b894d9d5d40e72718cc9959",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_sports32k/lambda_0p90/per_head.csv": "c09cd3d67c142e9e58c32b3fd02a215bfd958e9c5965b31d85deb2a3914734a6",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p90/summary.json": "c1951ca0427ea71e067b320387da1e4f3e624cc3e97f5bb560e73e9c084f5519",
+    "/home/fdong/qksieve_iclr2027/results/20260810_qksieve_shrinkage_sensitivity_v2_fast/analysis/llama31_8b_medicine32k/lambda_0p90/per_head.csv": "a5c3e819c74cf0ffe1de227b4c72fbd3e5824258ec55fdffe5440b2a001151c0"
+  },
+  "claim_boundary": "This is a paired selector-mechanism sensitivity test. It does not replace downstream LongBench, RULER, or PPL quality evidence."
+}

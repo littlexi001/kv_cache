@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ruler_summary", type=Path)
     parser.add_argument("--multimodel_summary", type=Path)
     parser.add_argument("--shrinkage_summary", type=Path)
+    parser.add_argument("--shrinkage_equivalence", type=Path)
     parser.add_argument("--h100_summary", type=Path)
     parser.add_argument("--output", required=True, type=Path)
     return parser.parse_args()
@@ -494,6 +496,64 @@ def validate_shrinkage(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def validate_shrinkage_equivalence(payload: dict[str, Any]) -> dict[str, Any]:
+    if payload.get("schema") != "qksieve_shrinkage_fast_grid_equivalence_v1":
+        raise AssertionError("shrinkage equivalence schema mismatch")
+    if payload.get("passed") is not True:
+        raise AssertionError("shrinkage fast-grid equivalence failed")
+    if int(payload.get("conditions", -1)) != 30720:
+        raise AssertionError("shrinkage equivalence condition count drifted")
+    if int(payload.get("allocation_conditions", -1)) != 40:
+        raise AssertionError("shrinkage equivalence allocation count drifted")
+    if payload.get("condition_keys_identical") is not True:
+        raise AssertionError("shrinkage equivalence keys differ")
+    if payload.get("allocations_identical") is not True:
+        raise AssertionError("shrinkage equivalence allocations differ")
+    metrics = payload.get("metrics")
+    expected_metrics = {
+        "top2_recall",
+        "selected_attention_mass",
+        "oracle_top2_attention_mass",
+        "top2_attention_mass_recall",
+        "score_pearson",
+        "score_rmse",
+    }
+    if not isinstance(metrics, dict) or set(metrics) != expected_metrics:
+        raise AssertionError("shrinkage equivalence metric grid drifted")
+    for name, row in metrics.items():
+        maximum = _finite_number(
+            row.get("max_abs_difference"), f"{name} maximum difference"
+        )
+        average = _finite_number(
+            row.get("mean_abs_difference"), f"{name} mean difference"
+        )
+        maximum_limit = _finite_number(
+            row.get("max_tolerance"), f"{name} maximum tolerance"
+        )
+        mean_limit = _finite_number(
+            row.get("mean_tolerance"), f"{name} mean tolerance"
+        )
+        if maximum > maximum_limit or average > mean_limit:
+            raise AssertionError(f"shrinkage equivalence {name} exceeds tolerance")
+    source_hashes = payload.get("source_sha256")
+    if not isinstance(source_hashes, dict) or len(source_hashes) != 4:
+        raise AssertionError("shrinkage equivalence source hashes are incomplete")
+    for label, digest in source_hashes.items():
+        if not isinstance(label, str) or not label.strip():
+            raise AssertionError("shrinkage equivalence source label is invalid")
+        if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+            raise AssertionError("shrinkage equivalence source hash is invalid")
+    claim_boundary = payload.get("claim_boundary")
+    if not isinstance(claim_boundary, str) or not claim_boundary.strip():
+        raise AssertionError("shrinkage equivalence claim boundary is missing")
+    return {
+        "conditions": payload["conditions"],
+        "allocation_conditions": payload["allocation_conditions"],
+        "metrics": metrics,
+        "claim_boundary": claim_boundary,
+    }
+
+
 def _positive_finite(row: dict[str, Any], field: str, label: str) -> None:
     if field not in row:
         raise AssertionError(f"H100 {label} is missing {field}")
@@ -618,6 +678,7 @@ def verify(
     ruler: dict[str, Any] | None = None,
     multimodel: dict[str, Any] | None = None,
     shrinkage: dict[str, Any] | None = None,
+    shrinkage_equivalence: dict[str, Any] | None = None,
     h100: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     report: dict[str, Any] = {
@@ -631,6 +692,10 @@ def verify(
         "ruler": (ruler, validate_ruler),
         "multimodel": (multimodel, validate_multimodel),
         "shrinkage": (shrinkage, validate_shrinkage),
+        "shrinkage_equivalence": (
+            shrinkage_equivalence,
+            validate_shrinkage_equivalence,
+        ),
         "h100": (h100, validate_h100),
     }
     missing: list[str] = []
@@ -652,6 +717,7 @@ def main() -> None:
         "ruler": args.ruler_summary,
         "multimodel": args.multimodel_summary,
         "shrinkage": args.shrinkage_summary,
+        "shrinkage_equivalence": args.shrinkage_equivalence,
         "h100": args.h100_summary,
     }
     report = verify(

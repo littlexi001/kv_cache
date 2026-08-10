@@ -59,6 +59,8 @@ def test_shrinkage_table_renders_full_grid_and_registered_regret() -> None:
     assert "1.00\\% & 80.75\\% & 0.20\\%" in text
     assert "The preregistered stability check passed" in text
     assert "selector-level numerical sensitivity" in text
+    assert "At 4\\% selected" in text
+    assert "\\textbackslash{}" not in text
 
 
 def test_shrinkage_table_exposes_failures_in_both_languages() -> None:

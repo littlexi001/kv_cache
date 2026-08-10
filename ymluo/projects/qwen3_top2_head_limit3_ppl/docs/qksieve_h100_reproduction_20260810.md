@@ -113,6 +113,8 @@ python ymluo/projects/qwen3_top2_head_limit3_ppl/src/verify_qksieve_robust_paper
   --longbench_summary RESULTS/longbench/paired_summary.json \
   --ruler_summary RESULTS/ruler/paired_summary.json \
   --multimodel_summary RESULTS/multimodel/multimodel_summary.json \
+  --shrinkage_summary RESULTS/shrinkage/summary.json \
+  --shrinkage_equivalence RESULTS/shrinkage/equivalence_audit.json \
   --h100_summary ${RUN_ROOT}/summary.json \
   --output RESULTS/frozen_evidence_report.json
 ```
